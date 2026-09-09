@@ -1,0 +1,2602 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_08cb6b9460b320d3b57b328433838e19 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.1.0/leaflet.markercluster.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.1.0/MarkerCluster.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.1.0/MarkerCluster.Default.css"/>
+    <script src="https://cdn.jsdelivr.net/gh/python-visualization/folium@main/folium/templates/leaflet_heat.min.js"></script>
+</head>
+<body>
+    
+    <div style="position: fixed; bottom: 28px; left: 28px; z-index: 9999;
+        background: white; color: #222; border: 1px solid #777; border-radius: 4px;
+        padding: 9px 11px; width: 245px; font: 12px/1.35 Arial, sans-serif;
+        box-shadow: 0 1px 4px #777;">
+        <strong>Geocoded activity heatmaps</strong><br>7d: 0 · 30d: 68 · 90d: 68 · 365d: 68<br>
+        <div style="margin-top: 7px;">Relative activity intensity</div>
+        <div style="height: 10px; margin-top: 3px; border: 1px solid #888;
+        background: linear-gradient(to right, #2c7bb6 0%, #00a6ca 25%,
+        #ffff8c 50%, #fdae61 75%, #d7191c 100%);"></div>
+        <div style="display: flex; justify-content: space-between; color: #444;">
+        <span>Lower</span><span>Higher</span>
+        </div>
+        <div style="margin: 5px 0; color: #555; font-size: 11px;">
+        Colors show relative concentration within each selected time layer;
+        they are not fixed post-count ranges. Use the layer control to switch
+        between 7, 30, 90, and 365 days.
+        </div>
+        <span style="color:#555">As of 2026-09-09 19:24 UTC</span>
+        </div>
+    
+            <div class="folium-map" id="map_08cb6b9460b320d3b57b328433838e19" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_08cb6b9460b320d3b57b328433838e19 = L.map(
+                "map_08cb6b9460b320d3b57b328433838e19",
+                {
+                    center: [32.61254332647059, 29.897039363235294],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 2,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+            L.control.scale().addTo(map_08cb6b9460b320d3b57b328433838e19);
+
+            
+
+        
+    
+            var tile_layer_fc030a9a5911616d6b808872730a25eb = L.tileLayer(
+                "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "\u0026copy; OpenStreetMap contributors \u0026copy; CARTO",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_fc030a9a5911616d6b808872730a25eb.addTo(map_08cb6b9460b320d3b57b328433838e19);
+        
+    
+            var tile_layer_ebd2eaba034e00dcd3cc2aa62170777e = L.tileLayer(
+                "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "\u0026copy; OpenStreetMap contributors \u0026copy; CARTO",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_ebd2eaba034e00dcd3cc2aa62170777e.addTo(map_08cb6b9460b320d3b57b328433838e19);
+        
+    
+            var tile_layer_98ab296117dbbe9eb1d1415a81282310 = L.tileLayer(
+                "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "Tiles \u0026copy; Esri \u0026mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_98ab296117dbbe9eb1d1415a81282310.addTo(map_08cb6b9460b320d3b57b328433838e19);
+        
+    
+            var marker_cluster_af2222d0e084db99d5cd1688082ae93f = L.markerClusterGroup(
+                {
+}
+            );
+        
+    
+            var marker_4172adeb13abdac85d0095e36d19aa09 = L.marker(
+                [23.9739374, 120.9820179],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_5ad353043d98bc4bc677fbd288942898 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_83b20773486dde113bdf65f41f541a0b = $(`<div id="html_83b20773486dde113bdf65f41f541a0b" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@TGTM_Official</h4>             <div><strong>Name:</strong> The Great Translation Movement 大翻译运动</div>             <div><strong>Date:</strong> 2026-09-01T23:40:48.000Z</div>             <div><strong>Inferred location:</strong> Taiwan</div>             <div><strong>Confidence:</strong> 0.78</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post explicitly discusses Taiwan and President Tsai Ing-wen, strongly associating its subject with Taiwan.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Happy 70th Birthday, President Tsai Ing-wen. 🎂 This is the gift she received. Some people like to say “Freedom and democracy can’t be eaten as a meal.” If Taiwan didn’t have freedom and democracy, Tsai Ing-wen would never have become president. If China had freedom and https://t.co/hrptkowZks</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Happy 70th Birthday, President Tsai Ing-wen. 🎂 This is the gift she received. Some people like to say “Freedom and democracy can’t be eaten as a meal.” If Taiwan didn’t have freedom and democracy, Tsai Ing-wen would never have become president. If China had freedom and https://t.co/hrptkowZks</div>             <hr>             <div><a href="https://x.com/TGTM_Official/status/2094933523140636997" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_5ad353043d98bc4bc677fbd288942898.setContent(html_83b20773486dde113bdf65f41f541a0b);
+            
+        
+
+        marker_4172adeb13abdac85d0095e36d19aa09.bindPopup(popup_5ad353043d98bc4bc677fbd288942898)
+        ;
+
+        
+    
+    
+            marker_4172adeb13abdac85d0095e36d19aa09.bindTooltip(
+                `<div>
+                     @TGTM_Official — Taiwan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_a5dd49435b64c11aef89802f316e83a4 = L.marker(
+                [-23.5506507, -46.6333824],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_fb0f94c93cf4821a4af28a89d3c69fde = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_3f0e6b5cf289b1c900bc4c31caa5212b = $(`<div id="html_3f0e6b5cf289b1c900bc4c31caa5212b" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@BolsonaroSP</h4>             <div><strong>Name:</strong> Eduardo Bolsonaro🇧🇷</div>             <div><strong>Date:</strong> 2026-09-01T23:37:25.000Z</div>             <div><strong>Inferred location:</strong> São Paulo, Brazil</div>             <div><strong>Confidence:</strong> 0.92</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The handle includes “SP” (São Paulo), the display name identifies Brazilian politician Eduardo Bolsonaro, and the post references Brazil-specific currency and public figures.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">DEFENDING DEMOCRACY COMES AT A HIGH PRICE! The scandal is huge! It’s out in the open that Moraes was being bankrolled by Vorcaro. In other words, Moraes, like every mobster, was extorting Vorcaro, who had to pay a R$300,000 (~USD 60,000) monthly allowance to his children; funded https://t.co/MkquuerrNL</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">DEFENDING DEMOCRACY COMES AT A HIGH PRICE! The scandal is huge! It’s out in the open that Moraes was being bankrolled by Vorcaro. In other words, Moraes, like every mobster, was extorting Vorcaro, who had to pay a R$300,000 (~USD 60,000) monthly allowance to his children; funded https://t.co/MkquuerrNL</div>             <hr>             <div><a href="https://x.com/BolsonaroSP/status/2094932672476754312" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_fb0f94c93cf4821a4af28a89d3c69fde.setContent(html_3f0e6b5cf289b1c900bc4c31caa5212b);
+            
+        
+
+        marker_a5dd49435b64c11aef89802f316e83a4.bindPopup(popup_fb0f94c93cf4821a4af28a89d3c69fde)
+        ;
+
+        
+    
+    
+            marker_a5dd49435b64c11aef89802f316e83a4.bindTooltip(
+                `<div>
+                     @BolsonaroSP — São Paulo, Brazil
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_5e64ffff3cabf737b25376977c3db3cc = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_ab3d009ac327fcc172b67c8a54cde538 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_2caa12d9071f4ca5f5f07134192e9ab3 = $(`<div id="html_2caa12d9071f4ca5f5f07134192e9ab3" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@marceelias</h4>             <div><strong>Name:</strong> Marc E. Elias</div>             <div><strong>Date:</strong> 2026-09-01T23:34:59.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.86</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post references DHS and Democracy Docket, both strongly associated with U.S. federal politics and legal affairs.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">NEW: Since Democracy Docket broke this news, it appears that DHS has taken down the website. https://t.co/ftpnPnECpG</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">NEW: Since Democracy Docket broke this news, it appears that DHS has taken down the website. https://t.co/ftpnPnECpG</div>             <hr>             <div><a href="https://x.com/marceelias/status/2094932060649509084" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_ab3d009ac327fcc172b67c8a54cde538.setContent(html_2caa12d9071f4ca5f5f07134192e9ab3);
+            
+        
+
+        marker_5e64ffff3cabf737b25376977c3db3cc.bindPopup(popup_ab3d009ac327fcc172b67c8a54cde538)
+        ;
+
+        
+    
+    
+            marker_5e64ffff3cabf737b25376977c3db3cc.bindTooltip(
+                `<div>
+                     @marceelias — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_88f0de0f3a7435cac1349200a49eb617 = L.marker(
+                [64.6863136, 97.7453061],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_948e462dc3740753e2b0243879414eca = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_a598125037753ae3c78b3ea68b01e109 = $(`<div id="html_a598125037753ae3c78b3ea68b01e109" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@RealAlbanianPat</h4>             <div><strong>Name:</strong> Charestiste🇨🇦🍁</div>             <div><strong>Date:</strong> 2026-09-01T23:30:13.000Z</div>             <div><strong>Inferred location:</strong> Russia</div>             <div><strong>Confidence:</strong> 0.78</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post explicitly discusses regional democracy and elections in Russia, naming the Chechen Republic and Sverdlovsk.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Democracy in Russia varies a lot by regions Some areas just fudge elections results, like Chechen Republic, the United Russia candidate got 99.8% of the votes, 0.1% lower than Kim Jong Un While in other areas, like Sverdlovsk, the elections are semi competitive and less rigged https://t.co/Ei7IuL52wX https://t.co/lgRCiQWC7j</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Democracy in Russia varies a lot by regions Some areas just fudge elections results, like Chechen Republic, the United Russia candidate got 99.8% of the votes, 0.1% lower than Kim Jong Un While in other areas, like Sverdlovsk, the elections are semi competitive and less rigged https://t.co/Ei7IuL52wX https://t.co/lgRCiQWC7j</div>             <hr>             <div><a href="https://x.com/RealAlbanianPat/status/2094930859270766853" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_948e462dc3740753e2b0243879414eca.setContent(html_a598125037753ae3c78b3ea68b01e109);
+            
+        
+
+        marker_88f0de0f3a7435cac1349200a49eb617.bindPopup(popup_948e462dc3740753e2b0243879414eca)
+        ;
+
+        
+    
+    
+            marker_88f0de0f3a7435cac1349200a49eb617.bindTooltip(
+                `<div>
+                     @RealAlbanianPat — Russia
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_bb47edd00ec1d40d08f1fae837245492 = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_83ed2135f946286457c734cf673437b4 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_adfca8a03ef3209bbf9e3e0f17a3c210 = $(`<div id="html_adfca8a03ef3209bbf9e3e0f17a3c210" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@SaraAbrams1990</h4>             <div><strong>Name:</strong> Sara Abrams</div>             <div><strong>Date:</strong> 2026-09-01T23:29:00.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.3</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post discusses Trump and U.S. democracy, suggesting a United States context, though no specific place is named.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Expecting greatness from this disaster? 🤔 Every frame exposes him. Trump and Epstein&#x27;s sick world. Our democracy is bleeding! 🛑🩸 https://t.co/OR6LKXobZr</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Expecting greatness from this disaster? 🤔 Every frame exposes him. Trump and Epstein&#x27;s sick world. Our democracy is bleeding! 🛑🩸 https://t.co/OR6LKXobZr</div>             <hr>             <div><a href="https://x.com/SaraAbrams1990/status/2094930552126341506" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_83ed2135f946286457c734cf673437b4.setContent(html_adfca8a03ef3209bbf9e3e0f17a3c210);
+            
+        
+
+        marker_bb47edd00ec1d40d08f1fae837245492.bindPopup(popup_83ed2135f946286457c734cf673437b4)
+        ;
+
+        
+    
+    
+            marker_bb47edd00ec1d40d08f1fae837245492.bindTooltip(
+                `<div>
+                     @SaraAbrams1990 — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_96ad5eb7cdb56bf740ee945a6fccc924 = L.marker(
+                [31.2638905, -98.5456116],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_0cbbf63ab4360257cf3b39d0e3869ca7 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_2869c4b33246c29923e35e1491166a9f = $(`<div id="html_2869c4b33246c29923e35e1491166a9f" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@texasdemocrats</h4>             <div><strong>Name:</strong> Texas Democratic Party</div>             <div><strong>Date:</strong> 2026-09-01T23:17:23.000Z</div>             <div><strong>Inferred location:</strong> Texas, United States</div>             <div><strong>Confidence:</strong> 0.99</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The account is the Texas Democratic Party, and the post explicitly references Tarrant County and voters across the state.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Voters in Tarrant County and across the state deserve convenient, accessible polling locations. The decision by Tarrant County’s GOP commissioners to close 92 polling places is blatant voter suppression and a disgrace to democracy. https://t.co/7ptqXBcDUe</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Voters in Tarrant County and across the state deserve convenient, accessible polling locations. The decision by Tarrant County’s GOP commissioners to close 92 polling places is blatant voter suppression and a disgrace to democracy. https://t.co/7ptqXBcDUe</div>             <hr>             <div><a href="https://x.com/texasdemocrats/status/2094927630109757509" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_0cbbf63ab4360257cf3b39d0e3869ca7.setContent(html_2869c4b33246c29923e35e1491166a9f);
+            
+        
+
+        marker_96ad5eb7cdb56bf740ee945a6fccc924.bindPopup(popup_0cbbf63ab4360257cf3b39d0e3869ca7)
+        ;
+
+        
+    
+    
+            marker_96ad5eb7cdb56bf740ee945a6fccc924.bindTooltip(
+                `<div>
+                     @texasdemocrats — Texas, United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_24aaed7ce0177cc5524480a1aa68e898 = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_6d9686545e36df1d8379f3d950651a1f = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_4f27b8aa63f35275abdf20546d616893 = $(`<div id="html_4f27b8aa63f35275abdf20546d616893" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@Sassafrass_84</h4>             <div><strong>Name:</strong> Sassafrass84</div>             <div><strong>Date:</strong> 2026-09-01T23:00:06.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.28</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> English-language political rhetoric referencing voting conservative, party politics, and open borders is somewhat suggestive of the United States, but no explicit location is provided.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">1. I vote conservative because I still believe in two sexes, two parents, one country, and consequences. 2. The party left women, kids, and common sense. 3. Compassion isn’t open borders, empty hospitals, and calling anyone who notices a bigot. 4. I will not pretend a man is https://t.co/Z6c05S87C1</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">1. I vote conservative because I still believe in two sexes, two parents, one country, and consequences. 2. The party left women, kids, and common sense. 3. Compassion isn’t open borders, empty hospitals, and calling anyone who notices a bigot. 4. I will not pretend a man is https://t.co/Z6c05S87C1</div>             <hr>             <div><a href="https://x.com/Sassafrass_84/status/2094923279433662863" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_6d9686545e36df1d8379f3d950651a1f.setContent(html_4f27b8aa63f35275abdf20546d616893);
+            
+        
+
+        marker_24aaed7ce0177cc5524480a1aa68e898.bindPopup(popup_6d9686545e36df1d8379f3d950651a1f)
+        ;
+
+        
+    
+    
+            marker_24aaed7ce0177cc5524480a1aa68e898.bindTooltip(
+                `<div>
+                     @Sassafrass_84 — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_a17c80fa0853720875f1193cb191c8bb = L.marker(
+                [8.0018709, -66.1109318],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_7ae7b8827a910a0139fd9cb2e27cb9b7 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_61316c6f826e865d08c3b4a62a2d7569 = $(`<div id="html_61316c6f826e865d08c3b4a62a2d7569" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@iamGermania</h4>             <div><strong>Name:</strong> Germania Rodriguez Poleo</div>             <div><strong>Date:</strong> 2026-09-01T22:42:45.000Z</div>             <div><strong>Inferred location:</strong> Venezuela</div>             <div><strong>Confidence:</strong> 0.55</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post explicitly discusses Venezuelans and Venezuelan political figures, indicating a strong association with Venezuela.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">To be clear- the main issue with the White House working with Alejandro Betancourt isn&#x27;t a moral one. Transitions to democracy certainly require concessions and letting criminals go free. Venezuelans undertand that. Most of us understand the US has no choice but to work with</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">To be clear- the main issue with the White House working with Alejandro Betancourt isn&#x27;t a moral one. Transitions to democracy certainly require concessions and letting criminals go free. Venezuelans undertand that. Most of us understand the US has no choice but to work with</div>             <hr>             <div><a href="https://x.com/iamGermania/status/2094918915755266465" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_7ae7b8827a910a0139fd9cb2e27cb9b7.setContent(html_61316c6f826e865d08c3b4a62a2d7569);
+            
+        
+
+        marker_a17c80fa0853720875f1193cb191c8bb.bindPopup(popup_7ae7b8827a910a0139fd9cb2e27cb9b7)
+        ;
+
+        
+    
+    
+            marker_a17c80fa0853720875f1193cb191c8bb.bindTooltip(
+                `<div>
+                     @iamGermania — Venezuela
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_d0350abbbc32801d1d54a78eeefdad1d = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_e479fe4b577583388ee8a4fbff468302 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_ad3cc42ee44c3dba2299be9223e587c6 = $(`<div id="html_ad3cc42ee44c3dba2299be9223e587c6" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@AAGDhillon</h4>             <div><strong>Name:</strong> AAGHarmeetDhillon</div>             <div><strong>Date:</strong> 2026-09-01T22:24:38.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.98</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post explicitly references U.S. citizens, U.S. elections, states, the Civil Rights Division, and the U.S. Justice Department.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">The @CivilRights Division @TheJusticeDept enforces a basic civil right fundamental to our democracy: only U.S. citizens vote in our elections, and each citizen votes only once. States that turn a blind eye by not cleaning their voter rolls erode the integrity of our elections. https://t.co/LSIzZmBdOZ</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">The @CivilRights Division @TheJusticeDept enforces a basic civil right fundamental to our democracy: only U.S. citizens vote in our elections, and each citizen votes only once. States that turn a blind eye by not cleaning their voter rolls erode the integrity of our elections. https://t.co/LSIzZmBdOZ</div>             <hr>             <div><a href="https://x.com/AAGDhillon/status/2094914354588029354" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_e479fe4b577583388ee8a4fbff468302.setContent(html_ad3cc42ee44c3dba2299be9223e587c6);
+            
+        
+
+        marker_d0350abbbc32801d1d54a78eeefdad1d.bindPopup(popup_e479fe4b577583388ee8a4fbff468302)
+        ;
+
+        
+    
+    
+            marker_d0350abbbc32801d1d54a78eeefdad1d.bindTooltip(
+                `<div>
+                     @AAGDhillon — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_e1440be46ace7bf0a70b42c9261dc5ce = L.marker(
+                [39.5158825, -116.853722],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_68540334fd50da11b4c6be79a9f4dd4e = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_e8c0abbb71bfc20b048e615461340e2b = $(`<div id="html_e8c0abbb71bfc20b048e615461340e2b" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@lamps_apple</h4>             <div><strong>Name:</strong> Apple Lamps</div>             <div><strong>Date:</strong> 2026-09-01T22:23:48.000Z</div>             <div><strong>Inferred location:</strong> Nevada, United States</div>             <div><strong>Confidence:</strong> 0.98</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post explicitly discusses Nevada&#x27;s 2024 election and Nevada&#x27;s Secretary of State&#x27;s office.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Donald Trump won Nevada in 2024. The people spoke clearly. Yet organizations founded by Norm Eisen now have formal access to Nevada’s election administration, including a privately funded attorney placed inside the Secretary of State’s office. Eisen founded Democracy Defenders https://t.co/P2GqY7viZp https://t.co/ecMralLTyU</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Donald Trump won Nevada in 2024. The people spoke clearly. Yet organizations founded by Norm Eisen now have formal access to Nevada’s election administration, including a privately funded attorney placed inside the Secretary of State’s office. Eisen founded Democracy Defenders https://t.co/P2GqY7viZp https://t.co/ecMralLTyU</div>             <hr>             <div><a href="https://x.com/lamps_apple/status/2094914147255275609" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_68540334fd50da11b4c6be79a9f4dd4e.setContent(html_e8c0abbb71bfc20b048e615461340e2b);
+            
+        
+
+        marker_e1440be46ace7bf0a70b42c9261dc5ce.bindPopup(popup_68540334fd50da11b4c6be79a9f4dd4e)
+        ;
+
+        
+    
+    
+            marker_e1440be46ace7bf0a70b42c9261dc5ce.bindTooltip(
+                `<div>
+                     @lamps_apple — Nevada, United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_a45ba20d500fc527632396a7775e99db = L.marker(
+                [37.1232245, -78.4927721],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_25ccf64b3c78e6d8762f1efe4b61be17 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_6558e08a83a41564606b454910b1a0f7 = $(`<div id="html_6558e08a83a41564606b454910b1a0f7" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@VaNewsVanguard</h4>             <div><strong>Name:</strong> Virginia News Vanguard</div>             <div><strong>Date:</strong> 2026-09-01T23:47:42.000Z</div>             <div><strong>Inferred location:</strong> Virginia, USA</div>             <div><strong>Confidence:</strong> 0.94</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The account name identifies Virginia, and the post explicitly discusses Virginia votes and Virginia political figures.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">🚨🇺🇸🇺🇸Congratulations! Hung Cao LOVES America and truly understands the destruction and loss of rights &amp;amp; freedoms under socialism and communism. By the way, when he once ran for elected office, he received MORE Virginia votes than Abigail Spanberger did the next year! https://t.co/RGBZGKgOra</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">🚨🇺🇸🇺🇸Congratulations! Hung Cao LOVES America and truly understands the destruction and loss of rights &amp;amp; freedoms under socialism and communism. By the way, when he once ran for elected office, he received MORE Virginia votes than Abigail Spanberger did the next year! https://t.co/RGBZGKgOra</div>             <hr>             <div><a href="https://x.com/VaNewsVanguard/status/2094935257510269006" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_25ccf64b3c78e6d8762f1efe4b61be17.setContent(html_6558e08a83a41564606b454910b1a0f7);
+            
+        
+
+        marker_a45ba20d500fc527632396a7775e99db.bindPopup(popup_25ccf64b3c78e6d8762f1efe4b61be17)
+        ;
+
+        
+    
+    
+            marker_a45ba20d500fc527632396a7775e99db.bindTooltip(
+                `<div>
+                     @VaNewsVanguard — Virginia, USA
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_5d7e85ab56ea394a1467bff9fed139d2 = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_63ac482eac33799384d5cd52d60c3cfd = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_10685793175aef7c0eada0f0d1ecb8a8 = $(`<div id="html_10685793175aef7c0eada0f0d1ecb8a8" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@JosephMothers2</h4>             <div><strong>Name:</strong> Joseph Mothers</div>             <div><strong>Date:</strong> 2026-09-01T23:41:24.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.28</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> English-language political commentary mentioning @Acyn, a U.S.-based political media account; no more specific location is provided.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@Acyn &amp;gt;&quot;What&#x27;s wrong with communism?&quot; &amp;gt; (describes capitalism)</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@Acyn &amp;gt;&quot;What&#x27;s wrong with communism?&quot; &amp;gt; (describes capitalism)</div>             <hr>             <div><a href="https://x.com/JosephMothers2/status/2094933673409646875" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_63ac482eac33799384d5cd52d60c3cfd.setContent(html_10685793175aef7c0eada0f0d1ecb8a8);
+            
+        
+
+        marker_5d7e85ab56ea394a1467bff9fed139d2.bindPopup(popup_63ac482eac33799384d5cd52d60c3cfd)
+        ;
+
+        
+    
+    
+            marker_5d7e85ab56ea394a1467bff9fed139d2.bindTooltip(
+                `<div>
+                     @JosephMothers2 — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_b72392b8492e6df2fcf5e03d8f6273b8 = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_42d16d4e4d73580cc9a02821368ccb1a = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_c58840170b1a066730a0b82bd0427d40 = $(`<div id="html_c58840170b1a066730a0b82bd0427d40" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@RyanAFournier</h4>             <div><strong>Name:</strong> Ryan Fournier</div>             <div><strong>Date:</strong> 2026-09-01T23:37:08.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.8</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post centers on President Trump, the U.S. Senate, the U.S. Navy, and uses the U.S. flag, strongly indicating a United States context.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">ANOTHER WIN! President Trump formally nominated combat veteran Hung Cao as Secretary of the Navy. 🇺🇸 He fled communism, served 25 years as a Navy Captain, and is ready to restore power to our military. A true WARRIOR. Senate needs to CONFIRM HIM ASAP! 🔥 https://t.co/ie2W4mSawk</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">ANOTHER WIN! President Trump formally nominated combat veteran Hung Cao as Secretary of the Navy. 🇺🇸 He fled communism, served 25 years as a Navy Captain, and is ready to restore power to our military. A true WARRIOR. Senate needs to CONFIRM HIM ASAP! 🔥 https://t.co/ie2W4mSawk</div>             <hr>             <div><a href="https://x.com/RyanAFournier/status/2094932601299476511" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_42d16d4e4d73580cc9a02821368ccb1a.setContent(html_c58840170b1a066730a0b82bd0427d40);
+            
+        
+
+        marker_b72392b8492e6df2fcf5e03d8f6273b8.bindPopup(popup_42d16d4e4d73580cc9a02821368ccb1a)
+        ;
+
+        
+    
+    
+            marker_b72392b8492e6df2fcf5e03d8f6273b8.bindTooltip(
+                `<div>
+                     @RyanAFournier — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_c2774babc71be2d643461da1f914fec7 = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_d2b32e6875bdd9d19f3421ec4afd116a = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_0c607b4dbc9ed71621338644d3146dcf = $(`<div id="html_0c607b4dbc9ed71621338644d3146dcf" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@LoomerUnleashed</h4>             <div><strong>Name:</strong> Loomer Unleashed</div>             <div><strong>Date:</strong> 2026-09-01T23:27:39.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.88</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post explicitly references a U.S. House Democrat and congressional political context.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">House Democrat Delia Ramirez @repdeliaramirez defended Hasan Piker @hasanthehun and socialism, which is actually Communism, saying: “Whether it’s ‘socialism,’ a Twitch streamer, working-class candidates, or immigrants, my colleagues always have a boogeyman to condemn.” Earlier https://t.co/RYnlXKQ8Ga https://t.co/2wdV6Lng6D</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">House Democrat Delia Ramirez @repdeliaramirez defended Hasan Piker @hasanthehun and socialism, which is actually Communism, saying: “Whether it’s ‘socialism,’ a Twitch streamer, working-class candidates, or immigrants, my colleagues always have a boogeyman to condemn.” Earlier https://t.co/RYnlXKQ8Ga https://t.co/2wdV6Lng6D</div>             <hr>             <div><a href="https://x.com/LoomerUnleashed/status/2094930215403180180" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_d2b32e6875bdd9d19f3421ec4afd116a.setContent(html_0c607b4dbc9ed71621338644d3146dcf);
+            
+        
+
+        marker_c2774babc71be2d643461da1f914fec7.bindPopup(popup_d2b32e6875bdd9d19f3421ec4afd116a)
+        ;
+
+        
+    
+    
+            marker_c2774babc71be2d643461da1f914fec7.bindTooltip(
+                `<div>
+                     @LoomerUnleashed — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_18ec10af703055b60abde782d56a06dd = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_cf7cc2b7b3bc88f3366bea92fc853776 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_5fb03a2309b6e75efccae196c19c4350 = $(`<div id="html_5fb03a2309b6e75efccae196c19c4350" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@MAGAVoice</h4>             <div><strong>Name:</strong> MAGA Voice</div>             <div><strong>Date:</strong> 2026-09-01T23:16:17.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.9</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post centers on Donald Trump, the U.S. Secretary of the Navy, American laws, and the American Dream; the MAGA Voice account name reinforces a U.S. political context.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">🚨 Wow! Donald Trump just endorsed Hung Cao to be the next Sec of the Navy. He fled Communism in Vietnam &quot;Let me be very clear to everyone who comes here. Do NOT come to this COUNTRY and ask for the American DREAM if you’re not willing to obey the American LAWS and embrace https://t.co/MwUBM8gif3</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">🚨 Wow! Donald Trump just endorsed Hung Cao to be the next Sec of the Navy. He fled Communism in Vietnam &quot;Let me be very clear to everyone who comes here. Do NOT come to this COUNTRY and ask for the American DREAM if you’re not willing to obey the American LAWS and embrace https://t.co/MwUBM8gif3</div>             <hr>             <div><a href="https://x.com/MAGAVoice/status/2094927351448809498" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_cf7cc2b7b3bc88f3366bea92fc853776.setContent(html_5fb03a2309b6e75efccae196c19c4350);
+            
+        
+
+        marker_18ec10af703055b60abde782d56a06dd.bindPopup(popup_cf7cc2b7b3bc88f3366bea92fc853776)
+        ;
+
+        
+    
+    
+            marker_18ec10af703055b60abde782d56a06dd.bindTooltip(
+                `<div>
+                     @MAGAVoice — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_de70d42f44a88590d6918e4d154dc612 = L.marker(
+                [34.5412252, 108.9237067],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_9b46065d8bf508962533bd218e849c64 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_ee4c5f03052f91db5a0c1672c7d196d8 = $(`<div id="html_ee4c5f03052f91db5a0c1672c7d196d8" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@threerights1</h4>             <div><strong>Name:</strong> 三票先生Mr.3rights</div>             <div><strong>Date:</strong> 2026-09-01T23:59:48.000Z</div>             <div><strong>Inferred location:</strong> China</div>             <div><strong>Confidence:</strong> 0.28</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written in Simplified Chinese and focuses on modern Chinese history, suggesting a Mainland China-associated context, though no explicit location is provided.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">近代中国争取宪政民主的失败历程二：“甲午战争”、“戊戌变法”和伪君子康有为 历史上日本一直在向中国学习，从徐福到鉴真大师，日本在文字、宗教、国家治理甚至动植物品种和农耕技术等很多方面都从中国学习和引进，中国一直把日本当作自己的徒弟。当然有两样东西日本没学，一是太监制度，一是科举制度。 https://t.co/KPqwW1g4pA https://t.co/Ip5tgMnyf7</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">The Failed Course of China’s Pursuit of Constitutional Democracy in Modern Times, Part Two: the “First Sino-Japanese War,” the “Hundred Days’ Reform,” and the Hypocrite Kang Youwei Throughout history, Japan has always learned from China. From Xu Fu to Master Jianzhen, Japan learned from and introduced many things from China, including writing, religion, national governance, and even plant and animal varieties and agricultural technologies. China has always regarded Japan as its apprentice. Of course, there are two things Japan did not learn: the eunuch system and the imperial examination system. https://t.co/KPqwW1g4pA https://t.co/Ip5tgMnyf7</div>             <hr>             <div><a href="https://x.com/threerights1/status/2094938302537142420" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_9b46065d8bf508962533bd218e849c64.setContent(html_ee4c5f03052f91db5a0c1672c7d196d8);
+            
+        
+
+        marker_de70d42f44a88590d6918e4d154dc612.bindPopup(popup_9b46065d8bf508962533bd218e849c64)
+        ;
+
+        
+    
+    
+            marker_de70d42f44a88590d6918e4d154dc612.bindTooltip(
+                `<div>
+                     @threerights1 — China
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_d14651bdcc9961dee3eb599c405805bd = L.marker(
+                [23.9739374, 120.9820179],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_e0a3314545afa9d4e4d9fd7ba658e331 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_637c80fc0906aac059d5fa53a5923917 = $(`<div id="html_637c80fc0906aac059d5fa53a5923917" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@threerights1</h4>             <div><strong>Name:</strong> 三票先生Mr.3rights</div>             <div><strong>Date:</strong> 2026-09-01T23:49:03.000Z</div>             <div><strong>Inferred location:</strong> Taiwan</div>             <div><strong>Confidence:</strong> 0.25</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written in Traditional Chinese, which is commonly associated with Taiwan, Hong Kong, and overseas Chinese contexts; no specific place is mentioned.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">近代中國爭取憲政民主的失敗歷程二：“甲午戰爭”、“戊戌變法”和偽君子康有為 歷史上日本一直在向中國學習，從徐福到鑒真大師，日本在文字、宗教、國家治理甚至動植物品種和農耕技術等很多方面都從中國學習和引進，中國一直把日本當作自己的徒弟。當然有兩樣東西日本沒學，一是太監制度，一是科舉制度。 https://t.co/kkrzEe5wiQ https://t.co/4jGfLSwuyz</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">The Failed History of Modern China’s Pursuit of Constitutional Democracy, Part 2: the “甲午戰爭,” the “戊戌變法,” and the Hypocrite 康有為 Throughout history, Japan has continuously learned from China. From 徐福 to 鑒真大師, Japan learned and introduced many things from China, including writing, religion, national governance, and even plant and animal varieties and agricultural techniques. China has always regarded Japan as its own apprentice. Of course, there were two things Japan did not learn: the eunuch system and the imperial examination system. https://t.co/kkrzEe5wiQ https://t.co/4jGfLSwuyz</div>             <hr>             <div><a href="https://x.com/threerights1/status/2094935598674870523" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_e0a3314545afa9d4e4d9fd7ba658e331.setContent(html_637c80fc0906aac059d5fa53a5923917);
+            
+        
+
+        marker_d14651bdcc9961dee3eb599c405805bd.bindPopup(popup_e0a3314545afa9d4e4d9fd7ba658e331)
+        ;
+
+        
+    
+    
+            marker_d14651bdcc9961dee3eb599c405805bd.bindTooltip(
+                `<div>
+                     @threerights1 — Taiwan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_d7faf038cd4e43fadb38be9b412d92e6 = L.marker(
+                [34.5412252, 108.9237067],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_7024a547292f8a5585a8d07be8480fd3 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_1c7f7b9b12dc8ac7e4eb2b58162b0df1 = $(`<div id="html_1c7f7b9b12dc8ac7e4eb2b58162b0df1" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@heken34704030</h4>             <div><strong>Name:</strong> 进步哥(GANG OUYANG)</div>             <div><strong>Date:</strong> 2026-09-01T23:47:54.000Z</div>             <div><strong>Inferred location:</strong> China</div>             <div><strong>Confidence:</strong> 0.88</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post is in Simplified Chinese and explicitly discusses China&#x27;s reforms, Chinese institutions, and political leaders.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">当代不应忘却的勇士（三百二十九） 陈一谘是1980年代中国农村改革、经济改革和政治体制改革的重要智囊与推动者。 他曾任中国经济体制改革研究所所长、中国政治体制改革研究会副会长，兼任北京大学、人民大学等高校教授，被胡耀邦、赵紫阳等改革派领导人器重，被视为赵紫阳核心经济智囊之一。 https://t.co/ItELYgB13t</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Warriors of the Contemporary Era Who Should Not Be Forgotten (329) Chen Yizi was an important adviser and driving force behind China’s rural reforms, economic reforms, and political system reforms in the 1980s. He served as director of the China Institute of Economic System Reform and vice president of the China Association for Political System Reform, while also serving as a professor at universities including Peking University and Renmin University. He was highly valued by reformist leaders such as Hu Yaobang and Zhao Ziyang, and was regarded as one of Zhao Ziyang’s core economic advisers. https://t.co/ItELYgB13t</div>             <hr>             <div><a href="https://x.com/heken34704030/status/2094935309054365868" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_7024a547292f8a5585a8d07be8480fd3.setContent(html_1c7f7b9b12dc8ac7e4eb2b58162b0df1);
+            
+        
+
+        marker_d7faf038cd4e43fadb38be9b412d92e6.bindPopup(popup_7024a547292f8a5585a8d07be8480fd3)
+        ;
+
+        
+    
+    
+            marker_d7faf038cd4e43fadb38be9b412d92e6.bindTooltip(
+                `<div>
+                     @heken34704030 — China
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_539653e6b9b13ad52c0805fcbfab6bca = L.marker(
+                [36.5748441, 139.2394179],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_f4797d457fa962d73313a3aa85484f64 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_a0c5c37f1dd7eac960a0d7dcc1b13ec3 = $(`<div id="html_a0c5c37f1dd7eac960a0d7dcc1b13ec3" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@DAIWA7777777</h4>             <div><strong>Name:</strong> 日本大和農場（筹建申请中）</div>             <div><strong>Date:</strong> 2026-09-01T23:47:53.000Z</div>             <div><strong>Inferred location:</strong> Japan</div>             <div><strong>Confidence:</strong> 0.55</div>             <div><strong>Source:</strong> display_name</div>             <div><strong>Reason:</strong> The display name explicitly includes 日本 (Japan) and refers to a Japanese Yamato farm, while the post itself discusses U.S. politics without naming a local place.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">🚨 刚刚：美国众议院投票谴责社会主义，令人震惊的是192名民主党人投了反对票 最终投票结果：220-192 再读一遍：192名众议院民主党人，占压倒性超多数，支持社会主义！ https://t.co/oyhofMMHGx</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">🚨 Just now: The U.S. House of Representatives voted to condemn socialism. Shockingly, 192 Democrats voted against it. Final vote result: 220-192 Read that again: 192 House Democrats, an overwhelming supermajority, support socialism! https://t.co/oyhofMMHGx</div>             <hr>             <div><a href="https://x.com/DAIWA7777777/status/2094935305644294468" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_f4797d457fa962d73313a3aa85484f64.setContent(html_a0c5c37f1dd7eac960a0d7dcc1b13ec3);
+            
+        
+
+        marker_539653e6b9b13ad52c0805fcbfab6bca.bindPopup(popup_f4797d457fa962d73313a3aa85484f64)
+        ;
+
+        
+    
+    
+            marker_539653e6b9b13ad52c0805fcbfab6bca.bindTooltip(
+                `<div>
+                     @DAIWA7777777 — Japan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_d66b517757d97f91461b1f6e467826eb = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_ae2309773c1ec06eebc24ec279facbad = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_d6e57bab87048f9b88ebfeda2767a31d = $(`<div id="html_d6e57bab87048f9b88ebfeda2767a31d" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@SSK2024</h4>             <div><strong>Name:</strong> 萧生客SSK🇺🇸🇨🇦</div>             <div><strong>Date:</strong> 2026-09-01T23:46:51.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.62</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post focuses on U.S. House voting and urges readers to vote Republican in the U.S.; the display name also includes U.S. and Canadian flags.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">💥美国众议院投票谴责社会主义，竟然有192名民主党人投了反对票！ 最终投票结果：220票赞成，192票反对 请再读一遍：192名众议院民主党人 - 一个压倒性的超级多数 - 支持社会主义！ 这太可怕了。 11月请投给共和党，因为国家的命运取决于此！ https://t.co/RFVuAoxqRU</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">💥The U.S. House of Representatives voted to condemn socialism, and 192 Democrats actually voted against it! Final vote result: 220 votes in favor, 192 votes against Please read that again: 192 House Democrats—a supermajority—support socialism! This is terrifying. Vote Republican in November, because the fate of the nation depends on it! https://t.co/RFVuAoxqRU</div>             <hr>             <div><a href="https://x.com/SSK2024/status/2094935047388221774" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_ae2309773c1ec06eebc24ec279facbad.setContent(html_d6e57bab87048f9b88ebfeda2767a31d);
+            
+        
+
+        marker_d66b517757d97f91461b1f6e467826eb.bindPopup(popup_ae2309773c1ec06eebc24ec279facbad)
+        ;
+
+        
+    
+    
+            marker_d66b517757d97f91461b1f6e467826eb.bindTooltip(
+                `<div>
+                     @SSK2024 — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_37624c79716b0acda4583405cdb9a16d = L.marker(
+                [36.7014631, -118.755997],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_9da344a781648cb9114a3d63bea8dff5 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_b552cee6b2f3233e02a1672ee755adeb = $(`<div id="html_b552cee6b2f3233e02a1672ee755adeb" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@calibillionare</h4>             <div><strong>Name:</strong> 加州大富翁</div>             <div><strong>Date:</strong> 2026-09-01T23:20:05.000Z</div>             <div><strong>Inferred location:</strong> California, United States</div>             <div><strong>Confidence:</strong> 0.55</div>             <div><strong>Source:</strong> display_name</div>             <div><strong>Reason:</strong> The display name includes “加州” (California), indicating an association with California; the Chinese-language political commentary also references U.S. politics.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">从黄左逼攻击大老王来看，大老王现在的政治光谱为中左，和目前的中国共产党高度重合。其实大老王夹在左派和右派中间也挺痛苦的，所以欧美政治很难中间派，要么左，当民主党的乏走狗，要么右，MCGA，中共这样的中左路线，两边都不讨好，但至少王吉周不会让自己的孩子成为变性人，顶天也就是大家一起发财 https://t.co/5tP5oeOqSf</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Judging by the attacks from the yellow leftist assholes on 大老王, 大老王’s current political position is center-left, highly aligned with that of the Chinese Communist Party. In fact, being caught between the left and the right is quite painful for 大老王 too, which is why it is so difficult to be a centrist in European and American politics: either go left and become a lackey of the Democratic Party, or go right—MCGA. A center-left path like that of the CCP pleases neither side, but at least 王吉周 won’t let his own children become transgender; at worst, everyone gets rich together. https://t.co/5tP5oeOqSf</div>             <hr>             <div><a href="https://x.com/calibillionare/status/2094928311025877017" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_9da344a781648cb9114a3d63bea8dff5.setContent(html_b552cee6b2f3233e02a1672ee755adeb);
+            
+        
+
+        marker_37624c79716b0acda4583405cdb9a16d.bindPopup(popup_9da344a781648cb9114a3d63bea8dff5)
+        ;
+
+        
+    
+    
+            marker_37624c79716b0acda4583405cdb9a16d.bindTooltip(
+                `<div>
+                     @calibillionare — California, United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_0d2e51e042c34e0f6f6480490fb8f070 = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_969db86ff53dfd671f229fad2a14a16e = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_bb78f074c7bf0a61d0b2a88db6b32fa5 = $(`<div id="html_bb78f074c7bf0a61d0b2a88db6b32fa5" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@WendyWu06088732</h4>             <div><strong>Name:</strong> Wendy W</div>             <div><strong>Date:</strong> 2026-09-01T23:15:27.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.78</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post explicitly discusses the U.S. House of Representatives, U.S. Democrats and Republicans, and voting in November.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">🚨 突发消息：美国众议院投票谴责社会主义，竟有高达 192 名民主党人投了反对票！ 最终投票结果：220 票对 192 票。 请再看一遍：192 名众议院民主党人——占据了党内绝大多数——竟然支持社会主义！ 这太可怕了。 11 月请投票支持共和党（投“红色”一票），因为这关乎国家的命运！🇺🇸 https://t.co/YFBEUjUAWN</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">🚨 Breaking news: The U.S. House of Representatives voted to condemn socialism, and an astonishing 192 Democrats voted against it! Final vote result: 220 votes to 192. Look at it again: 192 House Democrats—an overwhelming majority of the party—actually support socialism! This is terrifying. In November, vote Republican (vote “red”), because the fate of the country is at stake! 🇺🇸 https://t.co/YFBEUjUAWN</div>             <hr>             <div><a href="https://x.com/WendyWu06088732/status/2094927141901365590" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_969db86ff53dfd671f229fad2a14a16e.setContent(html_bb78f074c7bf0a61d0b2a88db6b32fa5);
+            
+        
+
+        marker_0d2e51e042c34e0f6f6480490fb8f070.bindPopup(popup_969db86ff53dfd671f229fad2a14a16e)
+        ;
+
+        
+    
+    
+            marker_0d2e51e042c34e0f6f6480490fb8f070.bindTooltip(
+                `<div>
+                     @WendyWu06088732 — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_bb187a9f1c68c23b1e7aa962b8330ec4 = L.marker(
+                [34.5412252, 108.9237067],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_3cdde70432ff0081579061c18f7a8e78 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_143cf4fd57f2745d03e922357616bb30 = $(`<div id="html_143cf4fd57f2745d03e922357616bb30" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@Wangwenhaha0518</h4>             <div><strong>Name:</strong> 量子·王文哈哈（新中国联邦）</div>             <div><strong>Date:</strong> 2026-09-01T23:09:26.000Z</div>             <div><strong>Inferred location:</strong> China</div>             <div><strong>Confidence:</strong> 0.2</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written in Simplified Chinese, which broadly suggests a Mainland Chinese or overseas Chinese context, but no specific location is stated.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">共匪及以其为首的邪恶轴心组织更加明确地站到了民主自由国家的对立面，这场正义与邪恶的战斗接下来一定会更加激烈残酷； 一场金融危机将在不久之后爆发，很可能就在美国中期选举前引爆🧨； https://t.co/a1rDrQ2LPH</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">The Chinese Communist bandits and the evil axis organizations led by them have taken an even clearer stance on the opposite side of the democratic and free countries. The battle between justice and evil will certainly become even more intense and brutal from here on; A financial crisis will erupt before long, very likely being triggered before the U.S. midterm elections🧨; https://t.co/a1rDrQ2LPH</div>             <hr>             <div><a href="https://x.com/Wangwenhaha0518/status/2094925630433571218" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_3cdde70432ff0081579061c18f7a8e78.setContent(html_143cf4fd57f2745d03e922357616bb30);
+            
+        
+
+        marker_bb187a9f1c68c23b1e7aa962b8330ec4.bindPopup(popup_3cdde70432ff0081579061c18f7a8e78)
+        ;
+
+        
+    
+    
+            marker_bb187a9f1c68c23b1e7aa962b8330ec4.bindTooltip(
+                `<div>
+                     @Wangwenhaha0518 — China
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_2e8cadc531944cdba2f76c7f872ac72d = L.marker(
+                [34.5412252, 108.9237067],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_c4c546a275e9e9c350a3f0a53b2db48b = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_65b6ca630fdbb65c28107157d0a859b2 = $(`<div id="html_65b6ca630fdbb65c28107157d0a859b2" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@WeicaoC</h4>             <div><strong>Name:</strong> 人心似水</div>             <div><strong>Date:</strong> 2026-09-01T23:06:54.000Z</div>             <div><strong>Inferred location:</strong> China</div>             <div><strong>Confidence:</strong> 0.25</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written in Simplified Chinese, suggesting a Chinese-language context, but it contains no reliable explicit location for the author.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@ZJ20672066 首先，这只能说明“越来越多中国民主人士”违反美国法律了；其次，你反共跑人家美国去干啥？共在美国吗？</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@ZJ20672066 First, this can only show that “more and more Chinese democracy activists” are violating U.S. law; secondly, if you’re anti-communist, what are you going to the U.S. for? Is the Communist Party in the U.S.?</div>             <hr>             <div><a href="https://x.com/WeicaoC/status/2094924992534511864" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_c4c546a275e9e9c350a3f0a53b2db48b.setContent(html_65b6ca630fdbb65c28107157d0a859b2);
+            
+        
+
+        marker_2e8cadc531944cdba2f76c7f872ac72d.bindPopup(popup_c4c546a275e9e9c350a3f0a53b2db48b)
+        ;
+
+        
+    
+    
+            marker_2e8cadc531944cdba2f76c7f872ac72d.bindTooltip(
+                `<div>
+                     @WeicaoC — China
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_5f057582adff83bd5905ebb0aadc20ba = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_188980af0f82b059178795a71f7e4369 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_f7ceadc81cecd205897783363d5a1ad9 = $(`<div id="html_f7ceadc81cecd205897783363d5a1ad9" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@helen_maga99</h4>             <div><strong>Name:</strong> Helen 🇺🇸👉PASS THE SAVE ACT</div>             <div><strong>Date:</strong> 2026-09-01T22:54:40.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.55</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post explicitly discusses the United States and U.S. political parties, while the display name includes a U.S. flag; the Simplified Chinese account likely reflects a Chinese-speaking audience in or focused on the U.S.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">民运说他们是反共的，可是在美国安全的反美共他们可不反。民主党那么烂他们还往上靠 https://t.co/pwv2xNWioW</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">The democracy movement says they’re anti-communist, but they don’t oppose the anti-American communists who are safe in the United States. The Democratic Party is so awful, yet they still cozy up to it. https://t.co/pwv2xNWioW</div>             <hr>             <div><a href="https://x.com/helen_maga99/status/2094921912812290430" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_188980af0f82b059178795a71f7e4369.setContent(html_f7ceadc81cecd205897783363d5a1ad9);
+            
+        
+
+        marker_5f057582adff83bd5905ebb0aadc20ba.bindPopup(popup_188980af0f82b059178795a71f7e4369)
+        ;
+
+        
+    
+    
+            marker_5f057582adff83bd5905ebb0aadc20ba.bindTooltip(
+                `<div>
+                     @helen_maga99 — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_d10e88fdf5a4aed969efb4919a9cfe69 = L.marker(
+                [39.3014159, -76.5888477],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_72af6c82df106db7e55bd339455a123e = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_5fa11a0ba05876572166740b854b4915 = $(`<div id="html_5fa11a0ba05876572166740b854b4915" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@aiham230</h4>             <div><strong>Name:</strong> أيهم</div>             <div><strong>Date:</strong> 2026-09-01T23:33:28.000Z</div>             <div><strong>Inferred location:</strong> Middle East</div>             <div><strong>Confidence:</strong> 0.2</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is in Arabic, indicating an Arabic-speaking region, but it contains no reliable location-specific evidence.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">وحوش بشرية تهاجم افراح الناس العزل لا يعرفون إنسانية ولا يعرفون حقوق الإنسان ولا يعرفون شرف الخصومة سيندمون وستكون عاقبتهم وخيمة جرحى العدوان الأميركي على إيران بنك أهداف امريكا ام الديمقراطية #امريكا_ام_الارهاب https://t.co/W2wpRIFP0H</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Human monsters attack the celebrations of defenseless people. They know neither humanity, nor human rights, nor the honor of adversaries. They will regret it, and their fate will be dire. The wounded of the American aggression against Iran America’s target bank, the mother of democracy #امريكا_ام_الارهاب https://t.co/W2wpRIFP0H</div>             <hr>             <div><a href="https://x.com/aiham230/status/2094931677424345386" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_72af6c82df106db7e55bd339455a123e.setContent(html_5fa11a0ba05876572166740b854b4915);
+            
+        
+
+        marker_d10e88fdf5a4aed969efb4919a9cfe69.bindPopup(popup_72af6c82df106db7e55bd339455a123e)
+        ;
+
+        
+    
+    
+            marker_d10e88fdf5a4aed969efb4919a9cfe69.bindTooltip(
+                `<div>
+                     @aiham230 — Middle East
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_fb892ebcc5ceb32bd3cf221261361a94 = L.marker(
+                [39.3014159, -76.5888477],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_31969ccc2794f4804be3c1b2238a21db = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_6a5e3810bdc765c1dbc3dc971bc13442 = $(`<div id="html_6a5e3810bdc765c1dbc3dc971bc13442" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@sufianjubran</h4>             <div><strong>Name:</strong> Sufian Jubran سفيان جبران</div>             <div><strong>Date:</strong> 2026-09-01T22:50:11.000Z</div>             <div><strong>Inferred location:</strong> Middle East</div>             <div><strong>Confidence:</strong> 0.2</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written in Arabic, indicating a likely connection to the Arabic-speaking Middle East, but it provides no explicit location.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">كان باقي نقطة النفوذ الناعم للحوثيين وحزب الله وإيران بمراكز البحوث والمنظمات والجامعات في الغرب وفي الحزب الديمقراطي شكراً @Ndawsari وأنت تضعين النقاط على الحروف أمام لجنة الشؤون الخارجية في الكونغرس الأمريكي أتابعك منذ فترة ورأيتك أفصح من يشرح ويصف الوضع باليمن وكلما حذرت منه https://t.co/fDHqUCV2cS</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">One point that remained was the Houthis’, Hezbollah’s, and Iran’s soft power influence in research centers, organizations, and universities in the West and within the Democratic Party. Thank you @Ndawsari for spelling things out before the U.S. Congress’s Foreign Affairs Committee. I’ve been following you for some time, and I’ve found you to be the most articulate in explaining and describing the situation in Yemen. And whenever you warned about it https://t.co/fDHqUCV2cS</div>             <hr>             <div><a href="https://x.com/sufianjubran/status/2094920786062565558" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_31969ccc2794f4804be3c1b2238a21db.setContent(html_6a5e3810bdc765c1dbc3dc971bc13442);
+            
+        
+
+        marker_fb892ebcc5ceb32bd3cf221261361a94.bindPopup(popup_31969ccc2794f4804be3c1b2238a21db)
+        ;
+
+        
+    
+    
+            marker_fb892ebcc5ceb32bd3cf221261361a94.bindTooltip(
+                `<div>
+                     @sufianjubran — Middle East
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_74ddd9bde1e0a6279481acc3e5443ffe = L.marker(
+                [16.3471243, 47.8915271],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_334abdb84019f1b804e6c12e515ae69b = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_7bdf7ae5d97a6d2a7723136c6c4fd9e3 = $(`<div id="html_7bdf7ae5d97a6d2a7723136c6c4fd9e3" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@FAISAL_ALBATATI</h4>             <div><strong>Name:</strong> فيصل البطاطي</div>             <div><strong>Date:</strong> 2026-09-01T22:36:29.000Z</div>             <div><strong>Inferred location:</strong> Yemen</div>             <div><strong>Confidence:</strong> 0.55</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post discusses secession, national unity, and partition in a context strongly associated with Yemen&#x27;s southern separatist debate.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@aljifri191 ماذا نقول لدعاة الانفصال عندما يرفعون شعار: مظاهراتنا سلمية؟ 👇👇 يخطئ من يظن أن كل ما يرفع تحت شعار &quot;السلمية&quot; أو &quot;الديمقراطية&quot; يصبح مشروعاً مقبولاً. فالديمقراطية لا تعني هدم الدولة، ولا تعني المساس بوحدتها الوطنية، ولا تعني رفع راية غير رايتها الرسمية، ولا تعني الدعوة إلى تقسيم</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@aljifri191 What do we say to advocates of secession when they raise the slogan: “Our demonstrations are peaceful”? 👇👇 Those who think that everything carried out under the slogan of “peacefulness” or “democracy” becomes legitimate and acceptable are mistaken. Democracy does not mean destroying the state, nor does it mean compromising its national unity, nor does it mean raising a flag other than its official flag, nor does it mean calling for partition.</div>             <hr>             <div><a href="https://x.com/FAISAL_ALBATATI/status/2094917338944434505" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_334abdb84019f1b804e6c12e515ae69b.setContent(html_7bdf7ae5d97a6d2a7723136c6c4fd9e3);
+            
+        
+
+        marker_74ddd9bde1e0a6279481acc3e5443ffe.bindPopup(popup_334abdb84019f1b804e6c12e515ae69b)
+        ;
+
+        
+    
+    
+            marker_74ddd9bde1e0a6279481acc3e5443ffe.bindTooltip(
+                `<div>
+                     @FAISAL_ALBATATI — Yemen
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_f3992eccb3fab407c72728a560a64df2 = L.marker(
+                [16.3471243, 47.8915271],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_ff29bbb66e26bb73af74cc83fa093052 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_051be7513db30f25c43e963822475205 = $(`<div id="html_051be7513db30f25c43e963822475205" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@FAISAL_ALBATATI</h4>             <div><strong>Name:</strong> فيصل البطاطي</div>             <div><strong>Date:</strong> 2026-09-01T22:33:27.000Z</div>             <div><strong>Inferred location:</strong> Yemen</div>             <div><strong>Confidence:</strong> 0.62</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> Arabic-language political commentary opposing secession and emphasizing national unity strongly aligns with Yemen&#x27;s southern secession debate; the account name provides a supporting but non-explicit clue.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">ماذا نقول لدعاة الانفصال عندما يرفعون شعار: مظاهراتنا سلمية؟ 👇👇 يخطئ من يظن أن كل ما يرفع تحت شعار &quot;السلمية&quot; أو &quot;الديمقراطية&quot; يصبح مشروعاً مقبولاً. فالديمقراطية لا تعني هدم الدولة، ولا تعني المساس بوحدتها الوطنية، ولا تعني رفع راية غير رايتها الرسمية، ولا تعني الدعوة إلى تقسيم</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">What do we say to advocates of secession when they raise the slogan: “Our demonstrations are peaceful”? 👇👇 Anyone who thinks that everything carried out under the slogan of “peacefulness” or “democracy” becomes an acceptable cause is mistaken. Democracy does not mean destroying the state, compromising its national unity, raising a flag other than its official one, or calling for partition.</div>             <hr>             <div><a href="https://x.com/FAISAL_ALBATATI/status/2094916574503198768" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_ff29bbb66e26bb73af74cc83fa093052.setContent(html_051be7513db30f25c43e963822475205);
+            
+        
+
+        marker_f3992eccb3fab407c72728a560a64df2.bindPopup(popup_ff29bbb66e26bb73af74cc83fa093052)
+        ;
+
+        
+    
+    
+            marker_f3992eccb3fab407c72728a560a64df2.bindTooltip(
+                `<div>
+                     @FAISAL_ALBATATI — Yemen
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_da5abdedcab02d2ae2f1096ae72ccdc3 = L.marker(
+                [54.7023545, -3.2765753],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_f70d0ba8f3c59155ac28d6ccdef9315b = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_615380ccbbcfe0cb5657748e5c4b5bc9 = $(`<div id="html_615380ccbbcfe0cb5657748e5c4b5bc9" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@N0R_SM</h4>             <div><strong>Name:</strong> المصدر المُطَّلِع</div>             <div><strong>Date:</strong> 2026-09-01T22:31:19.000Z</div>             <div><strong>Inferred location:</strong> United Kingdom</div>             <div><strong>Confidence:</strong> 0.72</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post explicitly discusses Britain and the United Kingdom’s oil, refining, and fuel sectors.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">بسبب الحثالة اليسارية يشهد قطاع النفط والتكرير في بريطانيا انكماشاً متسارعاً. فقد أُغلقت مصفاتان في عام 2025 ليتبقى أربعة مواقع عاملة فقط. ولا يزال الوقود السائل يمثل 47% من استهلاك الطاقة النهائي في المملكة المتحدة. ولا توجد بدائل قابلة للتوسع على المدى القريب للديزل في قطاعات</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Because of the leftist scum, Britain’s oil and refining sector is experiencing an accelerating contraction. Two refineries were closed in 2025, leaving only four operating sites. Liquid fuels still account for 47% of final energy consumption in the United Kingdom. There are no scalable near-term alternatives to diesel in sectors</div>             <hr>             <div><a href="https://x.com/N0R_SM/status/2094916038827651201" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_f70d0ba8f3c59155ac28d6ccdef9315b.setContent(html_615380ccbbcfe0cb5657748e5c4b5bc9);
+            
+        
+
+        marker_da5abdedcab02d2ae2f1096ae72ccdc3.bindPopup(popup_f70d0ba8f3c59155ac28d6ccdef9315b)
+        ;
+
+        
+    
+    
+            marker_da5abdedcab02d2ae2f1096ae72ccdc3.bindTooltip(
+                `<div>
+                     @N0R_SM — United Kingdom
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_3cf7656be83b88d22b7634f366a53337 = L.marker(
+                [26.2540493, 29.2675469],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_903703e925cbfc3fbf16dbdc3fe4afbc = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_7e91092730a866f05e0e88eba3711751 = $(`<div id="html_7e91092730a866f05e0e88eba3711751" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@haythamabokhal1</h4>             <div><strong>Name:</strong> Haytham Abokhalil هيثم أبوخليل</div>             <div><strong>Date:</strong> 2026-09-01T22:15:54.000Z</div>             <div><strong>Inferred location:</strong> Egypt</div>             <div><strong>Confidence:</strong> 0.42</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> Arabic text uses phrasing consistent with Egyptian usage, and the account name is associated with an Egyptian public commentator; no explicit city is mentioned.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">استدعاء الرقص في مسرحيات الانتخابات يمكن تبريره عند المتخلفين انه لزوم العرس الديمقراطي استدعاءه لاستقبال رئيس دولة تصنع من الإبرة إلى الصاروخ ليس من الفلكلور الشعبي وليس من القوة الناعمة هذه خفة وعبث تعجز عن التمييز بين البروتوكول الرسمي ولجنة الانتخابات هي وصلت نقلد أولاد زايد؟ https://t.co/Iaf4bApwgU</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Calling for dancing in election spectacles can be justified by backward people as part of the “democratic wedding.” Calling for it to welcome a head of state whose country manufactures everything from needles to missiles is neither popular folklore nor soft power. This is frivolity and absurdity, incapable of distinguishing between official protocol and an election committee. Have we really reached the point of imitating the sons of Zayed? https://t.co/Iaf4bApwgU</div>             <hr>             <div><a href="https://x.com/haythamabokhal1/status/2094912157313859746" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_903703e925cbfc3fbf16dbdc3fe4afbc.setContent(html_7e91092730a866f05e0e88eba3711751);
+            
+        
+
+        marker_3cf7656be83b88d22b7634f366a53337.bindPopup(popup_903703e925cbfc3fbf16dbdc3fe4afbc)
+        ;
+
+        
+    
+    
+            marker_3cf7656be83b88d22b7634f366a53337.bindTooltip(
+                `<div>
+                     @haythamabokhal1 — Egypt
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_f4e3d38f9b770f85e95ec04df04c3a05 = L.marker(
+                [14.5844444, 29.4917691],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_ddb856b6a1d62f2d587e955968e35420 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_82404b42a18f1fbfd40220258fab0b52 = $(`<div id="html_82404b42a18f1fbfd40220258fab0b52" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@abubakr_z</h4>             <div><strong>Name:</strong> Abubakr Zaid.</div>             <div><strong>Date:</strong> 2026-09-01T22:14:39.000Z</div>             <div><strong>Inferred location:</strong> Sudan</div>             <div><strong>Confidence:</strong> 0.78</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post explicitly discusses the Janjaweed, a Sudan-associated armed group, and refers to a country&#x27;s political history since 1990, strongly indicating Sudan.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@yasin123ah @SDNT59 اعدام علي طول . بلد عايشة في ديمقراطية منذ ١٩٩٠. . الجنجويد ظاهرة افريقية لابد مواجهتها بالحسم العسكري</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@yasin123ah @SDNT59 Straight to execution. A country that has been living in democracy since ١٩٩٠. The Janjaweed are an African phenomenon that must be confronted with military force.</div>             <hr>             <div><a href="https://x.com/abubakr_z/status/2094911844267803021" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_ddb856b6a1d62f2d587e955968e35420.setContent(html_82404b42a18f1fbfd40220258fab0b52);
+            
+        
+
+        marker_f4e3d38f9b770f85e95ec04df04c3a05.bindPopup(popup_ddb856b6a1d62f2d587e955968e35420)
+        ;
+
+        
+    
+    
+            marker_f4e3d38f9b770f85e95ec04df04c3a05.bindTooltip(
+                `<div>
+                     @abubakr_z — Sudan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_5756935af45b1e9f1c68ce746d2781ce = L.marker(
+                [28.3347722, -10.3713379],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_ea77212ff4809930e4dfa30af93a3df5 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_e6e3f66b0007b079aa93cfde14d258fc = $(`<div id="html_e6e3f66b0007b079aa93cfde14d258fc" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@2MInteractive</h4>             <div><strong>Name:</strong> 2M.ma</div>             <div><strong>Date:</strong> 2026-09-01T22:10:00.000Z</div>             <div><strong>Inferred location:</strong> Morocco</div>             <div><strong>Confidence:</strong> 0.98</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> Moroccan Darija wording, the 2M.ma account, and hashtags explicitly referencing Morocco&#x27;s elections indicate Morocco.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&quot;ولاد عبد الواحد ماشي كلهم واحد&quot; تعليق الأمين العام لحزب جبهة القوى الديمقراطية على تشابه برامج الأحزاب السياسية. #ساعة_الصراحة #المغرب_ينتخب #انتخابات_2026 https://t.co/IT7KLN9hOp</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&quot;Abdelouahed&#x27;s children are not all alike&quot; The Secretary-General of the Democratic Forces Front Party comments on the similarity of political parties&#x27; programs. #ساعة_الصراحة #المغرب_ينتخب #انتخابات_2026 https://t.co/IT7KLN9hOp</div>             <hr>             <div><a href="https://x.com/2MInteractive/status/2094910671636873223" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_ea77212ff4809930e4dfa30af93a3df5.setContent(html_e6e3f66b0007b079aa93cfde14d258fc);
+            
+        
+
+        marker_5756935af45b1e9f1c68ce746d2781ce.bindPopup(popup_ea77212ff4809930e4dfa30af93a3df5)
+        ;
+
+        
+    
+    
+            marker_5756935af45b1e9f1c68ce746d2781ce.bindTooltip(
+                `<div>
+                     @2MInteractive — Morocco
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_a8478680009fd56d4c9868ffa717ab1c = L.marker(
+                [25.3108807, 51.5081812],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_2b191cf71e7f702ccfb0f0ce66f60668 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_a5f27b1c901c4bb30830d371713b9ba7 = $(`<div id="html_a5f27b1c901c4bb30830d371713b9ba7" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@AJArabic</h4>             <div><strong>Name:</strong> قناة الجزيرة</div>             <div><strong>Date:</strong> 2026-09-01T21:58:53.000Z</div>             <div><strong>Inferred location:</strong> Doha, Qatar</div>             <div><strong>Confidence:</strong> 0.92</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post is from Al Jazeera Arabic (AJArabic), whose main headquarters are in Doha, Qatar.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">السيناتور الديمقراطي إد ماركي يقول في تصريح للجزيرة إنه في حال فوزه بولاية جديدة سيدفع برؤية تقدمية تشمل توفير الرعاية الصحية للجميع #الأخبار https://t.co/DB8sPFlxgm</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Democratic Senator Ed Markey says in a statement to Al Jazeera that if he wins another term, he will push for a progressive vision that includes providing healthcare for everyone #الأخبار https://t.co/DB8sPFlxgm</div>             <hr>             <div><a href="https://x.com/AJArabic/status/2094907873616667060" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_2b191cf71e7f702ccfb0f0ce66f60668.setContent(html_a5f27b1c901c4bb30830d371713b9ba7);
+            
+        
+
+        marker_a8478680009fd56d4c9868ffa717ab1c.bindPopup(popup_2b191cf71e7f702ccfb0f0ce66f60668)
+        ;
+
+        
+    
+    
+            marker_a8478680009fd56d4c9868ffa717ab1c.bindTooltip(
+                `<div>
+                     @AJArabic — Doha, Qatar
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_d3a8b06e95e19780f363e76ed92ba62c = L.marker(
+                [23.9739374, 120.9820179],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_e4a4ee8d82275aa0efc22d1e0b2adbd4 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_31b78cddbefb79091871d4bc8844273b = $(`<div id="html_31b78cddbefb79091871d4bc8844273b" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@SocDemCNBunny</h4>             <div><strong>Name:</strong> Lapin Chan Socialiste🇨🇳🇫🇷🇺🇦🇵🇸🏳️‍🌈🏳️‍⚧️</div>             <div><strong>Date:</strong> 2026-09-01T16:10:16.000Z</div>             <div><strong>Inferred location:</strong> Taiwan</div>             <div><strong>Confidence:</strong> 0.27</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post uses Traditional Chinese, which is commonly associated with Taiwan, though the language alone does not establish a specific location.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@Mark67358226 @Konizaza 中共是從一個政黨通過新民主主義革命國共內戰後成為中華人民共和國唯一執政黨，改革開放後放棄階級先鋒隊演變成中國作為民族國家的大型利維坦。</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@Mark67358226 @Konizaza The CCP went from being a political party to becoming the sole ruling party of the People’s Republic of China through the New Democratic Revolution and the Chinese Civil War. After the Reform and Opening Up, it abandoned its role as the vanguard of the class and evolved into a large Leviathan of China as a nation-state.</div>             <hr>             <div><a href="https://x.com/SocDemCNBunny/status/2094820142890770755" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_e4a4ee8d82275aa0efc22d1e0b2adbd4.setContent(html_31b78cddbefb79091871d4bc8844273b);
+            
+        
+
+        marker_d3a8b06e95e19780f363e76ed92ba62c.bindPopup(popup_e4a4ee8d82275aa0efc22d1e0b2adbd4)
+        ;
+
+        
+    
+    
+            marker_d3a8b06e95e19780f363e76ed92ba62c.bindTooltip(
+                `<div>
+                     @SocDemCNBunny — Taiwan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_e4a1782fdfc4b045558c067f2e612fb8 = L.marker(
+                [26.5707754, 128.0255901],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_b3de97f06f0ee6227da4e88a2ef5a455 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_70186fa2de9823e2a33771b1fcf1dcdd = $(`<div id="html_70186fa2de9823e2a33771b1fcf1dcdd" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@koji_yohena</h4>             <div><strong>Name:</strong> 饒平名 康司</div>             <div><strong>Date:</strong> 2026-09-01T13:22:59.000Z</div>             <div><strong>Inferred location:</strong> Okinawa, Japan</div>             <div><strong>Confidence:</strong> 0.72</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post is in Japanese, and the display name uses the distinctive Okinawan surname 饒平名 (Yohena), indicating likely association with Okinawa, Japan.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">民主主義、只今参上！ ┐⁠(⁠ ⁠∵⁠ ⁠)⁠┌</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Democracy, here I come! ┐⁠(⁠ ⁠∵⁠ ⁠)⁠┌</div>             <hr>             <div><a href="https://x.com/koji_yohena/status/2094778045085389103" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_b3de97f06f0ee6227da4e88a2ef5a455.setContent(html_70186fa2de9823e2a33771b1fcf1dcdd);
+            
+        
+
+        marker_e4a1782fdfc4b045558c067f2e612fb8.bindPopup(popup_b3de97f06f0ee6227da4e88a2ef5a455)
+        ;
+
+        
+    
+    
+            marker_e4a1782fdfc4b045558c067f2e612fb8.bindTooltip(
+                `<div>
+                     @koji_yohena — Okinawa, Japan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_0aafff67a867398a4df9163327b001a3 = L.marker(
+                [40.3736611, 127.0870417],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_912fc5bd221d766d7a0c6deccbdc3214 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_7adf740ed9e638c8bbdb5f791d230d8a = $(`<div id="html_7adf740ed9e638c8bbdb5f791d230d8a" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@tefwMstKqVbWHiV</h4>             <div><strong>Name:</strong> トマトマン</div>             <div><strong>Date:</strong> 2026-09-01T11:52:17.000Z</div>             <div><strong>Inferred location:</strong> North Korea</div>             <div><strong>Confidence:</strong> 0.65</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post explicitly names the Democratic People&#x27;s Republic of Korea, although it may be a topic reference rather than the author&#x27;s location.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">朝鮮民主主義人民共和国 #あたまおしりゲーム</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Democratic People&#x27;s Republic of Korea #あたまおしりゲーム</div>             <hr>             <div><a href="https://x.com/tefwMstKqVbWHiV/status/2094755218894545392" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_912fc5bd221d766d7a0c6deccbdc3214.setContent(html_7adf740ed9e638c8bbdb5f791d230d8a);
+            
+        
+
+        marker_0aafff67a867398a4df9163327b001a3.bindPopup(popup_912fc5bd221d766d7a0c6deccbdc3214)
+        ;
+
+        
+    
+    
+            marker_0aafff67a867398a4df9163327b001a3.bindTooltip(
+                `<div>
+                     @tefwMstKqVbWHiV — North Korea
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_92d21d574ff9b6278f5e5d77170f7168 = L.marker(
+                [36.5748441, 139.2394179],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_50a9cde2f6379006bdaca4eb045b8999 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_d19075a07ed8bd4b71c9d56219386e19 = $(`<div id="html_d19075a07ed8bd4b71c9d56219386e19" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@atmark_smile</h4>             <div><strong>Name:</strong> (^^)あっとまーく ～目指せ積読からの脱却～</div>             <div><strong>Date:</strong> 2026-09-01T11:50:06.000Z</div>             <div><strong>Inferred location:</strong> Japan</div>             <div><strong>Confidence:</strong> 0.7</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post is written in Japanese and uses Japanese entertainment hashtags, indicating a likely Japan-based context.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">朝鮮民主主義人民共和国（20文字） #あたまおしりゲーム #バナナサンド</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Democratic People&#x27;s Republic of Korea (20 characters) #あたまおしりゲーム #バナナサンド</div>             <hr>             <div><a href="https://x.com/atmark_smile/status/2094754670652920102" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_50a9cde2f6379006bdaca4eb045b8999.setContent(html_d19075a07ed8bd4b71c9d56219386e19);
+            
+        
+
+        marker_92d21d574ff9b6278f5e5d77170f7168.bindPopup(popup_50a9cde2f6379006bdaca4eb045b8999)
+        ;
+
+        
+    
+    
+            marker_92d21d574ff9b6278f5e5d77170f7168.bindTooltip(
+                `<div>
+                     @atmark_smile — Japan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_6a991f8329135159b2b6af2884605a91 = L.marker(
+                [23.9739374, 120.9820179],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_41f593c4435df590d5e2118eb02ff416 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_39466e8e7a9f1d8c6ada345e820d56ce = $(`<div id="html_39466e8e7a9f1d8c6ada345e820d56ce" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@ChaoChungYi</h4>             <div><strong>Name:</strong> 趙Chao中毅Chung-Yi</div>             <div><strong>Date:</strong> 2026-09-01T05:05:13.000Z</div>             <div><strong>Inferred location:</strong> Taiwan</div>             <div><strong>Confidence:</strong> 0.58</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post is written in Traditional Chinese, and the Chinese name with the romanization “Chao Chung-Yi” is more consistent with a Taiwanese context than with mainland China.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">民主主義要打造地上天國，走錯開倒車很容易變成這樣；共產主義應該要從原本發展成共生共榮共義主義，走錯則是另外的慘烈情況。 https://t.co/nxWanwLpOP</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Democracy is supposed to build heaven on earth, but taking a wrong turn and going backward can easily turn it into this; communism was supposed to develop into a system of coexistence, shared prosperity, and shared justice, but taking a wrong turn leads to a different kind of tragic outcome. https://t.co/nxWanwLpOP</div>             <hr>             <div><a href="https://x.com/ChaoChungYi/status/2094652777276567961" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_41f593c4435df590d5e2118eb02ff416.setContent(html_39466e8e7a9f1d8c6ada345e820d56ce);
+            
+        
+
+        marker_6a991f8329135159b2b6af2884605a91.bindPopup(popup_41f593c4435df590d5e2118eb02ff416)
+        ;
+
+        
+    
+    
+            marker_6a991f8329135159b2b6af2884605a91.bindTooltip(
+                `<div>
+                     @ChaoChungYi — Taiwan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_1bf54dc3321ef2543f9d56cbffc791da = L.marker(
+                [36.638392, 127.6961188],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_78a43e1d48982b28700309302891f73f = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_483a5df60a20379031409c6af27d08b7 = $(`<div id="html_483a5df60a20379031409c6af27d08b7" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@chosunnews</h4>             <div><strong>Name:</strong> 朝鲜日报中文网</div>             <div><strong>Date:</strong> 2026-09-01T03:05:13.000Z</div>             <div><strong>Inferred location:</strong> South Korea</div>             <div><strong>Confidence:</strong> 0.98</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post explicitly discusses South Korean political institutions and President Lee Jae-myung, and the account is the Chinese-language edition of Chosun Ilbo.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">【[社論]政權意圖幹涉大法官候選人推薦系違憲越權】 近日，韓國總統李在明拒絕將大法院院長曹喜大提請的孫鳳基大法官候選人任命同意案提交國會，要求其重新提請其他候選人，民主黨法制司法委員會議員還出手幹涉重新提請方式。這種威脅民主主義基本原則的違憲嘗試須立即停止。 https://t.co/lRVle7R63e https://t.co/hUpwqoj73v</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">【[Editorial] The administration’s attempt to interfere in the recommendation of Supreme Court justice candidates is unconstitutional overreach】 Recently, South Korean President Lee Jae-myung refused to submit to the National Assembly the motion for consent to appoint Son Bong-gi, the Supreme Court justice candidate proposed by Supreme Court Chief Justice Cho Hee-dae, and demanded that another candidate be proposed. Democratic Party lawmakers on the Legislation and Judiciary Committee also intervened in the process of proposing a new candidate. This unconstitutional attempt, which threatens the basic principles of democracy, must be stopped immediately. https://t.co/lRVle7R63e https://t.co/hUpwqoj73v</div>             <hr>             <div><a href="https://x.com/chosunnews/status/2094622577398558864" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_78a43e1d48982b28700309302891f73f.setContent(html_483a5df60a20379031409c6af27d08b7);
+            
+        
+
+        marker_1bf54dc3321ef2543f9d56cbffc791da.bindPopup(popup_78a43e1d48982b28700309302891f73f)
+        ;
+
+        
+    
+    
+            marker_1bf54dc3321ef2543f9d56cbffc791da.bindTooltip(
+                `<div>
+                     @chosunnews — South Korea
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_13f5ad277117a2e8d3a5a0ac9bcf45f3 = L.marker(
+                [23.9739374, 120.9820179],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_2dfae0146993736eeab5dbd9c06792b3 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_8de424ad4f3680bcfaafc4873caed136 = $(`<div id="html_8de424ad4f3680bcfaafc4873caed136" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@ACLiberFree</h4>             <div><strong>Name:</strong> ACtion</div>             <div><strong>Date:</strong> 2026-09-01T03:01:45.000Z</div>             <div><strong>Inferred location:</strong> Taiwan</div>             <div><strong>Confidence:</strong> 0.3</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post uses Traditional Chinese and expresses strongly anti-CCP, pro-democracy views, which broadly suggest a Taiwan or Hong Kong context; no explicit location is provided.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">[支共:Chicoms]. 即Chinese Communist Party. 因其極權獨裁本質, 嚴重詆毀[中華]二字. 故以它用以宣揚民主主義的貶義:支那,作為對其自身稱呼作支共黨, 同英語slang:Chicoms 發音相若, 有異曲同工之妙. 乃中國人同仇敵愾之對象. 走向自由民主, 由摧毀支共Chicoms開始! https://t.co/ba7NBeZNM9</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">[支共:Chicoms]. That is, the Chinese Communist Party. Because of its totalitarian and dictatorial nature, it seriously denigrates the two characters [中華]. Therefore, using the pejorative term it uses to promote democracy—支那—as a name for itself, calling it 支共黨, whose pronunciation is similar to the English slang “Chicoms,” has a remarkably similar effect. It is the target of the Chinese people’s shared hatred of a common enemy. The path to freedom and democracy begins with destroying 支共Chicoms! https://t.co/ba7NBeZNM9</div>             <hr>             <div><a href="https://x.com/ACLiberFree/status/2094621705293475999" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_2dfae0146993736eeab5dbd9c06792b3.setContent(html_8de424ad4f3680bcfaafc4873caed136);
+            
+        
+
+        marker_13f5ad277117a2e8d3a5a0ac9bcf45f3.bindPopup(popup_2dfae0146993736eeab5dbd9c06792b3)
+        ;
+
+        
+    
+    
+            marker_13f5ad277117a2e8d3a5a0ac9bcf45f3.bindTooltip(
+                `<div>
+                     @ACLiberFree — Taiwan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_4953830dc2234f23fd27565ae10a7b3f = L.marker(
+                [35.9754168, 139.4160114],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_8c6c09ce04eefea45b71e8eb96d51bef = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_f0d38ae179808ce61af92fff5a58402e = $(`<div id="html_f0d38ae179808ce61af92fff5a58402e" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@pH7saitama</h4>             <div><strong>Name:</strong> Rock Garden</div>             <div><strong>Date:</strong> 2026-08-31T22:22:14.000Z</div>             <div><strong>Inferred location:</strong> Saitama, Japan</div>             <div><strong>Confidence:</strong> 0.78</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The username explicitly includes “saitama,” and the original text uses Japanese wording and kanji consistent with Japan.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">民主主義国 https://t.co/81iD9KKriy</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Democratic country https://t.co/81iD9KKriy</div>             <hr>             <div><a href="https://x.com/pH7saitama/status/2094551363321774506" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_8c6c09ce04eefea45b71e8eb96d51bef.setContent(html_f0d38ae179808ce61af92fff5a58402e);
+            
+        
+
+        marker_4953830dc2234f23fd27565ae10a7b3f.bindPopup(popup_8c6c09ce04eefea45b71e8eb96d51bef)
+        ;
+
+        
+    
+    
+            marker_4953830dc2234f23fd27565ae10a7b3f.bindTooltip(
+                `<div>
+                     @pH7saitama — Saitama, Japan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_dece9be6856b0d414ded9c17726f2f18 = L.marker(
+                [34.5412252, 108.9237067],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_dea068f8847c5ef398437b970bfee6f8 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_cf6d6aee4d5addb40c8c165bd762e9df = $(`<div id="html_cf6d6aee4d5addb40c8c165bd762e9df" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@AaronWu49626079</h4>             <div><strong>Name:</strong> 中华兄弟会</div>             <div><strong>Date:</strong> 2026-09-01T23:55:49.000Z</div>             <div><strong>Inferred location:</strong> China</div>             <div><strong>Confidence:</strong> 0.2</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written in Simplified Chinese, which broadly suggests a Chinese-language context, but it contains no explicit place or institutional identifier.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@mayuhappy831 大和民族必须强大起来 应对共产主义的威胁</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@mayuhappy831 The Yamato people must grow stronger to counter the threat of communism.</div>             <hr>             <div><a href="https://x.com/AaronWu49626079/status/2094937303940804613" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_dea068f8847c5ef398437b970bfee6f8.setContent(html_cf6d6aee4d5addb40c8c165bd762e9df);
+            
+        
+
+        marker_dece9be6856b0d414ded9c17726f2f18.bindPopup(popup_dea068f8847c5ef398437b970bfee6f8)
+        ;
+
+        
+    
+    
+            marker_dece9be6856b0d414ded9c17726f2f18.bindTooltip(
+                `<div>
+                     @AaronWu49626079 — China
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_73407da22a61f8f9208c6f29a14b6383 = L.marker(
+                [34.5412252, 108.9237067],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_435241968620488032f95b0ce1d0e90a = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_66bf502dbf7c0189cf3b1bbfd5883ec3 = $(`<div id="html_66bf502dbf7c0189cf3b1bbfd5883ec3" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@YangCryptoReal</h4>             <div><strong>Name:</strong> BaNoNo</div>             <div><strong>Date:</strong> 2026-09-01T23:50:54.000Z</div>             <div><strong>Inferred location:</strong> China</div>             <div><strong>Confidence:</strong> 0.28</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post includes simplified Chinese text and the search query is Chinese, suggesting a Chinese-speaking context, but no explicit city, institution, or country is identified.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">who make money in solana:CGEDT9QZDvvH5GmVkWJH2BXiMJqMJySC9ihWyr7Spump you @toly or @BernieSanders ？ lots of people lose money no one can make money 共产主义很穷 资本主义很伟大</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">who make money in solana:CGEDT9QZDvvH5GmVkWJH2BXiMJqMJySC9ihWyr7Spump you @toly or @BernieSanders ？ lots of people lose money no one can make money 共产主义很穷 资本主义很伟大</div>             <hr>             <div><a href="https://x.com/YangCryptoReal/status/2094936065610277182" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_435241968620488032f95b0ce1d0e90a.setContent(html_66bf502dbf7c0189cf3b1bbfd5883ec3);
+            
+        
+
+        marker_73407da22a61f8f9208c6f29a14b6383.bindPopup(popup_435241968620488032f95b0ce1d0e90a)
+        ;
+
+        
+    
+    
+            marker_73407da22a61f8f9208c6f29a14b6383.bindTooltip(
+                `<div>
+                     @YangCryptoReal — China
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_a9e08bbc3464d796f25c89ef3584007c = L.marker(
+                [34.5412252, 108.9237067],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_e620f7489ceafc408d00cc0cd753d494 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_3e511b8d0a4a466a0b29d524dba3976f = $(`<div id="html_3e511b8d0a4a466a0b29d524dba3976f" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@chenjun7777777</h4>             <div><strong>Name:</strong> 晨君🌟🌟🌟银河舰队</div>             <div><strong>Date:</strong> 2026-09-01T23:43:15.000Z</div>             <div><strong>Inferred location:</strong> China</div>             <div><strong>Confidence:</strong> 0.22</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written in Simplified Chinese, which suggests a Chinese-language context, but no specific city, institution, or location is stated.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">七哥关于美国对共产主义的觉醒看法：美国明白这是生死之战，七哥以身试法的时代已经结束，接下来就是要收网了 https://t.co/g8b5gwrdUh</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">七哥’s view on America’s awakening to communism: The United States understands that this is a life-or-death battle. The era of 七哥 personally testing the law is over; next, they will close the net. https://t.co/g8b5gwrdUh</div>             <hr>             <div><a href="https://x.com/chenjun7777777/status/2094934139317170225" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_e620f7489ceafc408d00cc0cd753d494.setContent(html_3e511b8d0a4a466a0b29d524dba3976f);
+            
+        
+
+        marker_a9e08bbc3464d796f25c89ef3584007c.bindPopup(popup_e620f7489ceafc408d00cc0cd753d494)
+        ;
+
+        
+    
+    
+            marker_a9e08bbc3464d796f25c89ef3584007c.bindTooltip(
+                `<div>
+                     @chenjun7777777 — China
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_e1d4a977025e21fde6a52cb030dc3b95 = L.marker(
+                [34.5412252, 108.9237067],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_0baf6c9b91bda68ca427bbdda6ea046c = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_d1b1aec83630d84ba4bbd2c4ff715db2 = $(`<div id="html_d1b1aec83630d84ba4bbd2c4ff715db2" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@Baoliaogeming64</h4>             <div><strong>Name:</strong> 淘喵先生</div>             <div><strong>Date:</strong> 2026-09-01T23:42:44.000Z</div>             <div><strong>Inferred location:</strong> China</div>             <div><strong>Confidence:</strong> 0.22</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written in Simplified Chinese, suggesting a Chinese-language context, but it contains no explicit location and discusses U.S. politics.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">🚨【最新消息】川普总统正式提名Hung Cao出任美国海军部长！ 太棒了！这绝对是个好人选！🔥 Hung Cao目前担任代理海军部长。他曾逃离共产主义，后来以共和党候选人身份竞选美国参议员。 参议院赶紧确认任命！ 川普总统表示： “我很高兴提名真正的战士Hung https://t.co/9aITKJ3mgs https://t.co/wbLgCvAR9B</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">🚨【Latest News】President Trump has officially nominated Hung Cao to serve as Secretary of the Navy! That’s fantastic! This is absolutely a great choice! 🔥 Hung Cao is currently serving as Acting Secretary of the Navy. He once fled communism and later ran for the U.S. Senate as a Republican candidate. Senate, hurry up and confirm the appointment! President Trump said: “I am pleased to nominate true warrior Hung https://t.co/9aITKJ3mgs https://t.co/wbLgCvAR9B</div>             <hr>             <div><a href="https://x.com/Baoliaogeming64/status/2094934010975674467" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_0baf6c9b91bda68ca427bbdda6ea046c.setContent(html_d1b1aec83630d84ba4bbd2c4ff715db2);
+            
+        
+
+        marker_e1d4a977025e21fde6a52cb030dc3b95.bindPopup(popup_0baf6c9b91bda68ca427bbdda6ea046c)
+        ;
+
+        
+    
+    
+            marker_e1d4a977025e21fde6a52cb030dc3b95.bindTooltip(
+                `<div>
+                     @Baoliaogeming64 — China
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_c8a22e302f5eb027ad71c67f680712b3 = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_3f098327cd3236fd5cf50ab4530e5119 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_5a020f3838982b9223d58eb519d808cd = $(`<div id="html_5a020f3838982b9223d58eb519d808cd" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@LPX2019</h4>             <div><strong>Name:</strong> Liuping Xu</div>             <div><strong>Date:</strong> 2026-09-01T23:34:37.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.82</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The post explicitly discusses U.S. House Speaker Mike Johnson, the American people, and the United States as a constitutional republic.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">众议院议长迈克·约翰逊：“今年秋天，全美民众必须回答这样一个问题：我们是要按照激进左翼民主党人的主张，将这个世界历史上最伟大的国家拱手让给共产主义和“大政府”式的社会主义；还是要维护我们作为宪政共和国的地位——维护这个伟大的国家，维护这场建立在个人自由、无限机遇、人的尊严及法治等基本原</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">House Speaker Mike Johnson: “This fall, the American people must answer the following question: Are we going to, as advocated by radical left-wing Democrats, hand over the greatest nation in world history to communism and ‘big government’ socialism; or are we going to maintain our status as a constitutional republic—maintain this great nation, maintain this endeavor founded on the basic prin.</div>             <hr>             <div><a href="https://x.com/LPX2019/status/2094931965291954213" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_3f098327cd3236fd5cf50ab4530e5119.setContent(html_5a020f3838982b9223d58eb519d808cd);
+            
+        
+
+        marker_c8a22e302f5eb027ad71c67f680712b3.bindPopup(popup_3f098327cd3236fd5cf50ab4530e5119)
+        ;
+
+        
+    
+    
+            marker_c8a22e302f5eb027ad71c67f680712b3.bindTooltip(
+                `<div>
+                     @LPX2019 — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_992dc390aff96eb9bdd912d34bc9e9a8 = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_f32071c5eab96be8549411d0877a2301 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_86a2a0615892e4321ae5182513c84ee6 = $(`<div id="html_86a2a0615892e4321ae5182513c84ee6" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@SSK2024</h4>             <div><strong>Name:</strong> 萧生客SSK🇺🇸🇨🇦</div>             <div><strong>Date:</strong> 2026-09-01T23:29:19.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.93</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post explicitly discusses the U.S. House Speaker, Congress, midterm elections, and DSA candidates; the display name also includes U.S. and Canadian flags.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">💥“野蛮人已经闯进了城门。” 众议院议长迈克·约翰逊警告称，随着中期选举临近，民主社会主义（DSA）候选人正逐渐占据上风。 约翰逊表示，争夺国会控制权的斗争正逐渐演变为决定国家发展方向的关键抉择。 https://t.co/Rw9vYrNqBB</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">💥“The barbarians have already breached the city gates.” Speaker of the House Mike Johnson warned that, as the midterm elections approach, Democratic Socialists of America (DSA) candidates are gradually gaining the upper hand. Johnson said that the struggle for control of Congress is gradually becoming a crucial choice that will determine the direction of the country’s development. https://t.co/Rw9vYrNqBB</div>             <hr>             <div><a href="https://x.com/SSK2024/status/2094930632455446897" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_f32071c5eab96be8549411d0877a2301.setContent(html_86a2a0615892e4321ae5182513c84ee6);
+            
+        
+
+        marker_992dc390aff96eb9bdd912d34bc9e9a8.bindPopup(popup_f32071c5eab96be8549411d0877a2301)
+        ;
+
+        
+    
+    
+            marker_992dc390aff96eb9bdd912d34bc9e9a8.bindTooltip(
+                `<div>
+                     @SSK2024 — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_8a1fa363f8161b33a8ed3f8869c2db25 = L.marker(
+                [34.5412252, 108.9237067],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_4d62a4266af0c711211695b79e2564ac = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_1b1b065510d424ce77f99ca1450981de = $(`<div id="html_1b1b065510d424ce77f99ca1450981de" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@juanli324324</h4>             <div><strong>Name:</strong> 李隽</div>             <div><strong>Date:</strong> 2026-09-01T23:25:06.000Z</div>             <div><strong>Inferred location:</strong> China</div>             <div><strong>Confidence:</strong> 0.3</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> Simplified Chinese and references to the CCP, domestic politics, and 8964 suggest a Mainland China context, though the account may be operated from elsewhere.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">马云，以及国内外很多人，包括西方政客，都认为8964中共开枪才有了后来的经济发展。这既是人性的冷血，认知的错误，事实的扭曲，也是因果的颠倒，逻辑的谬背！ 当时中共有三条路可走。 1，当时前苏联已经巨变，中共完全可以走前苏联的路，改弦更张，抛弃共产主义，放弃极权统治。——但中共不愿意！ https://t.co/a84x6OBP0j</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">马云, as well as many people at home and abroad, including Western politicians, all believe that it was only because the CCP opened fire during 8964 that the subsequent economic development came about. This is at once the cold-bloodedness of human nature, an error in understanding, a distortion of facts, a reversal of cause and effect, and a betrayal of logic! At the time, the CCP had three paths it could take. 1. The former Soviet Union had already undergone tremendous changes, and the CCP could completely have followed the path of the former Soviet Union: changed course, abandoned communism, and given up totalitarian rule.——But the CCP was unwilling to! https://t.co/a84x6OBP0j</div>             <hr>             <div><a href="https://x.com/juanli324324/status/2094929572097933553" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_4d62a4266af0c711211695b79e2564ac.setContent(html_1b1b065510d424ce77f99ca1450981de);
+            
+        
+
+        marker_8a1fa363f8161b33a8ed3f8869c2db25.bindPopup(popup_4d62a4266af0c711211695b79e2564ac)
+        ;
+
+        
+    
+    
+            marker_8a1fa363f8161b33a8ed3f8869c2db25.bindTooltip(
+                `<div>
+                     @juanli324324 — China
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_c5e72006e53bd17b14dcc3d2254aa1f4 = L.marker(
+                [34.5412252, 108.9237067],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_6c634c923b363a09e970ba06aa4799b3 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_2d448722bb1aac71cffc7bf26ced188e = $(`<div id="html_2d448722bb1aac71cffc7bf26ced188e" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@LPX2019</h4>             <div><strong>Name:</strong> Liuping Xu</div>             <div><strong>Date:</strong> 2026-09-01T23:14:26.000Z</div>             <div><strong>Inferred location:</strong> China</div>             <div><strong>Confidence:</strong> 0.2</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written in Simplified Chinese, suggesting a Mainland Chinese or broader simplified-Chinese context, but no explicit location is provided.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">🚨 最新消息：特朗普总统已正式提名洪·曹（Hung Cao）出任美国海军部长。 太棒了，绝佳人选！🔥 曹（现任代理部长）曾为逃离共产主义统治而离开故土，后来作为共和党人竞选过美国联邦参议员。 请尽快予以确认。 https://t.co/1YD09CiFRU</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">🚨 Breaking news: President Trump has officially nominated Hung Cao to serve as Secretary of the Navy. Fantastic, an excellent choice! 🔥 Cao (the current acting Secretary) once left his homeland to escape communist rule and later ran for the U.S. Senate as a Republican. Please confirm him as soon as possible. https://t.co/1YD09CiFRU</div>             <hr>             <div><a href="https://x.com/LPX2019/status/2094926886405026272" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_6c634c923b363a09e970ba06aa4799b3.setContent(html_2d448722bb1aac71cffc7bf26ced188e);
+            
+        
+
+        marker_c5e72006e53bd17b14dcc3d2254aa1f4.bindPopup(popup_6c634c923b363a09e970ba06aa4799b3)
+        ;
+
+        
+    
+    
+            marker_c5e72006e53bd17b14dcc3d2254aa1f4.bindTooltip(
+                `<div>
+                     @LPX2019 — China
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_ec28b7a7e61513d1cbd44644dd8669f1 = L.marker(
+                [39.7837304, -100.445882],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_0fd0a3d838da3259ffbe53e1ee8ef474 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_4d82688dd657f1192a400240370c97fa = $(`<div id="html_4d82688dd657f1192a400240370c97fa" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@niumao666</h4>             <div><strong>Name:</strong> niuer6 MAGA</div>             <div><strong>Date:</strong> 2026-09-01T22:59:14.000Z</div>             <div><strong>Inferred location:</strong> United States</div>             <div><strong>Confidence:</strong> 0.2</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The display name references MAGA and the post mentions the White House, suggesting U.S. political alignment, but no explicit location is provided.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@WhiteHouse @MilesSeven4 消灭共产党是全世界的民意。中共是现在的国际共产主义总部</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@WhiteHouse @MilesSeven4 Eliminating the Communist Party is the will of people around the world. The CCP is currently the headquarters of international communism.</div>             <hr>             <div><a href="https://x.com/niumao666/status/2094923061795684666" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_0fd0a3d838da3259ffbe53e1ee8ef474.setContent(html_4d82688dd657f1192a400240370c97fa);
+            
+        
+
+        marker_ec28b7a7e61513d1cbd44644dd8669f1.bindPopup(popup_0fd0a3d838da3259ffbe53e1ee8ef474)
+        ;
+
+        
+    
+    
+            marker_ec28b7a7e61513d1cbd44644dd8669f1.bindTooltip(
+                `<div>
+                     @niumao666 — United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_af4b1bcd086d37abe0dab1cbd62ce15e = L.marker(
+                [44.869496, -68.935089],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_226cb9e5b2c8d08d4501b04a637525f3 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_9d07d0c19558420c530ec0e67bf6bfb8 = $(`<div id="html_9d07d0c19558420c530ec0e67bf6bfb8" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@ABOU_KUHATA</h4>             <div><strong>Name:</strong> ابو قحاتة</div>             <div><strong>Date:</strong> 2026-09-01T23:59:21.000Z</div>             <div><strong>Inferred location:</strong> Levant</div>             <div><strong>Confidence:</strong> 0.25</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> Arabic text uses colloquial Levantine phrasing such as &quot;طب وين المشكلة&quot; and &quot;بلاها&quot;, suggesting the Levant, but no specific country or city is named.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@MousaAlomar طب وين المشكلة اذا في فئة قادرة تدفع 1200 دولار سعر المتر ؟ بلاها الشعارات الشيوعية و وحدة الطبقات</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@MousaAlomar So what’s the problem if there’s a segment that can afford to pay 1200 dollars per square meter? Spare us the communist slogans and class unity.</div>             <hr>             <div><a href="https://x.com/ABOU_KUHATA/status/2094938192810041526" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_226cb9e5b2c8d08d4501b04a637525f3.setContent(html_9d07d0c19558420c530ec0e67bf6bfb8);
+            
+        
+
+        marker_af4b1bcd086d37abe0dab1cbd62ce15e.bindPopup(popup_226cb9e5b2c8d08d4501b04a637525f3)
+        ;
+
+        
+    
+    
+            marker_af4b1bcd086d37abe0dab1cbd62ce15e.bindTooltip(
+                `<div>
+                     @ABOU_KUHATA — Levant
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_cc75f42fc5dc080fb348baf7705fc7f1 = L.marker(
+                [25.6242618, 42.3528328],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_c7e432d2898b75b591ac4b3846534de5 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_173db22103932171bb99cdcdb760e4f6 = $(`<div id="html_173db22103932171bb99cdcdb760e4f6" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@hussainsanp</h4>             <div><strong>Name:</strong> hussain alqhtani🇸🇦</div>             <div><strong>Date:</strong> 2026-09-01T23:47:42.000Z</div>             <div><strong>Inferred location:</strong> Saudi Arabia</div>             <div><strong>Confidence:</strong> 0.68</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> Arabic-language post and the display name includes a Saudi flag, while the content discusses Yemen rather than explicitly locating the author there.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@dontclosedear @fathibnlazrq @AJArabic @SaudiNews50 لم تكونوافضل ايام اليمن الديموقراطي قبل الوحده حكم شيوعي وانقلابات واغتيالات وانهيار اقتصادي كامل وهو الامر اللي اجبر البيض والقيادات في الخزب الشيوعي الحاكم على طلب الوحده لا تنسى الوحده جاءت بطلب من الحنوبيين في الاساس</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@dontclosedear @fathibnlazrq @AJArabic @SaudiNews50 The days of Democratic Yemen before unity were not the best: communist rule, coups, assassinations, and complete economic collapse, which is what forced al-Baidh and the leaders of the ruling Communist Party to request unity. Don’t forget, unity came primarily at the request of the southerners.</div>             <hr>             <div><a href="https://x.com/hussainsanp/status/2094935260542746687" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_c7e432d2898b75b591ac4b3846534de5.setContent(html_173db22103932171bb99cdcdb760e4f6);
+            
+        
+
+        marker_cc75f42fc5dc080fb348baf7705fc7f1.bindPopup(popup_c7e432d2898b75b591ac4b3846534de5)
+        ;
+
+        
+    
+    
+            marker_cc75f42fc5dc080fb348baf7705fc7f1.bindTooltip(
+                `<div>
+                     @hussainsanp — Saudi Arabia
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_cc04754aa52d6c5ed1495133da6da395 = L.marker(
+                [25.6242618, 42.3528328],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_9c21dfa7ce3cd95df502d5fd5bf18a76 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_b2816751c478bb5ff336b081891bf539 = $(`<div id="html_b2816751c478bb5ff336b081891bf539" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@tamimhamad22</h4>             <div><strong>Name:</strong> 🆇🇸🇦تميم بن حمد الجميح</div>             <div><strong>Date:</strong> 2026-09-01T23:39:06.000Z</div>             <div><strong>Inferred location:</strong> Saudi Arabia</div>             <div><strong>Confidence:</strong> 0.58</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> Arabic-language post explicitly discusses Saudi Arabia and the Hadramis, while the display name includes the Saudi flag, suggesting an association with Saudi Arabia.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@Al_Otaibi_A2030 ماهو سر حقد وعداء الشيوعيين في جنوب اليمن على السعودية والحضارم عنوان مساحتي حياكم بعد قليل</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@Al_Otaibi_A2030 What is the reason for the hatred and hostility of the communists in South Yemen toward Saudi Arabia and the Hadramis? The title of my Space—welcome, shortly.</div>             <hr>             <div><a href="https://x.com/tamimhamad22/status/2094933095644324321" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_9c21dfa7ce3cd95df502d5fd5bf18a76.setContent(html_b2816751c478bb5ff336b081891bf539);
+            
+        
+
+        marker_cc04754aa52d6c5ed1495133da6da395.bindPopup(popup_9c21dfa7ce3cd95df502d5fd5bf18a76)
+        ;
+
+        
+    
+    
+            marker_cc04754aa52d6c5ed1495133da6da395.bindTooltip(
+                `<div>
+                     @tamimhamad22 — Saudi Arabia
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_0af821c89d49ae94c0b570495fa9c788 = L.marker(
+                [15.3995862, 45.3317939],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_2a5f0e68c7de13faf256e378cbf579ac = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_65db0258c9ce826c573ddc7a8cacd358 = $(`<div id="html_65db0258c9ce826c573ddc7a8cacd358" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@SMH78945256</h4>             <div><strong>Name:</strong> سلطنات العوالق العلياء والسفلى احورشبوه الجنوب</div>             <div><strong>Date:</strong> 2026-09-01T23:34:48.000Z</div>             <div><strong>Inferred location:</strong> Hadramout, Yemen</div>             <div><strong>Confidence:</strong> 0.98</div>             <div><strong>Source:</strong> tweet_text</div>             <div><strong>Reason:</strong> The original Arabic post explicitly mentions محافظة حضرموت and المجتمع الحضرمي, identifying Hadramout in Yemen.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">ألخنبشي والماركسيه الشوعيه والاشتراكيه العلميه بالشعارات الثورية القوميه والاشتركيه الشيوعيه ولم تبين له زيفها وبطلانها يخادع محافظة حضرموت جنوبيه وعدم صلاحيتها لمجتمع مسلم كالمجتمع الحضرمي وأن أولئك الرفاق يسعون للتسلط على حضرموت وليس لمصلحتها نراه اليوم يقول الحق ويسعى اليه.</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Al-Khanbashi, Marxist communism, and scientific socialism, with their revolutionary nationalist and socialist-communist slogans, and their falsity and invalidity were not made clear to him. He deceives the Southern Hadramout Governorate, and [the fact of] their unsuitability for a Muslim society like the Hadrami society, and that those comrades seek to dominate Hadramout rather than serve its interests. We see him today speaking the truth and striving for it.</div>             <hr>             <div><a href="https://x.com/SMH78945256/status/2094932013748793463" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_2a5f0e68c7de13faf256e378cbf579ac.setContent(html_65db0258c9ce826c573ddc7a8cacd358);
+            
+        
+
+        marker_0af821c89d49ae94c0b570495fa9c788.bindPopup(popup_2a5f0e68c7de13faf256e378cbf579ac)
+        ;
+
+        
+    
+    
+            marker_0af821c89d49ae94c0b570495fa9c788.bindTooltip(
+                `<div>
+                     @SMH78945256 — Hadramout, Yemen
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_5c7f8f5d67fa9d4d4970827da6111746 = L.marker(
+                [33.8439408, 9.400138],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_134c383faec798f2f6bfc973ef98a796 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_c68c9051e0ee628188b315f34efca427 = $(`<div id="html_c68c9051e0ee628188b315f34efca427" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@akram70070</h4>             <div><strong>Name:</strong> انا الشعب صوت الحق</div>             <div><strong>Date:</strong> 2026-09-01T22:51:48.000Z</div>             <div><strong>Inferred location:</strong> Tunisia</div>             <div><strong>Confidence:</strong> 0.22</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is in Arabic, and the addressed public figure @MohamedHnid is plausibly associated with Tunisia, but no explicit location is stated.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@MohamedHnid انت شيوعي فلا تتكلم في ما ليس لك بهي علم</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@MohamedHnid You are a communist, so do not speak about what you have no knowledge of.</div>             <hr>             <div><a href="https://x.com/akram70070/status/2094921193157533844" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_134c383faec798f2f6bfc973ef98a796.setContent(html_c68c9051e0ee628188b315f34efca427);
+            
+        
+
+        marker_5c7f8f5d67fa9d4d4970827da6111746.bindPopup(popup_134c383faec798f2f6bfc973ef98a796)
+        ;
+
+        
+    
+    
+            marker_5c7f8f5d67fa9d4d4970827da6111746.bindTooltip(
+                `<div>
+                     @akram70070 — Tunisia
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_5003e76f65d6c799118a91bbf38eacea = L.marker(
+                [25.6242618, 42.3528328],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_34f661fbf3833c6d4829996ef64a5129 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_096ed3c16b2a3e97731651e1beef545a = $(`<div id="html_096ed3c16b2a3e97731651e1beef545a" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@che_abod9</h4>             <div><strong>Name:</strong> عبدالله السويدي 🇸🇦 .</div>             <div><strong>Date:</strong> 2026-09-01T22:36:10.000Z</div>             <div><strong>Inferred location:</strong> Saudi Arabia</div>             <div><strong>Confidence:</strong> 0.62</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The display name includes a Saudi flag, and the Arabic Gulf-style wording is consistent with a Saudi-associated account; Yemen is discussed as the topic rather than clearly identified as the poster’s location.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@aegonY10 @SheikhSalem661 يارجال خاف الله حاكمين مدري الف سنه ممكن ، طبيعي عندهم نفوذ قوي عاليمن ، ثاني شي ضياع دولتكم وتشتتكم بسبب هالانجاس الاماميه ، والله عقلي مو مستوعب شيوعي يمني ههههههههه</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@aegonY10 @SheikhSalem661 Man, fear God. They’ve been ruling for I don’t know how many—maybe 1,000 years. Naturally, they have strong influence over Yemen. Secondly, the loss of your state and your fragmentation are because of those filthy Imamis. I swear, my mind can’t process a Yemeni communist hahaha.</div>             <hr>             <div><a href="https://x.com/che_abod9/status/2094917255796506894" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_34f661fbf3833c6d4829996ef64a5129.setContent(html_096ed3c16b2a3e97731651e1beef545a);
+            
+        
+
+        marker_5003e76f65d6c799118a91bbf38eacea.bindPopup(popup_34f661fbf3833c6d4829996ef64a5129)
+        ;
+
+        
+    
+    
+            marker_5003e76f65d6c799118a91bbf38eacea.bindTooltip(
+                `<div>
+                     @che_abod9 — Saudi Arabia
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_8e85452fe308e708e8608662f7f0ea25 = L.marker(
+                [32.2591449, 35.3015948],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_7e35753077bac80bedafdc578f004b21 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_519db7f6db59f2478d1b56f4a2c5ee49 = $(`<div id="html_519db7f6db59f2478d1b56f4a2c5ee49" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@AbunsaarA45313</h4>             <div><strong>Name:</strong> ابو نصار</div>             <div><strong>Date:</strong> 2026-09-01T22:17:50.000Z</div>             <div><strong>Inferred location:</strong> Palestine</div>             <div><strong>Confidence:</strong> 0.3</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The Arabic post explicitly discusses Palestinians and Palestinian religious communities, though the author’s location is not directly stated.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@6r0dg @samershaker919 من قال انها قضية العرب هل الدرزي والمسيحي والصوفي والشيوعي والبهائي والرافضي الفلسطيني مسلمين حتئ تكون قضية امة</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@6r0dg @samershaker919 Who said it is the Arabs’ cause? Are Palestinian Druze, Christians, Sufis, communists, Bahá’ís, and Rafidis Muslims for it to be the cause of a nation?</div>             <hr>             <div><a href="https://x.com/AbunsaarA45313/status/2094912642511200512" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_7e35753077bac80bedafdc578f004b21.setContent(html_519db7f6db59f2478d1b56f4a2c5ee49);
+            
+        
+
+        marker_8e85452fe308e708e8608662f7f0ea25.bindPopup(popup_7e35753077bac80bedafdc578f004b21)
+        ;
+
+        
+    
+    
+            marker_8e85452fe308e708e8608662f7f0ea25.bindTooltip(
+                `<div>
+                     @AbunsaarA45313 — Palestine
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_ae8e1670af997660ffe66dc2877eadee = L.marker(
+                [33.0955793, 44.1749775],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_0de32506102da037d26199bc8395d0c6 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_0f4c1d91b5e344cb816ab3af936b7f89 = $(`<div id="html_0f4c1d91b5e344cb816ab3af936b7f89" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@AbunsaarA45313</h4>             <div><strong>Name:</strong> ابو نصار</div>             <div><strong>Date:</strong> 2026-09-01T22:16:28.000Z</div>             <div><strong>Inferred location:</strong> Iraq</div>             <div><strong>Confidence:</strong> 0.24</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The Arabic text and colloquial phrasing are consistent with Iraq, and the al-Tamimi name is common there, but no explicit location is given.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">صادق غيث التميمي لية الفلسطيني الدرزي والمسيحي والصوفي والرافضي والشيوعي احسن من العرب السنة https://t.co/zuWP2OPEi2</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Sadiq Ghaith Al-Tamimi, why is the Palestinian Druze, Christian, Sufi, Rafidi, and communist better than the Sunni Arabs? https://t.co/zuWP2OPEi2</div>             <hr>             <div><a href="https://x.com/AbunsaarA45313/status/2094912300842983916" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_0de32506102da037d26199bc8395d0c6.setContent(html_0f4c1d91b5e344cb816ab3af936b7f89);
+            
+        
+
+        marker_ae8e1670af997660ffe66dc2877eadee.bindPopup(popup_0de32506102da037d26199bc8395d0c6)
+        ;
+
+        
+    
+    
+            marker_ae8e1670af997660ffe66dc2877eadee.bindTooltip(
+                `<div>
+                     @AbunsaarA45313 — Iraq
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_96561492098f3317481e131f36c6c687 = L.marker(
+                [36.638392, 127.6961188],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_70bb0785349c5c08a384c26b4e0684f4 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_cac5b239af15ebe51afe8af1900883b2 = $(`<div id="html_cac5b239af15ebe51afe8af1900883b2" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@seaeagle453</h4>             <div><strong>Name:</strong> 朱英吉</div>             <div><strong>Date:</strong> 2026-09-01T00:11:09.000Z</div>             <div><strong>Inferred location:</strong> South Korea</div>             <div><strong>Confidence:</strong> 0.2</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The detected language is Korean, suggesting South Korea, but the post contains no explicit place name or institutional affiliation.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@qin88484 👍 國際主義&amp;amp;共産主義,全是國際強盜暴徒集團,流竄全世界作亂肆虐！</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@qin88484 👍 Internationalism &amp;amp; communism are all international bandit thug groups, roaming around the world causing chaos and wreaking havoc!</div>             <hr>             <div><a href="https://x.com/seaeagle453/status/2094578774763507754" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_70bb0785349c5c08a384c26b4e0684f4.setContent(html_cac5b239af15ebe51afe8af1900883b2);
+            
+        
+
+        marker_96561492098f3317481e131f36c6c687.bindPopup(popup_70bb0785349c5c08a384c26b4e0684f4)
+        ;
+
+        
+    
+    
+            marker_96561492098f3317481e131f36c6c687.bindTooltip(
+                `<div>
+                     @seaeagle453 — South Korea
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_3c02495ad279d27a42028f392b9dd776 = L.marker(
+                [36.638392, 127.6961188],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_148e07723c618b6038ea7516cff96891 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_d2000bffb0c0711780365edbe7e4a092 = $(`<div id="html_d2000bffb0c0711780365edbe7e4a092" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@SL_A_NYA_mkII</h4>             <div><strong>Name:</strong> 星乃輝嗚呼猫改II</div>             <div><strong>Date:</strong> 2026-08-29T02:41:57.000Z</div>             <div><strong>Inferred location:</strong> South Korea</div>             <div><strong>Confidence:</strong> 0.2</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The detected language is Korean, but the post contains no explicit place or institutional identifier, so this is only a low-confidence country-level inference.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">資本主義→❌ 共産主義→⭕️ https://t.co/CzmseDiCmH</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Capitalism→❌ Communism→⭕️ https://t.co/CzmseDiCmH</div>             <hr>             <div><a href="https://x.com/SL_A_NYA_mkII/status/2093529557743857737" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_148e07723c618b6038ea7516cff96891.setContent(html_d2000bffb0c0711780365edbe7e4a092);
+            
+        
+
+        marker_3c02495ad279d27a42028f392b9dd776.bindPopup(popup_148e07723c618b6038ea7516cff96891)
+        ;
+
+        
+    
+    
+            marker_3c02495ad279d27a42028f392b9dd776.bindTooltip(
+                `<div>
+                     @SL_A_NYA_mkII — South Korea
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_3976224611ed792f3b995a36f1974423 = L.marker(
+                [36.638392, 127.6961188],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_f61a47ad027d54e2b8f29465ff3c1976 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_50787faab52057a5594febb74d9478fc = $(`<div id="html_50787faab52057a5594febb74d9478fc" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@Rx5s31xDXI53439</h4>             <div><strong>Name:</strong> 站住打劫棒棒糖</div>             <div><strong>Date:</strong> 2026-08-28T05:10:24.000Z</div>             <div><strong>Inferred location:</strong> South Korea</div>             <div><strong>Confidence:</strong> 0.3</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written primarily in Korean, suggesting a South Korean or Korean-language institutional context, but it contains no explicit place or institution.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@Shoegation 民主主義（민주주의） = 民衆主導（민중 주도） → 民衆이 主導한다. 專制主義（전제주의） = 專一制定（전일 제정） → 一方이 專一하게 制定한다. 共産主義（공산주의） = 共同生産（공동 생산） → 共同으로 生産한다. 資本主義（자본주의） = 以資爲本（이자위본） → 資本을 本으로 삼는다.</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@Shoegation Democracy (people’s rule) = People-led (led by the people) → The people lead. Despotism (one-man rule) = Unilateral enactment (established by one side) → One side unilaterally enacts it. Communism (joint production) = Collective production (produced jointly) → They produce jointly. Capitalism (using capital as the basis) = Making capital the basis (taking capital as the foundation) → It takes capital as its basis.</div>             <hr>             <div><a href="https://x.com/Rx5s31xDXI53439/status/2093204530121068720" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_f61a47ad027d54e2b8f29465ff3c1976.setContent(html_50787faab52057a5594febb74d9478fc);
+            
+        
+
+        marker_3976224611ed792f3b995a36f1974423.bindPopup(popup_f61a47ad027d54e2b8f29465ff3c1976)
+        ;
+
+        
+    
+    
+            marker_3976224611ed792f3b995a36f1974423.bindTooltip(
+                `<div>
+                     @Rx5s31xDXI53439 — South Korea
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_2ab04685c61a04d30c4e9fccc0e521c0 = L.marker(
+                [36.5748441, 139.2394179],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_07a56d95edd2e1f305b7f15f02967cdf = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_758d6c03e1befc09859f74c2facbc1fb = $(`<div id="html_758d6c03e1befc09859f74c2facbc1fb" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@bot1686772</h4>             <div><strong>Name:</strong> 娘かわいいbot</div>             <div><strong>Date:</strong> 2026-08-26T20:26:54.000Z</div>             <div><strong>Inferred location:</strong> Japan</div>             <div><strong>Confidence:</strong> 0.35</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The post and display name use Japanese-language text, suggesting a Japan-associated account, though no specific place is identified.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">共産主義vs資本主義 https://t.co/GjqFxfCI5H</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Communism vs Capitalism https://t.co/GjqFxfCI5H</div>             <hr>             <div><a href="https://x.com/bot1686772/status/2092710400366452903" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_07a56d95edd2e1f305b7f15f02967cdf.setContent(html_758d6c03e1befc09859f74c2facbc1fb);
+            
+        
+
+        marker_2ab04685c61a04d30c4e9fccc0e521c0.bindPopup(popup_07a56d95edd2e1f305b7f15f02967cdf)
+        ;
+
+        
+    
+    
+            marker_2ab04685c61a04d30c4e9fccc0e521c0.bindTooltip(
+                `<div>
+                     @bot1686772 — Japan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_2ea431c3e4b122618678aabf1bdc8e58 = L.marker(
+                [23.9739374, 120.9820179],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_ca5ed08e18c9bb3bbd6915aac5bc4e67 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_d8f410e4ac6695f673cd2a496ac210cc = $(`<div id="html_d8f410e4ac6695f673cd2a496ac210cc" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@tsui301</h4>             <div><strong>Name:</strong> tsui301</div>             <div><strong>Date:</strong> 2026-08-26T02:47:43.000Z</div>             <div><strong>Inferred location:</strong> Taiwan</div>             <div><strong>Confidence:</strong> 0.22</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written in Traditional Chinese, which is commonly used in Taiwan, but it contains no explicit location and could originate from other Chinese-speaking contexts.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@SUZUKIYASUSHI55 比較而言 日本人才是沒思想 只唯心想自己的芝麻綠豆事 中國人多元 儒釋道 伊斯蘭 基督教 無神論 共産主義都有</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@SUZUKIYASUSHI55 Comparatively speaking, Japanese people are the ones without ideas; they only think about their own petty matters. Chinese people are diverse: Confucianism, Buddhism, Taoism, Islam, Christianity, atheism, and communism all exist.</div>             <hr>             <div><a href="https://x.com/tsui301/status/2092443848777625953" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_ca5ed08e18c9bb3bbd6915aac5bc4e67.setContent(html_d8f410e4ac6695f673cd2a496ac210cc);
+            
+        
+
+        marker_2ea431c3e4b122618678aabf1bdc8e58.bindPopup(popup_ca5ed08e18c9bb3bbd6915aac5bc4e67)
+        ;
+
+        
+    
+    
+            marker_2ea431c3e4b122618678aabf1bdc8e58.bindTooltip(
+                `<div>
+                     @tsui301 — Taiwan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_8ca152e6142b6c939aeff621ce356aee = L.marker(
+                [36.5748441, 139.2394179],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_17acd4366804a4abf567d084a2a54796 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_26a04800dbb13d7ca3e4ed231060126e = $(`<div id="html_26a04800dbb13d7ca3e4ed231060126e" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@peacetoamari2</h4>             <div><strong>Name:</strong> 亜麻璃II</div>             <div><strong>Date:</strong> 2026-08-25T08:46:01.000Z</div>             <div><strong>Inferred location:</strong> Japan</div>             <div><strong>Confidence:</strong> 0.58</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The original post is written in Japanese, and the display name uses Japanese characters, suggesting a Japan-associated account.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">資本主義＝共産主義 https://t.co/xI1JZL3Zyq</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Capitalism = Communism https://t.co/xI1JZL3Zyq</div>             <hr>             <div><a href="https://x.com/peacetoamari2/status/2092171626884587995" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_17acd4366804a4abf567d084a2a54796.setContent(html_26a04800dbb13d7ca3e4ed231060126e);
+            
+        
+
+        marker_8ca152e6142b6c939aeff621ce356aee.bindPopup(popup_17acd4366804a4abf567d084a2a54796)
+        ;
+
+        
+    
+    
+            marker_8ca152e6142b6c939aeff621ce356aee.bindTooltip(
+                `<div>
+                     @peacetoamari2 — Japan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_7968d159c8d1bceb5579f49fcea83e90 = L.marker(
+                [26.5707754, 128.0255901],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_39aa37763ce386e0b7f67750a3491141 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_11c6e473430da8a73ca5095adf88c0a9 = $(`<div id="html_11c6e473430da8a73ca5095adf88c0a9" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@OkinawaMAXGG</h4>             <div><strong>Name:</strong> 黄金の極ガザミ</div>             <div><strong>Date:</strong> 2026-08-25T04:08:05.000Z</div>             <div><strong>Inferred location:</strong> Okinawa, Japan</div>             <div><strong>Confidence:</strong> 0.78</div>             <div><strong>Source:</strong> combined</div>             <div><strong>Reason:</strong> The username includes “Okinawa,” and the post is written in Japanese, strongly suggesting an Okinawa, Japan context.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">資本主義→社会主義→共産主義→市場社会主義 ↘︎ 修正資本主義→新自由主義</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">Capitalism→Socialism→Communism→Market Socialism ↘︎ Modified Capitalism→Neoliberalism.</div>             <hr>             <div><a href="https://x.com/OkinawaMAXGG/status/2092101681974767823" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_39aa37763ce386e0b7f67750a3491141.setContent(html_11c6e473430da8a73ca5095adf88c0a9);
+            
+        
+
+        marker_7968d159c8d1bceb5579f49fcea83e90.bindPopup(popup_39aa37763ce386e0b7f67750a3491141)
+        ;
+
+        
+    
+    
+            marker_7968d159c8d1bceb5579f49fcea83e90.bindTooltip(
+                `<div>
+                     @OkinawaMAXGG — Okinawa, Japan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_2b7385a27c35c353b1c1698d4b70aa90 = L.marker(
+                [23.9739374, 120.9820179],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_add9a677b7e63cc707e4399f77a83491 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_4082ee7131b75ab8817dd71d91cdadf0 = $(`<div id="html_4082ee7131b75ab8817dd71d91cdadf0" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@Tony06167149</h4>             <div><strong>Name:</strong> Tony</div>             <div><strong>Date:</strong> 2026-08-22T22:51:31.000Z</div>             <div><strong>Inferred location:</strong> Taiwan</div>             <div><strong>Confidence:</strong> 0.22</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written primarily in Traditional Chinese, which broadly suggests Taiwan or other Traditional-Chinese contexts, but no specific location is stated.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@LittleMsCujo 還有一個重大問題川普總統，要對付共産主義意識形太，毒害我們國家和民衆，加拿大和美国百年盟友，爲什么要對决，這一樣做，共産主義就會得勢，我们怎样對下一代人交代</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@LittleMsCujo There is another major issue, President Trump: we need to combat communist ideology, which poisons our country and our people. Canada and America have been allies for a hundred years—why confront each other? If we do this, communism will gain the upper hand. How will we explain this to the next generation?</div>             <hr>             <div><a href="https://x.com/Tony06167149/status/2091297242921762896" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_add9a677b7e63cc707e4399f77a83491.setContent(html_4082ee7131b75ab8817dd71d91cdadf0);
+            
+        
+
+        marker_2b7385a27c35c353b1c1698d4b70aa90.bindPopup(popup_add9a677b7e63cc707e4399f77a83491)
+        ;
+
+        
+    
+    
+            marker_2b7385a27c35c353b1c1698d4b70aa90.bindTooltip(
+                `<div>
+                     @Tony06167149 — Taiwan
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_6ce7ae2a76a57f097812229ca12b14b5 = L.marker(
+                [34.5412252, 108.9237067],
+                {
+}
+            ).addTo(marker_cluster_af2222d0e084db99d5cd1688082ae93f);
+        
+    
+        var popup_e90f9ac746a099f01e32dd27e1cb5918 = L.popup({
+  "maxWidth": 440,
+});
+
+        
+            
+                var html_111f033cb16dcaf2247b1898ab6dcc57 = $(`<div id="html_111f033cb16dcaf2247b1898ab6dcc57" style="width: 100.0%; height: 100.0%;">         <div style="width: 380px; font-family: Arial, sans-serif;">             <h4 style="margin-bottom: 4px;">@ffaa1683174</h4>             <div><strong>Name:</strong> 博丽灵梦</div>             <div><strong>Date:</strong> 2026-08-21T23:13:10.000Z</div>             <div><strong>Inferred location:</strong> China</div>             <div><strong>Confidence:</strong> 0.25</div>             <div><strong>Source:</strong> language</div>             <div><strong>Reason:</strong> The post is written in Simplified Chinese, which most strongly suggests a Mainland Chinese context, but no explicit location or institutional affiliation is provided.</div>             <hr>             <div><strong>Original:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@mengtunwudaimu “共产”对应英文 communist 现代意义的 Communist、Communist Party诞生于近代欧洲社会主义运动 马克思、恩格斯参与组建共产主义者同盟，1848年发表《共产党宣言》共产党这个正式名称由此广泛传播定型 明治时期，日本学者用汉字翻译西方术语，造出共産党，共産主義这套和制汉语</div>             <div><strong>Translation:</strong></div>             <div style="white-space: pre-wrap; margin-bottom: 8px;">&#x27;@mengtunwudaimu “共产” corresponds to the English word communist Communist and Communist Party in their modern senses emerged from the socialist movement in modern Europe. 马克思 and 恩格斯 participated in establishing the Communist League, and in 1848 published The Communist Manifesto. The formal name Communist Party spread widely and became established from then on. During the Meiji period, Japanese scholars used kanji to translate Western terminology, coining the Japanese-origin Chinese terms 共産党 and 共産主義.</div>             <hr>             <div><a href="https://x.com/ffaa1683174/status/2090940303884927463" target="_blank">Open original post</a></div>                      </div>         </div>`)[0];
+                popup_e90f9ac746a099f01e32dd27e1cb5918.setContent(html_111f033cb16dcaf2247b1898ab6dcc57);
+            
+        
+
+        marker_6ce7ae2a76a57f097812229ca12b14b5.bindPopup(popup_e90f9ac746a099f01e32dd27e1cb5918)
+        ;
+
+        
+    
+    
+            marker_6ce7ae2a76a57f097812229ca12b14b5.bindTooltip(
+                `<div>
+                     @ffaa1683174 — China
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            marker_cluster_af2222d0e084db99d5cd1688082ae93f.addTo(map_08cb6b9460b320d3b57b328433838e19);
+        
+    
+            var feature_group_16a647e11f9d997c503c379c7870cb02 = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var feature_group_880660ad7f3ae25b49999523d7a42756 = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var heat_map_2830bebe55c5dfca1715ff7c35b86c5e = L.heatLayer(
+                [[-23.55, -46.63, 1], [8.0, -66.11, 1], [14.58, 29.49, 1], [15.4, 45.33, 1], [16.35, 47.89, 2], [23.97, 120.98, 7], [25.31, 51.51, 1], [25.62, 42.35, 3], [26.25, 29.27, 1], [26.57, 128.03, 2], [28.33, -10.37, 1], [31.26, -98.55, 1], [32.26, 35.3, 1], [33.1, 44.17, 1], [33.84, 9.4, 1], [34.54, 108.92, 11], [35.98, 139.42, 1], [36.57, 139.24, 4], [36.64, 127.7, 4], [36.7, -118.76, 1], [37.12, -78.49, 1], [39.3, -76.59, 2], [39.52, -116.85, 1], [39.78, -100.45, 14], [40.37, 127.09, 1], [44.87, -68.94, 1], [54.7, -3.28, 1], [64.69, 97.75, 1]],
+                {
+  "minOpacity": 0.25,
+  "maxZoom": 8,
+  "radius": 24,
+  "blur": 18,
+  "gradient": {
+  0.2: "#2c7bb6",
+  0.4: "#00a6ca",
+  0.6: "#ffff8c",
+  0.8: "#fdae61",
+  1.0: "#d7191c",
+},
+}
+            );
+        
+    
+            heat_map_2830bebe55c5dfca1715ff7c35b86c5e.addTo(feature_group_880660ad7f3ae25b49999523d7a42756);
+        
+    
+            feature_group_880660ad7f3ae25b49999523d7a42756.addTo(map_08cb6b9460b320d3b57b328433838e19);
+        
+    
+            var feature_group_46c76982b9dc3480fb6d93d09575b4b7 = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var heat_map_81fc688815e16f236a7213db6aa979c1 = L.heatLayer(
+                [[-23.55, -46.63, 1], [8.0, -66.11, 1], [14.58, 29.49, 1], [15.4, 45.33, 1], [16.35, 47.89, 2], [23.97, 120.98, 7], [25.31, 51.51, 1], [25.62, 42.35, 3], [26.25, 29.27, 1], [26.57, 128.03, 2], [28.33, -10.37, 1], [31.26, -98.55, 1], [32.26, 35.3, 1], [33.1, 44.17, 1], [33.84, 9.4, 1], [34.54, 108.92, 11], [35.98, 139.42, 1], [36.57, 139.24, 4], [36.64, 127.7, 4], [36.7, -118.76, 1], [37.12, -78.49, 1], [39.3, -76.59, 2], [39.52, -116.85, 1], [39.78, -100.45, 14], [40.37, 127.09, 1], [44.87, -68.94, 1], [54.7, -3.28, 1], [64.69, 97.75, 1]],
+                {
+  "minOpacity": 0.25,
+  "maxZoom": 8,
+  "radius": 24,
+  "blur": 18,
+  "gradient": {
+  0.2: "#2c7bb6",
+  0.4: "#00a6ca",
+  0.6: "#ffff8c",
+  0.8: "#fdae61",
+  1.0: "#d7191c",
+},
+}
+            );
+        
+    
+            heat_map_81fc688815e16f236a7213db6aa979c1.addTo(feature_group_46c76982b9dc3480fb6d93d09575b4b7);
+        
+    
+            var feature_group_7dec37cb2d6655de2519f4463aa85348 = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var heat_map_3d21eb3f58b66c90be75581e142311dd = L.heatLayer(
+                [[-23.55, -46.63, 1], [8.0, -66.11, 1], [14.58, 29.49, 1], [15.4, 45.33, 1], [16.35, 47.89, 2], [23.97, 120.98, 7], [25.31, 51.51, 1], [25.62, 42.35, 3], [26.25, 29.27, 1], [26.57, 128.03, 2], [28.33, -10.37, 1], [31.26, -98.55, 1], [32.26, 35.3, 1], [33.1, 44.17, 1], [33.84, 9.4, 1], [34.54, 108.92, 11], [35.98, 139.42, 1], [36.57, 139.24, 4], [36.64, 127.7, 4], [36.7, -118.76, 1], [37.12, -78.49, 1], [39.3, -76.59, 2], [39.52, -116.85, 1], [39.78, -100.45, 14], [40.37, 127.09, 1], [44.87, -68.94, 1], [54.7, -3.28, 1], [64.69, 97.75, 1]],
+                {
+  "minOpacity": 0.25,
+  "maxZoom": 8,
+  "radius": 24,
+  "blur": 18,
+  "gradient": {
+  0.2: "#2c7bb6",
+  0.4: "#00a6ca",
+  0.6: "#ffff8c",
+  0.8: "#fdae61",
+  1.0: "#d7191c",
+},
+}
+            );
+        
+    
+            heat_map_3d21eb3f58b66c90be75581e142311dd.addTo(feature_group_7dec37cb2d6655de2519f4463aa85348);
+        
+    
+            var layer_control_cb9de2e8e3a6c587b3b333d8ea258823_layers = {
+                base_layers : {
+                    "CartoDB Positron" : tile_layer_fc030a9a5911616d6b808872730a25eb,
+                    "CartoDB Dark Matter" : tile_layer_ebd2eaba034e00dcd3cc2aa62170777e,
+                    "Esri World Imagery" : tile_layer_98ab296117dbbe9eb1d1415a81282310,
+                },
+                overlays :  {
+                    "Inferred tweet locations" : marker_cluster_af2222d0e084db99d5cd1688082ae93f,
+                    "Activity heatmap \u2014 last 7 days (0 posts)" : feature_group_16a647e11f9d997c503c379c7870cb02,
+                    "Activity heatmap \u2014 last 30 days (68 posts)" : feature_group_880660ad7f3ae25b49999523d7a42756,
+                    "Activity heatmap \u2014 last 90 days (68 posts)" : feature_group_46c76982b9dc3480fb6d93d09575b4b7,
+                    "Activity heatmap \u2014 last 365 days (68 posts)" : feature_group_7dec37cb2d6655de2519f4463aa85348,
+                },
+            };
+            let layer_control_cb9de2e8e3a6c587b3b333d8ea258823 = L.control.layers(
+                layer_control_cb9de2e8e3a6c587b3b333d8ea258823_layers.base_layers,
+                layer_control_cb9de2e8e3a6c587b3b333d8ea258823_layers.overlays,
+                {
+  "position": "topright",
+  "collapsed": true,
+  "autoZIndex": true,
+}
+            ).addTo(map_08cb6b9460b320d3b57b328433838e19);
+
+        
+</script>
+</html>
