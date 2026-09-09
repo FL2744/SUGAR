@@ -159,7 +159,9 @@ X_POST_LANGUAGE_OPTIONS = {
 # MAP / LOCATION SETTINGS
 # ============================================================
 
-CREATE_MAP = True
+# Search collection and mapping are separate menu actions. A completed search
+# writes CSV/XLSX results; choose "Map an existing results file" afterward.
+CREATE_MAP = False
 INFER_LOCATIONS = True
 
 # The geocoding cache intentionally keeps a stable name so later runs can reuse
@@ -209,6 +211,7 @@ import json
 import html as html_lib
 from getpass import getpass
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 from urllib.parse import urlencode, urljoin, urlparse
 
@@ -239,6 +242,11 @@ install_if_missing("openpyxl")
 install_if_missing("folium")
 install_if_missing("geopy")
 install_if_missing("python-dotenv")
+install_if_missing("docx", "python-docx")
+install_if_missing("matplotlib")
+install_if_missing("reportlab")
+install_if_missing("arabic_reshaper", "arabic-reshaper")
+install_if_missing("bidi", "python-bidi")
 
 
 # ============================================================
@@ -2605,10 +2613,96 @@ def save_records(records: List[PostRecord], output_file: str):
 
 
 # ============================================================
-# RUN THE SCRIPT
+# MENU WORKFLOWS
 # ============================================================
 
-if MODE in {"api", "x_api"}:
+def prompt_existing_results_file(purpose: str) -> str:
+    """Prompt for an existing SUGAR CSV/XLSX file and validate the path."""
+    print(f"\nSelect a SUGAR results file to {purpose}.")
+    candidates = sorted(
+        [*Path.cwd().glob("social_search_posts_*.xlsx"),
+         *Path.cwd().glob("social_search_posts_*.csv")],
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    for index, candidate in enumerate(candidates[:10], start=1):
+        print(f"  {index}. {candidate.name}")
+    print("  C. Enter another file path")
+
+    while True:
+        choice = input("Choose a file: ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= min(10, len(candidates)):
+            return str(candidates[int(choice) - 1].resolve())
+        if choice.casefold() == "c" or (not candidates and not choice):
+            raw_path = input("CSV or XLSX file path: ").strip().strip('"').strip("'")
+            path = Path(raw_path).expanduser()
+            if path.is_file() and path.suffix.casefold() in {".csv", ".xlsx"}:
+                return str(path.resolve())
+        print("Choose a listed number or C, then provide an existing CSV/XLSX file.")
+
+
+def load_results_file(file_path: str) -> pd.DataFrame:
+    path = Path(file_path)
+    if path.suffix.casefold() == ".xlsx":
+        return pd.read_excel(path, sheet_name="posts")
+    return pd.read_csv(path)
+
+
+def run_map_workflow() -> Optional[str]:
+    source_file = prompt_existing_results_file("map")
+    df = load_results_file(source_file)
+    default_output = str(Path(source_file).with_name(f"{Path(source_file).stem}_map.html"))
+    requested = input(f"Output HTML file [{default_output}]: ").strip()
+    output_file = str(Path(requested or default_output).expanduser())
+    if not output_file.casefold().endswith(".html"):
+        output_file += ".html"
+    result = create_tweet_map(df, output_file)
+    return output_file if result is not None else None
+
+
+def run_analysis_workflow() -> List[str]:
+    from sugar_analysis import create_analysis_report
+
+    source_file = prompt_existing_results_file("analyze")
+    print("\nReport format:")
+    print("  1. Word document (.docx)")
+    print("  2. PDF document (.pdf)")
+    print("  3. Both Word and PDF")
+    while True:
+        choice = input("Choose report format [3]: ").strip() or "3"
+        if choice in {"1", "2", "3"}:
+            break
+        print("Please enter 1, 2, or 3.")
+
+    output_format = {"1": "docx", "2": "pdf", "3": "both"}[choice]
+    default_stem = str(Path(source_file).with_suffix("")) + "_analysis"
+    output_stem = input(f"Output filename without extension [{default_stem}]: ").strip()
+    return create_analysis_report(
+        source_file=source_file,
+        output_stem=str(Path(output_stem or default_stem).expanduser()),
+        output_format=output_format,
+    )
+
+
+def run_search_workflow() -> pd.DataFrame:
+    """Run collection only. Mapping and analysis are separate menu actions."""
+    global X_BEARER_TOKEN, X_SEARCH_MODE, SINCE_DATE, UNTIL_DATE
+    global X_SEARCH_LANGUAGES, BLUESKY_IDENTIFIER, BLUESKY_APP_PASSWORD
+    global BLUESKY_ACCESS_JWT, MASTODON_INSTANCE_URL, MASTODON_ACCESS_TOKEN
+
+    if MODE not in {"api", "x_api"}:
+        if TRANSLATE_POSTS or INFER_LOCATIONS:
+            ensure_llm_configured()
+        collected_records = run_saved_html_collection(
+            html_files=SAVED_HTML_FILES,
+            output_file=OUTPUT_FILE,
+            include_retweets=INCLUDE_RETWEETS,
+            target_language=TARGET_LANGUAGE,
+            openai_model=LLM_MODEL,
+            translate=TRANSLATE_POSTS,
+        )
+        return save_records(collected_records, OUTPUT_FILE)
+
     selected_sources = prompt_data_sources()
     if "x" in selected_sources:
         X_BEARER_TOKEN = prompt_x_bearer_token()
@@ -2695,20 +2789,40 @@ if MODE in {"api", "x_api"}:
             )
         )
 
-    df = save_records(collected_records, OUTPUT_FILE)
+    return save_records(collected_records, OUTPUT_FILE)
 
-elif MODE == "saved_html":
-    if TRANSLATE_POSTS or INFER_LOCATIONS:
-        ensure_llm_configured()
-    collected_records = run_saved_html_collection(
-        html_files=SAVED_HTML_FILES,
-        output_file=OUTPUT_FILE,
-        include_retweets=INCLUDE_RETWEETS,
-        target_language=TARGET_LANGUAGE,
-        openai_model=LLM_MODEL,
-        translate=TRANSLATE_POSTS,
-    )
-    df = save_records(collected_records, OUTPUT_FILE)
 
-else:
-    raise ValueError("MODE must be either 'api' or 'saved_html'.")
+def main_menu():
+    while True:
+        print("\n" + "=" * 58)
+        print("SUGAR - Social Search, Mapping, and Analysis")
+        print("=" * 58)
+        print("  1. Run a new social-media search")
+        print("  2. Map an existing CSV/XLSX results file")
+        print("  3. Analyze an existing CSV/XLSX results file")
+        print("  4. Exit")
+        choice = input("Choose an option: ").strip()
+
+        try:
+            if choice == "1":
+                run_search_workflow()
+            elif choice == "2":
+                run_map_workflow()
+            elif choice == "3":
+                outputs = run_analysis_workflow()
+                print("\nAnalysis complete:")
+                for output in outputs:
+                    print(f"  {output}")
+            elif choice == "4":
+                print("Goodbye.")
+                return
+            else:
+                print("Please enter a number from 1 to 4.")
+        except (KeyboardInterrupt, EOFError):
+            print("\nOperation cancelled. Returning to the main menu.")
+        except Exception as exc:
+            print(f"\nCould not complete that operation: {exc}")
+
+
+if __name__ == "__main__":
+    main_menu()

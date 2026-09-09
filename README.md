@@ -1,8 +1,20 @@
 # SUGAR: System for User-Generated Content Gathering, Analysis, and Representation
 
-`SUGAR.py` is an interactive research script that searches public posts through
-X, Bluesky, Mastodon, or a user-selected combination. It can translate search
-terms and posts, infer broad public locations, and create tabular and map outputs.
+`SUGAR.py` is a menu-driven research program. Its independent workflows search
+public posts, map an existing SUGAR CSV/XLSX file, or analyze an existing file
+as a polished Word or PDF report. Search supports X, Bluesky, Mastodon, or a
+user-selected combination and can translate terms and posts and infer broad
+public locations.
+
+The main menu keeps collection separate from downstream work:
+
+1. Run a new social-media search
+2. Map an existing CSV/XLSX results file
+3. Analyze an existing CSV/XLSX results file
+4. Exit
+
+Report generation is implemented separately in `sugar_analysis.py`, keeping the
+analysis and document-rendering code out of the collectors.
 
 The default `api` mode prompts for social-data sources. X can use its official
 recent-search or full-archive endpoint; Bluesky uses its public AppView search;
@@ -17,12 +29,18 @@ August 29, 2026 can produce:
 
 - `social_search_posts_20260829_143012.csv` containing collected and enriched data
 - `social_search_posts_20260829_143012.xlsx`, a formatted Excel workbook
-- `social_search_map_20260829_143012.html`, an interactive map
+- `social_search_posts_20260829_143012_map.html`, an interactive map created
+  from a selected existing results file
+- `social_search_posts_20260829_143012_analysis.docx` and/or `.pdf`, a descriptive
+  analysis report with collection diagnostics, charts, engagement measures,
+  vocabulary, caveats, and recommendations
 - A local geocoding cache
 
-The CSV, Excel workbook, and map from one run always share the same timestamp,
-making them easy to keep together. `geocode_cache.json` deliberately retains a
-stable name because it is a reusable support cache rather than a run result.
+Search writes the CSV and Excel workbook only. Mapping and analysis are launched
+separately from the menu and prompt for an existing file, so either operation can
+be repeated without rerunning or paying for a search. `geocode_cache.json`
+deliberately retains a stable name because it is a reusable support cache rather
+than a run result.
 
 Inferred locations are broad, model-generated estimates. They are not verified
 geotags and should not be treated as precise personal locations.
@@ -180,7 +198,8 @@ The main settings are near the top of `SUGAR.py`:
 - `MAX_POSTS_PER_QUERY` and `MAX_PAGES_PER_QUERY`: collection limits
 - `TRANSLATE_POSTS`: enable or disable post translation
 - `INFER_LOCATIONS`: enable or disable model-based location inference
-- `CREATE_MAP`: enable or disable the interactive map
+- `CREATE_MAP`: retained internally and disabled by default because mapping is a
+  separate main-menu workflow
 - `DEFAULT_SEARCH_TERMS`: terms offered at startup; enter one or several terms,
   one per line
 

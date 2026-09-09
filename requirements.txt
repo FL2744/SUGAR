@@ -1,12 +1,17 @@
 beautifulsoup4
+arabic-reshaper
 certifi
 folium
 geopy
 langdetect
+matplotlib
 openai
 openpyxl
 pandas
+python-bidi
 python-dateutil
+python-docx
 python-dotenv
+reportlab
 requests
 tqdm

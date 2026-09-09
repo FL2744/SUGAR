@@ -27,4 +27,7 @@ __pycache__/
 social_search_posts_*.csv
 social_search_posts_*.xlsx
 social_search_map_*.html
+social_search_posts_*_analysis.docx
+social_search_posts_*_analysis.pdf
+~$*.xlsx
 geocode_cache.json
