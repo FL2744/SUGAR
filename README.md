@@ -1,3 +1,4 @@
+![sugar logo](sugar-logo.png)
 # SUGAR: System for User-Generated Content Gathering, Analysis, and Representation
 
 `SUGAR.py` is a menu-driven research program. Its independent workflows search
