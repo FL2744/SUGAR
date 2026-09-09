@@ -2795,7 +2795,10 @@ def run_search_workflow() -> pd.DataFrame:
 def main_menu():
     while True:
         print("\n" + "=" * 58)
-        print("SUGAR - Social Search, Mapping, and Analysis")
+        print(
+            "SUGAR: System for User-Generated Content Gathering, "
+            "Analysis, and Representation"
+        )
         print("=" * 58)
         print("  1. Run a new social-media search")
         print("  2. Map an existing CSV/XLSX results file")
