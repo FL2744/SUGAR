@@ -453,7 +453,7 @@ def normalize_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip()
 
 
-def clean_cell(value):
+def clean_cell(value, prevent_formula_injection: bool = True):
     """
     Make social media text safer and cleaner for CSV/Excel output.
     Removes internal line breaks, normalizes spacing, and prevents
@@ -472,7 +472,7 @@ def clean_cell(value):
     value = normalize_whitespace(value)
 
     # Prevent spreadsheet formula injection
-    if value.startswith(("=", "+", "-", "@")):
+    if prevent_formula_injection and value.startswith(("=", "+", "-", "@")):
         value = "'" + value
 
     return value
@@ -2433,9 +2433,17 @@ def save_records(records: List[PostRecord], output_file: str):
 
     df = pd.DataFrame([asdict(r) for r in records])
 
-    # Clean all cells for CSV and Excel readability
+    # Clean cells for CSV and Excel readability. Coordinate columns must remain
+    # numeric: negative longitude values are geographic numbers, not formulas.
+    numeric_columns = {"latitude", "longitude", "location_confidence"}
     for col in df.columns:
-        df[col] = df[col].apply(clean_cell)
+        protect_formulas = col not in numeric_columns
+        df[col] = df[col].apply(
+            lambda value: clean_cell(
+                value,
+                prevent_formula_injection=protect_formulas,
+            )
+        )
 
     # Put the most useful columns first
     preferred_order = [
