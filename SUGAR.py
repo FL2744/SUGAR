@@ -1800,8 +1800,18 @@ def create_tweet_map(
 
     map_df = df.copy()
 
-    map_df["latitude_num"] = pd.to_numeric(map_df["latitude"], errors="coerce")
-    map_df["longitude_num"] = pd.to_numeric(map_df["longitude"], errors="coerce")
+    # Older SUGAR exports protected negative spreadsheet values by prefixing
+    # them with an apostrophe (for example, "'-100.445882"). Strip that legacy
+    # prefix here so maps made from those CSV/XLSX files retain western and
+    # southern hemisphere coordinates.
+    def map_coordinate_numbers(series: pd.Series) -> pd.Series:
+        normalized = series.astype("string").str.strip().str.replace(
+            r"^'(?=[+-]?\d)", "", regex=True
+        )
+        return pd.to_numeric(normalized, errors="coerce")
+
+    map_df["latitude_num"] = map_coordinate_numbers(map_df["latitude"])
+    map_df["longitude_num"] = map_coordinate_numbers(map_df["longitude"])
     map_df["activity_date"] = pd.to_datetime(
         map_df.get("date_iso"), errors="coerce", utc=True
     )
@@ -1916,8 +1926,21 @@ def create_tweet_map(
     folium.Element(
         f'''<div style="position: fixed; bottom: 28px; left: 28px; z-index: 9999;
         background: white; color: #222; border: 1px solid #777; border-radius: 4px;
-        padding: 8px 10px; font: 12px/1.35 Arial, sans-serif; box-shadow: 0 1px 4px #777;">
+        padding: 9px 11px; width: 245px; font: 12px/1.35 Arial, sans-serif;
+        box-shadow: 0 1px 4px #777;">
         <strong>Geocoded activity heatmaps</strong><br>{activity_summary}<br>
+        <div style="margin-top: 7px;">Relative activity intensity</div>
+        <div style="height: 10px; margin-top: 3px; border: 1px solid #888;
+        background: linear-gradient(to right, #2c7bb6 0%, #00a6ca 25%,
+        #ffff8c 50%, #fdae61 75%, #d7191c 100%);"></div>
+        <div style="display: flex; justify-content: space-between; color: #444;">
+        <span>Lower</span><span>Higher</span>
+        </div>
+        <div style="margin: 5px 0; color: #555; font-size: 11px;">
+        Colors show relative concentration within each selected time layer;
+        they are not fixed post-count ranges. Use the layer control to switch
+        between 7, 30, 90, and 365 days.
+        </div>
         <span style="color:#555">As of {reference_time.strftime('%Y-%m-%d %H:%M UTC')}</span>
         </div>'''
     ).add_to(m.get_root().html)
