@@ -1,0 +1,12 @@
+beautifulsoup4
+certifi
+folium
+geopy
+langdetect
+openai
+openpyxl
+pandas
+python-dateutil
+python-dotenv
+requests
+tqdm

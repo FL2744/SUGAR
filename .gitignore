@@ -1,0 +1,30 @@
+# SUGAR credentials — never commit these files
+SUGAR KEYS
+SUGAR KEYS.*
+[Ss][Uu][Gg][Aa][Rr][ _-][Kk][Ee][Yy][Ss]*
+
+# Environment files may contain OpenAI or ARC API keys
+.env
+.env.*
+!.env.example
+
+# X API bearer token
+.x_bearer_token
+*x_bearer_token*
+
+# Common local secret files
+*.secret
+*.secrets
+secrets.*
+
+# Local Python environment and caches
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Generated research data and maps
+social_search_posts_*.csv
+social_search_posts_*.xlsx
+social_search_map_*.html
+geocode_cache.json
