@@ -1,4 +1,4 @@
-# SUGAR: Public-Post Search, Translation, and Mapping
+# SUGAR: System for User-Generated Content Gathering, Analysis, and Representation
 
 `SUGAR.py` is an interactive research script that searches public posts through
 X, Bluesky, Mastodon, or a user-selected combination. It can translate search
