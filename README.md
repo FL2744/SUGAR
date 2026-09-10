@@ -1,294 +1,136 @@
 ![sugar logo](sugar-logo.png)
-# SUGAR: System for User-Generated Content Gathering, Analysis, and Representation
 
-`SUGAR.py` is a menu-driven research program. Its independent workflows search
-public posts, map an existing SUGAR CSV/XLSX file, or analyze an existing file
-as a polished Word or PDF report. Search supports X, Bluesky, Mastodon, or a
-user-selected combination and can translate terms and posts and infer broad
-public locations.
+# SUGAR
 
-The main menu keeps collection separate from downstream work:
+**System for User-Generated Content Gathering, Analysis, and Representation**
 
-1. Run a new social-media search
-2. Map an existing CSV/XLSX results file
-3. Analyze an existing CSV/XLSX results file
-4. Exit
+SUGAR is a research pipeline for repeatable collection, normalization, AI-assisted enrichment, mapping, and descriptive analysis of public digital content. The current supported core collects from X, Bluesky, and Mastodon and is being developed for Virginia Tech Diplomacy Lab work on public diplomacy and cultural-influence networks.
 
-Report generation is implemented separately in `sugar_analysis.py`, keeping the
-analysis and document-rendering code out of the collectors.
+## Stable architecture
 
-The default `api` mode prompts for social-data sources. X can use its official
-recent-search or full-archive endpoint; Bluesky uses its public AppView search;
-Mastodon searches the statuses known and indexed by a user-selected server. A
-legacy `saved_html` mode remains available for previously saved Nitter pages.
+The supported implementation lives in `sugar_core/`. The original `SUGAR.py` monolith is retained as the historical prototype, but new work should target the stable package.
+
+The pipeline is:
+
+**Collect → Normalize → AI enrich/triage → Human review → Dataset → Map/analysis → Refresh**
+
+The stable schema is platform-neutral. It records native IDs, canonical URLs, authors, publication and collection times, original text, language, query provenance, canonical engagement metrics, location evidence, collector/schema versions, and raw platform metrics. Backward-compatible aliases are still exported for older SUGAR workbooks.
+
+## Installation
+
+Python 3.11–3.13 is supported.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+For development/testing:
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest
+```
+
+SUGAR never installs or upgrades packages at runtime.
+
+## ARC / Open OnDemand
+
+On Virginia Tech ARC, create/activate a virtual environment in your project space, install the repository once, and run the same CLI. The stable analysis path contains no hard-coded macOS font dependency.
+
+ARC's OpenAI-compatible LLM endpoint is supported with provider `arc`. Supply a personal ARC API key through `SUGAR_LLM_API_KEY` or the macOS application's Keychain-backed settings.
+
+## CLI examples
+
+Search X with translation/location enrichment:
+
+```bash
+export SUGAR_X_BEARER_TOKEN='...'
+export SUGAR_LLM_API_KEY='...'
+python -m sugar_core search "Confucius Institute" --sources x --since 2026-01-01 --until 2026-09-10
+```
+
+Use Virginia Tech ARC for enrichment:
+
+```bash
+python -m sugar_core search "孔子学院" --sources x,bluesky \
+  --provider arc --model gpt-oss-120b --since 2026-01-01 --until 2026-09-10
+```
+
+Collection without LLM enrichment:
+
+```bash
+python -m sugar_core search "democracy" --sources bluesky --no-translate --no-location
+```
+
+Create a map from an existing SUGAR CSV/XLSX:
+
+```bash
+python -m sugar_core map social_search_posts_YYYYMMDD_HHMMSS.csv
+```
+
+Create deterministic Word/PDF analysis:
+
+```bash
+python -m sugar_core analysis social_search_posts_YYYYMMDD_HHMMSS.csv --format both
+```
+
+## Credentials
+
+Credentials are never committed to the repository or written into result files. Supported environment variables are:
+
+- `SUGAR_X_BEARER_TOKEN`
+- `SUGAR_LLM_API_KEY`
+- `SUGAR_BLUESKY_IDENTIFIER`
+- `SUGAR_BLUESKY_APP_PASSWORD`
+- `SUGAR_MASTODON_TOKEN`
+
+The native macOS application stores these in macOS Keychain and passes them to the bundled backend only for execution.
+
+## Collection semantics
+
+### X
+
+SUGAR uses X API v2 recent or full-archive search. Full archive depends on the account's X API access/billing. Selected language filters are added to the X query. Start and end dates are inclusive.
+
+### Bluesky
+
+SUGAR uses `app.bsky.feed.searchPosts` through the public AppView or, when credentials are supplied, an authenticated PDS proxy. Query syntax/coverage are not assumed to be equivalent to X.
+
+### Mastodon
+
+Mastodon search is instance-scoped, not a global Fediverse index. Search coverage depends on the selected server and its indexing settings. Favorites, replies, and reblogs are mapped into SUGAR's canonical engagement fields for cross-platform analysis.
+
+## Provenance and deduplication
+
+One content object can match multiple queries. SUGAR stores a single normalized record while preserving every matching query in `query_matches`. This prevents deduplication from silently destroying search provenance.
+
+Every export also records the collection time, collector version, schema version, source URL, raw metrics, and a run-level `.metadata.json` sidecar.
+
+## AI enrichment
+
+LLM enrichment is optional. Source text is treated as untrusted data and is separated from model instructions. Location inference is broad and exploratory: SUGAR will not choose a country from language alone and does not infer private or street-level locations.
+
+LLM and geocoding results are cached under `.sugar-cache/` so reruns can reuse deterministic prior work and reduce cost.
+
+## Outputs
+
+A search writes:
+
+- `social_search_posts_<timestamp>.csv`
+- `social_search_posts_<timestamp>.xlsx`
+- `social_search_posts_<timestamp>.metadata.json`
+
+Mapping writes an interactive HTML file. Analysis writes DOCX and/or PDF reports from an existing CSV/XLSX without rerunning collection.
 
 ## Native macOS application
 
-`SUGAR-macOS` contains a native SwiftUI application for people who should not
-need Terminal, Python, or a virtual environment. It provides separate Search,
-Map, Analysis, and Settings screens, stores service credentials in macOS
-Keychain, and calls a bundled self-contained SUGAR backend.
+`SUGAR-macOS/` provides the SwiftUI UI. Its backend is `sugar_bridge.py`, which now calls `sugar_core` rather than importing the legacy monolith. Existing build/sign/notarization scripts remain under `SUGAR-macOS/scripts/`.
 
-The included scripts build an Apple Silicon test application and DMG with the
-current command-line toolchain. Public distribution additionally requires an
-Apple Developer Program membership, full Xcode, a Developer ID Application
-certificate, and notarization credentials. See `SUGAR-macOS/README.md` for the
-complete signing, notarization, stapling, and release procedure.
+## Development rule
 
-## What it creates
+Do not add another platform by adding another large function to `SUGAR.py`. New collectors should normalize into `sugar_core.models.PostRecord`, preserve native/raw fields, and include tests for pagination, date semantics, deduplication/provenance, and engagement normalization.
 
-Every run creates one local timestamp in `YYYYMMDD_HHMMSS` format and applies it
-to all primary output filenames. For example, a run started at 2:30:12 p.m. on
-August 29, 2026 can produce:
-
-- `social_search_posts_20260829_143012.csv` containing collected and enriched data
-- `social_search_posts_20260829_143012.xlsx`, a formatted Excel workbook
-- `social_search_posts_20260829_143012_map.html`, an interactive map created
-  from a selected existing results file
-- `social_search_posts_20260829_143012_analysis.docx` and/or `.pdf`, a descriptive
-  analysis report with collection diagnostics, charts, engagement measures,
-  vocabulary, caveats, and recommendations
-- A local geocoding cache
-
-Search writes the CSV and Excel workbook only. Mapping and analysis are launched
-separately from the menu and prompt for an existing file, so either operation can
-be repeated without rerunning or paying for a search. `geocode_cache.json`
-deliberately retains a stable name because it is a reusable support cache rather
-than a run result.
-
-Inferred locations are broad, model-generated estimates. They are not verified
-geotags and should not be treated as precise personal locations.
-
-The interactive map retains its clustered post markers and also provides
-weighted activity heatmaps for posts dated within the last 7, 30, 90, and 365
-days. The 30-day heatmap is visible initially; each window can be independently
-toggled in the map's layer control. Counts use successfully geocoded posts and
-the `date_iso` timestamp relative to the time the map is generated.
-
-## First-time setup
-
-Open Terminal, change to your project directory, and create a virtual Python
-environment:
-
-```bash
-cd "your project directory"
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install --upgrade pip
-python3 SUGAR.py
-```
-
-The script checks for its Python packages and installs missing ones into the
-active virtual environment. Internet access is required for package installation,
-LLM requests, live page retrieval, geocoding, and map tiles.
-
-## X API authentication
-
-For `x_api` mode, the script loads the **App-Only Bearer Token** from the hidden
-`.x_bearer_token` file in the SUGAR directory. The file must contain only the
-token and is protected with owner-only permissions (`chmod 600`).
-
-The token is not printed, written into `SUGAR.py`, or included in CSV, Excel,
-map, or cache files. `.x_bearer_token` is excluded by `.gitignore`; never share
-or commit it to version control.
-
-At startup, choose either:
-
-```text
-GET https://api.x.com/2/tweets/search/recent
-GET https://api.x.com/2/tweets/search/all
-```
-
-Full-archive search requires eligible Pay-per-use or Enterprise access. The
-script also prompts for an optional inclusive UTC date range and zero or more
-post-language filters. Multiple languages are combined as an X query group such
-as `(lang:en OR lang:fr)`. X charges for API resources returned, so start with
-small values for `MAX_POSTS_PER_QUERY` and `MAX_PAGES_PER_QUERY`, configure a
-spending limit in the Developer Console, and monitor usage.
-
-## Bluesky search
-
-Bluesky public search normally requires no API key. The script first offers a
-choice: press Enter to use the public endpoint, or enter a Bluesky handle/account
-email and a dedicated Bluesky app password. The public endpoint is:
-
-```text
-GET https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts
-```
-
-It supports keyword search, date bounds, up to 100 results per request, and
-cursor pagination. Bluesky's search syntax and ranking are not identical to X,
-so an advanced X query may not have the same meaning on Bluesky.
-
-Some institutional or filtered networks block the `*.bsky.app` API hosts and
-return an HTML `403 Forbidden` page. For that situation, create a dedicated app
-password in **Bluesky Settings > Privacy and Security > App Passwords**, then
-enter your handle and that app password at startup. SUGAR signs in through
-`bsky.social` and sends search requests through Bluesky's authenticated AppView
-proxy. Use an app password only—never your main account password.
-
-The app password and temporary access token remain in memory for the current
-run. They are not printed or written to the CSV, Excel, map, cache, or project
-files. You can revoke the app password later from the same Bluesky settings page.
-
-## Mastodon search
-
-Mastodon is decentralized. The script asks for a server URL, defaulting to
-`https://mastodon.social`, and searches that server through:
-
-```text
-GET /api/v2/search?type=statuses
-```
-
-This is not a global search of the entire Fediverse. Results depend on which
-remote posts the selected server knows about, whether it has full-text search
-configured, and whether authors opted into public indexing.
-
-The script accepts an optional Mastodon user access token through hidden input.
-Authenticated search generally provides better full-text status access and
-allows offset pagination. A token must include permission to read/search public
-statuses on that server. It is held only in memory and is never saved.
-
-## Normal startup after the first run
-
-From your project directory:
-
-```bash
-source .venv/bin/activate
-python3 SUGAR.py
-```
-
-When finished, leave the virtual environment with:
-
-```bash
-deactivate
-```
-
-## Choose an LLM provider
-
-When translation or location inference is enabled, the script asks you to
-choose one of two providers.
-
-### OpenAI API
-
-The OpenAI menu offers:
-
-1. `gpt-5.6-luna` — default; intended for cost-sensitive, high-volume work
-2. `gpt-5.6-terra` — balances capability and cost
-3. `gpt-5.6-sol` — flagship capability
-4. A different OpenAI model ID entered by the user
-
-Enter an OpenAI Platform API key when prompted.
-
-### Virginia Tech ARC LLM API
-
-The ARC menu offers:
-
-1. `gpt-oss-120b`
-2. `DeepSeek-V4-Flash`
-3. `GLM-5.2`
-4. `Kimi-K3`
-5. A different ARC model ID entered by the user
-
-The script uses ARC's OpenAI-compatible endpoint at
-`https://llm-api.arc.vt.edu/api/v1`. Virginia Tech students, faculty, and staff
-can create a personal API key at <https://llm.arc.vt.edu/> under **User profile
-> Settings > Account > API keys**.
-
-For both providers, key input is hidden. The key is retained only in memory for
-the current run and is not written into the script or output files. Never share
-an API key.
-
-## Configure a run
-
-The main settings are near the top of `SUGAR.py`:
-
-- `MODE`: use `"api"` to choose X, Bluesky, Mastodon, or a combination; use
-  `"saved_html"` for previously saved Nitter pages
-- `SAVED_HTML_FILES`: input pages used in saved-HTML mode
-- `TARGET_LANGUAGE`: translation target
-- `SINCE_DATE` and `UNTIL_DATE`: defaults for optional date bounds; X prompts for
-  an inclusive date range at startup
-- `MAX_POSTS_PER_QUERY` and `MAX_PAGES_PER_QUERY`: collection limits
-- `TRANSLATE_POSTS`: enable or disable post translation
-- `INFER_LOCATIONS`: enable or disable model-based location inference
-- `CREATE_MAP`: retained internally and disabled by default because mapping is a
-  separate main-menu workflow
-- `DEFAULT_SEARCH_TERMS`: terms offered at startup; enter one or several terms,
-  one per line
-
-For X, the startup flow additionally selects recent or full-archive search and
-one or several post languages. Query-translation languages are a separate
-multi-select: they create translated variants of each entered search term.
-
-`SEARCH_HANDLES` uses X's `from:` query syntax and therefore applies only to
-the X collector. Use ordinary keywords or platform-native handle text when
-searching Bluesky and Mastodon.
-
-Start with small post and page limits while confirming that each selected source,
-query, credential, and LLM provider works correctly.
-
-## During a run
-
-The script first asks which social-data sources to use. You can select X,
-Bluesky, Mastodon, all three, or a comma-separated combination such as `1,2`.
-It then asks for search terms and optional languages into which those terms
-should be translated. Original terms are always retained; translated variants
-are added as extra searches.
-
-API requests and public geocoding can take time. Keep Terminal open until the
-script reports the output filenames.
-
-## Troubleshooting
-
-### `externally-managed-environment`
-
-Activate the project virtual environment before running the script:
-
-```bash
-source .venv/bin/activate
-python3 SUGAR.py
-```
-
-### X API authentication or billing error
-
-- `401 Unauthorized`: generate a new App-Only Bearer Token and replace the contents of `.x_bearer_token`.
-- `402`: add X API credits or correct the billing configuration.
-- `403 Forbidden`: confirm that the app can use recent search.
-- `429`: wait for the applicable rate-limit window to reset.
-
-Do not put the Consumer Key or OAuth user Access Token in `.x_bearer_token`.
-
-### LLM authentication error
-
-Run the script again and enter a valid key for the provider you selected. An
-OpenAI key and an ARC key are not interchangeable.
-
-### ARC access
-
-ARC's shared API is intended for eligible Virginia Tech users. Generate the key
-through your own ARC web profile and keep it confidential.
-
-### No X results
-
-The query may have no matches within the preceding seven days, or date settings
-may fall outside the recent-search window. Remove date bounds, broaden the query,
-and keep `MAX_POSTS_PER_QUERY` small while testing.
-
-### No Bluesky results
-
-Broaden the query and remove X-specific operators. Bluesky search syntax and
-index coverage differ from X, even when the same words are used.
-
-If the error is an HTML `403 Forbidden` response, your network is probably
-blocking the public Bluesky API rather than Bluesky rejecting the query. Run
-SUGAR again and enter a Bluesky handle plus a dedicated app password when
-prompted. Alternatively, try another network or a trusted VPN that allows
-`*.bsky.app`. A JSON `401` during login usually means the handle or app password
-was entered incorrectly; create a fresh app password and try again.
-
-### No Mastodon results
-
-Try an authenticated user token, select a different Mastodon server relevant to
-the community being studied, or use hashtag/account-oriented terms. Full-text
-post search is deliberately instance-dependent and is not a universal index.
+See `STABILIZATION.md` for the v1.1 stabilization baseline.
