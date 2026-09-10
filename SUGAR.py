@@ -223,6 +223,8 @@ SCRIPT_DIRECTORY = (
 
 
 def install_if_missing(import_name, pip_name=None):
+    if os.environ.get("SUGAR_SKIP_DEPENDENCY_CHECK") == "1":
+        return
     if pip_name is None:
         pip_name = import_name
 
@@ -258,12 +260,12 @@ install_if_missing("bidi", "python-bidi")
 # FIX SSL CERTIFICATE ISSUES
 # ============================================================
 
-print("Upgrading certificate-related packages...")
-
-subprocess.check_call([
-    sys.executable, "-m", "pip", "install", "-q", "--upgrade",
-    "certifi", "requests", "urllib3"
-])
+if os.environ.get("SUGAR_SKIP_DEPENDENCY_CHECK") != "1":
+    print("Upgrading certificate-related packages...")
+    subprocess.check_call([
+        sys.executable, "-m", "pip", "install", "-q", "--upgrade",
+        "certifi", "requests", "urllib3"
+    ])
 
 import certifi
 

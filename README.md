@@ -22,6 +22,19 @@ recent-search or full-archive endpoint; Bluesky uses its public AppView search;
 Mastodon searches the statuses known and indexed by a user-selected server. A
 legacy `saved_html` mode remains available for previously saved Nitter pages.
 
+## Native macOS application
+
+`SUGAR-macOS` contains a native SwiftUI application for people who should not
+need Terminal, Python, or a virtual environment. It provides separate Search,
+Map, Analysis, and Settings screens, stores service credentials in macOS
+Keychain, and calls a bundled self-contained SUGAR backend.
+
+The included scripts build an Apple Silicon test application and DMG with the
+current command-line toolchain. Public distribution additionally requires an
+Apple Developer Program membership, full Xcode, a Developer ID Application
+certificate, and notarization credentials. See `SUGAR-macOS/README.md` for the
+complete signing, notarization, stapling, and release procedure.
+
 ## What it creates
 
 Every run creates one local timestamp in `YYYYMMDD_HHMMSS` format and applies it
