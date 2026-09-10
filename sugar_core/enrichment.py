@@ -1,11 +1,26 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Callable, Iterable
 
 from .llm import LLMConfig, create_client, parse_json_object, translate_text, cached_chat
 from .models import PostRecord
 from .utils import JsonCache, normalize_whitespace, stable_hash
+
+ProgressCallback = Callable[[str, dict[str, Any]], None]
+
+
+def _notify(progress: ProgressCallback | None, event: str, **values: Any) -> None:
+    if progress is not None:
+        progress(event, values)
+
+
+def _progress_tick(progress: ProgressCallback | None, event: str, current: int, total: int) -> None:
+    if total <= 0:
+        return
+    step = max(1, total // 10)
+    if current == 1 or current == total or current % step == 0:
+        _notify(progress, event, current=current, total=total)
 
 
 def detect_language(text: str) -> str:
@@ -63,38 +78,65 @@ def geocode_location(location: str, cache: JsonCache, user_agent: str = "SUGAR/1
     return data
 
 
-def enrich_records(records: Iterable[PostRecord], *, llm: LLMConfig | None = None,
-                   translate: bool = True, infer_locations: bool = True,
-                   target_language: str = "English", cache_dir: str | Path = ".sugar-cache",
-                   geocode: bool = True, min_location_confidence: float = 0.45) -> list[PostRecord]:
+def enrich_records(
+    records: Iterable[PostRecord], *, llm: LLMConfig | None = None,
+    translate: bool = True, infer_locations: bool = True,
+    target_language: str = "English", cache_dir: str | Path = ".sugar-cache",
+    geocode: bool = True, min_location_confidence: float = 0.45,
+    progress: ProgressCallback | None = None,
+) -> list[PostRecord]:
     records = list(records)
     if not records:
         return records
-    for record in records:
+
+    total = len(records)
+    _notify(progress, "detecting_languages", total=total)
+    for index, record in enumerate(records, 1):
         record.detected_language = detect_language(record.original_text)
+        _progress_tick(progress, "language_progress", index, total)
+
     if not (translate or infer_locations):
         return records
     if llm is None:
         raise ValueError("LLM configuration is required when translation or location inference is enabled.")
+
     cache_dir = Path(cache_dir)
     llm_cache = JsonCache(cache_dir / "llm.json")
     geo_cache = JsonCache(cache_dir / "geocode.json")
     client = create_client(llm)
-    for record in records:
-        if translate:
+
+    if translate:
+        _notify(progress, "translating", total=total, target_language=target_language)
+        for index, record in enumerate(records, 1):
             if record.detected_language == "en" and target_language.casefold() == "english":
                 record.translated_text = record.original_text
             else:
-                record.translated_text = translate_text(client, llm, llm_cache, record.original_text, target_language)
-        if infer_locations:
+                record.translated_text = translate_text(
+                    client, llm, llm_cache, record.original_text, target_language
+                )
+            _progress_tick(progress, "translation_progress", index, total)
+
+    if infer_locations:
+        _notify(progress, "inferring_locations", total=total)
+        for index, record in enumerate(records, 1):
             result = infer_location(client, llm, llm_cache, record)
             record.inferred_location = result["location_name"]
             record.location_confidence = result["confidence"]
             record.location_source = result["source"]
             record.location_reason = result["reason"]
-            if geocode and record.inferred_location and record.location_confidence >= min_location_confidence:
+            _progress_tick(progress, "location_progress", index, total)
+
+        candidates = [
+            r for r in records
+            if geocode and r.inferred_location and r.location_confidence >= min_location_confidence
+        ]
+        if candidates:
+            _notify(progress, "geocoding", total=len(candidates))
+            for index, record in enumerate(candidates, 1):
                 geo = geocode_location(record.inferred_location, geo_cache)
                 record.latitude = geo["latitude"]
                 record.longitude = geo["longitude"]
                 record.geocode_display_name = geo["display_name"]
+                _progress_tick(progress, "geocode_progress", index, len(candidates))
+
     return records

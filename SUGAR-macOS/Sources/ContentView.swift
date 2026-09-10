@@ -45,6 +45,8 @@ struct ActivityView: View {
             HStack {
                 Text("Activity").font(.headline)
                 Spacer()
+                Button("Copy Support Log") { model.copyLog() }
+                    .disabled(model.log.isEmpty)
                 if model.isRunning { ProgressView().controlSize(.small) }
             }
             ScrollView {
@@ -61,7 +63,7 @@ struct ActivityView: View {
                     }
                 }
             }
-        }.padding().frame(height: 190)
+        }.padding().frame(height: 210)
     }
 }
 

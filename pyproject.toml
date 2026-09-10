@@ -24,6 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10"]
+macos = ["pyinstaller>=6.10,<7"]
 rtl = ["arabic-reshaper>=3,<4", "python-bidi>=0.6,<1"]
 
 [project.scripts]
