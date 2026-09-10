@@ -65,7 +65,9 @@ def _prepare(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
     loc = work.get("inferred_location", pd.Series(["Unassigned"] * len(work), index=work.index))
     work["location"] = loc.fillna("Unassigned").replace("", "Unassigned")
     id_col = "native_id" if "native_id" in work else "tweet_id"
-    unique_ids = work.get(id_col, pd.Series([], dtype=str)).replace("", pd.NA).nunique()
+    ids = work.get(id_col, pd.Series([""] * len(work), index=work.index)).fillna("").astype(str).str.strip()
+    identity = pd.DataFrame({"platform": work["platform"].astype(str), "native_id": ids}, index=work.index)
+    unique_ids = len(identity.loc[identity.native_id.ne("")].drop_duplicates())
     valid_dates = work.date.dropna()
     return work, {
         "records": len(work), "unique_ids": int(unique_ids),
