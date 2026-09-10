@@ -533,20 +533,19 @@ def build_queries(
 
 
 def prompt_x_bearer_token() -> str:
-    """Load the X bearer token from SUGAR's protected token file."""
+    """Load a local X token when available; otherwise prompt securely."""
     token_path = str(SCRIPT_DIRECTORY / ".x_bearer_token")
 
     try:
         with open(token_path, "r", encoding="utf-8") as token_file:
             token = token_file.read().strip()
-    except OSError as exc:
-        raise RuntimeError(
-            f"Could not read the X bearer-token file: {token_path}. "
-            "Create it with the bearer token on one line and permissions 600."
-        ) from exc
+    except OSError:
+        token = ""
 
     if not token:
-        raise RuntimeError(f"The X bearer-token file is empty: {token_path}")
+        print("\nX API authentication")
+        print("No bearer-token file was found, or the file is empty.")
+        return prompt_required_secret("X bearer token (input hidden): ")
 
     print("\nX API authentication")
     print(f"Loaded the X bearer token from: {token_path}")
