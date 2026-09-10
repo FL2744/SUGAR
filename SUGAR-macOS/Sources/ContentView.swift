@@ -238,19 +238,67 @@ struct AnalysisView: View {
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
-        Form {
-            Section("API credentials") {
-                SecureField("X bearer token", text: $model.xToken)
-                SecureField("LLM API key", text: $model.llmKey)
-                TextField("Bluesky identifier", text: $model.blueskyIdentifier)
-                SecureField("Bluesky app password", text: $model.blueskyPassword)
-                SecureField("Mastodon token", text: $model.mastodonToken)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("API credentials").font(.headline)
+                Text("Credentials are stored securely in your macOS Keychain and are never written to the project folder.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 14) {
+                    GridRow {
+                        Text("X bearer token").frame(width: 180, alignment: .leading)
+                        SecureField("Enter X bearer token", text: $model.xToken)
+                            .credentialFieldStyle()
+                    }
+                    GridRow {
+                        Text("LLM API key").frame(width: 180, alignment: .leading)
+                        SecureField("Enter OpenAI, ARC, or custom API key", text: $model.llmKey)
+                            .credentialFieldStyle()
+                    }
+                    GridRow {
+                        Text("Bluesky identifier").frame(width: 180, alignment: .leading)
+                        TextField("handle.bsky.social", text: $model.blueskyIdentifier)
+                            .credentialFieldStyle()
+                    }
+                    GridRow {
+                        Text("Bluesky app password").frame(width: 180, alignment: .leading)
+                        SecureField("Enter Bluesky app password", text: $model.blueskyPassword)
+                            .credentialFieldStyle()
+                    }
+                    GridRow {
+                        Text("Mastodon token").frame(width: 180, alignment: .leading)
+                        SecureField("Enter Mastodon access token", text: $model.mastodonToken)
+                            .credentialFieldStyle()
+                    }
+                }
+                .gridColumnAlignment(.leading)
+                .frame(maxWidth: .infinity)
+
+                HStack {
+                    Spacer()
+                    Button("Save to Keychain") { model.saveCredentials() }
+                        .buttonStyle(.borderedProminent)
+                }
             }
-            HStack {
-                Spacer()
-                Button("Save to Keychain") { model.saveCredentials() }.buttonStyle(.borderedProminent)
-            }
-        }.formStyle(.grouped).navigationTitle("Settings")
+            .padding(24)
+            .frame(maxWidth: 820, alignment: .leading)
+        }
+        .navigationTitle("Settings")
+    }
+}
+
+private extension View {
+    func credentialFieldStyle() -> some View {
+        self
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 10)
+            .frame(minWidth: 420, minHeight: 30)
+            .background(Color(nsColor: .textBackgroundColor))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+            )
     }
 }
 
