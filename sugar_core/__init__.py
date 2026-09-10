@@ -10,6 +10,16 @@ from .observations import (
     observations_from_posts,
 )
 from .service import run_analysis, run_map, run_search
+from .triage import (
+    DEFAULT_PROJECT_CONTEXT,
+    GroundedEvidence,
+    TriageResult,
+    observation_from_triage,
+    parse_triage_result,
+    triage_post,
+    triage_posts,
+)
+from .triage_io import load_post_records, post_record_from_mapping, triage_dataset
 
 __all__ = [
     "PostRecord",
@@ -23,6 +33,16 @@ __all__ = [
     "observations_to_frame",
     "save_observations",
     "load_observations",
+    "GroundedEvidence",
+    "TriageResult",
+    "DEFAULT_PROJECT_CONTEXT",
+    "parse_triage_result",
+    "triage_post",
+    "triage_posts",
+    "observation_from_triage",
+    "post_record_from_mapping",
+    "load_post_records",
+    "triage_dataset",
     "run_search",
     "run_map",
     "run_analysis",
