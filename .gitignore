@@ -2,34 +2,37 @@
 SUGAR KEYS
 SUGAR KEYS.*
 [Ss][Uu][Gg][Aa][Rr][ _-][Kk][Ee][Yy][Ss]*
-
-# Environment files may contain OpenAI or ARC API keys
 .env
 .env.*
 !.env.example
-
-# X API bearer token
 .x_bearer_token
 *x_bearer_token*
-
-# Common local secret files
 *.secret
 *.secrets
 secrets.*
 
-# Local Python environment and caches
+# Python environments/caches
 .venv/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.sugar-cache/
+*.egg-info/
+build/
+dist/
 .DS_Store
 
-# Generated research data and maps
+# Generated research outputs
 social_search_posts_*.csv
 social_search_posts_*.xlsx
+social_search_posts_*.metadata.json
 social_search_map_*.html
+social_search_posts_*_map.html
 social_search_posts_*_analysis.docx
 social_search_posts_*_analysis.pdf
 ~$*.xlsx
 geocode_cache.json
+
+# Native macOS build products
 SUGAR-macOS/.build/
 SUGAR-macOS/.build-native/
