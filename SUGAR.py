@@ -215,6 +215,11 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from urllib.parse import urlencode, urljoin, urlparse
 
+# Jupyter notebooks do not define __file__. Use the notebook's current working
+# directory there, while normal script runs continue using SUGAR.py's folder.
+SCRIPT_DIRECTORY = (
+    Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
+)
 
 
 def install_if_missing(import_name, pip_name=None):
@@ -529,7 +534,7 @@ def build_queries(
 
 def prompt_x_bearer_token() -> str:
     """Load the X bearer token from SUGAR's protected token file."""
-    token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".x_bearer_token")
+    token_path = str(SCRIPT_DIRECTORY / ".x_bearer_token")
 
     try:
         with open(token_path, "r", encoding="utf-8") as token_file:
@@ -2794,12 +2799,15 @@ def run_search_workflow() -> pd.DataFrame:
 
 def main_menu():
     while True:
-        print("\n" + "=" * 58)
-        print(
-            "SUGAR: System for User-Generated Content Gathering, "
-            "Analysis, and Representation"
-        )
-        print("=" * 58)
+        print(r"""
+███████╗██╗   ██╗ ██████╗  █████╗ ██████╗
+██╔════╝██║   ██║██╔════╝ ██╔══██╗██╔══██╗
+███████╗██║   ██║██║█████╗███████║██████╔╝
+╚════██║██║   ██║██║╚══██║██╔══██║██╔══██╗
+███████║███████╔╝╚██████╔╝██║  ██║██║  ██║
+╚══════╝╚══════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝
+""")
+        print("SUGAR: System for User-Generated Content Gathering, Analysis, and Representation")
         print("  1. Run a new social-media search")
         print("  2. Map an existing CSV/XLSX results file")
         print("  3. Analyze an existing CSV/XLSX results file")
