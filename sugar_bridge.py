@@ -10,6 +10,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Frozen executables also need explicit flushing when connected to the UI pipe.
+for stream in (sys.stdout, sys.stderr):
+    if stream is not None:
+        stream.reconfigure(line_buffering=True, write_through=True)
+
 os.environ["SUGAR_SKIP_DEPENDENCY_CHECK"] = "1"
 
 import pandas as pd

@@ -33,3 +33,9 @@ social_search_posts_*_analysis.pdf
 geocode_cache.json
 SUGAR-macOS/.build/
 SUGAR-macOS/.build-native/
+
+# Local history, private notes, and generated working files
+archive/
+private-notes/
+outputs/
+scratch/

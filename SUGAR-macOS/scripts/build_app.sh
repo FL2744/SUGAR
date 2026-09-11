@@ -5,10 +5,15 @@ ROOT="${HERE:h}"
 BUILD="$HERE/.build-native"
 APP="$BUILD/SUGAR.app"
 cd "$HERE"
+export MACOSX_DEPLOYMENT_TARGET=13.0
 swift build -c release
-if [[ ! -x "$BUILD/backend/sugar-bridge" ]]; then
-  "$HERE/scripts/build_backend.sh"
-fi
+# Always rebuild: cached backends can contain a newer Python runtime.
+"$HERE/scripts/build_backend.sh"
+ARCH="$(uname -m)"
+"$BUILD/backend-venv/bin/python" "$HERE/scripts/check_compatibility.py" \
+  "$HERE/.build/release/SUGARMac" --arch "$ARCH"
+"$BUILD/backend-venv/bin/python" "$HERE/scripts/check_compatibility.py" \
+  "$BUILD/backend/sugar-bridge" --archive --arch "$ARCH"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$HERE/.build/release/SUGARMac" "$APP/Contents/MacOS/SUGAR"
 cp "$BUILD/backend/sugar-bridge" "$APP/Contents/Resources/sugar-bridge"

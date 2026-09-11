@@ -1,0 +1,3 @@
+# Select the macOS 13-compatible wheel explicitly in build_backend.sh.
+# Newer-host pip defaults may otherwise select a macOS 14 wheel.
+numpy==2.2.6

@@ -47,9 +47,17 @@ struct ActivityView: View {
                 Spacer()
                 if model.isRunning { ProgressView().controlSize(.small) }
             }
-            ScrollView {
-                Text(model.log).font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(model.log).font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                        Color.clear.frame(height: 1).id("activity-bottom")
+                    }
+                }
+                .onChange(of: model.log) { _ in
+                    proxy.scrollTo("activity-bottom", anchor: .bottom)
+                }
             }
             if !model.outputs.isEmpty {
                 ScrollView(.horizontal) {
@@ -68,8 +76,8 @@ struct ActivityView: View {
 struct SearchView: View {
     @EnvironmentObject var model: AppModel
     @State private var terms = "Democracy"
-    @State private var termLanguages = ""
-    @State private var postLanguages = "en"
+    @State private var termLanguages: Set<String> = []
+    @State private var postLanguages: Set<String> = ["en"]
     @State private var useX = true
     @State private var useBluesky = false
     @State private var useMastodon = false
@@ -81,8 +89,7 @@ struct SearchView: View {
     @State private var translate = true
     @State private var infer = true
     @State private var includeReposts = false
-    @State private var provider = "openai"
-    @State private var modelName = "gpt-5.6-luna"
+    @State private var llmSelection = LLMSelection()
     @State private var baseURL = ""
     @State private var outputDirectory = NSHomeDirectory() + "/Documents/SUGAR"
 
@@ -97,8 +104,18 @@ struct SearchView: View {
             }
             Section("Terms and languages") {
                 TextField("Search terms, comma separated", text: $terms)
-                TextField("Translate terms into languages, comma separated", text: $termLanguages)
-                TextField("X language codes, comma separated", text: $postLanguages)
+                LanguageCheckboxes(
+                    title: "Translate search terms into",
+                    hint: "Leave unchecked to use only your original search terms.",
+                    options: LanguageOption.translationLanguages,
+                    selection: $termLanguages
+                )
+                LanguageCheckboxes(
+                    title: "X post languages",
+                    hint: "Leave unchecked to include posts in all languages. Applies to X only.",
+                    options: LanguageOption.postLanguages,
+                    selection: $postLanguages
+                )
             }
             Section("Date and depth") {
                 HStack {
@@ -117,13 +134,23 @@ struct SearchView: View {
                     Toggle("Infer locations", isOn: $infer)
                     Toggle("Include reposts", isOn: $includeReposts)
                 }
-                Picker("LLM provider", selection: $provider) {
-                    Text("OpenAI").tag("openai")
-                    Text("Virginia Tech ARC").tag("arc")
-                    Text("Custom endpoint").tag("custom")
+                Picker("LLM provider", selection: $llmSelection.provider) {
+                    ForEach(LLMProvider.allCases) { provider in
+                        Text(provider.title).tag(provider)
+                    }
+                }.pickerStyle(.menu)
+                if llmSelection.provider == .custom {
+                    TextField("Model ID", text: $llmSelection.model)
+                    TextField("Custom base URL", text: $baseURL)
+                } else {
+                    Picker("Model", selection: $llmSelection.model) {
+                        ForEach(llmSelection.provider.models, id: \.self) { name in
+                            Text(name).tag(name)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .id(llmSelection.provider)
                 }
-                TextField("Model", text: $modelName)
-                TextField("Custom base URL", text: $baseURL)
             }
             Section("Output") {
                 HStack {
@@ -151,15 +178,15 @@ struct SearchView: View {
         if useMastodon { sources.append("mastodon") }
         model.run(command: "search", config: [
             "sources": sources, "terms": commaList(terms),
-            "translate_term_languages": commaList(termLanguages),
-            "post_languages": commaList(postLanguages),
+            "translate_term_languages": termLanguages.sorted(),
+            "post_languages": postLanguages.sorted(),
             "x_search_mode": fullArchive ? "all" : "recent",
             "since": since, "until": until,
             "max_posts_per_query": maxPosts, "max_pages_per_query": maxPages,
             "translate_posts": translate, "infer_locations": infer,
             "include_retweets": includeReposts, "target_language": "English",
             "output_directory": outputDirectory, "mastodon_url": "https://mastodon.social",
-            "llm": ["provider": provider, "model": modelName, "base_url": baseURL]
+            "llm": llmSelection.provider.configuration(model: llmSelection.model, customBaseURL: baseURL)
         ])
     }
 }
@@ -252,8 +279,18 @@ struct SettingsView: View {
                             .credentialFieldStyle()
                     }
                     GridRow {
-                        Text("LLM API key").frame(width: 180, alignment: .leading)
-                        SecureField("Enter OpenAI, ARC, or custom API key", text: $model.llmKey)
+                        Text("OpenAI API key").frame(width: 180, alignment: .leading)
+                        SecureField("Enter OpenAI API key", text: $model.openAIKey)
+                            .credentialFieldStyle()
+                    }
+                    GridRow {
+                        Text("ARC API key").frame(width: 180, alignment: .leading)
+                        SecureField("Enter llm.arc.vt.edu API key", text: $model.arcKey)
+                            .credentialFieldStyle()
+                    }
+                    GridRow {
+                        Text("Custom endpoint key").frame(width: 180, alignment: .leading)
+                        SecureField("Enter custom endpoint API key", text: $model.customLLMKey)
                             .credentialFieldStyle()
                     }
                     GridRow {
@@ -275,6 +312,17 @@ struct SettingsView: View {
                 .gridColumnAlignment(.leading)
                 .frame(maxWidth: .infinity)
 
+                if !model.legacyLLMKey.isEmpty {
+                    HStack {
+                        Text("A key from the previous shared field is saved. Choose which provider it belongs to.")
+                            .font(.callout)
+                        Menu("Use previous key for…") {
+                            ForEach(LLMProvider.allCases) { provider in
+                                Button(provider.title) { model.assignPreviousKey(to: provider) }
+                            }
+                        }
+                    }
+                }
                 HStack {
                     Spacer()
                     Button("Save to Keychain") { model.saveCredentials() }
@@ -320,4 +368,71 @@ private extension View {
     let panel = NSSavePanel()
     if let type = UTType(filenameExtension: extensionName) { panel.allowedContentTypes = [type] }
     return panel.runModal() == .OK ? panel.url : nil
+}
+
+
+private struct LanguageOption: Identifiable {
+    let name: String
+    let value: String
+    var id: String { value }
+
+    // Match the named language choices in the Python backend.
+    static let postLanguages: [LanguageOption] = [
+        .init(name: "Arabic", value: "ar"),
+        .init(name: "Chinese", value: "zh"),
+        .init(name: "English", value: "en"),
+        .init(name: "French", value: "fr"),
+        .init(name: "German", value: "de"),
+        .init(name: "Hindi", value: "hi"),
+        .init(name: "Indonesian", value: "id"),
+        .init(name: "Italian", value: "it"),
+        .init(name: "Japanese", value: "ja"),
+        .init(name: "Korean", value: "ko"),
+        .init(name: "Portuguese", value: "pt"),
+        .init(name: "Russian", value: "ru"),
+        .init(name: "Spanish", value: "es"),
+        .init(name: "Turkish", value: "tr"),
+    ]
+
+    static let translationLanguages: [LanguageOption] = (
+        postLanguages.filter { $0.value != "zh" }.map {
+            LanguageOption(name: $0.name, value: $0.name)
+        } + [
+            .init(name: "Simplified Chinese", value: "Simplified Chinese"),
+            .init(name: "Traditional Chinese", value: "Traditional Chinese"),
+        ]
+    ).sorted { $0.name < $1.name }
+}
+
+private struct LanguageCheckboxes: View {
+    let title: String
+    let hint: String
+    let options: [LanguageOption]
+    @Binding var selection: Set<String>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(title).font(.headline)
+                Spacer()
+                Button("Clear selection") { selection.removeAll() }
+                    .disabled(selection.isEmpty)
+            }
+            Text(hint).font(.caption).foregroundStyle(.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 165), alignment: .leading)],
+                      alignment: .leading, spacing: 8) {
+                ForEach(options) { language in
+                    Toggle(language.name, isOn: Binding(
+                        get: { selection.contains(language.value) },
+                        set: { checked in
+                            if checked { selection.insert(language.value) }
+                            else { selection.remove(language.value) }
+                        }
+                    ))
+                    .toggleStyle(.checkbox)
+                }
+            }
+        }
+        .padding(.vertical, 6)
+    }
 }
