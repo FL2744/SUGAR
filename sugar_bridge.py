@@ -5,7 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
+import sys
 
+import sugar_core
 from sugar_core.service import run_analysis, run_map, run_search
 
 
@@ -28,23 +31,49 @@ def secrets_from_environment() -> dict[str, str]:
     }
 
 
+def backend_info() -> dict[str, str]:
+    return {
+        "version": sugar_core.__version__,
+        "architecture": platform.machine() or "unknown",
+        "python": platform.python_version(),
+        "runtime": "bundled" if getattr(sys, "frozen", False) else "python",
+        "system": platform.platform(),
+    }
+
+
+def progress_event(event: str, values: dict) -> None:
+    emit(event, **values)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["search", "map", "analysis"])
-    parser.add_argument("--config", required=True)
+    parser.add_argument("command", choices=["search", "map", "analysis", "diagnostics"])
+    parser.add_argument("--config")
     args = parser.parse_args(argv)
+
+    if args.command == "diagnostics":
+        emit("diagnostics", **backend_info())
+        return 0
+    if not args.config:
+        parser.error("--config is required for search, map, and analysis")
+
     try:
+        emit("backend", **backend_info())
         config = load_config(args.config)
         if args.command == "search":
-            outputs = run_search(config, secrets_from_environment())
+            outputs = run_search(config, secrets_from_environment(), progress=progress_event)
         elif args.command == "map":
+            emit("starting", operation="map")
+            emit("mapping", source_file=str(config.get("source_file", "")))
             outputs = run_map(config)
         else:
+            emit("starting", operation="analysis")
+            emit("analyzing", source_file=str(config.get("source_file", "")))
             outputs = run_analysis(config)
         emit("complete", outputs=outputs)
         return 0
     except Exception as exc:
-        emit("error", message=str(exc))
+        emit("error", message=str(exc), exception=type(exc).__name__)
         return 1
 
 
