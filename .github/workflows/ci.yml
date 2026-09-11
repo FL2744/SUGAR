@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "stabilize/**", "fix/**"]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest
+      - name: Import smoke test
+        run: python -c "import sugar_core; print(sugar_core.__version__)"
+
+  macos-app:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build packaged app
+        run: ./SUGAR-macOS/scripts/build_app.sh
+      - name: Inspect bundled architectures
+        run: |
+          lipo -archs SUGAR-macOS/.build-native/SUGAR.app/Contents/MacOS/SUGAR
+          lipo -archs SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
+      - name: Backend diagnostics smoke test
+        run: SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge diagnostics
+      - name: Packaged analysis smoke test
+        run: |
+          cat > /tmp/sugar-smoke.csv <<'CSV'
+          platform,native_id,published_at,author_handle,original_text,latitude,longitude,engagement
+          bluesky,smoke-1,2026-09-10T12:00:00Z,tester,Smoke test,37.2296,-80.4139,"{""likes"": 1}"
+          CSV
+          cat > /tmp/sugar-analysis.json <<'JSON'
+          {"source_file":"/tmp/sugar-smoke.csv","output_stem":"/tmp/sugar-smoke-report","output_format":"pdf"}
+          JSON
+          SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge analysis --config /tmp/sugar-analysis.json
+          test -s /tmp/sugar-smoke-report.pdf
+      - name: Verify bundle signature
+        run: codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sugar-osint"
+version = "1.1.0"
+description = "SUGAR: repeatable OSINT collection, normalization, enrichment, mapping, and analysis"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "beautifulsoup4>=4.12,<5",
+  "certifi>=2024.2",
+  "folium>=0.17,<1",
+  "geopy>=2.4,<3",
+  "langdetect>=1.0.9,<2",
+  "matplotlib>=3.8,<4",
+  "openai>=1.50,<3",
+  "openpyxl>=3.1,<4",
+  "pandas>=2.2,<3",
+  "python-docx>=1.1,<2",
+  "reportlab>=4.2,<5",
+  "requests>=2.32,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+macos = ["pyinstaller>=6.10,<7"]
+rtl = ["arabic-reshaper>=3,<4", "python-bidi>=0.6,<1"]
+
+[project.scripts]
+sugar = "sugar_core.cli:main"
+
+[tool.setuptools]
+packages = ["sugar_core"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

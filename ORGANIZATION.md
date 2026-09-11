@@ -26,3 +26,12 @@ this project were not moved. The existing README and macOS README still describe
 the application and its build process.
 
 The archive's `inventory.json` records source checksums and relocated files.
+
+## GitHub integration
+
+The working source now also includes GitHub main through `07cad07`, including
+merged pull requests #1, #2, #3, #5, and #7. Local macOS provider credentials,
+streaming, compatibility, and Word template fixes were combined with those changes
+on `integrate/github-local-2026-09-10`. The original cleanup snapshots remain
+unchanged. Examples removed from GitHub's root are preserved locally in `examples/`.
+The cleanup and integration are committed locally; no changes have been pushed.

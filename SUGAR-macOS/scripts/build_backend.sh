@@ -16,7 +16,7 @@ trap 'rm -rf "$WHEELS"' EXIT
 "$BUILD/backend-venv/bin/python" -m pip download --only-binary=:all: --no-deps \
   --platform "macosx_13_0_${ARCH}" --dest "$WHEELS" 'numpy==2.2.6'
 "$BUILD/backend-venv/bin/python" -m pip install "$WHEELS"/numpy-*.whl
-"$BUILD/backend-venv/bin/python" -m pip install -r "$ROOT/requirements.txt" -c "$ROOT/SUGAR-macOS/constraints-macos.txt"
+"$BUILD/backend-venv/bin/python" -m pip install "${ROOT}[macos]" -c "$ROOT/SUGAR-macOS/constraints-macos.txt"
 "$BUILD/backend-venv/bin/pyinstaller" --noconfirm --clean --onefile \
   --name sugar-bridge --distpath "$BUILD/backend" --workpath "$BUILD/pyinstaller" \
   --specpath "$BUILD" --collect-all matplotlib --collect-all folium --collect-all docx \
@@ -26,4 +26,6 @@ trap 'rm -rf "$WHEELS"' EXIT
   "$BUILD/backend/sugar-bridge" --archive --arch "$ARCH"
 "$BUILD/backend-venv/bin/python" "$ROOT/SUGAR-macOS/scripts/check_word_templates.py" \
   "$BUILD/backend/sugar-bridge"
+"$BUILD/backend/sugar-bridge" diagnostics
+file "$BUILD/backend/sugar-bridge"
 echo "$BUILD/backend/sugar-bridge"

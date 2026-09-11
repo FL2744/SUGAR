@@ -13,6 +13,7 @@ final class AppModel: ObservableObject {
     @Published var customLLMKey = KeychainStore.read(LLMProvider.custom.keychainAccount)
     @Published private(set) var legacyLLMKey = KeychainStore.read("llmAPIKey")
     private var previousKeyAssigned = false
+    private var rawBackendLog = ""
 
     func assignPreviousKey(to provider: LLMProvider) {
         switch provider {
@@ -60,6 +61,10 @@ final class AppModel: ObservableObject {
 
     func run(command: String, config: [String: Any]) {
         guard !isRunning else { return }
+        if let issue = preflight(command: command, config: config) {
+            log = issue
+            return
+        }
         guard saveCredentials() else { return }
         let configData: Data
         do {
@@ -75,8 +80,8 @@ final class AppModel: ObservableObject {
             return
         }
         let selectedKey = provider?.apiKey(openAI: openAIKey, arc: arcKey, custom: customLLMKey) ?? ""
-        let needsLLM = config["translate_posts"] as? Bool == true
-            || config["infer_locations"] as? Bool == true
+        let needsLLM = (config["translate_posts"] as? Bool ?? true)
+            || (config["infer_locations"] as? Bool ?? true)
             || !(config["translate_term_languages"] as? [String] ?? []).isEmpty
         if command == "search", needsLLM, selectedKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             log = "Enter the \(provider!.title) API key in Settings before running this search."
@@ -88,15 +93,18 @@ final class AppModel: ObservableObject {
         )
         isRunning = true
         outputs = []
-        log = "Starting \(command)…\n"
+        rawBackendLog = ""
+        log = "Starting \(command)…\n\(Self.appDiagnostics())\n"
         Task {
             do {
                 let result = try await Task.detached {
                     try await Self.execute(command: command, configData: configData, secrets: secrets) { line in
-                        self.log += line
+                        self.rawBackendLog += line
+                        self.log += Self.renderBackendLog(line) + "\n"
+                        self.outputs = Self.outputPaths(from: self.rawBackendLog)
                     }
                 }.value
-                outputs = Self.outputPaths(from: log)
+                outputs = Self.outputPaths(from: rawBackendLog)
                 log += result == 0 ? "\nOperation completed.\n" : "\nOperation failed (exit code \(result)).\n"
             } catch {
                 log += "\n\(error.localizedDescription)"
@@ -130,7 +138,155 @@ final class AppModel: ObservableObject {
         environment["SUGAR_BLUESKY_APP_PASSWORD"] = secrets.blueskyPassword
         environment["SUGAR_MASTODON_TOKEN"] = secrets.mastodonToken
         process.environment = environment
-        return try await BackendRunner.run(process, onOutput: onOutput)
+        do {
+            return try await BackendRunner.run(process, onOutput: onOutput)
+        } catch {
+            throw NSError(domain: "SUGAR", code: 2, userInfo: [NSLocalizedDescriptionKey:
+                "Bundled backend could not start. App architecture: \(compiledArchitecture()); backend architecture: \(binaryArchitectures(backend)). \(error.localizedDescription)"])
+        }
+    }
+
+    private func preflight(command: String, config: [String: Any]) -> String? {
+        if command == "search" {
+            let sources = (config["sources"] as? [String]) ?? []
+            if sources.contains("x") && xToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Cannot start search: X is selected, but no X bearer token is saved. Open Settings, enter the token, and try again."
+            }
+            if let output = config["output_directory"] as? String, !output.isEmpty {
+                let path = (output as NSString).expandingTildeInPath
+                do {
+                    try FileManager.default.createDirectory(
+                        atPath: path, withIntermediateDirectories: true, attributes: nil
+                    )
+                } catch {
+                    return "Cannot use the selected output folder: \(error.localizedDescription)"
+                }
+                if !FileManager.default.isWritableFile(atPath: path) {
+                    return "Cannot use the selected output folder because it is not writable: \(path)"
+                }
+            }
+        } else if let source = config["source_file"] as? String,
+                  !FileManager.default.isReadableFile(atPath: source) {
+            return "Cannot read the selected source file: \(source)"
+        }
+        return nil
+    }
+
+    func copyLog() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(log, forType: .string)
+    }
+
+    nonisolated static func appDiagnostics() -> String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        let os = ProcessInfo.processInfo.operatingSystemVersionString
+        return "SUGAR \(version) • \(os) • app \(compiledArchitecture())"
+    }
+
+    nonisolated static func compiledArchitecture() -> String {
+        #if arch(arm64)
+        return "arm64"
+        #elseif arch(x86_64)
+        return "x86_64"
+        #else
+        return "unknown"
+        #endif
+    }
+
+    nonisolated static func binaryArchitectures(_ url: URL) -> String {
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/lipo")
+        process.arguments = ["-archs", url.path]
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            process.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return text.isEmpty ? "unknown" : text
+        } catch {
+            return "unknown"
+        }
+    }
+
+    nonisolated static func renderBackendLog(_ raw: String) -> String {
+        var lines: [String] = []
+        for rawLine in raw.split(separator: "\n") {
+            let line = String(rawLine)
+            guard let data = line.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let event = json["event"] as? String else {
+                lines.append(line)
+                continue
+            }
+            switch event {
+            case "backend", "diagnostics":
+                let version = json["version"] as? String ?? "unknown"
+                let architecture = json["architecture"] as? String ?? "unknown"
+                let python = json["python"] as? String ?? "unknown"
+                let runtime = json["runtime"] as? String ?? "unknown"
+                lines.append("Backend \(version) • \(architecture) • Python \(python) • \(runtime)")
+            case "starting":
+                if let operation = json["operation"] as? String {
+                    lines.append("Preparing \(operation)…")
+                }
+            case "translating_search_terms":
+                lines.append("Translating search terms…")
+            case "search_term_progress":
+                lines.append(progressLine("Search-term translation", json: json))
+            case "authenticating":
+                lines.append("Authenticating \((json["source"] as? String ?? "source").capitalized)…")
+            case "collecting":
+                lines.append("Collecting \((json["source"] as? String ?? "source").capitalized)…")
+            case "collected":
+                let source = (json["source"] as? String ?? "source").capitalized
+                let count = json["records"] as? Int ?? 0
+                lines.append("\(source): \(count) records collected")
+            case "enriching":
+                let count = json["records"] as? Int ?? 0
+                lines.append("Enriching \(count) records…")
+            case "detecting_languages":
+                lines.append("Detecting languages…")
+            case "language_progress":
+                lines.append(progressLine("Language detection", json: json))
+            case "translating":
+                lines.append("Translating posts…")
+            case "translation_progress":
+                lines.append(progressLine("Translation", json: json))
+            case "inferring_locations":
+                lines.append("Inferring broad locations…")
+            case "location_progress":
+                lines.append(progressLine("Location inference", json: json))
+            case "geocoding":
+                lines.append("Geocoding supported locations…")
+            case "geocode_progress":
+                lines.append(progressLine("Geocoding", json: json))
+            case "saving":
+                lines.append("Saving results…")
+            case "saved":
+                lines.append("Results saved.")
+            case "mapping":
+                lines.append("Creating map…")
+            case "analyzing":
+                lines.append("Creating analysis report…")
+            case "complete":
+                lines.append("Finished successfully.")
+            case "error":
+                lines.append("Error: \(json["message"] as? String ?? "Unknown backend error")")
+            default:
+                continue
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    nonisolated static func progressLine(_ label: String, json: [String: Any]) -> String {
+        let current = json["current"] as? Int ?? 0
+        let total = json["total"] as? Int ?? 0
+        return total > 0 ? "\(label): \(current)/\(total)" : label
     }
 
     nonisolated static func outputPaths(from log: String) -> [String] {
