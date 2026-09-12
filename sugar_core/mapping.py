@@ -97,6 +97,22 @@ def _json_list(value: Any) -> list[str]:
     return result
 
 
+def _json_objects(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        parsed = value
+    else:
+        text = _clean(value)
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return []
+    if not isinstance(parsed, list):
+        return []
+    return [dict(item) for item in parsed if isinstance(item, dict)]
+
+
 def _safe_url(value: Any) -> str:
     url = _clean(value)
     if not url:
@@ -196,6 +212,14 @@ def _normalize_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
             themes = _json_list(row.get("themes", ""))
             overlap = _json_list(row.get("us_overlap", ""))
             overlap_note = _first(row, "overlap_note")
+            spatial_matches = _json_objects(row.get("spatial_matches", ""))
+            spatial_matches.sort(
+                key=lambda item: (
+                    _numeric(item.get("distance_km")) if _numeric(item.get("distance_km")) is not None else float("inf"),
+                    _clean(item.get("reference_layer")).casefold(),
+                    _clean(item.get("reference_id")).casefold(),
+                )
+            )
             verification = _first(row, "verification_state") or "unreviewed"
             activity_status = _first(row, "activity_status") or "unknown"
             location_basis = _first(row, "location_basis") or "unknown"
@@ -230,6 +254,7 @@ def _normalize_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
             themes = []
             overlap = []
             overlap_note = ""
+            spatial_matches = []
             verification = "source_record"
             activity_status = "unknown"
             location_basis = _first(row, "location_source") or (
@@ -261,6 +286,7 @@ def _normalize_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
                 "_themes": themes,
                 "_us_overlap": overlap,
                 "_overlap_note": overlap_note,
+                "_spatial_matches": spatial_matches,
                 "_verification": verification.casefold(),
                 "_activity_status": activity_status.casefold(),
                 "_location_basis": location_basis,
@@ -309,6 +335,26 @@ def _list_text(values: Iterable[str]) -> str:
     return ", ".join(_clean(value) for value in values if _clean(value))
 
 
+def _spatial_match_text(match: dict[str, Any]) -> str:
+    name = _clean(match.get("reference_name")) or _clean(match.get("reference_id")) or "reference"
+    layer = _clean(match.get("reference_layer"))
+    distance = _numeric(match.get("distance_km"))
+    band = _clean(match.get("distance_band"))
+    parts = [f"{layer}: {name}" if layer else name]
+    if distance is not None:
+        parts.append(f"{distance:.1f} km")
+    if band:
+        parts.append(band)
+    flags: list[str] = []
+    if bool(match.get("same_city")):
+        flags.append("same city")
+    if bool(match.get("same_country")):
+        flags.append("same country")
+    if flags:
+        parts.append(", ".join(flags))
+    return " · ".join(parts)
+
+
 def _popup_html(row: pd.Series, max_chars: int) -> str:
     def esc(value: Any) -> str:
         return html.escape(_clean(value), quote=True)
@@ -334,6 +380,7 @@ def _popup_html(row: pd.Series, max_chars: int) -> str:
     themes = _list_text(row.get("_themes") or [])
     overlap = _list_text(row.get("_us_overlap") or [])
     overlap_note = _clean(row.get("_overlap_note"))
+    spatial_matches = row.get("_spatial_matches") or []
     location_basis = _clean(row.get("_location_basis"))
     loc_conf = row.get("_location_confidence")
     ai_conf = row.get("_ai_confidence")
@@ -366,6 +413,15 @@ def _popup_html(row: pd.Series, max_chars: int) -> str:
     if overlap or overlap_note:
         overlap_text = overlap or overlap_note
         lines.append(f"<div class='sugar-overlap'><b>U.S. overlap:</b> {esc(overlap_text)}</div>")
+    if spatial_matches:
+        nearest = spatial_matches[0]
+        lines.append(
+            f"<div class='sugar-proximity'><b>Computed proximity:</b> {esc(_spatial_match_text(nearest))}</div>"
+        )
+        if len(spatial_matches) > 1:
+            lines.append(
+                f"<div class='sugar-popup-provenance'>{len(spatial_matches) - 1} additional stored nearby reference match(es)</div>"
+            )
     if summary:
         lines.append(f"<div class='sugar-popup-summary'>{esc(summary)}</div>")
 
@@ -460,6 +516,18 @@ def _distinct_site_heat_points(frame: pd.DataFrame) -> list[list[float]]:
     return [[lat, lon, float(len(entities))] for (lat, lon), entities in sites.items()]
 
 
+def _nearest_spatial_endpoint(row: pd.Series) -> tuple[float, float] | None:
+    matches = row.get("_spatial_matches") or []
+    if not matches:
+        return None
+    match = matches[0]
+    lat = _numeric(match.get("latitude"))
+    lon = _numeric(match.get("longitude"))
+    if lat is None or lon is None or not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return None
+    return lat, lon
+
+
 def _summary_stats(
     frame: pd.DataFrame,
     dataset_type: str,
@@ -469,7 +537,12 @@ def _summary_stats(
     dated = frame["_date"].dropna() if "_date" in frame else pd.Series(dtype="datetime64[ns, UTC]")
     overlap_mask = frame["_us_overlap"].map(bool) | frame["_overlap_note"].map(bool)
     dimension = "_kind" if dataset_type == "research_observations" else "_platform"
-    rejected = frame["_verification"].eq("rejected") if dataset_type == "research_observations" else pd.Series(False, index=frame.index)
+    rejected = (
+        frame["_verification"].eq("rejected")
+        if dataset_type == "research_observations"
+        else pd.Series(False, index=frame.index)
+    )
+    proximity_rows = int(frame["_spatial_matches"].map(bool).sum()) if "_spatial_matches" in frame else 0
     return {
         "dataset_type": dataset_type,
         "source_rows": int(source_rows),
@@ -479,6 +552,7 @@ def _summary_stats(
         "dimensions": int(frame[dimension].replace("", pd.NA).dropna().nunique()),
         "dimension_label": "record types" if dataset_type == "research_observations" else "source platforms",
         "us_overlap_rows": int(overlap_mask.sum()),
+        "computed_proximity_rows": proximity_rows,
         "human_verified_rows": int(frame["_verification"].eq("human_verified").sum()),
         "rejected_rows": int(rejected.sum()),
         "reference_rows": int(reference_rows),
@@ -506,6 +580,8 @@ def _panel_html(stats: dict[str, Any], title: str, subtitle: str) -> str:
         rows.append(f"<div><b>{stats['rejected_rows']}</b> rejected observations excluded from default density</div>")
     if stats["us_overlap_rows"]:
         rows.append(f"<div><b>{stats['us_overlap_rows']}</b> records tagged for U.S. overlap</div>")
+    if stats["computed_proximity_rows"]:
+        rows.append(f"<div><b>{stats['computed_proximity_rows']}</b> observations with computed reference proximity</div>")
     if stats["reference_rows"]:
         rows.append(f"<div><b>{stats['reference_rows']}</b> external reference points</div>")
     if stats["earliest_date"] and stats["latest_date"]:
@@ -518,7 +594,7 @@ def _panel_html(stats: dict[str, Any], title: str, subtitle: str) -> str:
       <div class="sugar-panel-subtitle">{html.escape(subtitle)}</div>
       <div class="sugar-panel-type">{html.escape(dataset_label)}</div>
       {''.join(rows)}
-      <div class="sugar-panel-note">Heat intensity represents mapped record density, not influence, sentiment, audience size, institutional strength, or causal effect.</div>
+      <div class="sugar-panel-note">Heat intensity represents mapped record density, not influence, sentiment, audience size, institutional strength, or causal effect. Computed proximity is distance only and is not a strategic-overlap finding.</div>
     </div>
     """
 
@@ -574,6 +650,7 @@ def _style_html() -> str:
       .sugar-popup-provenance { color: #64748b; margin-top: 7px; font-size: 11px; }
       .sugar-popup-id { color: #94a3b8; font-size: 10px; margin-top: 5px; word-break: break-all; }
       .sugar-overlap { color: #9f1239; }
+      .sugar-proximity { color: #0f766e; margin-top: 4px; }
       @media (max-width: 700px) {
         .sugar-map-panel { left: 48px; width: 220px; max-height: 190px; overflow-y:auto; }
         .sugar-legend { display:none; }
@@ -619,7 +696,8 @@ def create_map(
     """Create an analyst-oriented interactive map from SUGAR research data.
 
     Density layers are descriptive only. Rejected research observations remain inspectable in a
-    dedicated layer but are excluded from the default analytical marker and heat layers.
+    dedicated layer but are excluded from default analytical marker and heat layers. Computed
+    spatial proximity remains separate from analyst-tagged overlap.
     """
     import folium
     from folium.plugins import Fullscreen, HeatMap, MarkerCluster, MeasureControl, MiniMap, MousePosition
@@ -656,8 +734,6 @@ def create_map(
         show=False,
     ).add_to(m)
 
-    # Each record is rendered once in its primary type/platform cluster. This keeps large maps from
-    # duplicating every marker merely to provide basic filtering.
     dimension = "_kind" if dataset_type == "research_observations" else "_platform"
     dimension_prefix = "Type" if dataset_type == "research_observations" else "Platform"
     for label in sorted(value for value in analysis_work[dimension].dropna().unique() if _clean(value)):
@@ -673,8 +749,6 @@ def create_map(
             _add_record_marker(cluster, row, dataset_type, options.max_popup_chars)
 
     if dataset_type == "research_observations":
-        # Review layers duplicate observation markers only because review status is an orthogonal
-        # analytical dimension. They start hidden and are intended for focused QA/review sessions.
         for state in ("human_verified", "ai_triaged", "needs_followup", "unreviewed"):
             subset = analysis_work.loc[analysis_work["_verification"].eq(state)]
             if subset.empty:
@@ -736,6 +810,49 @@ def create_map(
                 weight=3,
             )
 
+    proximity_rows = (
+        analysis_work.loc[analysis_work["_spatial_matches"].map(bool)]
+        if "_spatial_matches" in analysis_work
+        else analysis_work.iloc[0:0]
+    )
+    if not proximity_rows.empty:
+        proximity_group = folium.FeatureGroup(
+            name=f"Computed proximity — nearest reference ({len(proximity_rows):,})",
+            overlay=True,
+            show=False,
+        ).add_to(m)
+        for _, row in proximity_rows.iterrows():
+            endpoint = _nearest_spatial_endpoint(row)
+            if endpoint is None:
+                continue
+            nearest = row["_spatial_matches"][0]
+            color = _stable_color(f"proximity:{_clean(nearest.get('reference_layer')) or 'reference'}")
+            tooltip = html.escape(
+                "Computed proximity only — " + _spatial_match_text(nearest),
+                quote=True,
+            )
+            folium.PolyLine(
+                locations=[
+                    [float(row["latitude"]), float(row["longitude"])],
+                    [endpoint[0], endpoint[1]],
+                ],
+                color=color,
+                weight=2,
+                opacity=0.68,
+                dash_array="6,5",
+                tooltip=tooltip,
+            ).add_to(proximity_group)
+            folium.CircleMarker(
+                [endpoint[0], endpoint[1]],
+                radius=4,
+                color=color,
+                weight=2,
+                fill=True,
+                fill_color="#ffffff",
+                fill_opacity=0.9,
+                tooltip=tooltip,
+            ).add_to(proximity_group)
+
     reference_total = 0
     for reference, normalized in normalized_references:
         if normalized.empty:
@@ -769,7 +886,6 @@ def create_map(
                 ),
             ).add_to(cluster)
 
-    # Descriptive heat layers. Rejected observations never contribute to these layers.
     if not analysis_work.empty:
         all_points = _heat_points(analysis_work)
         all_heat = folium.FeatureGroup(name="Density — all analytical records", overlay=True, show=False)
@@ -844,6 +960,14 @@ def create_map(
         for _, normalized in normalized_references
         if not normalized.empty
     )
+    endpoint_rows: list[dict[str, float]] = []
+    for _, row in proximity_rows.iterrows():
+        endpoint = _nearest_spatial_endpoint(row)
+        if endpoint is not None:
+            endpoint_rows.append({"latitude": endpoint[0], "longitude": endpoint[1]})
+    if endpoint_rows:
+        bounds_frames.append(pd.DataFrame(endpoint_rows))
+
     bounds_frame = pd.concat(bounds_frames, ignore_index=True)
     if len(bounds_frame) == 1:
         m.location = [float(bounds_frame.iloc[0]["latitude"]), float(bounds_frame.iloc[0]["longitude"])]
