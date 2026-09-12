@@ -17,10 +17,20 @@ from .observations import (
     OBSERVATION_SCHEMA_VERSION,
     EvidenceReference,
     ResearchObservation,
+    SpatialMatch,
     observation_from_post,
     observations_from_posts,
 )
-from .service import run_analysis, run_map, run_search
+from .service import run_analysis, run_map, run_overlap, run_search
+from .spatial import (
+    DEFAULT_DISTANCE_BANDS_KM,
+    ReferencePoint,
+    SpatialOverlapConfig,
+    analyze_spatial_overlap,
+    distance_band,
+    haversine_km,
+    reference_points_from_frame,
+)
 
 __all__ = [
     "PostRecord",
@@ -37,14 +47,23 @@ __all__ = [
     "collect_registered_comments",
     "ResearchObservation",
     "EvidenceReference",
+    "SpatialMatch",
     "OBSERVATION_SCHEMA_VERSION",
     "observation_from_post",
     "observations_from_posts",
     "observations_to_frame",
     "save_observations",
     "load_observations",
+    "DEFAULT_DISTANCE_BANDS_KM",
+    "ReferencePoint",
+    "SpatialOverlapConfig",
+    "analyze_spatial_overlap",
+    "distance_band",
+    "haversine_km",
+    "reference_points_from_frame",
     "run_search",
     "run_map",
+    "run_overlap",
     "run_analysis",
 ]
 
