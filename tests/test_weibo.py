@@ -6,6 +6,7 @@ import pytest
 
 from sugar_core import collector_registry
 from sugar_core.collector_registry import CollectorRequest, collector_capabilities
+from sugar_core.models import PostRecord
 from sugar_core.weibo import (
     WeiboAccessError,
     collect_weibo_comments,
@@ -184,12 +185,21 @@ def test_top_level_comment_parent_is_status():
     assert row.thread_root_key == "weibo:123"
 
 
-def test_registry_advertises_weibo_surfaces_and_passes_optional_cookie(monkeypatch):
+def test_registry_advertises_weibo_surfaces_and_records_session_mode(monkeypatch):
     captured = {}
+    fake_record = PostRecord(
+        platform="weibo",
+        native_id="123",
+        canonical_url="https://m.weibo.cn/detail/123",
+        query="美国空间",
+        content_type="post",
+        source_mode="weibo_public_search",
+        original_text="test",
+    )
 
     def fake_collect(**kwargs):
         captured.update(kwargs)
-        return []
+        return [fake_record]
 
     monkeypatch.setattr(collector_registry, "collect_weibo_public", fake_collect)
     request = CollectorRequest(
@@ -200,8 +210,10 @@ def test_registry_advertises_weibo_surfaces_and_passes_optional_cookie(monkeypat
     rows = collector_registry.collect_registered_source("weibo", request)
     caps = collector_capabilities()["weibo"]
 
-    assert rows == []
     assert captured["cookie"] == "SUB=user-provided"
+    assert rows[0].source_mode == "weibo_session_search"
+    assert rows[0].raw_stats["access_mode"] == "session"
+    assert "user-provided" not in str(rows[0].raw_stats)
     assert caps["keyword_search"] is True
     assert caps["known_item"] is True
     assert caps["comments"] is True
