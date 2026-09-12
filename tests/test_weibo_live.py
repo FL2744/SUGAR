@@ -36,11 +36,22 @@ def test_live_public_weibo_seed_and_context_smoke():
     assert seed.engagement.get("replies", 0) > 0
     assert seed.engagement.get("reposts", 0) > 0
 
+    # This seed reports dozens of comments. The live contract therefore requires the ordinary
+    # anonymous comment surface to return at least one real normalized audience response, not
+    # merely the post metadata. If Weibo changes that surface, CI should tell us explicitly.
+    assert result.surface_status["comments"]["status"] == "ok"
+    assert len(result.comments) > 0
+    assert all(row.platform == "weibo" and row.content_type == "comment" for row in result.comments)
+    assert all(row.thread_root_key == "weibo:5320265912291527" for row in result.comments)
+
     insight = result.insights
     assert insight["seed"]["reported_engagement"]["likes"] > 0
     assert insight["retrieval"]["surface_status"]["seed"]["status"] == "ok"
+    assert insight["retrieval"]["comments_retrieved"] == len(result.comments)
+    assert insight["response_context"]["top_public_responses"]
     assert "not a sentiment poll" in insight["interpretation_guardrail"]
 
     print("LIVE_WEIBO_SEED", insight["seed"])
     print("LIVE_WEIBO_RETRIEVAL", insight["retrieval"])
+    print("LIVE_WEIBO_TOP_RESPONSES", insight["response_context"]["top_public_responses"][:5])
     print("LIVE_WEIBO_AUTHOR_CONTEXT", insight["author_context"])
