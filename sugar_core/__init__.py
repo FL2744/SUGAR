@@ -17,7 +17,6 @@ from .harvest import (
     HarvestTask,
     build_harvest_tasks,
     rate_limit_wait_seconds,
-    run_harvest,
 )
 from .models import COLLECTOR_VERSION, SCHEMA_VERSION, PostRecord
 from .observation_storage import load_observations, observations_to_frame, save_observations
@@ -28,7 +27,7 @@ from .observations import (
     observation_from_post,
     observations_from_posts,
 )
-from .service import run_analysis, run_map, run_search
+from .service import run_analysis, run_harvest, run_map, run_search
 
 __all__ = [
     "PostRecord",
