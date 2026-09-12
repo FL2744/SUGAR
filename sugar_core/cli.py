@@ -21,7 +21,6 @@ def _collection_secrets(sources: list[str]) -> dict[str, str]:
         "bluesky_identifier": os.environ.get("SUGAR_BLUESKY_IDENTIFIER", ""),
         "bluesky_app_password": os.environ.get("SUGAR_BLUESKY_APP_PASSWORD", ""),
         "mastodon_token": os.environ.get("SUGAR_MASTODON_TOKEN", ""),
-        # Optional legitimate session state only. SUGAR never generates/harvests Weibo cookies.
         "weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", ""),
     }
     if "x" in sources:
@@ -60,8 +59,9 @@ def build_parser() -> argparse.ArgumentParser:
     harvest.add_argument("--since")
     harvest.add_argument("--until")
     harvest.add_argument("--target", type=int, default=5000, help="Stop after at least this many unique records.")
-    harvest.add_argument("--posts-per-task", type=int, default=1000)
-    harvest.add_argument("--pages-per-task", type=int, default=50)
+    harvest.add_argument("--posts-per-task", type=int, default=500)
+    harvest.add_argument("--pages-per-task", type=int, default=5, help="Durable checkpoint page chunk for numbered-page sources.")
+    harvest.add_argument("--max-pages-per-query", type=int, default=100, help="Maximum numbered pages planned for each query.")
     harvest.add_argument("--shard-days", type=int, default=7)
     harvest.add_argument("--max-retries", type=int, default=4)
     harvest.add_argument("--max-inline-wait", type=float, default=900.0)
@@ -127,6 +127,7 @@ def main(argv=None) -> int:
                 "target_records": args.target,
                 "posts_per_task": args.posts_per_task,
                 "pages_per_task": args.pages_per_task,
+                "max_pages_per_query": args.max_pages_per_query,
                 "shard_days": args.shard_days,
                 "max_retries": args.max_retries,
                 "max_inline_wait_seconds": args.max_inline_wait,
