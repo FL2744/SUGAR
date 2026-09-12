@@ -3,7 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from .bilibili import collect_bilibili_public
+from .bilibili import (
+    collect_bilibili_comments,
+    collect_bilibili_public,
+    fetch_bilibili_video,
+)
 from .collectors import (
     collect_bluesky,
     collect_mastodon,
@@ -36,7 +40,7 @@ class CollectorCapabilities:
 
 @dataclass
 class CollectorRequest:
-    search_terms: list[str]
+    search_terms: list[str] = field(default_factory=list)
     since: str | None = None
     until: str | None = None
     max_posts_per_query: int = 10
@@ -46,6 +50,8 @@ class CollectorRequest:
 
 
 SearchAdapter = Callable[[CollectorRequest], list[PostRecord]]
+KnownItemAdapter = Callable[[str, CollectorRequest], PostRecord]
+CommentsAdapter = Callable[[str, CollectorRequest], list[PostRecord]]
 
 
 @dataclass(frozen=True)
@@ -53,16 +59,31 @@ class CollectorSpec:
     name: str
     capabilities: CollectorCapabilities
     search: SearchAdapter | None = None
+    known_item: KnownItemAdapter | None = None
+    comments: CommentsAdapter | None = None
     required_secrets: tuple[str, ...] = ()
     description: str = ""
 
-    def validate_search(self, request: CollectorRequest) -> None:
-        if not self.capabilities.keyword_search or self.search is None:
-            raise ValueError(f"{self.name} does not currently support keyword search in SUGAR.")
+    def _validate_secrets(self, request: CollectorRequest) -> None:
         missing = [key for key in self.required_secrets if not request.secrets.get(key, "").strip()]
         if missing:
             names = ", ".join(missing)
             raise ValueError(f"{self.name} requires credential(s): {names}.")
+
+    def validate_search(self, request: CollectorRequest) -> None:
+        if not self.capabilities.keyword_search or self.search is None:
+            raise ValueError(f"{self.name} does not currently support keyword search in SUGAR.")
+        self._validate_secrets(request)
+
+    def validate_known_item(self, request: CollectorRequest) -> None:
+        if not self.capabilities.known_item or self.known_item is None:
+            raise ValueError(f"{self.name} does not currently support known-item retrieval in SUGAR.")
+        self._validate_secrets(request)
+
+    def validate_comments(self, request: CollectorRequest) -> None:
+        if not self.capabilities.comments or self.comments is None:
+            raise ValueError(f"{self.name} does not currently support comment retrieval in SUGAR.")
+        self._validate_secrets(request)
 
 
 def _common(request: CollectorRequest) -> dict[str, Any]:
@@ -103,13 +124,46 @@ def _collect_mastodon(request: CollectorRequest) -> list[PostRecord]:
     )
 
 
+def _set_thread_root(record: PostRecord, conversation_id: str | None = None) -> PostRecord:
+    conversation = str(conversation_id or record.native_id or "").strip()
+    if conversation:
+        record.conversation_id = conversation
+    if record.record_key and not record.thread_root_key:
+        record.thread_root_key = record.record_key
+    return record
+
+
 def _collect_bilibili(request: CollectorRequest) -> list[PostRecord]:
-    return collect_bilibili_public(
+    rows = collect_bilibili_public(
         order=request.config.get("bilibili_order", "pubdate"),
         hydrate_details=bool(request.config.get("bilibili_hydrate_details", True)),
         initialize_session=bool(request.config.get("bilibili_initialize_session", True)),
         **_common(request),
     )
+    return [_set_thread_root(row) for row in rows]
+
+
+def _fetch_bilibili(native_id: str, request: CollectorRequest) -> PostRecord:
+    query = request.search_terms[0] if request.search_terms else ""
+    return _set_thread_root(fetch_bilibili_video(native_id, query=query))
+
+
+def _bilibili_comments(native_id: str, request: CollectorRequest) -> list[PostRecord]:
+    query = request.search_terms[0] if request.search_terms else ""
+    rows = collect_bilibili_comments(
+        native_id,
+        query=query,
+        since=request.since,
+        until=request.until,
+        max_comments=request.max_posts_per_query,
+        max_pages=request.max_pages_per_query,
+    )
+    root_key = f"bilibili:{native_id}"
+    for row in rows:
+        row.parent_record_key = root_key
+        row.thread_root_key = root_key
+        row.conversation_id = native_id
+    return rows
 
 
 COLLECTORS: dict[str, CollectorSpec] = {
@@ -119,9 +173,6 @@ COLLECTORS: dict[str, CollectorSpec] = {
         required_secrets=("x_bearer_token",),
         capabilities=CollectorCapabilities(
             keyword_search=True,
-            known_item=False,
-            comments=False,
-            profile_timeline=False,
             authenticated_search=True,
             anonymous_search=False,
         ),
@@ -132,9 +183,6 @@ COLLECTORS: dict[str, CollectorSpec] = {
         search=_collect_bluesky,
         capabilities=CollectorCapabilities(
             keyword_search=True,
-            known_item=False,
-            comments=False,
-            profile_timeline=False,
             authenticated_search=True,
             anonymous_search=True,
         ),
@@ -145,9 +193,6 @@ COLLECTORS: dict[str, CollectorSpec] = {
         search=_collect_mastodon,
         capabilities=CollectorCapabilities(
             keyword_search=True,
-            known_item=False,
-            comments=False,
-            profile_timeline=False,
             authenticated_search=True,
             anonymous_search=True,
         ),
@@ -156,15 +201,15 @@ COLLECTORS: dict[str, CollectorSpec] = {
     "bilibili": CollectorSpec(
         name="bilibili",
         search=_collect_bilibili,
+        known_item=_fetch_bilibili,
+        comments=_bilibili_comments,
         capabilities=CollectorCapabilities(
             keyword_search=True,
             known_item=True,
             comments=True,
-            profile_timeline=False,
-            authenticated_search=False,
             anonymous_search=True,
         ),
-        description="Fail-closed public Bilibili video search; known-video and comments helpers are also available.",
+        description="Fail-closed public Bilibili video search, known-video metadata, and comments.",
     ),
 }
 
@@ -186,3 +231,23 @@ def collect_registered_source(name: str, request: CollectorRequest) -> list[Post
     spec.validate_search(request)
     assert spec.search is not None
     return spec.search(request)
+
+
+def fetch_registered_item(name: str, native_id: str, request: CollectorRequest | None = None) -> PostRecord:
+    request = request or CollectorRequest()
+    spec = get_collector(name)
+    spec.validate_known_item(request)
+    assert spec.known_item is not None
+    return spec.known_item(native_id, request)
+
+
+def collect_registered_comments(
+    name: str,
+    native_id: str,
+    request: CollectorRequest | None = None,
+) -> list[PostRecord]:
+    request = request or CollectorRequest()
+    spec = get_collector(name)
+    spec.validate_comments(request)
+    assert spec.comments is not None
+    return spec.comments(native_id, request)
