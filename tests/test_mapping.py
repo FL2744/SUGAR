@@ -216,7 +216,7 @@ def test_create_map_supports_raw_source_records_and_platform_semantics(tmp_path:
     assert row["_platform"] == "weibo"
     assert row["_kind"] == "post"
     popup = _popup_html(row, 2200)
-    assert "Weibo Post" in popup
+    assert "Weibo post" in popup
     assert "weibo_public_status_anonymous" in popup
 
     path = tmp_path / "posts_map.html"
