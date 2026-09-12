@@ -17,6 +17,7 @@ for stream in (sys.stdout, sys.stderr):
 import sugar_core
 from sugar_core.collector_registry import collector_capabilities
 from sugar_core.service import run_analysis, run_harvest, run_map, run_search
+from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 
 
 def emit(event: str, **values) -> None:
@@ -48,7 +49,7 @@ def backend_info() -> dict[str, Any]:
         "runtime": "bundled" if getattr(sys, "frozen", False) else "python",
         "system": platform.platform(),
         "collectors": collector_capabilities(),
-        "operations": ["search", "harvest", "map", "analysis", "diagnostics"],
+        "operations": ["search", "harvest", "weibo-investigate", "map", "analysis", "diagnostics"],
     }
 
 
@@ -58,7 +59,10 @@ def progress_event(event: str, values: dict) -> None:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["search", "harvest", "map", "analysis", "diagnostics"])
+    parser.add_argument(
+        "command",
+        choices=["search", "harvest", "weibo-investigate", "map", "analysis", "diagnostics"],
+    )
     parser.add_argument("--config")
     args = parser.parse_args(argv)
 
@@ -66,7 +70,7 @@ def main(argv=None) -> int:
         emit("diagnostics", **backend_info())
         return 0
     if not args.config:
-        parser.error("--config is required for search, harvest, map, and analysis")
+        parser.error("--config is required for search, harvest, weibo-investigate, map, and analysis")
 
     try:
         emit("backend", **backend_info())
@@ -76,6 +80,32 @@ def main(argv=None) -> int:
         elif args.command == "harvest":
             emit("starting", operation="harvest")
             outputs = run_harvest(config, secrets_from_environment(), progress=progress_event)
+        elif args.command == "weibo-investigate":
+            emit("starting", operation="weibo-investigate")
+            secrets = secrets_from_environment()
+            result = investigate_weibo_seed(
+                config["seed"],
+                max_comments=int(config.get("max_comments", 100)),
+                comment_pages=int(config.get("comment_pages", 5)),
+                max_reposts=int(config.get("max_reposts", 100)),
+                repost_pages=int(config.get("repost_pages", 5)),
+                author_posts=int(config.get("author_posts", 40)),
+                author_pages=int(config.get("author_pages", 2)),
+                cookie=secrets.get("weibo_cookie", ""),
+            )
+            outputs = save_weibo_investigation(
+                result,
+                config.get("output_directory") or ".",
+                name=str(config.get("name") or "weibo_investigation"),
+            )
+            emit(
+                "weibo_investigation",
+                seed_record_key=result.seed.record_key,
+                comments=len(result.comments),
+                reposts=len(result.reposts),
+                author_posts=len(result.author_posts),
+                surface_status=result.surface_status,
+            )
         elif args.command == "map":
             emit("starting", operation="map")
             emit("mapping", source_file=str(config.get("source_file", "")))
