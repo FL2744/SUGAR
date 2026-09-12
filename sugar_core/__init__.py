@@ -28,6 +28,17 @@ from .observations import (
     observations_from_posts,
 )
 from .service import run_analysis, run_harvest, run_map, run_search
+from .weibo_investigation import (
+    WeiboInvestigation,
+    build_weibo_insights,
+    collect_weibo_reposts,
+    collect_weibo_user_timeline,
+    fetch_weibo_seed_status,
+    investigate_weibo_seed,
+    parse_weibo_seed,
+    render_weibo_brief,
+    save_weibo_investigation,
+)
 
 __all__ = [
     "PostRecord",
@@ -59,6 +70,15 @@ __all__ = [
     "run_search",
     "run_map",
     "run_analysis",
+    "WeiboInvestigation",
+    "parse_weibo_seed",
+    "fetch_weibo_seed_status",
+    "collect_weibo_reposts",
+    "collect_weibo_user_timeline",
+    "build_weibo_insights",
+    "investigate_weibo_seed",
+    "render_weibo_brief",
+    "save_weibo_investigation",
 ]
 
 __version__ = "1.1.0"
