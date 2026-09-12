@@ -185,13 +185,18 @@ def analyze_spatial_overlap(
     matched_observations = 0
 
     for observation in observations:
+        had_spatial_matches = bool(observation.spatial_matches)
         observation.spatial_matches = []
         coords = _valid_coordinate(observation.latitude, observation.longitude)
         if coords is None:
             skipped_unmapped += 1
+            if had_spatial_matches:
+                observation.touch()
             continue
         if observation.verification_state == "rejected" and not config.include_rejected:
             skipped_rejected += 1
+            if had_spatial_matches:
+                observation.touch()
             continue
         analyzed += 1
         latitude, longitude = coords
@@ -240,7 +245,7 @@ def analyze_spatial_overlap(
             )
             for row in local_rows[: config.stored_matches_per_observation]
         ]
-        if observation.spatial_matches:
+        if observation.spatial_matches or had_spatial_matches:
             observation.touch()
 
     matches = pd.DataFrame(match_rows)
