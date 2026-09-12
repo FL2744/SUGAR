@@ -173,7 +173,7 @@ def test_real_shaped_seed_expands_comments_reposts_and_author_context(tmp_path: 
     assert (tmp_path / "kai3.brief.md").is_file()
 
 
-def test_insight_builder_does_not_call_response_sample_sentiment():
+def test_insight_builder_does_not_create_sentiment_scores_or_labels():
     from sugar_core.models import PostRecord
 
     seed = PostRecord(
@@ -185,6 +185,6 @@ def test_insight_builder_does_not_call_response_sample_sentiment():
         engagement={"likes": 1, "replies": 10, "reposts": 2},
     )
     insight = build_weibo_insights(seed, [], [], [])
-    serialized = str(insight).casefold()
-    assert "sentiment" not in serialized
+    assert "sentiment_score" not in insight
+    assert "sentiment_label" not in insight
     assert "not a sentiment poll" in insight["interpretation_guardrail"]
