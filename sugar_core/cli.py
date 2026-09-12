@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from .service import run_analysis, run_harvest, run_map, run_search
+from .weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 
 
 def _secret(prompt: str, env: str) -> str:
@@ -114,6 +115,20 @@ def build_parser() -> argparse.ArgumentParser:
     harvest.add_argument("--no-bilibili-hydrate", action="store_true")
     harvest.add_argument("--no-weibo-hydrate", action="store_true")
 
+    investigate = sub.add_parser(
+        "weibo-investigate",
+        help="Expand one real public Weibo post into comments/reposts/account context and a research brief.",
+    )
+    investigate.add_argument("seed", help="Weibo status URL, mobile detail/status URL, numeric mid, or bid.")
+    investigate.add_argument("--comments", type=int, default=100)
+    investigate.add_argument("--comment-pages", type=int, default=5)
+    investigate.add_argument("--reposts", type=int, default=100)
+    investigate.add_argument("--repost-pages", type=int, default=5)
+    investigate.add_argument("--author-posts", type=int, default=40)
+    investigate.add_argument("--author-pages", type=int, default=2)
+    investigate.add_argument("--output", default=".")
+    investigate.add_argument("--name", default="weibo_investigation")
+
     map_p = sub.add_parser("map")
     map_p.add_argument("source_file")
     map_p.add_argument("--output")
@@ -140,6 +155,21 @@ def main(argv=None) -> int:
             {"source_file": args.source_file, "output_stem": stem, "output_format": args.format}
         )
         print("\n".join(outputs))
+        return 0
+
+    if args.command == "weibo-investigate":
+        cookie = os.environ.get("SUGAR_WEIBO_COOKIE", "")
+        investigation = investigate_weibo_seed(
+            args.seed,
+            max_comments=args.comments,
+            comment_pages=args.comment_pages,
+            max_reposts=args.reposts,
+            repost_pages=args.repost_pages,
+            author_posts=args.author_posts,
+            author_pages=args.author_pages,
+            cookie=cookie,
+        )
+        print("\n".join(save_weibo_investigation(investigation, args.output, name=args.name)))
         return 0
 
     sources = _csv(args.sources)
