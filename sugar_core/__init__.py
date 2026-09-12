@@ -11,6 +11,14 @@ from .collector_registry import (
     fetch_registered_item,
     get_collector,
 )
+from .harvest import (
+    HarvestConfig,
+    HarvestStore,
+    HarvestTask,
+    build_harvest_tasks,
+    rate_limit_wait_seconds,
+    run_harvest,
+)
 from .models import COLLECTOR_VERSION, SCHEMA_VERSION, PostRecord
 from .observation_storage import load_observations, observations_to_frame, save_observations
 from .observations import (
@@ -35,6 +43,12 @@ __all__ = [
     "collect_registered_source",
     "fetch_registered_item",
     "collect_registered_comments",
+    "HarvestConfig",
+    "HarvestStore",
+    "HarvestTask",
+    "build_harvest_tasks",
+    "rate_limit_wait_seconds",
+    "run_harvest",
     "ResearchObservation",
     "EvidenceReference",
     "OBSERVATION_SCHEMA_VERSION",
