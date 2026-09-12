@@ -157,7 +157,7 @@ def test_real_shaped_seed_expands_comments_reposts_and_author_context(tmp_path: 
     assert insights["author_context"]["seed_vs_recent_likes"]["percentile"] == 1.0
     assert any(item["value"] == "MoveLikeKai" for item in insights["content_signals"]["hashtags"])
     assert any(item["region"] == "广东" for item in insights["response_context"]["top_regions"])
-    assert "not a complete audience" in insights["interpretation_guardrail"]
+    assert "not the complete audience" in insights["interpretation_guardrail"]
 
     brief = render_weibo_brief(result)
     assert "124 likes" in brief
