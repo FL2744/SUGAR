@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from .collector_registry import CollectorRequest, COLLECTORS, collect_registered_source
 from .enrichment import enrich_records
+from .harvest import run_harvest
 from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
 from .mapping import create_map
 from .reporting import create_analysis_report
