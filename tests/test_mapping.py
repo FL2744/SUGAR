@@ -77,7 +77,9 @@ def _observation_frame() -> pd.DataFrame:
 
 def test_detects_observation_and_source_record_datasets():
     assert detect_dataset_type(_observation_frame()) == "research_observations"
-    assert detect_dataset_type(pd.DataFrame([{"platform": "weibo", "latitude": 1, "longitude": 2}])) == "source_records"
+    assert detect_dataset_type(
+        pd.DataFrame([{"platform": "weibo", "latitude": 1, "longitude": 2}])
+    ) == "source_records"
 
 
 def test_normalization_filters_invalid_coordinates_and_parses_lists():
@@ -136,12 +138,23 @@ def test_source_record_workbook_falls_back_to_posts_sheet(tmp_path: Path):
 def test_create_map_contains_analytical_layers_and_escapes_content(tmp_path: Path):
     frame = _observation_frame()
     frame.loc[0, "title"] = "<script>alert('x')</script>"
+    rejected = frame.iloc[0].copy()
+    rejected["observation_id"] = "obs_rejected"
+    rejected["title"] = "Rejected record"
+    rejected["verification_state"] = "rejected"
+    rejected["latitude"] = 41.2
+    rejected["longitude"] = 74.2
+    frame = pd.concat([frame, pd.DataFrame([rejected])], ignore_index=True)
     path = tmp_path / "research_map.html"
 
     result = create_map(
         frame,
         path,
-        options=MapOptions(title="Diplomacy Lab Map", heat_windows=(30, 90), default_heat_window=90),
+        options=MapOptions(
+            title="Diplomacy Lab Map",
+            heat_windows=(30, 90),
+            default_heat_window=90,
+        ),
     )
 
     assert result == str(path.resolve())
@@ -152,13 +165,15 @@ def test_create_map_contains_analytical_layers_and_escapes_content(tmp_path: Pat
     assert "U.S. overlap tagged" in text
     assert "Density — human-verified only" in text
     assert "Density — location-confidence weighted" in text
+    assert "Footprint — distinct institutions/programs" in text
+    assert "Rejected observations — excluded from density" in text
     assert "not influence" in text
     assert "Open source evidence" in text
     assert "javascript:alert(1)" not in text
     assert "<script>alert('x')</script>" not in text
 
 
-def test_create_map_supports_raw_source_records(tmp_path: Path):
+def test_create_map_supports_raw_source_records_and_platform_filtering(tmp_path: Path):
     now = pd.Timestamp.now(tz="UTC").floor("s").isoformat()
     frame = pd.DataFrame(
         [
@@ -184,6 +199,8 @@ def test_create_map_supports_raw_source_records(tmp_path: Path):
     text = path.read_text(encoding="utf-8")
 
     assert "Source records" in text
+    assert "Source platforms" in text
+    assert "Platform — Weibo" in text
     assert "Weibo Post" in text
     assert "weibo_public_status_anonymous" in text
 
@@ -211,6 +228,47 @@ def test_run_map_accepts_observation_xlsx_and_custom_title(tmp_path: Path):
     text = output.read_text(encoding="utf-8")
     assert "Americanspaces / PRC Activity" in text
     assert "Density — activity in last 180d" in text
+
+
+def test_run_map_supports_generic_reference_layers(tmp_path: Path):
+    source = tmp_path / "observations.csv"
+    reference = tmp_path / "american_spaces.csv"
+    output = tmp_path / "overlap_map.html"
+    _observation_frame().to_csv(source, index=False)
+    pd.DataFrame(
+        [
+            {
+                "name": "American Space Bishkek",
+                "category": "American Space",
+                "city": "Bishkek",
+                "country": "Kyrgyzstan",
+                "latitude": 42.87,
+                "longitude": 74.60,
+                "url": "https://example.test/american-space",
+            }
+        ]
+    ).to_csv(reference, index=False)
+
+    outputs = run_map(
+        {
+            "source_file": str(source),
+            "output_file": str(output),
+            "map": {
+                "reference_layers": [
+                    {
+                        "name": "American Spaces",
+                        "file": str(reference),
+                    }
+                ]
+            },
+        }
+    )
+
+    assert outputs == [str(output.resolve())]
+    text = output.read_text(encoding="utf-8")
+    assert "Reference — American Spaces" in text
+    assert "American Space Bishkek" in text
+    assert "external reference points" in text
 
 
 def test_create_map_rejects_dataset_without_coordinates(tmp_path: Path):
