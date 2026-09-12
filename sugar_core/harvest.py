@@ -17,14 +17,9 @@ from .models import PostRecord, merge_record
 from .storage import save_records
 from .utils import utc_iso
 
-# Time-window sharding is only enabled by default where the existing collector sends the
-# bounds to the remote search service. For client-side-only date filters, repeated shards
-# would waste requests by rescanning the same leading result pages.
 DEFAULT_TIME_SHARD_SOURCES = frozenset({"x", "bluesky"})
+NUMBERED_PAGE_SOURCES = frozenset({"bilibili", "weibo"})
 
-# Conservative fallback waits are used only when a collector has already converted a 429
-# into a generic exception and the server headers are no longer available. These are not a
-# mechanism for getting around limits: SUGAR waits or defers the task.
 RATE_LIMIT_FALLBACK_SECONDS = {
     "x": 900.0,
     "mastodon": 300.0,
@@ -65,9 +60,9 @@ def _parse_date_only(value: str | None) -> date | None:
         return None
 
 
-def _task_id(payload: dict[str, Any]) -> str:
+def _stable_hash(payload: Any, prefix: str) -> str:
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return "task_" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:24]
+    return prefix + hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:24]
 
 
 @dataclass(frozen=True)
@@ -76,10 +71,12 @@ class HarvestTask:
     query: str
     since: str | None = None
     until: str | None = None
+    page_start: int = 0
+    page_count: int = 0
 
     @property
     def task_id(self) -> str:
-        return _task_id(asdict(self))
+        return _stable_hash(asdict(self), "task_")
 
 
 @dataclass(frozen=True)
@@ -90,8 +87,9 @@ class HarvestConfig:
     until: str | None = None
     target_records: int | None = None
     shard_days: int = 7
-    posts_per_task: int = 1000
-    pages_per_task: int = 50
+    posts_per_task: int = 500
+    pages_per_task: int = 5
+    max_pages_per_query: int = 100
     max_retries: int = 4
     base_backoff_seconds: float = 5.0
     max_inline_wait_seconds: float = 900.0
@@ -107,15 +105,19 @@ class HarvestConfig:
         if not terms:
             raise ValueError("Harvest requires at least one search term.")
         for source in sources:
-            get_collector(source).validate_search(CollectorRequest()) if False else get_collector(source)
+            spec = get_collector(source)
+            if not spec.capabilities.keyword_search or spec.search is None:
+                raise ValueError(f"{source} does not currently support keyword harvesting in SUGAR.")
         if self.target_records is not None and int(self.target_records) < 1:
             raise ValueError("target_records must be positive when provided.")
-        if int(self.shard_days) < 1:
-            raise ValueError("shard_days must be at least 1.")
-        if int(self.posts_per_task) < 1:
-            raise ValueError("posts_per_task must be at least 1.")
-        if int(self.pages_per_task) < 1:
-            raise ValueError("pages_per_task must be at least 1.")
+        for name, value in (
+            ("shard_days", self.shard_days),
+            ("posts_per_task", self.posts_per_task),
+            ("pages_per_task", self.pages_per_task),
+            ("max_pages_per_query", self.max_pages_per_query),
+        ):
+            if int(value) < 1:
+                raise ValueError(f"{name} must be at least 1.")
         if int(self.max_retries) < 0:
             raise ValueError("max_retries cannot be negative.")
         if float(self.base_backoff_seconds) < 0 or float(self.inter_task_delay_seconds) < 0:
@@ -128,6 +130,7 @@ class HarvestConfig:
         object.__setattr__(self, "shard_days", int(self.shard_days))
         object.__setattr__(self, "posts_per_task", int(self.posts_per_task))
         object.__setattr__(self, "pages_per_task", int(self.pages_per_task))
+        object.__setattr__(self, "max_pages_per_query", int(self.max_pages_per_query))
         object.__setattr__(self, "max_retries", int(self.max_retries))
         object.__setattr__(self, "base_backoff_seconds", float(self.base_backoff_seconds))
         object.__setattr__(self, "max_inline_wait_seconds", float(self.max_inline_wait_seconds))
@@ -153,6 +156,21 @@ def build_harvest_tasks(config: HarvestConfig) -> list[HarvestTask]:
     tasks: list[HarvestTask] = []
     shard_sources = set(config.time_shard_sources)
     for source in config.sources:
+        if source in NUMBERED_PAGE_SOURCES:
+            for query in config.terms:
+                for page_start in range(1, config.max_pages_per_query + 1, config.pages_per_task):
+                    page_count = min(config.pages_per_task, config.max_pages_per_query - page_start + 1)
+                    tasks.append(
+                        HarvestTask(
+                            source=source,
+                            query=query,
+                            since=config.since,
+                            until=config.until,
+                            page_start=page_start,
+                            page_count=page_count,
+                        )
+                    )
+            continue
         windows = (
             _date_shards(config.since, config.until, config.shard_days)
             if source in shard_sources
@@ -164,12 +182,29 @@ def build_harvest_tasks(config: HarvestConfig) -> list[HarvestTask]:
     return tasks
 
 
-class HarvestStore:
-    """SQLite-backed checkpoint store for long-running collection.
+def _collection_plan_signature(tasks: list[HarvestTask], config: dict[str, Any]) -> str:
+    collector_options = {
+        key: config.get(key)
+        for key in (
+            "x_search_mode",
+            "post_languages",
+            "include_retweets",
+            "mastodon_url",
+            "bilibili_order",
+            "bilibili_hydrate_details",
+            "bilibili_initialize_session",
+            "weibo_hydrate_details",
+        )
+        if key in config
+    }
+    return _stable_hash(
+        {"tasks": [asdict(task) for task in tasks], "collector_options": collector_options},
+        "plan_",
+    )
 
-    Records are committed after every successful task. Reopening the same store automatically
-    skips completed tasks and deduplicates normalized records by stable `record_key`.
-    """
+
+class HarvestStore:
+    """SQLite-backed checkpoint store for long-running collection."""
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -193,6 +228,8 @@ class HarvestStore:
                 query_text TEXT NOT NULL,
                 since_value TEXT,
                 until_value TEXT,
+                page_start INTEGER NOT NULL DEFAULT 0,
+                page_count INTEGER NOT NULL DEFAULT 0,
                 status TEXT NOT NULL DEFAULT 'pending',
                 attempts INTEGER NOT NULL DEFAULT 0,
                 records_seen INTEGER NOT NULL DEFAULT 0,
@@ -208,9 +245,21 @@ class HarvestStore:
                 task_id TEXT NOT NULL DEFAULT '',
                 detail_json TEXT NOT NULL DEFAULT '{}'
             );
+            CREATE TABLE IF NOT EXISTS meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             """
         )
+        self._ensure_task_columns()
         self.connection.commit()
+
+    def _ensure_task_columns(self) -> None:
+        columns = {row[1] for row in self.connection.execute("PRAGMA table_info(tasks)").fetchall()}
+        if "page_start" not in columns:
+            self.connection.execute("ALTER TABLE tasks ADD COLUMN page_start INTEGER NOT NULL DEFAULT 0")
+        if "page_count" not in columns:
+            self.connection.execute("ALTER TABLE tasks ADD COLUMN page_count INTEGER NOT NULL DEFAULT 0")
 
     def close(self) -> None:
         self.connection.close()
@@ -221,6 +270,18 @@ class HarvestStore:
     def __exit__(self, exc_type, exc, tb) -> None:
         self.close()
 
+    def bind_plan(self, signature: str) -> None:
+        row = self.connection.execute("SELECT value FROM meta WHERE key='plan_signature'").fetchone()
+        if row is not None and row[0] != signature:
+            raise ValueError(
+                "This harvest checkpoint belongs to a different collection plan. "
+                "Use a different --name/output checkpoint for changed queries, windows, pages, or collector options."
+            )
+        with self.connection:
+            self.connection.execute(
+                "INSERT OR REPLACE INTO meta(key,value) VALUES('plan_signature',?)", (signature,)
+            )
+
     def register_tasks(self, tasks: Iterable[HarvestTask]) -> None:
         now = utc_iso()
         with self.connection:
@@ -228,10 +289,19 @@ class HarvestStore:
                 self.connection.execute(
                     """
                     INSERT OR IGNORE INTO tasks
-                    (task_id, source, query_text, since_value, until_value, status, updated_at)
-                    VALUES (?, ?, ?, ?, ?, 'pending', ?)
+                    (task_id, source, query_text, since_value, until_value, page_start, page_count, status, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
                     """,
-                    (task.task_id, task.source, task.query, task.since, task.until, now),
+                    (
+                        task.task_id,
+                        task.source,
+                        task.query,
+                        task.since,
+                        task.until,
+                        task.page_start,
+                        task.page_count,
+                        now,
+                    ),
                 )
 
     def task_status(self, task_id: str) -> dict[str, Any] | None:
@@ -325,7 +395,6 @@ class HarvestStore:
                     "SELECT payload_json FROM records WHERE record_key=?", (key,)
                 ).fetchone()
                 if row is None:
-                    payload = asdict(incoming)
                     self.connection.execute(
                         """
                         INSERT INTO records(record_key,platform,native_id,payload_json,first_seen_at,last_seen_at)
@@ -335,7 +404,7 @@ class HarvestStore:
                             key,
                             incoming.platform,
                             incoming.native_id,
-                            json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                            json.dumps(asdict(incoming), ensure_ascii=False, sort_keys=True),
                             now,
                             now,
                         ),
@@ -387,7 +456,6 @@ def _header_wait_seconds(headers: Any) -> float | None:
     if reset:
         try:
             number = float(reset)
-            # X-style reset is Unix time. Some servers instead return a small seconds value.
             if number > 10_000_000:
                 return max(0.0, number - _utc_now().timestamp())
             return max(0.0, number)
@@ -446,11 +514,12 @@ def run_harvest(
     collector: CollectorCallable = collect_registered_source,
     sleeper: Sleeper = time.sleep,
 ) -> list[str]:
-    """Run a resumable, rate-limit-aware high-volume public-data collection.
+    """Run resumable, rate-limit-aware high-volume public-data collection.
 
-    This removes SUGAR's small-run orchestration ceiling; it does not remove or evade platform
-    limits. On HTTP 429/rate-limit signals, SUGAR waits according to server headers when available
-    or uses a conservative fallback. Long waits are checkpointed as deferred tasks.
+    The harvest engine removes SUGAR's small-run orchestration ceiling; it does not remove or evade
+    platform limits. On 429/rate-limit signals SUGAR waits according to response headers when they
+    remain available, otherwise uses conservative source-specific waits, or checkpoints a task for
+    later when the required wait is too long for the current run.
     """
     secrets = secrets or {}
     raw = config.get("harvest") or {}
@@ -463,8 +532,9 @@ def run_harvest(
         until=config.get("until") or raw.get("until") or None,
         target_records=raw.get("target_records"),
         shard_days=int(raw.get("shard_days", 7)),
-        posts_per_task=int(raw.get("posts_per_task", 1000)),
-        pages_per_task=int(raw.get("pages_per_task", 50)),
+        posts_per_task=int(raw.get("posts_per_task", 500)),
+        pages_per_task=int(raw.get("pages_per_task", 5)),
+        max_pages_per_query=int(raw.get("max_pages_per_query", 100)),
         max_retries=int(raw.get("max_retries", 4)),
         base_backoff_seconds=float(raw.get("base_backoff_seconds", 5.0)),
         max_inline_wait_seconds=float(raw.get("max_inline_wait_seconds", 900.0)),
@@ -481,16 +551,37 @@ def run_harvest(
     manifest_path = out_dir / f"{name}.harvest.json"
 
     tasks = build_harvest_tasks(harvest_config)
-    _notify(progress, "harvest_plan", tasks=len(tasks), sources=list(harvest_config.sources), terms=len(harvest_config.terms))
+    plan_signature = _collection_plan_signature(tasks, config)
+    _notify(
+        progress,
+        "harvest_plan",
+        tasks=len(tasks),
+        sources=list(harvest_config.sources),
+        terms=len(harvest_config.terms),
+        numbered_page_tasks=sum(1 for task in tasks if task.page_start),
+    )
 
     with HarvestStore(checkpoint) as store:
+        store.bind_plan(plan_signature)
         store.register_tasks(tasks)
         for index, task in enumerate(tasks, 1):
             if harvest_config.target_records is not None and store.count_records() >= harvest_config.target_records:
-                _notify(progress, "harvest_target_reached", records=store.count_records(), target=harvest_config.target_records)
+                _notify(
+                    progress,
+                    "harvest_target_reached",
+                    records=store.count_records(),
+                    target=harvest_config.target_records,
+                )
                 break
             if not store.runnable(task):
-                _notify(progress, "harvest_task_skipped", task_id=task.task_id, source=task.source, index=index, total=len(tasks))
+                _notify(
+                    progress,
+                    "harvest_task_skipped",
+                    task_id=task.task_id,
+                    source=task.source,
+                    index=index,
+                    total=len(tasks),
+                )
                 continue
 
             attempt = 0
@@ -505,17 +596,23 @@ def run_harvest(
                     query=task.query,
                     since=task.since,
                     until=task.until,
+                    page_start=task.page_start,
+                    page_count=task.page_count,
                     attempt=attempt,
                     index=index,
                     total=len(tasks),
                 )
+                task_config = dict(config)
+                if task.page_start:
+                    task_config["_harvest_page_start"] = task.page_start
+                    task_config["_harvest_page_count"] = task.page_count
                 request = CollectorRequest(
                     search_terms=[task.query],
                     since=task.since,
                     until=task.until,
                     max_posts_per_query=harvest_config.posts_per_task,
-                    max_pages_per_query=harvest_config.pages_per_task,
-                    config=config,
+                    max_pages_per_query=task.page_count or harvest_config.pages_per_task,
+                    config=task_config,
                     secrets=secrets,
                 )
                 try:
@@ -529,6 +626,8 @@ def run_harvest(
                         returned=len(rows),
                         inserted=inserted,
                         updated=updated,
+                        page_start=task.page_start,
+                        page_count=task.page_count,
                     )
                     _notify(
                         progress,
@@ -562,7 +661,13 @@ def run_harvest(
                         )
                         if wait > harvest_config.max_inline_wait_seconds:
                             store.defer_task(task, str(exc), wait)
-                            _notify(progress, "harvest_task_deferred", task_id=task.task_id, source=task.source, not_before_seconds=wait)
+                            _notify(
+                                progress,
+                                "harvest_task_deferred",
+                                task_id=task.task_id,
+                                source=task.source,
+                                not_before_seconds=wait,
+                            )
                             break
                         if attempt > harvest_config.max_retries:
                             store.defer_task(task, str(exc), wait)
@@ -572,14 +677,38 @@ def run_harvest(
 
                     if _is_transient(exc) and attempt <= harvest_config.max_retries:
                         wait = min(harvest_config.max_inline_wait_seconds, _backoff(harvest_config, attempt))
-                        store.add_event("transient_retry", source=task.source, task_id=task.task_id, wait_seconds=wait)
-                        _notify(progress, "harvest_retry", task_id=task.task_id, source=task.source, wait_seconds=wait, attempt=attempt)
+                        store.add_event(
+                            "transient_retry",
+                            source=task.source,
+                            task_id=task.task_id,
+                            wait_seconds=wait,
+                        )
+                        _notify(
+                            progress,
+                            "harvest_retry",
+                            task_id=task.task_id,
+                            source=task.source,
+                            wait_seconds=wait,
+                            attempt=attempt,
+                        )
                         sleeper(wait)
                         continue
 
                     store.fail_task(task, str(exc))
-                    store.add_event("task_failed", source=task.source, task_id=task.task_id, error=type(exc).__name__, message=str(exc)[:500])
-                    _notify(progress, "harvest_task_failed", task_id=task.task_id, source=task.source, message=str(exc))
+                    store.add_event(
+                        "task_failed",
+                        source=task.source,
+                        task_id=task.task_id,
+                        error=type(exc).__name__,
+                        message=str(exc)[:500],
+                    )
+                    _notify(
+                        progress,
+                        "harvest_task_failed",
+                        task_id=task.task_id,
+                        source=task.source,
+                        message=str(exc),
+                    )
                     if not harvest_config.continue_on_error:
                         raise
                     break
@@ -602,14 +731,22 @@ def run_harvest(
             "task_counts": task_counts,
             "rate_limit_events": store.event_count("rate_limit"),
             "checkpoint": checkpoint.name,
+            "plan_signature": plan_signature,
             "shard_days": harvest_config.shard_days,
             "posts_per_task": harvest_config.posts_per_task,
             "pages_per_task": harvest_config.pages_per_task,
+            "max_pages_per_query": harvest_config.max_pages_per_query,
             "time_shard_sources": list(harvest_config.time_shard_sources),
-            "rate_limit_policy": "Honor server Retry-After/reset headers when available; otherwise wait conservatively or defer. No bypass/rotation logic.",
+            "numbered_page_sources": sorted(NUMBERED_PAGE_SOURCES),
+            "rate_limit_policy": (
+                "Honor server Retry-After/reset headers when available; otherwise wait conservatively "
+                "or defer. No proxy/account/device rotation or access-control bypass logic."
+            ),
             "enrichment": "Raw normalized collection only. Run enrichment/triage separately after harvest.",
         }
-        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
+        )
 
         outputs = [str(checkpoint.resolve()), str(manifest_path.resolve())]
         if records:
@@ -622,5 +759,11 @@ def run_harvest(
                     write_jsonl(records, _jsonl_path(output_csv)),
                 ]
             )
-        _notify(progress, "harvest_complete", unique_records=len(records), task_counts=task_counts, outputs=outputs)
+        _notify(
+            progress,
+            "harvest_complete",
+            unique_records=len(records),
+            task_counts=task_counts,
+            outputs=outputs,
+        )
         return outputs
