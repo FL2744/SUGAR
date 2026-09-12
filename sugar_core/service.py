@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
 from .collector_registry import CollectorRequest, COLLECTORS, collect_registered_source
 from .enrichment import enrich_records
+from .harvest import run_harvest as _run_harvest
 from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
 from .mapping import create_map
 from .reporting import create_analysis_report
@@ -139,6 +141,73 @@ def run_search(
         str(csv_path.with_suffix(".metadata.json")),
     ]
     _notify(progress, "saved", outputs=outputs)
+    return outputs
+
+
+def _harvest_access_modes(config: dict[str, Any], secrets: dict[str, str]) -> dict[str, str]:
+    sources = [str(value).strip().casefold() for value in (config.get("sources") or ["x"]) if str(value).strip()]
+    modes: dict[str, str] = {}
+    for source in sources:
+        if source == "x":
+            modes[source] = "authorized_api" if secrets.get("x_bearer_token", "").strip() else "missing_credential"
+        elif source == "bluesky":
+            authenticated = bool(
+                secrets.get("bluesky_identifier", "").strip()
+                and secrets.get("bluesky_app_password", "").strip()
+            )
+            modes[source] = "authenticated" if authenticated else "public_appview"
+        elif source == "mastodon":
+            modes[source] = "authenticated" if secrets.get("mastodon_token", "").strip() else "anonymous_instance"
+        elif source == "weibo":
+            modes[source] = "session" if secrets.get("weibo_cookie", "").strip() else "anonymous"
+        elif source == "bilibili":
+            modes[source] = "anonymous_public"
+        else:
+            modes[source] = "collector_default"
+    return modes
+
+
+def _harvest_access_marker(config: dict[str, Any]) -> Path:
+    raw = config.get("harvest") or {}
+    out_dir = Path(config.get("output_directory") or raw.get("output_directory") or Path.cwd()).expanduser().resolve()
+    name = "_".join(str(raw.get("name") or config.get("name") or "sugar_harvest").split())
+    return out_dir / f"{name}.harvest.access.json"
+
+
+def run_harvest(
+    config: dict[str, Any],
+    secrets: dict[str, str] | None = None,
+    progress: ProgressCallback | None = None,
+) -> list[str]:
+    """Run the high-volume collector with a non-secret access-mode consistency guard."""
+    secrets = secrets or {}
+    modes = _harvest_access_modes(config, secrets)
+    marker = _harvest_access_marker(config)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    if marker.is_file():
+        existing = json.loads(marker.read_text(encoding="utf-8"))
+        if existing.get("access_modes") != modes:
+            raise ValueError(
+                "This named harvest was created with different source access modes. "
+                "Use a new harvest --name instead of mixing anonymous and authenticated coverage."
+            )
+    else:
+        marker.write_text(
+            json.dumps({"access_modes": modes}, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+    outputs = _run_harvest(config, secrets, progress=progress)
+    raw = config.get("harvest") or {}
+    out_dir = Path(config.get("output_directory") or raw.get("output_directory") or Path.cwd()).expanduser().resolve()
+    name = "_".join(str(raw.get("name") or config.get("name") or "sugar_harvest").split())
+    manifest = out_dir / f"{name}.harvest.json"
+    if manifest.is_file():
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        payload["access_modes"] = modes
+        manifest.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    if str(marker.resolve()) not in outputs:
+        outputs.append(str(marker.resolve()))
     return outputs
 
 
