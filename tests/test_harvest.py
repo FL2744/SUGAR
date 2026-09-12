@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 import requests
 
 from sugar_core.harvest import (
@@ -26,13 +27,15 @@ def _record(source: str, native_id: str, query: str) -> PostRecord:
     )
 
 
-def test_planner_time_shards_only_configured_sources():
+def test_planner_time_shards_server_bound_sources_and_pages_numbered_sources():
     config = HarvestConfig(
         sources=("x", "bilibili"),
         terms=("one",),
         since="2026-01-01",
         until="2026-01-20",
         shard_days=7,
+        pages_per_task=5,
+        max_pages_per_query=12,
     )
     tasks = build_harvest_tasks(config)
     x_tasks = [task for task in tasks if task.source == "x"]
@@ -43,9 +46,12 @@ def test_planner_time_shards_only_configured_sources():
         ("2026-01-08", "2026-01-14"),
         ("2026-01-15", "2026-01-20"),
     ]
-    # Bilibili's current date bounds are applied after search results are returned, so repeated
-    # time shards would just rescan the same leading pages and waste requests.
-    assert [(task.since, task.until) for task in bilibili_tasks] == [("2026-01-01", "2026-01-20")]
+    assert [(task.page_start, task.page_count) for task in bilibili_tasks] == [
+        (1, 5),
+        (6, 5),
+        (11, 2),
+    ]
+    assert all(task.since == "2026-01-01" and task.until == "2026-01-20" for task in bilibili_tasks)
 
 
 def test_store_merges_duplicate_query_provenance(tmp_path: Path):
@@ -134,8 +140,65 @@ def test_long_rate_limit_is_checkpointed_as_deferred_not_bypassed(tmp_path: Path
     with HarvestStore(tmp_path / "deferred.harvest.sqlite3") as store:
         assert store.count_records() == 0
         assert store.task_counts() == {"deferred": 1}
-        status = store.connection.execute("SELECT not_before FROM tasks").fetchone()[0]
-        assert status.endswith("Z")
+        not_before = store.connection.execute("SELECT not_before FROM tasks").fetchone()[0]
+        assert not_before.endswith("Z")
+
+
+def test_numbered_page_ranges_are_durable_tasks_and_reach_collector(tmp_path: Path):
+    ranges: list[tuple[int, int]] = []
+
+    def collector(source, request):
+        page_start = int(request.config["_harvest_page_start"])
+        page_count = int(request.config["_harvest_page_count"])
+        ranges.append((page_start, page_count))
+        return [_record(source, f"page-{page_start}", request.search_terms[0])]
+
+    run_harvest(
+        {
+            "sources": ["bilibili"],
+            "terms": ["孔子学院"],
+            "output_directory": str(tmp_path),
+            "harvest": {
+                "name": "page_shards",
+                "target_records": 3,
+                "posts_per_task": 50,
+                "pages_per_task": 2,
+                "max_pages_per_query": 6,
+                "inter_task_delay_seconds": 0,
+            },
+        },
+        collector=collector,
+        sleeper=lambda _: None,
+    )
+
+    assert ranges == [(1, 2), (3, 2), (5, 2)]
+    with HarvestStore(tmp_path / "page_shards.harvest.sqlite3") as store:
+        assert store.count_records() == 3
+        assert store.task_counts() == {"completed": 3}
+
+
+def test_checkpoint_refuses_silent_plan_mixing(tmp_path: Path):
+    def collector(source, request):
+        return [_record(source, request.search_terms[0], request.search_terms[0])]
+
+    base = {
+        "sources": ["bilibili"],
+        "terms": ["alpha"],
+        "output_directory": str(tmp_path),
+        "harvest": {
+            "name": "fixed_plan",
+            "target_records": 1,
+            "pages_per_task": 1,
+            "max_pages_per_query": 1,
+            "inter_task_delay_seconds": 0,
+        },
+    }
+    run_harvest(base, collector=collector, sleeper=lambda _: None)
+
+    changed = dict(base)
+    changed["terms"] = ["beta"]
+    with pytest.raises(ValueError, match="different collection plan"):
+        run_harvest(changed, collector=collector, sleeper=lambda _: None)
 
 
 def test_full_harvest_scales_to_five_thousand_and_resumes_without_recollection(
@@ -188,7 +251,6 @@ def test_full_harvest_scales_to_five_thousand_and_resumes_without_recollection(
     assert manifest["unique_records"] == 5000
     assert manifest["task_counts"] == {"completed": 20}
 
-    # Re-running the same plan resumes from SQLite and performs zero collection calls.
     def should_not_run(source, request):
         raise AssertionError("completed harvest tasks should not be collected again")
 
