@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 SCHEMA_VERSION = "1.2"
-COLLECTOR_VERSION = "sugar-core-1.2"
+COLLECTOR_VERSION = "sugar-core-1.1"
 
 
 def utc_now_iso() -> str:
