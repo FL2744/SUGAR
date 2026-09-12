@@ -16,6 +16,36 @@ def _csv(value: str) -> list[str]:
     return [x.strip() for x in value.split(",") if x.strip()]
 
 
+def _terms_from_files(paths: list[str]) -> list[str]:
+    terms: list[str] = []
+    seen: set[str] = set()
+    for raw_path in paths:
+        path = Path(raw_path).expanduser()
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        for line in path.read_text(encoding="utf-8-sig").splitlines():
+            term = line.strip()
+            if not term or term.startswith("#"):
+                continue
+            key = term.casefold()
+            if key not in seen:
+                terms.append(term)
+                seen.add(key)
+    return terms
+
+
+def _merge_terms(inline: list[str], files: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for term in [*inline, *_terms_from_files(files)]:
+        term = term.strip()
+        key = term.casefold()
+        if term and key not in seen:
+            result.append(term)
+            seen.add(key)
+    return result
+
+
 def _collection_secrets(sources: list[str]) -> dict[str, str]:
     secrets: dict[str, str] = {
         "bluesky_identifier": os.environ.get("SUGAR_BLUESKY_IDENTIFIER", ""),
@@ -54,7 +84,13 @@ def build_parser() -> argparse.ArgumentParser:
         "harvest",
         help="Run resumable high-volume raw collection while honoring platform limits.",
     )
-    harvest.add_argument("terms", nargs="+")
+    harvest.add_argument("terms", nargs="*", help="Inline search terms. Can be combined with --terms-file.")
+    harvest.add_argument(
+        "--terms-file",
+        action="append",
+        default=[],
+        help="UTF-8 query-plan file: one term per line; blank lines/# comments ignored. Repeatable.",
+    )
     harvest.add_argument("--sources", default="bilibili,weibo")
     harvest.add_argument("--since")
     harvest.add_argument("--until")
@@ -90,7 +126,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
 
     if args.command == "map":
         outputs = run_map({"source_file": args.source_file, "output_file": args.output})
@@ -109,9 +146,12 @@ def main(argv=None) -> int:
     secrets = _collection_secrets(sources)
 
     if args.command == "harvest":
+        terms = _merge_terms(args.terms, args.terms_file)
+        if not terms:
+            parser.error("harvest requires at least one inline term or --terms-file entry")
         config = {
             "sources": sources,
-            "terms": args.terms,
+            "terms": terms,
             "since": args.since,
             "until": args.until,
             "output_directory": args.output,
