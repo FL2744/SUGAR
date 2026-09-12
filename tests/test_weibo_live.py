@@ -51,6 +51,7 @@ def test_live_public_weibo_seed_and_context_smoke():
     assert insight["response_context"]["top_public_responses"]
     assert "not a sentiment poll" in insight["interpretation_guardrail"]
 
+    print("LIVE_WEIBO_RAW_CREATED_AT", seed.raw_stats.get("created_at_raw"))
     print("LIVE_WEIBO_SEED", insight["seed"])
     print("LIVE_WEIBO_RETRIEVAL", insight["retrieval"])
     print("LIVE_WEIBO_TOP_RESPONSES", insight["response_context"]["top_public_responses"][:5])
