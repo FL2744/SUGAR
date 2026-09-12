@@ -647,9 +647,14 @@ def create_map(
         prefer_canvas=True,
         world_copy_jump=True,
     )
-    folium.TileLayer("CartoDB positron", name="Light basemap", control=True, show=True).add_to(m)
-    folium.TileLayer("OpenStreetMap", name="Street basemap", control=True, show=False).add_to(m)
-    folium.TileLayer("CartoDB dark_matter", name="Dark basemap", control=True, show=False).add_to(m)
+    folium.TileLayer("OpenStreetMap", name="OpenStreetMap", control=True, show=True).add_to(m)
+    folium.TileLayer(
+        tiles="https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
+        attr="&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team",
+        name="Humanitarian OSM",
+        control=True,
+        show=False,
+    ).add_to(m)
 
     # Each record is rendered once in its primary type/platform cluster. This keeps large maps from
     # duplicating every marker merely to provide basic filtering.
