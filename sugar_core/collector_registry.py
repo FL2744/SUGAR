@@ -167,34 +167,54 @@ def _bilibili_comments(native_id: str, request: CollectorRequest) -> list[PostRe
     return rows
 
 
+def _weibo_access_mode(cookie: str) -> str:
+    return "session" if str(cookie or "").strip() else "anonymous"
+
+
+def _mark_weibo_access(records: list[PostRecord], cookie: str) -> list[PostRecord]:
+    mode = _weibo_access_mode(cookie)
+    for record in records:
+        record.raw_stats = dict(record.raw_stats)
+        record.raw_stats["access_mode"] = mode
+        if mode == "session" and record.source_mode.startswith("weibo_public_"):
+            record.source_mode = record.source_mode.replace("weibo_public_", "weibo_session_", 1)
+    return records
+
+
 def _collect_weibo(request: CollectorRequest) -> list[PostRecord]:
-    return collect_weibo_public(
-        cookie=request.secrets.get("weibo_cookie", ""),
+    cookie = request.secrets.get("weibo_cookie", "")
+    rows = collect_weibo_public(
+        cookie=cookie,
         hydrate_details=bool(request.config.get("weibo_hydrate_details", True)),
         **_common(request),
     )
+    return _mark_weibo_access(rows, cookie)
 
 
 def _fetch_weibo(native_id: str, request: CollectorRequest) -> PostRecord:
     query = request.search_terms[0] if request.search_terms else ""
-    return fetch_weibo_status(
+    cookie = request.secrets.get("weibo_cookie", "")
+    record = fetch_weibo_status(
         native_id,
         query=query,
-        cookie=request.secrets.get("weibo_cookie", ""),
+        cookie=cookie,
     )
+    return _mark_weibo_access([record], cookie)[0]
 
 
 def _weibo_comments(native_id: str, request: CollectorRequest) -> list[PostRecord]:
     query = request.search_terms[0] if request.search_terms else ""
-    return collect_weibo_comments(
+    cookie = request.secrets.get("weibo_cookie", "")
+    rows = collect_weibo_comments(
         native_id,
         query=query,
         since=request.since,
         until=request.until,
         max_comments=request.max_posts_per_query,
         max_pages=request.max_pages_per_query,
-        cookie=request.secrets.get("weibo_cookie", ""),
+        cookie=cookie,
     )
+    return _mark_weibo_access(rows, cookie)
 
 
 COLLECTORS: dict[str, CollectorSpec] = {
