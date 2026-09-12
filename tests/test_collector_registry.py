@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from sugar_core import collector_registry
@@ -52,10 +50,10 @@ def test_capabilities_advertise_partial_platform_surfaces():
     assert caps["x"]["comments"] is False
 
 
-def test_required_credentials_are_validated_before_collection(monkeypatch):
+def test_required_credentials_are_validated_before_collection():
     request = CollectorRequest(search_terms=["test"], secrets={})
 
-    with pytest.raises(ValueError, match="x_bearer_token"):
+    with pytest.raises(ValueError, match="x bearer token"):
         collect_registered_source("x", request)
 
 
