@@ -7,7 +7,7 @@ from typing import Any, Callable
 from .collector_registry import CollectorRequest, COLLECTORS, collect_registered_source
 from .enrichment import enrich_records
 from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
-from .mapping import MapOptions, create_map, load_map_frame
+from .mapping import MapOptions, ReferenceLayer, create_map, load_map_frame
 from .reporting import create_analysis_report
 from .storage import save_records
 from .utils import JsonCache
@@ -161,10 +161,51 @@ def _map_options(config: dict[str, Any]) -> MapOptions:
     )
 
 
+def _map_reference_layers(config: dict[str, Any]) -> list[ReferenceLayer]:
+    raw = config.get("map") or {}
+    specs = raw.get("reference_layers") or []
+    if isinstance(specs, (str, Path, dict)):
+        specs = [specs]
+
+    layers: list[ReferenceLayer] = []
+    for spec in specs:
+        if isinstance(spec, (str, Path)):
+            path = Path(spec)
+            name = path.stem.replace("_", " ").replace("-", " ").title()
+            color = ""
+            show = True
+        elif isinstance(spec, dict):
+            raw_path = spec.get("file") or spec.get("path")
+            if not raw_path:
+                raise ValueError("Each map reference layer requires a file/path.")
+            path = Path(raw_path)
+            name = str(spec.get("name") or path.stem).strip() or "Reference"
+            color = str(spec.get("color") or "").strip()
+            show = bool(spec.get("show", True))
+        else:
+            raise TypeError("Map reference layers must be file paths or dictionaries.")
+        layers.append(
+            ReferenceLayer(
+                name=name,
+                frame=load_map_frame(path),
+                color=color,
+                show=show,
+            )
+        )
+    return layers
+
+
 def run_map(config: dict[str, Any]) -> list[str]:
     source = Path(config["source_file"])
     output = Path(config.get("output_file") or source.with_name(source.stem + "_map.html"))
-    return [create_map(load_map_frame(source), output, options=_map_options(config))]
+    return [
+        create_map(
+            load_map_frame(source),
+            output,
+            options=_map_options(config),
+            reference_layers=_map_reference_layers(config),
+        )
+    ]
 
 
 def run_analysis(config: dict[str, Any]) -> list[str]:
