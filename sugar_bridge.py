@@ -16,7 +16,7 @@ for stream in (sys.stdout, sys.stderr):
 
 import sugar_core
 from sugar_core.collector_registry import collector_capabilities
-from sugar_core.service import run_analysis, run_map, run_search
+from sugar_core.service import run_analysis, run_map, run_overlap, run_search
 
 
 def emit(event: str, **values) -> None:
@@ -46,6 +46,7 @@ def backend_info() -> dict[str, Any]:
         "runtime": "bundled" if getattr(sys, "frozen", False) else "python",
         "system": platform.platform(),
         "collectors": collector_capabilities(),
+        "operations": ["search", "map", "overlap", "analysis", "diagnostics"],
     }
 
 
@@ -55,7 +56,7 @@ def progress_event(event: str, values: dict) -> None:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["search", "map", "analysis", "diagnostics"])
+    parser.add_argument("command", choices=["search", "map", "overlap", "analysis", "diagnostics"])
     parser.add_argument("--config")
     args = parser.parse_args(argv)
 
@@ -63,7 +64,7 @@ def main(argv=None) -> int:
         emit("diagnostics", **backend_info())
         return 0
     if not args.config:
-        parser.error("--config is required for search, map, and analysis")
+        parser.error("--config is required for search, map, overlap, and analysis")
 
     try:
         emit("backend", **backend_info())
@@ -74,6 +75,9 @@ def main(argv=None) -> int:
             emit("starting", operation="map")
             emit("mapping", source_file=str(config.get("source_file", "")))
             outputs = run_map(config)
+        elif args.command == "overlap":
+            emit("starting", operation="spatial_overlap")
+            outputs = run_overlap(config, progress=progress_event)
         else:
             emit("starting", operation="analysis")
             emit("analyzing", source_file=str(config.get("source_file", "")))
