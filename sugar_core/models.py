@@ -112,7 +112,7 @@ class PostRecord:
             "date_iso": self.date_iso,
             "date_raw": self.date_raw,
             "translated_en": self.translated_en,
-            "is_retweet": self.is_repost,
+            "is_retweet": self.is_retweet,
         })
         return data
 
