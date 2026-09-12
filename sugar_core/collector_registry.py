@@ -67,7 +67,7 @@ class CollectorSpec:
     def _validate_secrets(self, request: CollectorRequest) -> None:
         missing = [key for key in self.required_secrets if not request.secrets.get(key, "").strip()]
         if missing:
-            names = ", ".join(missing)
+            names = ", ".join(key.replace("_", " ") for key in missing)
             raise ValueError(f"{self.name} requires credential(s): {names}.")
 
     def validate_search(self, request: CollectorRequest) -> None:
