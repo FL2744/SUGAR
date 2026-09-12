@@ -23,7 +23,7 @@ def test_search_progress_reports_major_stages(monkeypatch, tmp_path: Path):
         published_at="2026-09-10T12:00:00Z",
         original_text="test",
     )
-    monkeypatch.setattr(service, "collect_bluesky", lambda **kwargs: [record])
+    monkeypatch.setattr(service, "collect_registered_source", lambda source, request: [record])
     events = []
 
     outputs = service.run_search(
