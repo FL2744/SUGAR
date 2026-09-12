@@ -16,7 +16,7 @@ for stream in (sys.stdout, sys.stderr):
 
 import sugar_core
 from sugar_core.collector_registry import collector_capabilities
-from sugar_core.service import run_analysis, run_map, run_search
+from sugar_core.service import run_analysis, run_harvest, run_map, run_search
 
 
 def emit(event: str, **values) -> None:
@@ -48,6 +48,7 @@ def backend_info() -> dict[str, Any]:
         "runtime": "bundled" if getattr(sys, "frozen", False) else "python",
         "system": platform.platform(),
         "collectors": collector_capabilities(),
+        "operations": ["search", "harvest", "map", "analysis", "diagnostics"],
     }
 
 
@@ -57,7 +58,7 @@ def progress_event(event: str, values: dict) -> None:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["search", "map", "analysis", "diagnostics"])
+    parser.add_argument("command", choices=["search", "harvest", "map", "analysis", "diagnostics"])
     parser.add_argument("--config")
     args = parser.parse_args(argv)
 
@@ -65,13 +66,16 @@ def main(argv=None) -> int:
         emit("diagnostics", **backend_info())
         return 0
     if not args.config:
-        parser.error("--config is required for search, map, and analysis")
+        parser.error("--config is required for search, harvest, map, and analysis")
 
     try:
         emit("backend", **backend_info())
         config = load_config(args.config)
         if args.command == "search":
             outputs = run_search(config, secrets_from_environment(), progress=progress_event)
+        elif args.command == "harvest":
+            emit("starting", operation="harvest")
+            outputs = run_harvest(config, secrets_from_environment(), progress=progress_event)
         elif args.command == "map":
             emit("starting", operation="map")
             emit("mapping", source_file=str(config.get("source_file", "")))
