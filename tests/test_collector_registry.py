@@ -11,6 +11,7 @@ from sugar_core.collector_registry import (
     fetch_registered_item,
 )
 from sugar_core.models import PostRecord
+from sugar_core.storage import records_to_frame
 
 
 def _record(platform: str, native_id: str, content_type: str = "post") -> PostRecord:
@@ -38,6 +39,26 @@ def test_record_key_and_relationships_are_exported():
     assert exported["thread_root_key"] == "weibo:root"
     assert exported["conversation_id"] == "root"
     assert exported["schema_version"] == "1.2"
+
+
+def test_relationship_columns_are_prominent_in_dataset_exports():
+    record = _record("weibo", "abc")
+    record.parent_record_key = "weibo:parent"
+    record.thread_root_key = "weibo:root"
+    record.conversation_id = "root"
+
+    frame = records_to_frame([record])
+
+    assert list(frame.columns[:7]) == [
+        "platform",
+        "native_id",
+        "record_key",
+        "content_type",
+        "parent_record_key",
+        "thread_root_key",
+        "conversation_id",
+    ]
+    assert frame.loc[0, "parent_record_key"] == "weibo:parent"
 
 
 def test_capabilities_advertise_partial_platform_surfaces():
