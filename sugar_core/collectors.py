@@ -278,6 +278,7 @@ def collect_mastodon(*, instance_url: str, search_terms: Iterable[str], access_t
                 raw = {"reply_count": content.get("replies_count", 0), "reblog_count": content.get("reblogs_count", 0),
                        "favourite_count": content.get("favourites_count", 0), "in_reply_to_id": parent_id}
                 native_id = str(content.get("id", status.get("id", "")))
+                # Mastodon search results expose the direct parent but not necessarily the thread root.
                 root_key = "" if parent_id else _platform_key("mastodon", native_id)
                 conversation_id = "" if parent_id else native_id
                 _merge(records, PostRecord(
