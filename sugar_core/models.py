@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 SCHEMA_VERSION = "1.2"
-COLLECTOR_VERSION = "sugar-core-1.2"
+COLLECTOR_VERSION = "sugar-core-1.1"
 
 
 def utc_now_iso() -> str:
@@ -112,7 +112,7 @@ class PostRecord:
             "date_iso": self.date_iso,
             "date_raw": self.date_raw,
             "translated_en": self.translated_en,
-            "is_retweet": self.is_retweet,
+            "is_retweet": self.is_repost,
         })
         return data
 
