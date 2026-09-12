@@ -34,6 +34,7 @@ PREFERRED_OBSERVATION_COLUMNS = [
     "themes",
     "us_overlap",
     "overlap_note",
+    "spatial_matches",
     "triage_labels",
     "ai_confidence",
     "ai_model",
@@ -51,7 +52,14 @@ PREFERRED_OBSERVATION_COLUMNS = [
 ]
 
 _NUMERIC_COLUMNS = {"latitude", "longitude", "location_confidence", "ai_confidence"}
-_LONG_TEXT_COLUMNS = {"summary", "overlap_note", "ai_reason", "verification_notes", "evidence"}
+_LONG_TEXT_COLUMNS = {
+    "summary",
+    "overlap_note",
+    "spatial_matches",
+    "ai_reason",
+    "verification_notes",
+    "evidence",
+}
 
 
 def observations_to_frame(observations: Iterable[ResearchObservation]) -> pd.DataFrame:
