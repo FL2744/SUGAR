@@ -7,12 +7,14 @@ import pytest
 
 from sugar_core.mapping import (
     MapOptions,
+    _normalize_reference_rows,
     _normalize_rows,
+    _popup_html,
     create_map,
     detect_dataset_type,
     load_map_frame,
 )
-from sugar_core.service import run_map
+from sugar_core.service import _map_options, run_map
 
 
 def _observation_frame() -> pd.DataFrame:
@@ -99,6 +101,8 @@ def test_normalization_filters_invalid_coordinates_and_parses_lists():
     verified = normalized.loc[normalized["_record_id"].eq("obs_verified")].iloc[0]
     assert verified["_audiences"] == ["students", "emerging leaders"]
     assert verified["_us_overlap"] == ["American Space nearby"]
+    assert verified["_verification"] == "human_verified"
+    assert set(normalized["_kind"]) == {"program", "institution"}
 
 
 def test_observation_workbook_is_loaded_from_observations_sheet(tmp_path: Path):
@@ -135,9 +139,27 @@ def test_source_record_workbook_falls_back_to_posts_sheet(tmp_path: Path):
     assert loaded.iloc[0]["platform"] == "bilibili"
 
 
-def test_create_map_contains_analytical_layers_and_escapes_content(tmp_path: Path):
+def test_popup_semantics_and_safety_are_independent_of_folium_serialization():
     frame = _observation_frame()
     frame.loc[0, "title"] = "<script>alert('x')</script>"
+    normalized, _ = _normalize_rows(frame)
+
+    verified = normalized.loc[normalized["_record_id"].eq("obs_verified")].iloc[0]
+    followup = normalized.loc[normalized["_record_id"].eq("obs_followup")].iloc[0]
+    verified_popup = _popup_html(verified, 2200)
+    followup_popup = _popup_html(followup, 2200)
+
+    assert "&lt;script&gt;alert(&#x27;x&#x27;)&lt;/script&gt;" in verified_popup
+    assert "Open source evidence" in verified_popup
+    assert "students, emerging leaders" in verified_popup
+    assert "American Space nearby" in verified_popup
+    assert "location confidence: 0.98" in verified_popup
+    assert "javascript:alert(1)" not in followup_popup
+    assert "<script>" not in verified_popup
+
+
+def test_create_map_smoke_contains_plain_analytical_panel_content(tmp_path: Path):
+    frame = _observation_frame()
     rejected = frame.iloc[0].copy()
     rejected["observation_id"] = "obs_rejected"
     rejected["title"] = "Rejected record"
@@ -160,20 +182,14 @@ def test_create_map_contains_analytical_layers_and_escapes_content(tmp_path: Pat
     assert result == str(path.resolve())
     text = path.read_text(encoding="utf-8")
     assert "Diplomacy Lab Map" in text
-    assert "Type — Program" in text
-    assert "Verification — Human Verified" in text
-    assert "U.S. overlap tagged" in text
-    assert "Density — human-verified only" in text
-    assert "Density — location-confidence weighted" in text
-    assert "Footprint — distinct institutions/programs" in text
-    assert "Rejected observations — excluded from density" in text
+    assert "Research observations" in text
+    assert "rejected observations excluded from default density" in text
+    assert "records tagged for U.S. overlap" in text
     assert "not influence" in text
-    assert "Open source evidence" in text
-    assert "javascript:alert(1)" not in text
-    assert "<script>alert('x')</script>" not in text
+    assert "CartoDB" not in text
 
 
-def test_create_map_supports_raw_source_records_and_platform_filtering(tmp_path: Path):
+def test_create_map_supports_raw_source_records_and_platform_semantics(tmp_path: Path):
     now = pd.Timestamp.now(tz="UTC").floor("s").isoformat()
     frame = pd.DataFrame(
         [
@@ -193,16 +209,36 @@ def test_create_map_supports_raw_source_records_and_platform_filtering(tmp_path:
             }
         ]
     )
-    path = tmp_path / "posts_map.html"
+    normalized, dataset_type = _normalize_rows(frame)
+    row = normalized.iloc[0]
 
+    assert dataset_type == "source_records"
+    assert row["_platform"] == "weibo"
+    assert row["_kind"] == "post"
+    popup = _popup_html(row, 2200)
+    assert "Weibo Post" in popup
+    assert "weibo_public_status_anonymous" in popup
+
+    path = tmp_path / "posts_map.html"
     create_map(frame, path)
     text = path.read_text(encoding="utf-8")
-
     assert "Source records" in text
     assert "Source platforms" in text
-    assert "Platform — Weibo" in text
-    assert "Weibo Post" in text
-    assert "weibo_public_status_anonymous" in text
+
+
+def test_map_option_parser_preserves_custom_heat_windows():
+    options = _map_options(
+        {
+            "map": {
+                "title": "American Spaces / PRC Activity",
+                "heat_windows": [30, 180],
+                "default_heat_window": 180,
+            }
+        }
+    )
+    assert options.title == "American Spaces / PRC Activity"
+    assert options.heat_windows == (30, 180)
+    assert options.default_heat_window == 180
 
 
 def test_run_map_accepts_observation_xlsx_and_custom_title(tmp_path: Path):
@@ -216,7 +252,7 @@ def test_run_map_accepts_observation_xlsx_and_custom_title(tmp_path: Path):
             "source_file": str(source),
             "output_file": str(output),
             "map": {
-                "title": "Americanspaces / PRC Activity",
+                "title": "American Spaces / PRC Activity",
                 "heat_windows": [30, 180],
                 "default_heat_window": 180,
             },
@@ -226,8 +262,7 @@ def test_run_map_accepts_observation_xlsx_and_custom_title(tmp_path: Path):
     assert outputs == [str(output.resolve())]
     assert output.exists()
     text = output.read_text(encoding="utf-8")
-    assert "Americanspaces / PRC Activity" in text
-    assert "Density — activity in last 180d" in text
+    assert "American Spaces / PRC Activity" in text
 
 
 def test_run_map_supports_generic_reference_layers(tmp_path: Path):
@@ -235,7 +270,7 @@ def test_run_map_supports_generic_reference_layers(tmp_path: Path):
     reference = tmp_path / "american_spaces.csv"
     output = tmp_path / "overlap_map.html"
     _observation_frame().to_csv(source, index=False)
-    pd.DataFrame(
+    reference_frame = pd.DataFrame(
         [
             {
                 "name": "American Space Bishkek",
@@ -247,7 +282,12 @@ def test_run_map_supports_generic_reference_layers(tmp_path: Path):
                 "url": "https://example.test/american-space",
             }
         ]
-    ).to_csv(reference, index=False)
+    )
+    reference_frame.to_csv(reference, index=False)
+
+    normalized_reference = _normalize_reference_rows(reference_frame)
+    assert normalized_reference.iloc[0]["_title"] == "American Space Bishkek"
+    assert normalized_reference.iloc[0]["_category"] == "American Space"
 
     outputs = run_map(
         {
@@ -266,8 +306,7 @@ def test_run_map_supports_generic_reference_layers(tmp_path: Path):
 
     assert outputs == [str(output.resolve())]
     text = output.read_text(encoding="utf-8")
-    assert "Reference — American Spaces" in text
-    assert "American Space Bishkek" in text
+    assert "American Spaces reference" in text
     assert "external reference points" in text
 
 
