@@ -1,5 +1,16 @@
 """Stable SUGAR core for repeatable OSINT collection and analysis."""
 
+from .collector_registry import (
+    COLLECTORS,
+    CollectorCapabilities,
+    CollectorRequest,
+    CollectorSpec,
+    collect_registered_comments,
+    collect_registered_source,
+    collector_capabilities,
+    fetch_registered_item,
+    get_collector,
+)
 from .models import COLLECTOR_VERSION, SCHEMA_VERSION, PostRecord
 from .observation_storage import load_observations, observations_to_frame, save_observations
 from .observations import (
@@ -15,6 +26,15 @@ __all__ = [
     "PostRecord",
     "SCHEMA_VERSION",
     "COLLECTOR_VERSION",
+    "CollectorCapabilities",
+    "CollectorRequest",
+    "CollectorSpec",
+    "COLLECTORS",
+    "get_collector",
+    "collector_capabilities",
+    "collect_registered_source",
+    "fetch_registered_item",
+    "collect_registered_comments",
     "ResearchObservation",
     "EvidenceReference",
     "OBSERVATION_SCHEMA_VERSION",
