@@ -35,7 +35,10 @@ PREFERRED_OBSERVATION_COLUMNS = [
     "us_overlap",
     "overlap_note",
     "spatial_matches",
+    "relevance",
+    "relevance_confidence",
     "triage_labels",
+    "triage_evidence",
     "ai_confidence",
     "ai_model",
     "ai_reason",
@@ -51,11 +54,18 @@ PREFERRED_OBSERVATION_COLUMNS = [
     "schema_version",
 ]
 
-_NUMERIC_COLUMNS = {"latitude", "longitude", "location_confidence", "ai_confidence"}
+_NUMERIC_COLUMNS = {
+    "latitude",
+    "longitude",
+    "location_confidence",
+    "relevance_confidence",
+    "ai_confidence",
+}
 _LONG_TEXT_COLUMNS = {
     "summary",
     "overlap_note",
     "spatial_matches",
+    "triage_evidence",
     "ai_reason",
     "verification_notes",
     "evidence",

@@ -16,6 +16,7 @@ from .collectors import (
     create_session,
 )
 from .models import PostRecord
+from .weibo import collect_weibo_comments, collect_weibo_public, fetch_weibo_status
 
 
 @dataclass(frozen=True)
@@ -166,6 +167,56 @@ def _bilibili_comments(native_id: str, request: CollectorRequest) -> list[PostRe
     return rows
 
 
+def _weibo_access_mode(cookie: str) -> str:
+    return "session" if str(cookie or "").strip() else "anonymous"
+
+
+def _mark_weibo_access(records: list[PostRecord], cookie: str) -> list[PostRecord]:
+    mode = _weibo_access_mode(cookie)
+    for record in records:
+        record.raw_stats = dict(record.raw_stats)
+        record.raw_stats["access_mode"] = mode
+        if mode == "session" and record.source_mode.startswith("weibo_public_"):
+            record.source_mode = record.source_mode.replace("weibo_public_", "weibo_session_", 1)
+    return records
+
+
+def _collect_weibo(request: CollectorRequest) -> list[PostRecord]:
+    cookie = request.secrets.get("weibo_cookie", "")
+    rows = collect_weibo_public(
+        cookie=cookie,
+        hydrate_details=bool(request.config.get("weibo_hydrate_details", True)),
+        **_common(request),
+    )
+    return _mark_weibo_access(rows, cookie)
+
+
+def _fetch_weibo(native_id: str, request: CollectorRequest) -> PostRecord:
+    query = request.search_terms[0] if request.search_terms else ""
+    cookie = request.secrets.get("weibo_cookie", "")
+    record = fetch_weibo_status(
+        native_id,
+        query=query,
+        cookie=cookie,
+    )
+    return _mark_weibo_access([record], cookie)[0]
+
+
+def _weibo_comments(native_id: str, request: CollectorRequest) -> list[PostRecord]:
+    query = request.search_terms[0] if request.search_terms else ""
+    cookie = request.secrets.get("weibo_cookie", "")
+    rows = collect_weibo_comments(
+        native_id,
+        query=query,
+        since=request.since,
+        until=request.until,
+        max_comments=request.max_posts_per_query,
+        max_pages=request.max_pages_per_query,
+        cookie=cookie,
+    )
+    return _mark_weibo_access(rows, cookie)
+
+
 COLLECTORS: dict[str, CollectorSpec] = {
     "x": CollectorSpec(
         name="x",
@@ -210,6 +261,23 @@ COLLECTORS: dict[str, CollectorSpec] = {
             anonymous_search=True,
         ),
         description="Fail-closed public Bilibili video search, known-video metadata, and comments.",
+    ),
+    "weibo": CollectorSpec(
+        name="weibo",
+        search=_collect_weibo,
+        known_item=_fetch_weibo,
+        comments=_weibo_comments,
+        capabilities=CollectorCapabilities(
+            keyword_search=True,
+            known_item=True,
+            comments=True,
+            authenticated_search=True,
+            anonymous_search=True,
+        ),
+        description=(
+            "Fail-closed Weibo mobile-web search/status/comments. Public status and basic comment "
+            "surfaces are anonymous; search availability can vary and may use a legitimate supplied session."
+        ),
     ),
 }
 

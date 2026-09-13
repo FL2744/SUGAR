@@ -28,6 +28,8 @@ VERIFICATION_STATES = {
     "needs_followup",
 }
 
+RELEVANCE_STATES = {"unknown", "relevant", "uncertain", "not_relevant"}
+
 _ALLOWED_TRANSITIONS = {
     "unreviewed": {"ai_triaged", "human_verified", "rejected", "needs_followup"},
     "ai_triaged": {"human_verified", "rejected", "needs_followup"},
@@ -175,7 +177,10 @@ class ResearchObservation:
     evidence: list[EvidenceReference] = field(default_factory=list)
     source_record_keys: list[str] = field(default_factory=list)
 
+    relevance: str = "unknown"
+    relevance_confidence: float | None = None
     triage_labels: list[str] = field(default_factory=list)
+    triage_evidence: list[str] = field(default_factory=list)
     ai_confidence: float | None = None
     ai_model: str = ""
     ai_reason: str = ""
@@ -212,8 +217,14 @@ class ResearchObservation:
         self.us_overlap = _clean_list(self.us_overlap)
         self.source_record_keys = _clean_list(self.source_record_keys)
         self.triage_labels = _clean_list(self.triage_labels)
+        self.triage_evidence = _clean_list(self.triage_evidence)
         self.location_confidence = _bounded_confidence(self.location_confidence, "location_confidence")
+        self.relevance_confidence = _bounded_confidence(self.relevance_confidence, "relevance_confidence")
         self.ai_confidence = _bounded_confidence(self.ai_confidence, "ai_confidence")
+
+        self.relevance = _clean(self.relevance).casefold() or "unknown"
+        if self.relevance not in RELEVANCE_STATES:
+            raise ValueError(f"Unsupported relevance: {self.relevance}")
 
         normalized_matches: list[SpatialMatch] = []
         for item in self.spatial_matches:
@@ -287,8 +298,17 @@ class ResearchObservation:
         confidence: float | int | None,
         model: str,
         reason: str = "",
+        relevance: str = "unknown",
+        relevance_confidence: float | int | None = None,
+        evidence_spans: Iterable[str] = (),
     ) -> None:
+        normalized_relevance = _clean(relevance).casefold() or "unknown"
+        if normalized_relevance not in RELEVANCE_STATES:
+            raise ValueError(f"Unsupported relevance: {normalized_relevance}")
+        self.relevance = normalized_relevance
+        self.relevance_confidence = _bounded_confidence(relevance_confidence, "relevance_confidence")
         self.triage_labels = _clean_list(labels)
+        self.triage_evidence = _clean_list(evidence_spans)
         self.ai_confidence = _bounded_confidence(confidence, "ai_confidence")
         self.ai_model = _clean(model)
         self.ai_reason = _clean(reason)
@@ -318,7 +338,9 @@ class ResearchObservation:
 
     def export_dict(self) -> dict[str, Any]:
         data = asdict(self)
-        for key in ("actors", "audiences", "themes", "us_overlap", "source_record_keys", "triage_labels"):
+        for key in (
+            "actors", "audiences", "themes", "us_overlap", "source_record_keys", "triage_labels", "triage_evidence"
+        ):
             data[key] = json.dumps(data[key], ensure_ascii=False)
         data["spatial_matches"] = json.dumps(data["spatial_matches"], ensure_ascii=False, sort_keys=True)
         data["evidence"] = json.dumps(data["evidence"], ensure_ascii=False, sort_keys=True)
@@ -329,7 +351,9 @@ class ResearchObservation:
     def from_export_dict(cls, raw: dict[str, Any]) -> "ResearchObservation":
         data = dict(raw)
         data.pop("primary_source_url", None)
-        for key in ("actors", "audiences", "themes", "us_overlap", "source_record_keys", "triage_labels"):
+        for key in (
+            "actors", "audiences", "themes", "us_overlap", "source_record_keys", "triage_labels", "triage_evidence"
+        ):
             value = data.get(key, [])
             if isinstance(value, str):
                 value = json.loads(value) if value.strip() else []
@@ -339,7 +363,9 @@ class ResearchObservation:
             if isinstance(value, str):
                 value = json.loads(value) if value.strip() else []
             data[key] = value
-        for key in ("latitude", "longitude", "location_confidence", "ai_confidence"):
+        for key in (
+            "latitude", "longitude", "location_confidence", "relevance_confidence", "ai_confidence"
+        ):
             data[key] = _optional_float(data.get(key))
         return cls(**data)
 
