@@ -9,6 +9,7 @@ from .llm import ARC_BASE_URL, LLMConfig
 from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from .triage import DEFAULT_PROJECT_CONTEXT
 from .triage_io import triage_dataset
+from .weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 
 
 def _secret(prompt: str, env: str) -> str:
@@ -103,7 +104,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run resumable high-volume raw collection while honoring platform limits.",
     )
     harvest.add_argument("terms", nargs="*", help="Inline search terms. Can be combined with --terms-file.")
-    harvest.add_argument("--terms-file", action="append", default=[], help="UTF-8 query-plan file: one term per line; blank lines/# comments ignored. Repeatable.")
+    harvest.add_argument(
+        "--terms-file",
+        action="append",
+        default=[],
+        help="UTF-8 query-plan file: one term per line; blank lines/# comments ignored. Repeatable.",
+    )
     harvest.add_argument("--sources", default="bilibili,weibo")
     harvest.add_argument("--since")
     harvest.add_argument("--until")
@@ -127,7 +133,24 @@ def build_parser() -> argparse.ArgumentParser:
     harvest.add_argument("--no-bilibili-hydrate", action="store_true")
     harvest.add_argument("--no-weibo-hydrate", action="store_true")
 
-    triage = sub.add_parser("triage", help="AI-triage an existing SUGAR post dataset into a human-review observation dataset")
+    investigate = sub.add_parser(
+        "weibo-investigate",
+        help="Expand one real public Weibo post into comments/reposts/account context and a research brief.",
+    )
+    investigate.add_argument("seed", help="Weibo status URL, mobile detail/status URL, numeric mid, or bid.")
+    investigate.add_argument("--comments", type=int, default=100)
+    investigate.add_argument("--comment-pages", type=int, default=5)
+    investigate.add_argument("--reposts", type=int, default=100)
+    investigate.add_argument("--repost-pages", type=int, default=5)
+    investigate.add_argument("--author-posts", type=int, default=40)
+    investigate.add_argument("--author-pages", type=int, default=2)
+    investigate.add_argument("--output", default=".")
+    investigate.add_argument("--name", default="weibo_investigation")
+
+    triage = sub.add_parser(
+        "triage",
+        help="AI-triage an existing SUGAR post dataset into a human-review observation dataset",
+    )
     triage.add_argument("source_file")
     triage.add_argument("--output")
     triage.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
@@ -140,9 +163,18 @@ def build_parser() -> argparse.ArgumentParser:
     map_p.add_argument("source_file")
     map_p.add_argument("--output")
 
-    overlap = sub.add_parser("overlap", help="Compute geographic proximity between research observations and reference networks.")
+    overlap = sub.add_parser(
+        "overlap",
+        help="Compute geographic proximity between research observations and reference networks.",
+    )
     overlap.add_argument("source_file")
-    overlap.add_argument("--reference", action="append", type=_reference_spec, required=True, help="Reference file, optionally named as 'American Spaces=american_spaces.csv'. Repeat as needed.")
+    overlap.add_argument(
+        "--reference",
+        action="append",
+        type=_reference_spec,
+        required=True,
+        help="Reference file, optionally named as 'American Spaces=american_spaces.csv'. Repeat as needed.",
+    )
     overlap.add_argument("--bands", default="5,25,100,250")
     overlap.add_argument("--max-distance", type=float)
     overlap.add_argument("--top-k", type=int, default=5)
@@ -195,12 +227,41 @@ def main(argv=None) -> int:
 
     if args.command == "analysis":
         stem = args.output_stem or str(Path(args.source_file).with_suffix("")) + "_analysis"
-        print("\n".join(run_analysis({"source_file": args.source_file, "output_stem": stem, "output_format": args.format})))
+        print(
+            "\n".join(
+                run_analysis(
+                    {
+                        "source_file": args.source_file,
+                        "output_stem": stem,
+                        "output_format": args.format,
+                    }
+                )
+            )
+        )
+        return 0
+
+    if args.command == "weibo-investigate":
+        cookie = os.environ.get("SUGAR_WEIBO_COOKIE", "")
+        investigation = investigate_weibo_seed(
+            args.seed,
+            max_comments=args.comments,
+            comment_pages=args.comment_pages,
+            max_reposts=args.reposts,
+            repost_pages=args.repost_pages,
+            author_posts=args.author_posts,
+            author_pages=args.author_pages,
+            cookie=cookie,
+        )
+        print("\n".join(save_weibo_investigation(investigation, args.output, name=args.name)))
         return 0
 
     if args.command == "triage":
         source = Path(args.source_file).expanduser()
-        output = Path(args.output).expanduser() if args.output else source.with_name(source.stem + "_observations.csv")
+        output = (
+            Path(args.output).expanduser()
+            if args.output
+            else source.with_name(source.stem + "_observations.csv")
+        )
         project_context = DEFAULT_PROJECT_CONTEXT
         if args.project_context_file:
             project_context = Path(args.project_context_file).expanduser().read_text(encoding="utf-8").strip()
@@ -208,7 +269,13 @@ def main(argv=None) -> int:
                 raise ValueError("The project context file is empty.")
         api_key = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
         llm = _llm_from_cli(args.provider, args.model, args.base_url, api_key)
-        outputs = triage_dataset(source, output, llm=llm, project_context=project_context, continue_on_error=not args.fail_fast)
+        outputs = triage_dataset(
+            source,
+            output,
+            llm=llm,
+            project_context=project_context,
+            continue_on_error=not args.fail_fast,
+        )
         print("\n".join(outputs))
         return 0
 

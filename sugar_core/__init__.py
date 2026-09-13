@@ -48,6 +48,17 @@ from .triage import (
     triage_posts,
 )
 from .triage_io import load_post_records, post_record_from_mapping, triage_dataset
+from .weibo_investigation import (
+    WeiboInvestigation,
+    build_weibo_insights,
+    collect_weibo_reposts,
+    collect_weibo_user_timeline,
+    fetch_weibo_seed_status,
+    investigate_weibo_seed,
+    parse_weibo_seed,
+    render_weibo_brief,
+    save_weibo_investigation,
+)
 
 __all__ = [
     "PostRecord",
@@ -98,6 +109,15 @@ __all__ = [
     "run_map",
     "run_overlap",
     "run_analysis",
+    "WeiboInvestigation",
+    "parse_weibo_seed",
+    "fetch_weibo_seed_status",
+    "collect_weibo_reposts",
+    "collect_weibo_user_timeline",
+    "build_weibo_insights",
+    "investigate_weibo_seed",
+    "render_weibo_brief",
+    "save_weibo_investigation",
 ]
 
 __version__ = "1.1.0"
