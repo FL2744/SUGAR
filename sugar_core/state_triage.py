@@ -261,7 +261,7 @@ def assessment_from_triage_payload(
     if priority not in {"low", "normal", "high", "urgent"}:
         priority = "normal"
 
-    assessment = StateAssessment(
+    return StateAssessment(
         observation_id=observation.observation_id,
         strategic_audiences=_allowed_values(payload.get("strategic_audiences") or [], STRATEGIC_AUDIENCES),
         program_domains=_allowed_values(payload.get("program_domains") or [], PROGRAM_DOMAINS),
@@ -279,7 +279,6 @@ def assessment_from_triage_payload(
         review_note=" ".join(part for part in note_parts if part),
         analytic_priority=priority,
     )
-    return assessment
 
 
 def triage_observation(
@@ -310,6 +309,7 @@ def triage_observations(
     cache_dir: str | Path | None = None,
     limit: int | None = None,
     progress: ProgressCallback | None = None,
+    continue_on_error: bool = True,
 ) -> list[StateAssessment]:
     rows = list(observations)
     if limit is not None:
@@ -320,7 +320,27 @@ def triage_observations(
     total = len(rows)
     for index, observation in enumerate(rows, 1):
         _notify(progress, "state_triage_item_start", current=index, total=total, observation_id=observation.observation_id)
-        assessment = triage_observation(observation, llm=llm, client=client, cache=cache)
+        try:
+            assessment = triage_observation(observation, llm=llm, client=client, cache=cache)
+        except Exception as exc:
+            if not continue_on_error:
+                raise
+            message = " ".join(str(exc).split())[:600]
+            assessment = StateAssessment(
+                observation_id=observation.observation_id,
+                review_state="needs_followup",
+                review_note=f"AI triage failed closed ({type(exc).__name__}): {message}",
+                analytic_priority="high",
+            )
+            _notify(
+                progress,
+                "state_triage_item_failed",
+                current=index,
+                total=total,
+                observation_id=observation.observation_id,
+                exception=type(exc).__name__,
+                message=message,
+            )
         result.append(assessment)
         _notify(
             progress,
