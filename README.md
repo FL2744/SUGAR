@@ -6,7 +6,7 @@
 
 SUGAR helps researchers collect public social-media content, organize and translate it, infer broad geographic context, build maps, and create descriptive analytical reports. It is being developed for Virginia Tech Diplomacy Lab work on public diplomacy and cultural-influence networks.
 
-The current supported sources are **X, Bluesky, and Mastodon**. SUGAR can be used through the native macOS app or from the Python command line.
+The stable Python core currently includes collectors/workflows for **X, Bluesky, Mastodon, Bilibili, and Weibo**. The native macOS UI may expose a smaller subset while newer research workflows are validated. SUGAR can be used through the native macOS app or from the Python command line.
 
 ## Quick start for macOS users
 
@@ -49,7 +49,7 @@ Open **Settings** inside SUGAR. Credentials entered in the macOS app are stored 
 
 Open **Search** and:
 
-1. Choose one or more sources: **X**, **Bluesky**, or **Mastodon**.
+1. Choose one or more sources exposed by the current GUI build.
 2. Enter one or more search terms, separated by commas.
 3. Optionally set a start and end date in `YYYY-MM-DD` format.
 4. Choose how many posts/pages you want to request.
@@ -102,22 +102,18 @@ This usually indicates a signing/notarization issue with a development build rat
 Check the **Activity** panel and copy the error message. Common causes include:
 
 - missing or invalid API credentials;
-- X API access, billing, or rate-limit restrictions;
-- source-specific search limitations;
+- API access, billing, or rate-limit restrictions;
+- source-specific search/login limitations;
 - network connectivity problems;
 - the bundled backend failing to start.
 
-When reporting the problem, include the source you were searching, whether the app itself opened successfully, and the exact error text. Do **not** send API keys or passwords in a bug report.
+When reporting the problem, include the source you were searching, whether the app itself opened successfully, and the exact error text. Do **not** send API keys, cookies, or passwords in a bug report.
 
 ### The search runs but returns no posts
 
-A zero-result search does not always mean SUGAR is broken. Search coverage differs by platform:
+A zero-result search does not always mean SUGAR is broken. Search coverage differs by platform and access mode. A platform may also gate a search route even while known public items remain accessible.
 
-- X results depend on the API tier and whether recent or full-archive search is available.
-- Bluesky search coverage and query behavior are not identical to X.
-- Mastodon search is server/instance scoped and is not a complete global Fediverse search.
-
-Try a broader query and verify that the target platform itself contains recent public material matching the term.
+SUGAR should record access-limited or unavailable surfaces distinctly rather than silently turning an access failure into evidence of zero activity.
 
 ### I do not know where the output went
 
@@ -133,7 +129,7 @@ Please include:
 4. Exact warning/error text.
 5. Whether the failure occurs at launch or only after clicking **Run Search**, **Create Map**, or **Create Analysis**.
 
-Do not include credentials, tokens, passwords, or other secrets.
+Do not include credentials, tokens, passwords, session cookies, or other secrets.
 
 ## What SUGAR is doing under the hood
 
@@ -144,6 +140,37 @@ The research pipeline is:
 **Collect → Normalize → AI enrich/triage → Human review → Dataset → Map/analysis → Refresh**
 
 The stable schema is platform-neutral. It records native IDs, canonical URLs, authors, publication and collection times, original text, language, query provenance, canonical engagement metrics, location evidence, collector/schema versions, and raw platform metrics. Backward-compatible aliases are still exported for older SUGAR workbooks.
+
+## State Department / Diplomacy Lab research workflow
+
+The `sugar-state` command suite is the evidence-to-brief workflow for the Diplomacy Lab project. It keeps raw `ResearchObservation` evidence separate from State-specific analytic assessments and adds:
+
+- strategic audiences and program domains;
+- narrative/theme coding;
+- explicit PRC-support basis and evidence;
+- claim-level evidence and epistemic status;
+- American Spaces/EducationUSA/U.S. public-diplomacy overlap;
+- human-review workbooks and evidence-integrity audits;
+- verified-only BLUF, map, relationship network, and country/city rollups;
+- monitored-entity/alias registries and reproducible watch-query plans;
+- collection freshness and change detection;
+- research-gap prioritization.
+
+The State workflow deliberately separates **presence, activity, reach, engagement, outcomes, and causal influence**. It does not create a universal influence score. Maps/networks/briefs default to human-verified material, and missing observations are described as collection gaps rather than proof of no activity.
+
+A complete package can be generated with:
+
+```bash
+sugar-state package observations.xlsx \
+  --assessments state.reviewed.jsonl \
+  --us-sites us_presence.csv \
+  --entities monitored_entities.csv \
+  --previous-assessments prior_state.jsonl \
+  --output ./state_package \
+  --name quarterly_update
+```
+
+See [`docs/state-department-workflow.md`](docs/state-department-workflow.md) for the full methodology, review rules, guardrails, entity monitoring, network semantics, freshness rules, and command examples.
 
 ## Collection behavior
 
@@ -159,9 +186,19 @@ SUGAR uses `app.bsky.feed.searchPosts` through the public AppView or, when crede
 
 Mastodon search is instance-scoped, not a global Fediverse index. Search coverage depends on the selected server and its indexing settings. Favorites, replies, and reblogs are mapped into SUGAR's canonical engagement fields for cross-platform analysis.
 
+### Bilibili
+
+SUGAR includes fail-closed public Bilibili video search, known-video metadata, and comment collection. It does not attempt to defeat login, verification, anti-bot, or rate-limit controls.
+
+### Weibo
+
+SUGAR distinguishes Weibo keyword search from known-public-post retrieval and comment expansion. Access can vary by surface. A legitimate team-supplied session may be used where a platform requires authentication, but SUGAR does not generate, harvest, or bypass credentials. Known public seed expansion and collection qualification are separate workflows so search-access failure is not confused with zero matching activity.
+
 ## AI enrichment
 
 LLM enrichment is optional. Source text is treated as untrusted data and is separated from model instructions. Location inference is broad and exploratory: SUGAR will not choose a country from language alone and does not infer private or street-level locations.
+
+State-specific AI triage is additionally fail-closed for high-consequence claims: the model cannot confirm PRC support, cannot self-verify findings, cannot invent acceptable evidence references, and cannot establish causal influence.
 
 LLM and geocoding results are cached under `.sugar-cache/` so reruns can reuse prior work and reduce cost.
 
@@ -236,15 +273,16 @@ ARC's OpenAI-compatible LLM endpoint is supported with provider `arc`. Supply a 
 
 ## Credentials for command-line use
 
-Credentials are never committed to the repository or written into result files. Supported environment variables are:
+Credentials are never committed to the repository or written into result files. Supported environment variables include:
 
 - `SUGAR_X_BEARER_TOKEN`
 - `SUGAR_LLM_API_KEY`
 - `SUGAR_BLUESKY_IDENTIFIER`
 - `SUGAR_BLUESKY_APP_PASSWORD`
 - `SUGAR_MASTODON_TOKEN`
+- `SUGAR_WEIBO_COOKIE` — optional legitimate team-supplied Weibo session state for routes that require it; SUGAR does not generate it.
 
-The native macOS application stores these in macOS Keychain and passes them to the bundled backend only for execution.
+The native macOS application stores supported GUI credentials in macOS Keychain and passes them to the bundled backend only for execution.
 
 ## Native macOS application development
 
