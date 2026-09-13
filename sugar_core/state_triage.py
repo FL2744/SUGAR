@@ -12,6 +12,7 @@ from .state_schema import (
     OBSERVABILITY_LEVELS,
     PROGRAM_DOMAINS,
     STRATEGIC_AUDIENCES,
+    SUPPORT_BASES,
     AnalyticClaim,
     ReachMetrics,
     StateAssessment,
@@ -117,6 +118,7 @@ def _triage_user_prompt(observation: ResearchObservation) -> str:
         "strategic_audiences": sorted(STRATEGIC_AUDIENCES),
         "program_domains": sorted(PROGRAM_DOMAINS),
         "narrative_tags": sorted(NARRATIVE_TAGS),
+        "support_bases": sorted(SUPPORT_BASES),
         "claim_types": sorted(CLAIM_TYPES),
         "observability_levels": sorted(value for value in OBSERVABILITY_LEVELS if value != "causal_influence_evidence"),
         "allowed_evidence_refs": allowed,
@@ -139,6 +141,37 @@ def _valid_refs(values: Iterable[Any], allowed: set[str]) -> list[str]:
     return result
 
 
+def _allowed_values(values: Iterable[Any], allowed: set[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values or []:
+        text = str(value or "").strip().casefold()
+        if text in allowed and text not in seen:
+            result.append(text)
+            seen.add(text)
+    return result
+
+
+def _safe_confidence(value: Any) -> float | None:
+    try:
+        if value is None or value == "":
+            return None
+        number = float(value)
+        return number if 0.0 <= number <= 1.0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_metric(value: Any) -> int | None:
+    try:
+        if value is None or value == "":
+            return None
+        number = int(float(value))
+        return number if number >= 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
 def assessment_from_triage_payload(
     observation: ResearchObservation,
     payload: dict[str, Any],
@@ -153,27 +186,29 @@ def assessment_from_triage_payload(
         downgrade_note = "AI suggested confirmed support; SUGAR downgraded it to probable pending human verification."
     else:
         downgrade_note = ""
+    if requested_level not in {"not_assessed", "unsupported", "possible", "probable"}:
+        requested_level = "not_assessed"
     support_refs = _valid_refs(support_raw.get("evidence_refs") or [], allowed_refs)
-    if requested_level in {"probable", "confirmed"} and not support_refs:
+    if requested_level == "probable" and not support_refs:
         requested_level = "possible"
         downgrade_note = (downgrade_note + " High-confidence support label lacked an attached evidence reference and was downgraded.").strip()
     support = SupportAssessment(
-        level=requested_level if requested_level in {"not_assessed", "unsupported", "possible", "probable"} else "not_assessed",
-        bases=support_raw.get("bases") or [],
+        level=requested_level,
+        bases=_allowed_values(support_raw.get("bases") or [], SUPPORT_BASES),
         rationale=str(support_raw.get("rationale", "")),
-        confidence=support_raw.get("confidence"),
+        confidence=_safe_confidence(support_raw.get("confidence")),
         evidence_refs=support_refs,
         review_state="ai_triaged",
     )
 
     reach_raw = dict(payload.get("reach") or {})
     reach = ReachMetrics(
-        attendance=reach_raw.get("attendance"),
-        views=reach_raw.get("views"),
-        likes=reach_raw.get("likes"),
-        comments=reach_raw.get("comments"),
-        shares_reposts=reach_raw.get("shares_reposts"),
-        followers=reach_raw.get("followers"),
+        attendance=_safe_metric(reach_raw.get("attendance")),
+        views=_safe_metric(reach_raw.get("views")),
+        likes=_safe_metric(reach_raw.get("likes")),
+        comments=_safe_metric(reach_raw.get("comments")),
+        shares_reposts=_safe_metric(reach_raw.get("shares_reposts")),
+        followers=_safe_metric(reach_raw.get("followers")),
         source_note=str(reach_raw.get("source_note", "")),
     )
 
@@ -181,6 +216,9 @@ def assessment_from_triage_payload(
     needs_followup = False
     for raw in payload.get("claims") or []:
         if not isinstance(raw, dict):
+            continue
+        statement = str(raw.get("statement", "")).strip()
+        if not statement:
             continue
         refs = _valid_refs(raw.get("evidence_refs") or [], allowed_refs)
         claim_type = str(raw.get("claim_type", "descriptive_fact")).strip().casefold()
@@ -198,10 +236,10 @@ def assessment_from_triage_payload(
             needs_followup = True
         claims.append(
             AnalyticClaim(
-                statement=str(raw.get("statement", "")),
+                statement=statement,
                 claim_type=claim_type,
                 epistemic_status=epistemic,
-                confidence=raw.get("confidence"),
+                confidence=_safe_confidence(raw.get("confidence")),
                 evidence_refs=refs,
                 review_state=review_state,
                 review_note=f"AI triage using {model}" if model else "AI triage",
@@ -219,11 +257,15 @@ def assessment_from_triage_payload(
     if needs_followup:
         note_parts.append("Potential influence/outcome language requires human follow-up; AI cannot establish causal influence.")
 
+    priority = str(payload.get("analytic_priority", "normal")).strip().casefold()
+    if priority not in {"low", "normal", "high", "urgent"}:
+        priority = "normal"
+
     assessment = StateAssessment(
         observation_id=observation.observation_id,
-        strategic_audiences=payload.get("strategic_audiences") or [],
-        program_domains=payload.get("program_domains") or [],
-        narrative_tags=payload.get("narrative_tags") or [],
+        strategic_audiences=_allowed_values(payload.get("strategic_audiences") or [], STRATEGIC_AUDIENCES),
+        program_domains=_allowed_values(payload.get("program_domains") or [], PROGRAM_DOMAINS),
+        narrative_tags=_allowed_values(payload.get("narrative_tags") or [], NARRATIVE_TAGS),
         sponsor_entities=payload.get("sponsor_entities") or [],
         host_entities=payload.get("host_entities") or [],
         partner_entities=payload.get("partner_entities") or [],
@@ -235,7 +277,7 @@ def assessment_from_triage_payload(
         claims=claims,
         review_state="needs_followup" if needs_followup else "ai_triaged",
         review_note=" ".join(part for part in note_parts if part),
-        analytic_priority=str(payload.get("analytic_priority", "normal")),
+        analytic_priority=priority,
     )
     return assessment
 
