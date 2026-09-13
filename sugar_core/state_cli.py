@@ -10,6 +10,8 @@ from .observation_storage import load_observations
 from .state_aggregate import save_state_rollups
 from .state_entities import load_entity_registry, save_query_plan, write_entity_template
 from .state_freshness import save_freshness_report
+from .state_gaps import save_gap_report
+from .state_map import create_state_map
 from .state_network import save_state_network
 from .state_review import apply_review_workbook_file, export_review_workbook
 from .state_triage import triage_observations
@@ -88,13 +90,32 @@ def build_parser() -> argparse.ArgumentParser:
     freshness.add_argument("--current-start", default="2024-01-01")
     freshness.add_argument("--stale-days", type=int, default=90)
 
+    gaps = sub.add_parser("gaps", help="Prioritize verification, stale-data, entity, location, and U.S.-comparison research gaps.")
+    gaps.add_argument("observations")
+    gaps.add_argument("assessments")
+    gaps.add_argument("--entities")
+    gaps.add_argument("--us-sites")
+    gaps.add_argument("--output", required=True)
+    gaps.add_argument("--name", default="state_research")
+    gaps.add_argument("--current-start", default="2024-01-01")
+    gaps.add_argument("--stale-days", type=int, default=90)
+
+    map_p = sub.add_parser("map", help="Create a layered verified-activity/U.S.-presence HTML map.")
+    map_p.add_argument("observations")
+    map_p.add_argument("assessments")
+    map_p.add_argument("--us-sites")
+    map_p.add_argument("--output", required=True)
+    map_p.add_argument("--include-unverified", action="store_true")
+    map_p.add_argument("--no-density", action="store_true")
+
     package = sub.add_parser(
         "package",
-        help="Build the complete State-facing bundle: audit, review queue/workbook, BLUF, map, network, rollups, and freshness.",
+        help="Build the complete State-facing bundle: audit, review, BLUF, map, network, rollups, freshness, and gaps.",
     )
     package.add_argument("observations")
     package.add_argument("--assessments")
     package.add_argument("--us-sites")
+    package.add_argument("--entities")
     package.add_argument("--previous-assessments")
     package.add_argument("--output", required=True)
     package.add_argument("--name", default="state_research")
@@ -190,18 +211,7 @@ def main(argv=None) -> int:
 
     if args.command == "network":
         observations, assessments, sites = _loaded_state_inputs(args)
-        print(
-            "\n".join(
-                save_state_network(
-                    observations,
-                    assessments,
-                    args.output,
-                    us_sites=sites,
-                    name=args.name,
-                    verified_only=not args.include_unverified,
-                )
-            )
-        )
+        print("\n".join(save_state_network(observations, assessments, args.output, us_sites=sites, name=args.name, verified_only=not args.include_unverified)))
         return 0
 
     if args.command == "rollup":
@@ -211,15 +221,18 @@ def main(argv=None) -> int:
 
     if args.command == "freshness":
         observations, assessments, _ = _loaded_state_inputs(args)
-        print(
-            save_freshness_report(
-                observations,
-                assessments,
-                args.output,
-                current_activity_start=args.current_start,
-                collection_stale_days=args.stale_days,
-            )
-        )
+        print(save_freshness_report(observations, assessments, args.output, current_activity_start=args.current_start, collection_stale_days=args.stale_days))
+        return 0
+
+    if args.command == "gaps":
+        observations, assessments, sites = _loaded_state_inputs(args)
+        registry = load_entity_registry(args.entities) if args.entities else None
+        print("\n".join(save_gap_report(observations, assessments, args.output, entities=registry, us_sites=sites, name=args.name, current_activity_start=args.current_start, collection_stale_days=args.stale_days)))
+        return 0
+
+    if args.command == "map":
+        observations, assessments, sites = _loaded_state_inputs(args)
+        print(create_state_map(observations, assessments, args.output, us_sites=sites, verified_only=not args.include_unverified, include_activity_density=not args.no_density))
         return 0
 
     if args.command == "package":
@@ -233,23 +246,21 @@ def main(argv=None) -> int:
             title=args.title,
         )
         observations, assessments, sites = _loaded_state_inputs(args)
+        registry = load_entity_registry(args.entities) if args.entities else None
         stem = "_".join(args.name.split())
-        assessed_snapshot = Path(args.output).expanduser().resolve() / f"{stem}.assessed.jsonl"
+        out_dir = Path(args.output).expanduser().resolve()
+        assessed_snapshot = out_dir / f"{stem}.assessed.jsonl"
         outputs.append(save_state_assessments(assessments, assessed_snapshot))
-        outputs.extend(save_state_rollups(observations, assessments, args.output, name=args.name))
-        outputs.extend(save_state_network(observations, assessments, args.output, us_sites=sites, name=args.name, verified_only=True))
-        review_path = Path(args.output).expanduser().resolve() / f"{stem}.review.xlsx"
+        outputs.extend(save_state_rollups(observations, assessments, out_dir, name=args.name))
+        outputs.extend(save_state_network(observations, assessments, out_dir, us_sites=sites, name=args.name, verified_only=True))
+        review_path = out_dir / f"{stem}.review.xlsx"
         outputs.append(export_review_workbook(observations, assessments, review_path))
-        freshness_path = Path(args.output).expanduser().resolve() / f"{stem}.freshness.json"
-        outputs.append(
-            save_freshness_report(
-                observations,
-                assessments,
-                freshness_path,
-                current_activity_start=args.current_start,
-                collection_stale_days=args.stale_days,
-            )
-        )
+        freshness_path = out_dir / f"{stem}.freshness.json"
+        outputs.append(save_freshness_report(observations, assessments, freshness_path, current_activity_start=args.current_start, collection_stale_days=args.stale_days))
+        outputs.extend(save_gap_report(observations, assessments, out_dir, entities=registry, us_sites=sites, name=args.name, current_activity_start=args.current_start, collection_stale_days=args.stale_days))
+        map_path = out_dir / f"{stem}.interactive_map.html"
+        outputs.append(create_state_map(observations, assessments, map_path, us_sites=sites, verified_only=True, include_activity_density=True))
+        outputs.append(str(map_path.with_suffix(map_path.suffix + ".metadata.json")))
         print("\n".join(dict.fromkeys(outputs)))
         return 0
 
