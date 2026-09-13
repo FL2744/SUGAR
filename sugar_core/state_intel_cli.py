@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
+from .state_hypotheses import save_hypothesis_matrix
 from .state_intelligence import save_intelligence_packet
 from .state_longitudinal import save_longitudinal_comparison
 from .state_synthesis import save_agentic_synthesis
@@ -40,6 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
     synthesize.add_argument("--base-url", default="")
     synthesize.add_argument("--cache-dir", default=".sugar-cache")
     synthesize.add_argument("--workers", type=int, default=4)
+
+    hypotheses = sub.add_parser("hypotheses", help="Turn synthesis alternatives into a competing-hypothesis evidence matrix.")
+    hypotheses.add_argument("synthesis")
+    hypotheses.add_argument("--output", required=True)
+    hypotheses.add_argument("--name", default="analytic_intelligence")
 
     compare = sub.add_parser("compare", help="Compare two intelligence packets or two agentic syntheses over time.")
     compare.add_argument("previous")
@@ -84,6 +89,10 @@ def main(argv=None) -> int:
             depth=args.depth, cache_dir=args.cache_dir, max_workers=args.workers, name=args.name,
         )
         print("\n".join(outputs))
+        return 0
+
+    if args.command == "hypotheses":
+        print("\n".join(save_hypothesis_matrix(args.synthesis, args.output, name=args.name)))
         return 0
 
     if args.command == "compare":
