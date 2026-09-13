@@ -151,3 +151,42 @@ def test_observation_storage_round_trip(tmp_path):
     metadata = json.loads(target.with_suffix(".metadata.json").read_text(encoding="utf-8"))
     assert metadata["dataset_type"] == "research_observations"
     assert metadata["project"] == "test"
+
+
+def test_observation_jsonl_loading_preserves_nested_evidence(tmp_path):
+    observation = ResearchObservation(
+        observation_type="program",
+        title="JSONL program",
+        summary="A structured observation stored as line-delimited JSON.",
+        country="Kyrgyzstan",
+        city="Bishkek",
+        actors=["Example Center"],
+        audiences=["students"],
+        evidence=[
+            EvidenceReference(
+                url="https://example.org/jsonl",
+                source_type="official_host_source",
+                platform="weibo",
+                native_id="12345",
+            )
+        ],
+        source_record_keys=["weibo:12345"],
+    )
+    target = tmp_path / "observations.jsonl"
+    target.write_text(json.dumps(observation.export_dict(), ensure_ascii=False) + "\n", encoding="utf-8")
+
+    restored = load_observations(target)
+
+    assert len(restored) == 1
+    assert restored[0].observation_id == observation.observation_id
+    assert restored[0].country == "Kyrgyzstan"
+    assert restored[0].source_record_keys == ["weibo:12345"]
+    assert restored[0].evidence[0].native_id == "12345"
+    assert restored[0].evidence[0].url == "https://example.org/jsonl"
+
+
+def test_observation_jsonl_rejects_non_object_records(tmp_path):
+    target = tmp_path / "bad.jsonl"
+    target.write_text('["not", "an", "object"]\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="must be an object"):
+        load_observations(target)
