@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
 from .collector_registry import CollectorRequest, COLLECTORS, collect_registered_source
 from .enrichment import enrich_records
+from .harvest import run_harvest as _run_harvest
 from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
 from .mapping import MapOptions, ReferenceLayer, create_map, load_map_frame
 from .observation_storage import load_observations, observations_to_frame, save_observations
@@ -93,9 +95,7 @@ def run_search(
     llm = _llm_config(config, secrets)
 
     _notify(progress, "starting", operation="search", sources=sources)
-    terms = _translated_terms(
-        config.get("terms") or [], translated_languages, llm, cache_dir, progress=progress
-    )
+    terms = _translated_terms(config.get("terms") or [], translated_languages, llm, cache_dir, progress=progress)
     if not terms:
         raise ValueError("Enter at least one search term.")
 
@@ -132,20 +132,74 @@ def run_search(
         "terms": terms,
         "since": config.get("since") or None,
         "until": config.get("until") or None,
-        "collector_capabilities": {
-            source: COLLECTORS[source].capabilities.as_dict() for source in sources
-        },
+        "collector_capabilities": {source: COLLECTORS[source].capabilities.as_dict() for source in sources},
         "llm_provider": llm.provider if (translate or infer) else None,
         "llm_model": llm.model if (translate or infer) else None,
     }
     _notify(progress, "saving", records=len(records), output=str(csv_path))
     save_records(records, csv_path, metadata=metadata)
-    outputs = [
-        str(csv_path),
-        str(csv_path.with_suffix(".xlsx")),
-        str(csv_path.with_suffix(".metadata.json")),
-    ]
+    outputs = [str(csv_path), str(csv_path.with_suffix(".xlsx")), str(csv_path.with_suffix(".metadata.json"))]
     _notify(progress, "saved", outputs=outputs)
+    return outputs
+
+
+def _harvest_access_modes(config: dict[str, Any], secrets: dict[str, str]) -> dict[str, str]:
+    sources = [str(value).strip().casefold() for value in (config.get("sources") or ["x"]) if str(value).strip()]
+    modes: dict[str, str] = {}
+    for source in sources:
+        if source == "x":
+            modes[source] = "authorized_api" if secrets.get("x_bearer_token", "").strip() else "missing_credential"
+        elif source == "bluesky":
+            authenticated = bool(secrets.get("bluesky_identifier", "").strip() and secrets.get("bluesky_app_password", "").strip())
+            modes[source] = "authenticated" if authenticated else "public_appview"
+        elif source == "mastodon":
+            modes[source] = "authenticated" if secrets.get("mastodon_token", "").strip() else "anonymous_instance"
+        elif source == "weibo":
+            modes[source] = "session" if secrets.get("weibo_cookie", "").strip() else "anonymous"
+        elif source == "bilibili":
+            modes[source] = "anonymous_public"
+        else:
+            modes[source] = "collector_default"
+    return modes
+
+
+def _harvest_access_marker(config: dict[str, Any]) -> Path:
+    raw = config.get("harvest") or {}
+    out_dir = Path(config.get("output_directory") or raw.get("output_directory") or Path.cwd()).expanduser().resolve()
+    name = "_".join(str(raw.get("name") or config.get("name") or "sugar_harvest").split())
+    return out_dir / f"{name}.harvest.access.json"
+
+
+def run_harvest(
+    config: dict[str, Any],
+    secrets: dict[str, str] | None = None,
+    progress: ProgressCallback | None = None,
+) -> list[str]:
+    secrets = secrets or {}
+    modes = _harvest_access_modes(config, secrets)
+    marker = _harvest_access_marker(config)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    if marker.is_file():
+        existing = json.loads(marker.read_text(encoding="utf-8"))
+        if existing.get("access_modes") != modes:
+            raise ValueError(
+                "This named harvest was created with different source access modes. "
+                "Use a new harvest --name instead of mixing anonymous and authenticated coverage."
+            )
+    else:
+        marker.write_text(json.dumps({"access_modes": modes}, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+
+    outputs = _run_harvest(config, secrets, progress=progress)
+    raw = config.get("harvest") or {}
+    out_dir = Path(config.get("output_directory") or raw.get("output_directory") or Path.cwd()).expanduser().resolve()
+    name = "_".join(str(raw.get("name") or config.get("name") or "sugar_harvest").split())
+    manifest = out_dir / f"{name}.harvest.json"
+    if manifest.is_file():
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        payload["access_modes"] = modes
+        manifest.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    if str(marker.resolve()) not in outputs:
+        outputs.append(str(marker.resolve()))
     return outputs
 
 
@@ -196,35 +250,17 @@ def _map_reference_layers(config: dict[str, Any]) -> list[ReferenceLayer]:
     raw = config.get("map") or {}
     layers: list[ReferenceLayer] = []
     for name, path, color, show in _load_reference_specs(raw.get("reference_layers") or [], context="map"):
-        layers.append(
-            ReferenceLayer(
-                name=name,
-                frame=load_map_frame(path),
-                color=color,
-                show=show,
-            )
-        )
+        layers.append(ReferenceLayer(name=name, frame=load_map_frame(path), color=color, show=show))
     return layers
 
 
 def run_map(config: dict[str, Any]) -> list[str]:
     source = Path(config["source_file"])
     output = Path(config.get("output_file") or source.with_name(source.stem + "_map.html"))
-    return [
-        create_map(
-            load_map_frame(source),
-            output,
-            options=_map_options(config),
-            reference_layers=_map_reference_layers(config),
-        )
-    ]
+    return [create_map(load_map_frame(source), output, options=_map_options(config), reference_layers=_map_reference_layers(config))]
 
 
-def run_overlap(
-    config: dict[str, Any],
-    progress: ProgressCallback | None = None,
-) -> list[str]:
-    """Compute geographic proximity between research observations and reference networks."""
+def run_overlap(config: dict[str, Any], progress: ProgressCallback | None = None) -> list[str]:
     source = Path(config["source_file"]).expanduser().resolve()
     raw = config.get("spatial") or {}
     specs = raw.get("reference_layers") or raw.get("references") or config.get("reference_layers") or []
@@ -237,11 +273,7 @@ def run_overlap(
         bands = [part.strip() for part in bands.split(",") if part.strip()]
     overlap_config = SpatialOverlapConfig(
         distance_bands_km=tuple(float(value) for value in bands),
-        max_distance_km=(
-            float(raw["max_distance_km"])
-            if raw.get("max_distance_km") not in (None, "")
-            else None
-        ),
+        max_distance_km=float(raw["max_distance_km"]) if raw.get("max_distance_km") not in (None, "") else None,
         stored_matches_per_observation=int(raw.get("stored_matches_per_observation", raw.get("top_k", 5))),
         include_rejected=bool(raw.get("include_rejected", False)),
     )
@@ -254,66 +286,27 @@ def run_overlap(
         frame = load_map_frame(path)
         reference_layers.append((name, frame))
         map_layers.append(ReferenceLayer(name=name, frame=frame, color=color, show=show))
-    _notify(
-        progress,
-        "spatial_matching",
-        observations=len(observations),
-        reference_layers=len(reference_layers),
-        max_distance_km=overlap_config.max_distance_km,
-    )
-    enriched, matches, summary = analyze_spatial_overlap(
-        observations,
-        reference_layers,
-        config=overlap_config,
-    )
+    _notify(progress, "spatial_matching", observations=len(observations), reference_layers=len(reference_layers), max_distance_km=overlap_config.max_distance_km)
+    enriched, matches, summary = analyze_spatial_overlap(observations, reference_layers, config=overlap_config)
 
-    output = Path(
-        config.get("output_file")
-        or raw.get("output_file")
-        or source.with_name(source.stem + "_spatial.csv")
-    ).expanduser().resolve()
+    output = Path(config.get("output_file") or raw.get("output_file") or source.with_name(source.stem + "_spatial.csv")).expanduser().resolve()
     output_csv = output if output.suffix.casefold() == ".csv" else output.with_suffix(".csv")
     output_stem = output_csv.with_suffix("")
     save_observations(enriched, output_csv, metadata={"spatial_analysis": summary})
-    outputs = [
-        str(output_csv),
-        str(output_csv.with_suffix(".xlsx")),
-        str(output_csv.with_suffix(".metadata.json")),
-    ]
-
-    match_outputs = save_spatial_matches(matches, output_stem.with_name(output_stem.name + "_matches.csv"))
-    outputs.extend(match_outputs)
-    outputs.append(
-        save_spatial_summary(summary, output_stem.with_name(output_stem.name + "_summary.json"))
-    )
+    outputs = [str(output_csv), str(output_csv.with_suffix(".xlsx")), str(output_csv.with_suffix(".metadata.json"))]
+    outputs.extend(save_spatial_matches(matches, output_stem.with_name(output_stem.name + "_matches.csv")))
+    outputs.append(save_spatial_summary(summary, output_stem.with_name(output_stem.name + "_summary.json")))
 
     if bool(raw.get("create_map", config.get("create_map", False))):
-        map_output = Path(
-            raw.get("map_output")
-            or config.get("map_output")
-            or output_stem.with_name(output_stem.name + "_map.html")
-        )
+        map_output = Path(raw.get("map_output") or config.get("map_output") or output_stem.with_name(output_stem.name + "_map.html"))
         map_config = dict(config)
         map_config["map"] = {**(config.get("map") or {}), "reference_layers": []}
-        create_map(
-            observations_to_frame(enriched),
-            map_output,
-            options=_map_options(map_config),
-            reference_layers=map_layers,
-        )
+        create_map(observations_to_frame(enriched), map_output, options=_map_options(map_config), reference_layers=map_layers)
         outputs.append(str(map_output.expanduser().resolve()))
 
-    _notify(
-        progress,
-        "spatial_complete",
-        observations_matched=summary["observations_matched"],
-        pair_matches=summary["retained_pair_matches"],
-        outputs=outputs,
-    )
+    _notify(progress, "spatial_complete", observations_matched=summary["observations_matched"], pair_matches=summary["retained_pair_matches"], outputs=outputs)
     return outputs
 
 
 def run_analysis(config: dict[str, Any]) -> list[str]:
-    return create_analysis_report(
-        config["source_file"], config["output_stem"], config.get("output_format", "both")
-    )
+    return create_analysis_report(config["source_file"], config["output_stem"], config.get("output_format", "both"))

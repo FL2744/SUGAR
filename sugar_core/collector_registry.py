@@ -16,6 +16,7 @@ from .collectors import (
     create_session,
 )
 from .models import PostRecord
+from .paged_collectors import collect_bilibili_page_range, collect_weibo_page_range
 from .weibo import collect_weibo_comments, collect_weibo_public, fetch_weibo_status
 
 
@@ -135,12 +136,15 @@ def _set_thread_root(record: PostRecord, conversation_id: str | None = None) -> 
 
 
 def _collect_bilibili(request: CollectorRequest) -> list[PostRecord]:
-    rows = collect_bilibili_public(
-        order=request.config.get("bilibili_order", "pubdate"),
-        hydrate_details=bool(request.config.get("bilibili_hydrate_details", True)),
-        initialize_session=bool(request.config.get("bilibili_initialize_session", True)),
-        **_common(request),
-    )
+    if request.config.get("_harvest_page_start"):
+        rows = collect_bilibili_page_range(request)
+    else:
+        rows = collect_bilibili_public(
+            order=request.config.get("bilibili_order", "pubdate"),
+            hydrate_details=bool(request.config.get("bilibili_hydrate_details", True)),
+            initialize_session=bool(request.config.get("bilibili_initialize_session", True)),
+            **_common(request),
+        )
     return [_set_thread_root(row) for row in rows]
 
 
@@ -183,11 +187,14 @@ def _mark_weibo_access(records: list[PostRecord], cookie: str) -> list[PostRecor
 
 def _collect_weibo(request: CollectorRequest) -> list[PostRecord]:
     cookie = request.secrets.get("weibo_cookie", "")
-    rows = collect_weibo_public(
-        cookie=cookie,
-        hydrate_details=bool(request.config.get("weibo_hydrate_details", True)),
-        **_common(request),
-    )
+    if request.config.get("_harvest_page_start"):
+        rows = collect_weibo_page_range(request)
+    else:
+        rows = collect_weibo_public(
+            cookie=cookie,
+            hydrate_details=bool(request.config.get("weibo_hydrate_details", True)),
+            **_common(request),
+        )
     return _mark_weibo_access(rows, cookie)
 
 

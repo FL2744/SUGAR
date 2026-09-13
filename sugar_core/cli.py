@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from .llm import ARC_BASE_URL, LLMConfig
-from .service import run_analysis, run_map, run_overlap, run_search
+from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from .triage import DEFAULT_PROJECT_CONTEXT
 from .triage_io import triage_dataset
 
@@ -17,6 +17,48 @@ def _secret(prompt: str, env: str) -> str:
 
 def _csv(value: str) -> list[str]:
     return [x.strip() for x in value.split(",") if x.strip()]
+
+
+def _terms_from_files(paths: list[str]) -> list[str]:
+    terms: list[str] = []
+    seen: set[str] = set()
+    for raw_path in paths:
+        path = Path(raw_path).expanduser()
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        for line in path.read_text(encoding="utf-8-sig").splitlines():
+            term = line.strip()
+            if not term or term.startswith("#"):
+                continue
+            key = term.casefold()
+            if key not in seen:
+                terms.append(term)
+                seen.add(key)
+    return terms
+
+
+def _merge_terms(inline: list[str], files: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for term in [*inline, *_terms_from_files(files)]:
+        term = term.strip()
+        key = term.casefold()
+        if term and key not in seen:
+            result.append(term)
+            seen.add(key)
+    return result
+
+
+def _collection_secrets(sources: list[str]) -> dict[str, str]:
+    secrets: dict[str, str] = {
+        "bluesky_identifier": os.environ.get("SUGAR_BLUESKY_IDENTIFIER", ""),
+        "bluesky_app_password": os.environ.get("SUGAR_BLUESKY_APP_PASSWORD", ""),
+        "mastodon_token": os.environ.get("SUGAR_MASTODON_TOKEN", ""),
+        "weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", ""),
+    }
+    if "x" in sources:
+        secrets["x_bearer_token"] = _secret("X bearer token: ", "SUGAR_X_BEARER_TOKEN")
+    return secrets
 
 
 def _reference_spec(value: str) -> dict[str, str]:
@@ -38,7 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sugar", description="SUGAR stable research pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    search = sub.add_parser("search")
+    search = sub.add_parser("search", help="Run a normal bounded collection + optional enrichment.")
     search.add_argument("terms", nargs="+")
     search.add_argument("--sources", default="x")
     search.add_argument("--since")
@@ -56,10 +98,36 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--mastodon-url", default="https://mastodon.social")
     search.add_argument("--include-reposts", action="store_true")
 
-    triage = sub.add_parser(
-        "triage",
-        help="AI-triage an existing SUGAR post dataset into a human-review observation dataset",
+    harvest = sub.add_parser(
+        "harvest",
+        help="Run resumable high-volume raw collection while honoring platform limits.",
     )
+    harvest.add_argument("terms", nargs="*", help="Inline search terms. Can be combined with --terms-file.")
+    harvest.add_argument("--terms-file", action="append", default=[], help="UTF-8 query-plan file: one term per line; blank lines/# comments ignored. Repeatable.")
+    harvest.add_argument("--sources", default="bilibili,weibo")
+    harvest.add_argument("--since")
+    harvest.add_argument("--until")
+    harvest.add_argument("--target", type=int, default=5000)
+    harvest.add_argument("--posts-per-task", type=int, default=500)
+    harvest.add_argument("--pages-per-task", type=int, default=5)
+    harvest.add_argument("--max-pages-per-query", type=int, default=100)
+    harvest.add_argument("--shard-days", type=int, default=7)
+    harvest.add_argument("--max-retries", type=int, default=4)
+    harvest.add_argument("--max-inline-wait", type=float, default=900.0)
+    harvest.add_argument("--task-delay", type=float, default=1.0)
+    harvest.add_argument("--output", default=".")
+    harvest.add_argument("--name", default="sugar_harvest")
+    harvest.add_argument("--time-shard-sources", default="x,bluesky")
+    harvest.add_argument("--fail-fast", action="store_true")
+    harvest.add_argument("--x-mode", choices=["recent", "all"], default="recent")
+    harvest.add_argument("--x-languages", default="")
+    harvest.add_argument("--mastodon-url", default="https://mastodon.social")
+    harvest.add_argument("--include-reposts", action="store_true")
+    harvest.add_argument("--bilibili-order", default="pubdate")
+    harvest.add_argument("--no-bilibili-hydrate", action="store_true")
+    harvest.add_argument("--no-weibo-hydrate", action="store_true")
+
+    triage = sub.add_parser("triage", help="AI-triage an existing SUGAR post dataset into a human-review observation dataset")
     triage.add_argument("source_file")
     triage.add_argument("--output")
     triage.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
@@ -72,21 +140,12 @@ def build_parser() -> argparse.ArgumentParser:
     map_p.add_argument("source_file")
     map_p.add_argument("--output")
 
-    overlap = sub.add_parser(
-        "overlap",
-        help="Compute geographic proximity between research observations and reference networks.",
-    )
+    overlap = sub.add_parser("overlap", help="Compute geographic proximity between research observations and reference networks.")
     overlap.add_argument("source_file")
-    overlap.add_argument(
-        "--reference",
-        action="append",
-        type=_reference_spec,
-        required=True,
-        help="Reference file, optionally named as 'American Spaces=american_spaces.csv'. Repeat as needed.",
-    )
-    overlap.add_argument("--bands", default="5,25,100,250", help="Comma-separated distance bands in km.")
+    overlap.add_argument("--reference", action="append", type=_reference_spec, required=True, help="Reference file, optionally named as 'American Spaces=american_spaces.csv'. Repeat as needed.")
+    overlap.add_argument("--bands", default="5,25,100,250")
     overlap.add_argument("--max-distance", type=float)
-    overlap.add_argument("--top-k", type=int, default=5, help="Nearest matches to store inside each observation.")
+    overlap.add_argument("--top-k", type=int, default=5)
     overlap.add_argument("--include-rejected", action="store_true")
     overlap.add_argument("--output")
     overlap.add_argument("--map", action="store_true", dest="create_map")
@@ -109,7 +168,8 @@ def _llm_from_cli(provider: str, model: str, base_url: str, api_key: str) -> LLM
 
 
 def main(argv=None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
 
     if args.command == "map":
         outputs = run_map({"source_file": args.source_file, "output_file": args.output})
@@ -135,10 +195,7 @@ def main(argv=None) -> int:
 
     if args.command == "analysis":
         stem = args.output_stem or str(Path(args.source_file).with_suffix("")) + "_analysis"
-        outputs = run_analysis(
-            {"source_file": args.source_file, "output_stem": stem, "output_format": args.format}
-        )
-        print("\n".join(outputs))
+        print("\n".join(run_analysis({"source_file": args.source_file, "output_stem": stem, "output_format": args.format})))
         return 0
 
     if args.command == "triage":
@@ -151,25 +208,49 @@ def main(argv=None) -> int:
                 raise ValueError("The project context file is empty.")
         api_key = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
         llm = _llm_from_cli(args.provider, args.model, args.base_url, api_key)
-        outputs = triage_dataset(
-            source,
-            output,
-            llm=llm,
-            project_context=project_context,
-            continue_on_error=not args.fail_fast,
-        )
+        outputs = triage_dataset(source, output, llm=llm, project_context=project_context, continue_on_error=not args.fail_fast)
         print("\n".join(outputs))
         return 0
 
     sources = _csv(args.sources)
-    secrets = {}
-    if "x" in sources:
-        secrets["x_bearer_token"] = _secret("X bearer token: ", "SUGAR_X_BEARER_TOKEN")
+    secrets = _collection_secrets(sources)
+
+    if args.command == "harvest":
+        terms = _merge_terms(args.terms, args.terms_file)
+        if not terms:
+            parser.error("harvest requires at least one inline term or --terms-file entry")
+        config = {
+            "sources": sources,
+            "terms": terms,
+            "since": args.since,
+            "until": args.until,
+            "output_directory": args.output,
+            "x_search_mode": args.x_mode,
+            "post_languages": _csv(args.x_languages),
+            "mastodon_url": args.mastodon_url,
+            "include_retweets": args.include_reposts,
+            "bilibili_order": args.bilibili_order,
+            "bilibili_hydrate_details": not args.no_bilibili_hydrate,
+            "weibo_hydrate_details": not args.no_weibo_hydrate,
+            "harvest": {
+                "name": args.name,
+                "target_records": args.target,
+                "posts_per_task": args.posts_per_task,
+                "pages_per_task": args.pages_per_task,
+                "max_pages_per_query": args.max_pages_per_query,
+                "shard_days": args.shard_days,
+                "max_retries": args.max_retries,
+                "max_inline_wait_seconds": args.max_inline_wait,
+                "inter_task_delay_seconds": args.task_delay,
+                "time_shard_sources": _csv(args.time_shard_sources),
+                "continue_on_error": not args.fail_fast,
+            },
+        }
+        print("\n".join(run_harvest(config, secrets)))
+        return 0
+
     if not (args.no_translate and args.no_location):
         secrets["llm_api_key"] = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
-    secrets["bluesky_identifier"] = os.environ.get("SUGAR_BLUESKY_IDENTIFIER", "")
-    secrets["bluesky_app_password"] = os.environ.get("SUGAR_BLUESKY_APP_PASSWORD", "")
-    secrets["mastodon_token"] = os.environ.get("SUGAR_MASTODON_TOKEN", "")
     config = {
         "sources": sources,
         "terms": args.terms,
