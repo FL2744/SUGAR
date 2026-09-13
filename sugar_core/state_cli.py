@@ -8,6 +8,7 @@ from pathlib import Path
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
 from .state_aggregate import save_state_rollups
+from .state_entities import load_entity_registry, save_query_plan, write_entity_template
 from .state_network import save_state_network
 from .state_review import apply_review_workbook_file, export_review_workbook
 from .state_triage import triage_observations
@@ -33,6 +34,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     template = sub.add_parser("template-us-sites", help="Write a CSV template for American Spaces/EducationUSA/U.S. presence data.")
     template.add_argument("output")
+
+    entity_template = sub.add_parser("template-entities", help="Write a monitored-entity/alias registry template.")
+    entity_template.add_argument("output")
+
+    query_plan = sub.add_parser("query-plan", help="Create a reproducible watch-query plan from the monitored-entity registry.")
+    query_plan.add_argument("entities")
+    query_plan.add_argument("--output", required=True)
 
     blank = sub.add_parser("blank", help="Create blank State-assessment JSONL for an observation dataset.")
     blank.add_argument("observations")
@@ -136,6 +144,14 @@ def main(argv=None) -> int:
         print(write_us_presence_template(args.output))
         return 0
 
+    if args.command == "template-entities":
+        print(write_entity_template(args.output))
+        return 0
+
+    if args.command == "query-plan":
+        print(save_query_plan(load_entity_registry(args.entities), args.output))
+        return 0
+
     if args.command == "blank":
         observations = load_observations(args.observations)
         print(save_state_assessments(blank_state_assessments(observations), args.output))
@@ -194,7 +210,6 @@ def main(argv=None) -> int:
             title=args.title,
         )
         observations, assessments, sites = _loaded_state_inputs(args)
-        # Persist the exact overlap-assessed snapshot consumed by every supplemental output.
         assessed_snapshot = Path(args.output).expanduser().resolve() / f"{'_'.join(args.name.split())}.assessed.jsonl"
         outputs.append(save_state_assessments(assessments, assessed_snapshot))
         outputs.extend(save_state_rollups(observations, assessments, args.output, name=args.name))
