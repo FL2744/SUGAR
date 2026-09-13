@@ -39,6 +39,7 @@ def test_thousand_seed_run_persists_and_resumes_without_recollection(tmp_path: P
 def test_plan_change_and_access_mode_are_guarded(tmp_path: Path):
     config = SeedHarvestConfig(seeds=("5320265912291527",), name="guard", inter_seed_delay_seconds=0)
     run_weibo_seed_harvest(config, tmp_path, investigator=investigation, sleeper=lambda _: None)
+
     changed = SeedHarvestConfig(seeds=("5320265912291527", "5320265912291528"), name="guard", inter_seed_delay_seconds=0)
     try:
         run_weibo_seed_harvest(changed, tmp_path, investigator=investigation, sleeper=lambda _: None)
@@ -46,3 +47,11 @@ def test_plan_change_and_access_mode_are_guarded(tmp_path: Path):
         assert "different seed/depth plan" in str(exc)
     else:
         raise AssertionError("changed seed plan must not reuse checkpoint")
+
+    try:
+        run_weibo_seed_harvest(config, tmp_path, cookie="legitimate-existing-session", investigator=investigation, sleeper=lambda _: None)
+    except ValueError as exc:
+        assert "cannot resume" in str(exc)
+        assert "anonymous" in str(exc) and "session" in str(exc)
+    else:
+        raise AssertionError("anonymous/session coverage must not mix inside one checkpoint")
