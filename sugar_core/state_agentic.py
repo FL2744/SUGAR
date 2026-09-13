@@ -21,7 +21,7 @@ from .state_synthesis import (
 from .state_tradecraft import build_tradecraft_audit
 from .utils import JsonCache, utc_iso
 
-AGENTIC_ORCHESTRATION_VERSION = "1.2"
+AGENTIC_ORCHESTRATION_VERSION = "1.3"
 
 
 def _clean(value: Any) -> str:
@@ -38,7 +38,7 @@ def _referenced_ids(output: dict[str, Any]) -> set[str]:
     for alternative in output.get("alternatives") or []:
         refs.update(str(x) for x in alternative.get("supporting_refs") or [])
         refs.update(str(x) for x in alternative.get("contradicting_refs") or [])
-    return refs
+    return {_clean(ref) for ref in refs if _clean(ref)}
 
 
 def _case_index(packet: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -57,6 +57,9 @@ def _case_index(packet: dict[str, Any]) -> dict[str, dict[str, Any]]:
             claim_id = _clean(claim.get("claim_id"))
             if claim_id:
                 result[claim_id] = case
+            for ref in claim.get("evidence_refs") or []:
+                if _clean(ref):
+                    result[_clean(ref)] = case
     return result
 
 
@@ -194,6 +197,55 @@ def _packet_with_tradecraft(
     return packet
 
 
+def _integration_packet(
+    base_packet: dict[str, Any],
+    tasks: list[AgentTask],
+    agent_outputs: list[dict[str, Any]],
+    *,
+    baseline_cases: int = 24,
+    max_cases: int = 80,
+) -> dict[str, Any]:
+    """Build a bounded integration context containing baseline and actually cited cases.
+
+    The final integrator should not receive hundreds of full case dossiers merely so citation
+    validation can see them. This function retains a focused set: high-priority baseline cases plus
+    every case referenced by a specialist output, resolved against both the global and country-task
+    packet indices.
+    """
+    selected: dict[str, dict[str, Any]] = {}
+    for case in list(base_packet.get("representative_cases") or [])[:baseline_cases]:
+        observation_id = _clean(case.get("observation_id"))
+        if observation_id:
+            selected[observation_id] = case
+
+    indices = [_case_index(base_packet)]
+    indices.extend(_case_index(task.packet) for task in tasks if task.packet is not base_packet)
+    refs = set()
+    for output in agent_outputs:
+        refs.update(_referenced_ids(output))
+    for ref in refs:
+        for index in indices:
+            case = index.get(ref)
+            if case:
+                observation_id = _clean(case.get("observation_id"))
+                if observation_id:
+                    selected[observation_id] = case
+                break
+        if len(selected) >= max_cases:
+            break
+
+    packet = dict(base_packet)
+    packet["representative_cases"] = list(selected.values())[:max_cases]
+    packet["integration_context"] = {
+        "baseline_cases": min(baseline_cases, len(base_packet.get("representative_cases") or [])),
+        "specialist_refs_considered": len(refs),
+        "cases_in_integrator_context": len(packet["representative_cases"]),
+        "strategy": "high-priority baseline plus specialist-cited cases",
+        "guardrail": "Cases absent from the bounded integration context cannot be cited by the final synthesis even if they exist elsewhere in the corpus.",
+    }
+    return packet
+
+
 def run_iterative_agentic_synthesis(
     observations: Iterable[ResearchObservation],
     assessments: Iterable[StateAssessment],
@@ -210,8 +262,8 @@ def run_iterative_agentic_synthesis(
     if depth not in {"quick", "standard", "deep"}:
         raise ValueError("depth must be quick, standard, or deep")
 
-    # The large case index exists for evidence validation/retrieval. Individual agent prompts are
-    # still trimmed by state_synthesis._call_agent, so prompt size does not grow linearly with corpus size.
+    # The large case index exists for specialist validation/retrieval. Agent prompts are trimmed by
+    # state_synthesis._call_agent, and the final integrator receives a separately bounded context.
     base_packet = _packet_with_tradecraft(
         observations,
         assessments,
@@ -251,13 +303,14 @@ def run_iterative_agentic_synthesis(
             client, llm, cache, base_packet, tasks, first_pass, max_workers=max_workers
         )
 
-    draft = _call_integrator(client, llm, cache, base_packet, analysis_pass, stage="iterative-draft")
+    integration_packet = _integration_packet(base_packet, tasks, analysis_pass)
+    draft = _call_integrator(client, llm, cache, integration_packet, analysis_pass, stage="iterative-draft")
     critique = None
     final = draft
     if depth != "quick":
-        critique = _red_team(client, llm, cache, base_packet, draft)
+        critique = _red_team(client, llm, cache, integration_packet, draft)
         final = _call_integrator(
-            client, llm, cache, base_packet, analysis_pass,
+            client, llm, cache, integration_packet, analysis_pass,
             stage="iterative-revised", critique=critique,
         )
 
@@ -270,9 +323,9 @@ def run_iterative_agentic_synthesis(
         "depth": depth,
         "llm": {"provider": llm.provider, "model": llm.model},
         "method": {
-            "architecture": "deterministic full evidence index + tradecraft audit -> parallel specialists -> optional evidence-neighborhood refinement -> integrator -> red team -> revised integrator",
-            "prompt_window_is_bounded": True,
-            "full_reference_index_retained_for_integration": True,
+            "architecture": "deterministic full evidence index + tradecraft audit -> parallel specialists -> optional evidence-neighborhood refinement -> retrieved integration context -> integrator -> red team -> revised integrator",
+            "specialist_prompt_window_is_bounded": True,
+            "integrator_prompt_window_is_bounded": True,
             "deep_mode_iterative_retrieval": depth == "deep",
             "probability_confidence_separated": True,
             "source_adequacy_and_tensions_exposed_to_agents": True,
@@ -288,6 +341,7 @@ def run_iterative_agentic_synthesis(
                 "high_severity_tensions": audit.get("high_severity_tensions"),
                 "source_environment": audit.get("source_environment"),
             },
+            "integration_context": integration_packet.get("integration_context"),
         },
         "first_pass_agents": first_pass,
         "agents": analysis_pass,
