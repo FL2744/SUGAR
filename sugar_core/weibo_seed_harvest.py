@@ -172,7 +172,7 @@ class SeedHarvestStore:
             """
             SELECT seed_key,seed_input,identity,status,attempts,last_error,not_before
             FROM seeds
-            WHERE status IN ('pending','failed','deferred')
+            WHERE status IN ('pending','deferred')
               AND (not_before='' OR not_before<=?)
             ORDER BY rowid
             """,
@@ -328,15 +328,21 @@ def run_weibo_seed_harvest(
     status_path = out_dir / f"{config.name}.seeds.csv"
     records_path = out_dir / f"{config.name}.csv"
     jsonl_path = out_dir / f"{config.name}.jsonl"
+    access_mode = "session" if cookie else "anonymous"
 
     with SeedHarvestStore(checkpoint) as store:
         existing_signature = store.get_meta("plan_signature")
         if existing_signature and existing_signature != config.plan_signature:
             raise ValueError("Seed-harvest checkpoint belongs to a different seed/depth plan. Use a new --name.")
+        existing_mode = store.get_meta("access_mode")
+        if existing_mode and existing_mode != access_mode:
+            raise ValueError(
+                f"Seed-harvest checkpoint was created in {existing_mode} mode and cannot resume in {access_mode} mode. Use a new --name."
+            )
         store.set_meta("plan_signature", config.plan_signature)
-        store.set_meta("access_mode", "session" if cookie else "anonymous")
+        store.set_meta("access_mode", access_mode)
         store.register(config.seeds)
-        _notify(progress, "seed_harvest_start", seeds=len(config.seeds), checkpoint=str(checkpoint))
+        _notify(progress, "seed_harvest_start", seeds=len(config.seeds), checkpoint=str(checkpoint), access_mode=access_mode)
 
         eligible = store.eligible()
         for index, task in enumerate(eligible, 1):
@@ -370,14 +376,11 @@ def run_weibo_seed_harvest(
                 _notify(progress, "seed_harvest_item_complete", seed=task["seed_input"], inserted=inserted, updated=updated, comments=len(result.comments))
             except Exception as exc:
                 wait = config.base_backoff_seconds * (2 ** max(0, attempt - 1))
-                if _rate_limit_error(exc) and wait > config.max_inline_wait_seconds:
+                if _retryable(exc) and attempt <= config.max_retries:
+                    wait = min(wait, config.max_inline_wait_seconds) if not _rate_limit_error(exc) else max(wait, min(120.0, config.max_inline_wait_seconds))
                     store.defer(seed_key, str(exc), wait)
-                    store.add_event("seed_deferred", seed_key, wait_seconds=wait, error=type(exc).__name__)
-                    _notify(progress, "seed_harvest_item_deferred", seed=task["seed_input"], wait_seconds=wait)
-                elif _retryable(exc) and attempt <= config.max_retries:
-                    wait = min(wait, config.max_inline_wait_seconds)
-                    store.defer(seed_key, str(exc), wait)
-                    store.add_event("seed_retry_deferred", seed_key, wait_seconds=wait, error=type(exc).__name__)
+                    event = "seed_rate_limit_deferred" if _rate_limit_error(exc) else "seed_retry_deferred"
+                    store.add_event(event, seed_key, wait_seconds=wait, error=type(exc).__name__)
                     _notify(progress, "seed_harvest_item_deferred", seed=task["seed_input"], wait_seconds=wait)
                 else:
                     store.fail(seed_key, str(exc))
@@ -395,7 +398,7 @@ def run_weibo_seed_harvest(
             "generated_at": utc_iso(),
             "operation": "weibo_seed_harvest",
             "plan_signature": config.plan_signature,
-            "access_mode": "session" if cookie else "anonymous",
+            "access_mode": access_mode,
             "planned_seeds": len(config.seeds),
             "seed_counts": counts,
             "unique_records": len(records),
@@ -406,6 +409,7 @@ def run_weibo_seed_harvest(
                 "repost_pages": config.repost_pages,
                 "author_posts": config.author_posts,
                 "author_pages": config.author_pages,
+                "max_retries": config.max_retries,
                 "inter_seed_delay_seconds": config.inter_seed_delay_seconds,
             },
             "methodology": "Known public seed expansion with durable per-seed checkpoints. Gated optional surfaces are recorded independently; no login automation or access-control bypass.",
