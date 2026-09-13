@@ -5,7 +5,10 @@ import getpass
 import os
 from pathlib import Path
 
+from .llm import ARC_BASE_URL, LLMConfig
 from .service import run_analysis, run_map, run_search
+from .triage import DEFAULT_PROJECT_CONTEXT
+from .triage_io import triage_dataset
 
 
 def _secret(prompt: str, env: str) -> str:
@@ -19,30 +22,115 @@ def _csv(value: str) -> list[str]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sugar", description="SUGAR stable research pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
-    search = sub.add_parser("search"); search.add_argument("terms", nargs="+"); search.add_argument("--sources", default="x")
-    search.add_argument("--since"); search.add_argument("--until"); search.add_argument("--posts", type=int, default=10); search.add_argument("--pages", type=int, default=1)
-    search.add_argument("--output", default="."); search.add_argument("--provider", choices=["openai","arc","custom"], default="openai")
-    search.add_argument("--model", default="gpt-5.6-luna"); search.add_argument("--base-url", default=""); search.add_argument("--no-translate", action="store_true"); search.add_argument("--no-location", action="store_true")
-    search.add_argument("--x-mode", choices=["recent","all"], default="recent"); search.add_argument("--x-languages", default="")
-    search.add_argument("--mastodon-url", default="https://mastodon.social"); search.add_argument("--include-reposts", action="store_true")
-    map_p = sub.add_parser("map"); map_p.add_argument("source_file"); map_p.add_argument("--output")
-    report = sub.add_parser("analysis"); report.add_argument("source_file"); report.add_argument("--output-stem"); report.add_argument("--format", choices=["docx","pdf","both"], default="both")
+
+    search = sub.add_parser("search")
+    search.add_argument("terms", nargs="+")
+    search.add_argument("--sources", default="x")
+    search.add_argument("--since")
+    search.add_argument("--until")
+    search.add_argument("--posts", type=int, default=10)
+    search.add_argument("--pages", type=int, default=1)
+    search.add_argument("--output", default=".")
+    search.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
+    search.add_argument("--model", default="gpt-5.6-luna")
+    search.add_argument("--base-url", default="")
+    search.add_argument("--no-translate", action="store_true")
+    search.add_argument("--no-location", action="store_true")
+    search.add_argument("--x-mode", choices=["recent", "all"], default="recent")
+    search.add_argument("--x-languages", default="")
+    search.add_argument("--mastodon-url", default="https://mastodon.social")
+    search.add_argument("--include-reposts", action="store_true")
+
+    triage = sub.add_parser(
+        "triage",
+        help="AI-triage an existing SUGAR post dataset into a human-review observation dataset",
+    )
+    triage.add_argument("source_file")
+    triage.add_argument("--output")
+    triage.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
+    triage.add_argument("--model", default="gpt-5.6-luna")
+    triage.add_argument("--base-url", default="")
+    triage.add_argument("--project-context-file")
+    triage.add_argument("--fail-fast", action="store_true")
+
+    map_p = sub.add_parser("map")
+    map_p.add_argument("source_file")
+    map_p.add_argument("--output")
+
+    report = sub.add_parser("analysis")
+    report.add_argument("source_file")
+    report.add_argument("--output-stem")
+    report.add_argument("--format", choices=["docx", "pdf", "both"], default="both")
     return parser
+
+
+def _llm_from_cli(provider: str, model: str, base_url: str, api_key: str) -> LLMConfig:
+    base = base_url.strip()
+    if provider == "arc" and not base:
+        base = ARC_BASE_URL
+    if provider == "custom" and not base:
+        raise ValueError("--base-url is required when --provider custom is used.")
+    return LLMConfig(provider=provider, model=model, api_key=api_key, base_url=base)
 
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+
     if args.command == "map":
-        outputs = run_map({"source_file": args.source_file, "output_file": args.output}); print("\n".join(outputs)); return 0
+        outputs = run_map({"source_file": args.source_file, "output_file": args.output})
+        print("\n".join(outputs))
+        return 0
+
     if args.command == "analysis":
         stem = args.output_stem or str(Path(args.source_file).with_suffix("")) + "_analysis"
-        outputs = run_analysis({"source_file": args.source_file, "output_stem": stem, "output_format": args.format}); print("\n".join(outputs)); return 0
-    sources = _csv(args.sources); secrets = {}
-    if "x" in sources: secrets["x_bearer_token"] = _secret("X bearer token: ", "SUGAR_X_BEARER_TOKEN")
-    if not (args.no_translate and args.no_location): secrets["llm_api_key"] = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
-    secrets["bluesky_identifier"] = os.environ.get("SUGAR_BLUESKY_IDENTIFIER", ""); secrets["bluesky_app_password"] = os.environ.get("SUGAR_BLUESKY_APP_PASSWORD", ""); secrets["mastodon_token"] = os.environ.get("SUGAR_MASTODON_TOKEN", "")
-    config = {"sources": sources, "terms": args.terms, "since": args.since, "until": args.until, "max_posts_per_query": args.posts,
-              "max_pages_per_query": args.pages, "output_directory": args.output, "translate_posts": not args.no_translate, "infer_locations": not args.no_location,
-              "include_retweets": args.include_reposts, "x_search_mode": args.x_mode, "post_languages": _csv(args.x_languages), "mastodon_url": args.mastodon_url,
-              "llm": {"provider": args.provider, "model": args.model, "base_url": args.base_url}}
-    print("\n".join(run_search(config, secrets))); return 0
+        outputs = run_analysis({"source_file": args.source_file, "output_stem": stem, "output_format": args.format})
+        print("\n".join(outputs))
+        return 0
+
+    if args.command == "triage":
+        source = Path(args.source_file).expanduser()
+        output = Path(args.output).expanduser() if args.output else source.with_name(source.stem + "_observations.csv")
+        project_context = DEFAULT_PROJECT_CONTEXT
+        if args.project_context_file:
+            project_context = Path(args.project_context_file).expanduser().read_text(encoding="utf-8").strip()
+            if not project_context:
+                raise ValueError("The project context file is empty.")
+        api_key = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
+        llm = _llm_from_cli(args.provider, args.model, args.base_url, api_key)
+        outputs = triage_dataset(
+            source,
+            output,
+            llm=llm,
+            project_context=project_context,
+            continue_on_error=not args.fail_fast,
+        )
+        print("\n".join(outputs))
+        return 0
+
+    sources = _csv(args.sources)
+    secrets = {}
+    if "x" in sources:
+        secrets["x_bearer_token"] = _secret("X bearer token: ", "SUGAR_X_BEARER_TOKEN")
+    if not (args.no_translate and args.no_location):
+        secrets["llm_api_key"] = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
+    secrets["bluesky_identifier"] = os.environ.get("SUGAR_BLUESKY_IDENTIFIER", "")
+    secrets["bluesky_app_password"] = os.environ.get("SUGAR_BLUESKY_APP_PASSWORD", "")
+    secrets["mastodon_token"] = os.environ.get("SUGAR_MASTODON_TOKEN", "")
+    config = {
+        "sources": sources,
+        "terms": args.terms,
+        "since": args.since,
+        "until": args.until,
+        "max_posts_per_query": args.posts,
+        "max_pages_per_query": args.pages,
+        "output_directory": args.output,
+        "translate_posts": not args.no_translate,
+        "infer_locations": not args.no_location,
+        "include_retweets": args.include_reposts,
+        "x_search_mode": args.x_mode,
+        "post_languages": _csv(args.x_languages),
+        "mastodon_url": args.mastodon_url,
+        "llm": {"provider": args.provider, "model": args.model, "base_url": args.base_url},
+    }
+    print("\n".join(run_search(config, secrets)))
+    return 0

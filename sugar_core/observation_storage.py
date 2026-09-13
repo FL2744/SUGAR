@@ -34,7 +34,10 @@ PREFERRED_OBSERVATION_COLUMNS = [
     "themes",
     "us_overlap",
     "overlap_note",
+    "relevance",
+    "relevance_confidence",
     "triage_labels",
+    "triage_evidence",
     "ai_confidence",
     "ai_model",
     "ai_reason",
@@ -50,8 +53,21 @@ PREFERRED_OBSERVATION_COLUMNS = [
     "schema_version",
 ]
 
-_NUMERIC_COLUMNS = {"latitude", "longitude", "location_confidence", "ai_confidence"}
-_LONG_TEXT_COLUMNS = {"summary", "overlap_note", "ai_reason", "verification_notes", "evidence"}
+_NUMERIC_COLUMNS = {
+    "latitude",
+    "longitude",
+    "location_confidence",
+    "relevance_confidence",
+    "ai_confidence",
+}
+_LONG_TEXT_COLUMNS = {
+    "summary",
+    "overlap_note",
+    "triage_evidence",
+    "ai_reason",
+    "verification_notes",
+    "evidence",
+}
 
 
 def observations_to_frame(observations: Iterable[ResearchObservation]) -> pd.DataFrame:
@@ -107,7 +123,9 @@ def save_observations(
                 width = 60
             elif name in {"primary_source_url"}:
                 width = 45
-            elif name in {"actors", "audiences", "themes", "us_overlap", "triage_labels"}:
+            elif name in {
+                "actors", "audiences", "themes", "us_overlap", "triage_labels"
+            }:
                 width = 35
             worksheet.column_dimensions[get_column_letter(index)].width = width
         for row in worksheet.iter_rows(min_row=2):
