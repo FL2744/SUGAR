@@ -12,6 +12,7 @@ from .state_network import save_state_network
 from .state_review import apply_review_workbook_file, export_review_workbook
 from .state_triage import triage_observations
 from .state_workflow import (
+    apply_us_overlaps,
     audit_state_records,
     blank_state_assessments,
     compare_state_snapshots,
@@ -67,6 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     rollup = sub.add_parser("rollup", help="Export country/city activity and verification rollups (not an influence score).")
     rollup.add_argument("observations")
     rollup.add_argument("assessments")
+    rollup.add_argument("--us-sites")
     rollup.add_argument("--output", required=True)
     rollup.add_argument("--name", default="state_research")
 
@@ -121,6 +123,8 @@ def _loaded_state_inputs(args):
     observations = load_observations(args.observations)
     assessments = load_state_assessments(args.assessments) if getattr(args, "assessments", None) else blank_state_assessments(observations)
     sites = load_us_presence_sites(args.us_sites) if getattr(args, "us_sites", None) else []
+    if sites:
+        assessments = apply_us_overlaps(observations, assessments, sites)
     return observations, assessments, sites
 
 
@@ -190,6 +194,9 @@ def main(argv=None) -> int:
             title=args.title,
         )
         observations, assessments, sites = _loaded_state_inputs(args)
+        # Persist the exact overlap-assessed snapshot consumed by every supplemental output.
+        assessed_snapshot = Path(args.output).expanduser().resolve() / f"{'_'.join(args.name.split())}.assessed.jsonl"
+        outputs.append(save_state_assessments(assessments, assessed_snapshot))
         outputs.extend(save_state_rollups(observations, assessments, args.output, name=args.name))
         outputs.extend(save_state_network(observations, assessments, args.output, us_sites=sites, name=args.name, verified_only=True))
         review_path = Path(args.output).expanduser().resolve() / f"{'_'.join(args.name.split())}.review.xlsx"
