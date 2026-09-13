@@ -128,15 +128,37 @@ def save_observations(
     return frame
 
 
+def _load_jsonl_frame(path: Path) -> pd.DataFrame:
+    rows: list[dict] = []
+    with path.open("r", encoding="utf-8-sig") as stream:
+        for line_number, line in enumerate(stream, 1):
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                payload = json.loads(text)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSONL observation record on line {line_number}: {exc.msg}") from exc
+            if not isinstance(payload, dict):
+                raise ValueError(f"JSONL observation record on line {line_number} must be an object.")
+            rows.append(payload)
+    if not rows:
+        raise ValueError("Observation JSONL file contains no records.")
+    return pd.DataFrame(rows)
+
+
 def load_observation_frame(path: str | Path) -> pd.DataFrame:
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(path)
-    if path.suffix.lower() == ".csv":
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
         return pd.read_csv(path)
-    if path.suffix.lower() == ".xlsx":
+    if suffix == ".xlsx":
         return pd.read_excel(path, sheet_name="observations")
-    raise ValueError("Observation dataset must be CSV or XLSX.")
+    if suffix in {".jsonl", ".ndjson"}:
+        return _load_jsonl_frame(path)
+    raise ValueError("Observation dataset must be CSV, XLSX, JSONL, or NDJSON.")
 
 
 def load_observations(path: str | Path) -> list[ResearchObservation]:
