@@ -100,9 +100,17 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--mastodon-url", default="https://mastodon.social")
     search.add_argument("--include-reposts", action="store_true")
 
-    harvest = sub.add_parser("harvest", help="Run resumable high-volume raw collection while honoring platform limits.")
+    harvest = sub.add_parser(
+        "harvest",
+        help="Run resumable high-volume raw collection while honoring platform limits.",
+    )
     harvest.add_argument("terms", nargs="*", help="Inline search terms. Can be combined with --terms-file.")
-    harvest.add_argument("--terms-file", action="append", default=[], help="UTF-8 query-plan file: one term per line; blank lines/# comments ignored. Repeatable.")
+    harvest.add_argument(
+        "--terms-file",
+        action="append",
+        default=[],
+        help="UTF-8 query-plan file: one term per line; blank lines/# comments ignored. Repeatable.",
+    )
     harvest.add_argument("--sources", default="bilibili,weibo")
     harvest.add_argument("--since")
     harvest.add_argument("--until")
@@ -126,7 +134,10 @@ def build_parser() -> argparse.ArgumentParser:
     harvest.add_argument("--no-bilibili-hydrate", action="store_true")
     harvest.add_argument("--no-weibo-hydrate", action="store_true")
 
-    investigate = sub.add_parser("weibo-investigate", help="Expand one real public Weibo post into observable context and a research brief.")
+    investigate = sub.add_parser(
+        "weibo-investigate",
+        help="Expand one real public Weibo post into comments/reposts/account context and a research brief.",
+    )
     investigate.add_argument("seed", help="Weibo status URL, mobile detail/status URL, numeric mid, or bid.")
     investigate.add_argument("--comments", type=int, default=100)
     investigate.add_argument("--comment-pages", type=int, default=5)
@@ -157,7 +168,10 @@ def build_parser() -> argparse.ArgumentParser:
     seed_harvest.add_argument("--output", default=".")
     seed_harvest.add_argument("--name", default="weibo_seed_harvest")
 
-    qualify = sub.add_parser("weibo-qualify", help="Run a reproducible Weibo collection/investigation acceptance campaign for State-facing research.")
+    qualify = sub.add_parser(
+        "weibo-qualify",
+        help="Run a reproducible Weibo collection/investigation acceptance campaign for State-facing research.",
+    )
     qualify.add_argument("terms", nargs="*", help="Inline query-plan terms. Can be combined with --terms-file.")
     qualify.add_argument("--terms-file", action="append", default=[])
     qualify.add_argument("--seed", action="append", default=[], help="Real public Weibo post URL/ID. Repeatable.")
@@ -199,17 +213,30 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "map":
-        print("\n".join(run_map({"source_file": args.source_file, "output_file": args.output})))
+        outputs = run_map({"source_file": args.source_file, "output_file": args.output})
+        print("\n".join(outputs))
         return 0
 
     if args.command == "analysis":
         stem = args.output_stem or str(Path(args.source_file).with_suffix("")) + "_analysis"
-        print("\n".join(run_analysis({"source_file": args.source_file, "output_stem": stem, "output_format": args.format})))
+        outputs = run_analysis(
+            {"source_file": args.source_file, "output_stem": stem, "output_format": args.format}
+        )
+        print("\n".join(outputs))
         return 0
 
     if args.command == "weibo-investigate":
         cookie = os.environ.get("SUGAR_WEIBO_COOKIE", "")
-        investigation = investigate_weibo_seed(args.seed, max_comments=args.comments, comment_pages=args.comment_pages, max_reposts=args.reposts, repost_pages=args.repost_pages, author_posts=args.author_posts, author_pages=args.author_pages, cookie=cookie)
+        investigation = investigate_weibo_seed(
+            args.seed,
+            max_comments=args.comments,
+            comment_pages=args.comment_pages,
+            max_reposts=args.reposts,
+            repost_pages=args.repost_pages,
+            author_posts=args.author_posts,
+            author_pages=args.author_pages,
+            cookie=cookie,
+        )
         print("\n".join(save_weibo_investigation(investigation, args.output, name=args.name)))
         return 0
 
@@ -232,7 +259,12 @@ def main(argv=None) -> int:
             inter_seed_delay_seconds=args.seed_delay,
             continue_on_error=not args.fail_fast,
         )
-        print("\n".join(run_weibo_seed_harvest(config, args.output, cookie=os.environ.get("SUGAR_WEIBO_COOKIE", ""))))
+        outputs = run_weibo_seed_harvest(
+            config,
+            args.output,
+            cookie=os.environ.get("SUGAR_WEIBO_COOKIE", ""),
+        )
+        print("\n".join(outputs))
         return 0
 
     if args.command == "weibo-qualify":
@@ -245,12 +277,38 @@ def main(argv=None) -> int:
         thresholds = _json_mapping(args.thresholds)
         thresholds.setdefault("minimum_unique_records", args.target)
         config = {
-            "sources": ["weibo"], "terms": terms, "output_directory": args.output,
+            "sources": ["weibo"],
+            "terms": terms,
+            "output_directory": args.output,
             "weibo_hydrate_details": not args.no_weibo_hydrate,
-            "harvest": {"target_records": None, "posts_per_task": args.posts_per_task, "pages_per_task": args.pages_per_task, "max_pages_per_query": args.max_pages_per_query, "max_retries": args.max_retries, "max_inline_wait_seconds": args.max_inline_wait, "inter_task_delay_seconds": args.task_delay, "continue_on_error": True},
-            "qualification": {"name": args.name, "replicates": args.replicates, "seeds": seeds, "max_comments": args.comments, "comment_pages": args.comment_pages, "max_reposts": args.reposts, "repost_pages": args.repost_pages, "author_posts": args.author_posts, "author_pages": args.author_pages, "audit_sample_size": args.audit_size, "audit_file": args.audit_file, "thresholds": thresholds},
+            "harvest": {
+                # Qualification must run the full bounded query/page plan; --target is an acceptance floor.
+                "target_records": None,
+                "posts_per_task": args.posts_per_task,
+                "pages_per_task": args.pages_per_task,
+                "max_pages_per_query": args.max_pages_per_query,
+                "max_retries": args.max_retries,
+                "max_inline_wait_seconds": args.max_inline_wait,
+                "inter_task_delay_seconds": args.task_delay,
+                "continue_on_error": True,
+            },
+            "qualification": {
+                "name": args.name,
+                "replicates": args.replicates,
+                "seeds": seeds,
+                "max_comments": args.comments,
+                "comment_pages": args.comment_pages,
+                "max_reposts": args.reposts,
+                "repost_pages": args.repost_pages,
+                "author_posts": args.author_posts,
+                "author_pages": args.author_pages,
+                "audit_sample_size": args.audit_size,
+                "audit_file": args.audit_file,
+                "thresholds": thresholds,
+            },
         }
-        print("\n".join(run_weibo_qualification(config, {"weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", "")})))
+        secrets = {"weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", "")}
+        print("\n".join(run_weibo_qualification(config, secrets)))
         return 0
 
     sources = _csv(args.sources)
@@ -261,11 +319,31 @@ def main(argv=None) -> int:
         if not terms:
             parser.error("harvest requires at least one inline term or --terms-file entry")
         config = {
-            "sources": sources, "terms": terms, "since": args.since, "until": args.until, "output_directory": args.output,
-            "x_search_mode": args.x_mode, "post_languages": _csv(args.x_languages), "mastodon_url": args.mastodon_url,
-            "include_retweets": args.include_reposts, "bilibili_order": args.bilibili_order,
-            "bilibili_hydrate_details": not args.no_bilibili_hydrate, "weibo_hydrate_details": not args.no_weibo_hydrate,
-            "harvest": {"name": args.name, "target_records": args.target, "posts_per_task": args.posts_per_task, "pages_per_task": args.pages_per_task, "max_pages_per_query": args.max_pages_per_query, "shard_days": args.shard_days, "max_retries": args.max_retries, "max_inline_wait_seconds": args.max_inline_wait, "inter_task_delay_seconds": args.task_delay, "time_shard_sources": _csv(args.time_shard_sources), "continue_on_error": not args.fail_fast},
+            "sources": sources,
+            "terms": terms,
+            "since": args.since,
+            "until": args.until,
+            "output_directory": args.output,
+            "x_search_mode": args.x_mode,
+            "post_languages": _csv(args.x_languages),
+            "mastodon_url": args.mastodon_url,
+            "include_retweets": args.include_reposts,
+            "bilibili_order": args.bilibili_order,
+            "bilibili_hydrate_details": not args.no_bilibili_hydrate,
+            "weibo_hydrate_details": not args.no_weibo_hydrate,
+            "harvest": {
+                "name": args.name,
+                "target_records": args.target,
+                "posts_per_task": args.posts_per_task,
+                "pages_per_task": args.pages_per_task,
+                "max_pages_per_query": args.max_pages_per_query,
+                "shard_days": args.shard_days,
+                "max_retries": args.max_retries,
+                "max_inline_wait_seconds": args.max_inline_wait,
+                "inter_task_delay_seconds": args.task_delay,
+                "time_shard_sources": _csv(args.time_shard_sources),
+                "continue_on_error": not args.fail_fast,
+            },
         }
         print("\n".join(run_harvest(config, secrets)))
         return 0
@@ -273,10 +351,19 @@ def main(argv=None) -> int:
     if not (args.no_translate and args.no_location):
         secrets["llm_api_key"] = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
     config = {
-        "sources": sources, "terms": args.terms, "since": args.since, "until": args.until,
-        "max_posts_per_query": args.posts, "max_pages_per_query": args.pages, "output_directory": args.output,
-        "translate_posts": not args.no_translate, "infer_locations": not args.no_location, "include_retweets": args.include_reposts,
-        "x_search_mode": args.x_mode, "post_languages": _csv(args.x_languages), "mastodon_url": args.mastodon_url,
+        "sources": sources,
+        "terms": args.terms,
+        "since": args.since,
+        "until": args.until,
+        "max_posts_per_query": args.posts,
+        "max_pages_per_query": args.pages,
+        "output_directory": args.output,
+        "translate_posts": not args.no_translate,
+        "infer_locations": not args.no_location,
+        "include_retweets": args.include_reposts,
+        "x_search_mode": args.x_mode,
+        "post_languages": _csv(args.x_languages),
+        "mastodon_url": args.mastodon_url,
         "llm": {"provider": args.provider, "model": args.model, "base_url": args.base_url},
     }
     print("\n".join(run_search(config, secrets)))
