@@ -11,7 +11,6 @@ from .state_schema import StateAssessment
 from .state_synthesis import (
     SYNTHESIS_VERSION,
     AgentTask,
-    _call_agent,
     _call_integrator,
     _parallel_agents,
     _red_team,
@@ -19,9 +18,10 @@ from .state_synthesis import (
     _scope_label,
     render_synthesis_markdown,
 )
+from .state_tradecraft import build_tradecraft_audit
 from .utils import JsonCache, utc_iso
 
-AGENTIC_ORCHESTRATION_VERSION = "1.1"
+AGENTIC_ORCHESTRATION_VERSION = "1.2"
 
 
 def _clean(value: Any) -> str:
@@ -84,6 +84,7 @@ def _evidence_neighborhood(packet: dict[str, Any], output: dict[str, Any], *, li
         "comparative_diagnostics": packet.get("comparative_diagnostics"),
         "network_patterns": packet.get("network_patterns"),
         "collection_questions": packet.get("collection_questions"),
+        "tradecraft_audit": packet.get("tradecraft_audit"),
         "representative_cases": list(selected.values())[:limit],
         "first_pass": output,
         "retrieval_note": "Cases were selected because the first-pass agent cited them or their deterministic comparable-case neighbors.",
@@ -155,6 +156,44 @@ def _roles(country: str, observation_id: str, depth: str) -> list[str]:
     )
 
 
+def _scoped_rows(
+    observations: list[ResearchObservation],
+    assessments: list[StateAssessment],
+    *,
+    country: str = "",
+    observation_id: str = "",
+) -> tuple[list[ResearchObservation], list[StateAssessment]]:
+    selected = observations
+    if country:
+        selected = [row for row in selected if row.country.casefold() == country.casefold()]
+    if observation_id:
+        selected = [row for row in selected if row.observation_id == observation_id]
+    ids = {row.observation_id for row in selected}
+    return selected, [row for row in assessments if row.observation_id in ids]
+
+
+def _packet_with_tradecraft(
+    observations: list[ResearchObservation],
+    assessments: list[StateAssessment],
+    *,
+    country: str = "",
+    observation_id: str = "",
+    representative_case_limit: int = 500,
+) -> dict[str, Any]:
+    packet = build_intelligence_packet(
+        observations,
+        assessments,
+        country=country,
+        observation_id=observation_id,
+        representative_case_limit=representative_case_limit,
+    )
+    scoped_observations, scoped_assessments = _scoped_rows(
+        observations, assessments, country=country, observation_id=observation_id
+    )
+    packet["tradecraft_audit"] = build_tradecraft_audit(scoped_observations, scoped_assessments)
+    return packet
+
+
 def run_iterative_agentic_synthesis(
     observations: Iterable[ResearchObservation],
     assessments: Iterable[StateAssessment],
@@ -173,7 +212,7 @@ def run_iterative_agentic_synthesis(
 
     # The large case index exists for evidence validation/retrieval. Individual agent prompts are
     # still trimmed by state_synthesis._call_agent, so prompt size does not grow linearly with corpus size.
-    base_packet = build_intelligence_packet(
+    base_packet = _packet_with_tradecraft(
         observations,
         assessments,
         country=country,
@@ -193,7 +232,7 @@ def run_iterative_agentic_synthesis(
             if row.get("value") and row.get("value") != "Unspecified"
         ]
         for candidate in countries[:max_country_agents]:
-            country_packet = build_intelligence_packet(
+            country_packet = _packet_with_tradecraft(
                 observations, assessments, country=candidate, representative_case_limit=100
             )
             tasks.append(AgentTask(
@@ -222,6 +261,7 @@ def run_iterative_agentic_synthesis(
             stage="iterative-revised", critique=critique,
         )
 
+    audit = base_packet.get("tradecraft_audit") or {}
     return {
         "synthesis_version": SYNTHESIS_VERSION,
         "agentic_orchestration_version": AGENTIC_ORCHESTRATION_VERSION,
@@ -230,11 +270,12 @@ def run_iterative_agentic_synthesis(
         "depth": depth,
         "llm": {"provider": llm.provider, "model": llm.model},
         "method": {
-            "architecture": "deterministic full evidence index -> parallel specialists -> optional evidence-neighborhood refinement -> integrator -> red team -> revised integrator",
+            "architecture": "deterministic full evidence index + tradecraft audit -> parallel specialists -> optional evidence-neighborhood refinement -> integrator -> red team -> revised integrator",
             "prompt_window_is_bounded": True,
             "full_reference_index_retained_for_integration": True,
             "deep_mode_iterative_retrieval": depth == "deep",
             "probability_confidence_separated": True,
+            "source_adequacy_and_tensions_exposed_to_agents": True,
             "evidence_allowlist_enforced": True,
             "human_verification_mutated": False,
         },
@@ -242,6 +283,11 @@ def run_iterative_agentic_synthesis(
             "corpus": base_packet.get("corpus"),
             "macro_structure": base_packet.get("macro_structure"),
             "comparative_diagnostics": base_packet.get("comparative_diagnostics"),
+            "tradecraft": {
+                "epistemic_debt": audit.get("epistemic_debt"),
+                "high_severity_tensions": audit.get("high_severity_tensions"),
+                "source_environment": audit.get("source_environment"),
+            },
         },
         "first_pass_agents": first_pass,
         "agents": analysis_pass,
