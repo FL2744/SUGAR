@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import json
 import os
 from pathlib import Path
 
 from .service import run_analysis, run_harvest, run_map, run_search
 from .weibo_investigation import investigate_weibo_seed, save_weibo_investigation
+from .weibo_qualification import run_weibo_qualification
 
 
 def _secret(prompt: str, env: str) -> str:
@@ -17,22 +19,26 @@ def _csv(value: str) -> list[str]:
     return [x.strip() for x in value.split(",") if x.strip()]
 
 
-def _terms_from_files(paths: list[str]) -> list[str]:
-    terms: list[str] = []
+def _lines_from_files(paths: list[str]) -> list[str]:
+    values: list[str] = []
     seen: set[str] = set()
     for raw_path in paths:
         path = Path(raw_path).expanduser()
         if not path.is_file():
             raise FileNotFoundError(path)
         for line in path.read_text(encoding="utf-8-sig").splitlines():
-            term = line.strip()
-            if not term or term.startswith("#"):
+            value = line.strip()
+            if not value or value.startswith("#"):
                 continue
-            key = term.casefold()
+            key = value.casefold()
             if key not in seen:
-                terms.append(term)
+                values.append(value)
                 seen.add(key)
-    return terms
+    return values
+
+
+def _terms_from_files(paths: list[str]) -> list[str]:
+    return _lines_from_files(paths)
 
 
 def _merge_terms(inline: list[str], files: list[str]) -> list[str]:
@@ -57,6 +63,18 @@ def _collection_secrets(sources: list[str]) -> dict[str, str]:
     if "x" in sources:
         secrets["x_bearer_token"] = _secret("X bearer token: ", "SUGAR_X_BEARER_TOKEN")
     return secrets
+
+
+def _json_mapping(path: str | None) -> dict:
+    if not path:
+        return {}
+    source = Path(path).expanduser()
+    if not source.is_file():
+        raise FileNotFoundError(source)
+    data = json.loads(source.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"{source} must contain a JSON object.")
+    return data
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -129,6 +147,35 @@ def build_parser() -> argparse.ArgumentParser:
     investigate.add_argument("--output", default=".")
     investigate.add_argument("--name", default="weibo_investigation")
 
+    qualify = sub.add_parser(
+        "weibo-qualify",
+        help="Run a reproducible Weibo collection/investigation acceptance campaign for State-facing research.",
+    )
+    qualify.add_argument("terms", nargs="*", help="Inline query-plan terms. Can be combined with --terms-file.")
+    qualify.add_argument("--terms-file", action="append", default=[])
+    qualify.add_argument("--seed", action="append", default=[], help="Real public Weibo post URL/ID. Repeatable.")
+    qualify.add_argument("--seeds-file", action="append", default=[], help="UTF-8 seed file, one post URL/ID per line.")
+    qualify.add_argument("--replicates", type=int, default=2, help="Independent fresh harvest snapshots for stability measurement.")
+    qualify.add_argument("--target", type=int, default=1000)
+    qualify.add_argument("--posts-per-task", type=int, default=250)
+    qualify.add_argument("--pages-per-task", type=int, default=2)
+    qualify.add_argument("--max-pages-per-query", type=int, default=25)
+    qualify.add_argument("--max-retries", type=int, default=3)
+    qualify.add_argument("--max-inline-wait", type=float, default=300.0)
+    qualify.add_argument("--task-delay", type=float, default=2.0)
+    qualify.add_argument("--comments", type=int, default=50)
+    qualify.add_argument("--comment-pages", type=int, default=3)
+    qualify.add_argument("--reposts", type=int, default=25)
+    qualify.add_argument("--repost-pages", type=int, default=2)
+    qualify.add_argument("--author-posts", type=int, default=20)
+    qualify.add_argument("--author-pages", type=int, default=1)
+    qualify.add_argument("--audit-size", type=int, default=100)
+    qualify.add_argument("--audit-file", help="Completed human-audit CSV from a prior qualification run.")
+    qualify.add_argument("--thresholds", help="Optional JSON object overriding project acceptance thresholds.")
+    qualify.add_argument("--output", default=".")
+    qualify.add_argument("--name", default="weibo_qualification")
+    qualify.add_argument("--no-weibo-hydrate", action="store_true")
+
     map_p = sub.add_parser("map")
     map_p.add_argument("source_file")
     map_p.add_argument("--output")
@@ -170,6 +217,48 @@ def main(argv=None) -> int:
             cookie=cookie,
         )
         print("\n".join(save_weibo_investigation(investigation, args.output, name=args.name)))
+        return 0
+
+    if args.command == "weibo-qualify":
+        terms = _merge_terms(args.terms, args.terms_file)
+        seeds = _merge_terms(args.seed, args.seeds_file)
+        if not terms:
+            parser.error("weibo-qualify requires at least one inline term or --terms-file entry")
+        if not seeds:
+            parser.error("weibo-qualify requires at least one --seed or --seeds-file entry for real-post validation")
+        thresholds = _json_mapping(args.thresholds)
+        config = {
+            "sources": ["weibo"],
+            "terms": terms,
+            "output_directory": args.output,
+            "weibo_hydrate_details": not args.no_weibo_hydrate,
+            "harvest": {
+                "target_records": args.target,
+                "posts_per_task": args.posts_per_task,
+                "pages_per_task": args.pages_per_task,
+                "max_pages_per_query": args.max_pages_per_query,
+                "max_retries": args.max_retries,
+                "max_inline_wait_seconds": args.max_inline_wait,
+                "inter_task_delay_seconds": args.task_delay,
+                "continue_on_error": True,
+            },
+            "qualification": {
+                "name": args.name,
+                "replicates": args.replicates,
+                "seeds": seeds,
+                "max_comments": args.comments,
+                "comment_pages": args.comment_pages,
+                "max_reposts": args.reposts,
+                "repost_pages": args.repost_pages,
+                "author_posts": args.author_posts,
+                "author_pages": args.author_pages,
+                "audit_sample_size": args.audit_size,
+                "audit_file": args.audit_file,
+                "thresholds": thresholds,
+            },
+        }
+        secrets = {"weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", "")}
+        print("\n".join(run_weibo_qualification(config, secrets)))
         return 0
 
     sources = _csv(args.sources)
