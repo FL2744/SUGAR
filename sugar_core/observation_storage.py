@@ -34,6 +34,7 @@ PREFERRED_OBSERVATION_COLUMNS = [
     "themes",
     "us_overlap",
     "overlap_note",
+    "spatial_matches",
     "relevance",
     "relevance_confidence",
     "triage_labels",
@@ -63,6 +64,7 @@ _NUMERIC_COLUMNS = {
 _LONG_TEXT_COLUMNS = {
     "summary",
     "overlap_note",
+    "spatial_matches",
     "triage_evidence",
     "ai_reason",
     "verification_notes",
@@ -74,6 +76,9 @@ def observations_to_frame(observations: Iterable[ResearchObservation]) -> pd.Dat
     frame = pd.DataFrame([observation.export_dict() for observation in observations])
     if frame.empty:
         return frame
+    # Export is a schema migration boundary: rows written by this version must advertise the
+    # current observation schema even when they were loaded from an older dataset and unchanged.
+    frame["schema_version"] = OBSERVATION_SCHEMA_VERSION
     for column in frame.columns:
         if column not in _NUMERIC_COLUMNS:
             frame[column] = frame[column].map(lambda value: safe_cell(value, formula_safe=True))
@@ -123,9 +128,7 @@ def save_observations(
                 width = 60
             elif name in {"primary_source_url"}:
                 width = 45
-            elif name in {
-                "actors", "audiences", "themes", "us_overlap", "triage_labels"
-            }:
+            elif name in {"actors", "audiences", "themes", "us_overlap", "triage_labels"}:
                 width = 35
             worksheet.column_dimensions[get_column_letter(index)].width = width
         for row in worksheet.iter_rows(min_row=2):
