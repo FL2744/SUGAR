@@ -5,10 +5,10 @@ import os
 
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
+from .state_agentic import save_iterative_agentic_synthesis
 from .state_hypotheses import save_hypothesis_matrix
 from .state_intelligence import save_intelligence_packet
 from .state_longitudinal import save_longitudinal_comparison
-from .state_synthesis import save_agentic_synthesis
 from .state_workflow import load_state_assessments
 
 
@@ -27,7 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     packet.add_argument("--observation-id", default="")
     packet.add_argument("--case-limit", type=int, default=20)
 
-    synthesize = sub.add_parser("synthesize", help="Run parallel specialist agents, integration, red-team critique, and revision.")
+    synthesize = sub.add_parser("synthesize", help="Run specialist agents, optional evidence-neighborhood refinement, integration, red-team critique, and revision.")
     synthesize.add_argument("observations")
     synthesize.add_argument("assessments")
     synthesize.add_argument("--output", required=True)
@@ -83,7 +83,7 @@ def main(argv=None) -> int:
     if args.command == "synthesize":
         observations = load_observations(args.observations)
         assessments = load_state_assessments(args.assessments)
-        outputs = save_agentic_synthesis(
+        outputs = save_iterative_agentic_synthesis(
             observations, assessments, args.output,
             llm=_llm(args), country=args.country, observation_id=args.observation_id,
             depth=args.depth, cache_dir=args.cache_dir, max_workers=args.workers, name=args.name,
