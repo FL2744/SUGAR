@@ -9,7 +9,6 @@ import platform
 import sys
 from typing import Any
 
-# Frozen executables need explicit flushing when connected to a desktop UI pipe.
 for stream in (sys.stdout, sys.stderr):
     if stream is not None and hasattr(stream, "reconfigure"):
         stream.reconfigure(line_buffering=True, write_through=True)
@@ -17,17 +16,20 @@ for stream in (sys.stdout, sys.stderr):
 import sugar_core
 from sugar_core.collector_registry import collector_capabilities
 from sugar_core.desktop_ops import DESKTOP_ANALYTIC_OPERATIONS, run_desktop_analytic_operation
-from sugar_core.service import run_analysis, run_harvest, run_map, run_search
+from sugar_core.service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from sugar_core.weibo_qualification import run_weibo_qualification
+from sugar_core.weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
 
 BRIDGE_PROTOCOL_VERSION = 2
 BASE_OPERATIONS = {
     "search",
     "harvest",
     "weibo-investigate",
+    "weibo-seed-harvest",
     "weibo-qualify",
     "map",
+    "overlap",
     "analysis",
     "diagnostics",
 }
@@ -53,7 +55,6 @@ def secrets_from_environment() -> dict[str, str]:
         "bluesky_identifier": os.environ.get("SUGAR_BLUESKY_IDENTIFIER", ""),
         "bluesky_app_password": os.environ.get("SUGAR_BLUESKY_APP_PASSWORD", ""),
         "mastodon_token": os.environ.get("SUGAR_MASTODON_TOKEN", ""),
-        # Optional only. SUGAR never generates or harvests a Weibo session cookie.
         "weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", ""),
     }
 
@@ -76,9 +77,8 @@ def progress_event(event: str, values: dict[str, Any]) -> None:
     emit(event, **values)
 
 
-def _run_weibo_investigation(config: dict[str, Any]) -> list[str]:
+def _run_weibo_investigation(config: dict[str, Any], secrets: dict[str, str]) -> list[str]:
     emit("starting", operation="weibo-investigate")
-    secrets = secrets_from_environment()
     result = investigate_weibo_seed(
         config["seed"],
         max_comments=int(config.get("max_comments", 100)),
@@ -120,20 +120,48 @@ def main(argv=None) -> int:
     try:
         emit("backend", **backend_info())
         config = load_config(args.config)
+        secrets = secrets_from_environment()
         if args.command == "search":
-            outputs = run_search(config, secrets_from_environment(), progress=progress_event)
+            outputs = run_search(config, secrets, progress=progress_event)
         elif args.command == "harvest":
             emit("starting", operation="harvest")
-            outputs = run_harvest(config, secrets_from_environment(), progress=progress_event)
+            outputs = run_harvest(config, secrets, progress=progress_event)
         elif args.command == "weibo-investigate":
-            outputs = _run_weibo_investigation(config)
+            outputs = _run_weibo_investigation(config, secrets)
+        elif args.command == "weibo-seed-harvest":
+            emit("starting", operation="weibo-seed-harvest")
+            raw = config.get("seed_harvest") or config
+            harvest_config = SeedHarvestConfig(
+                seeds=tuple(raw.get("seeds") or []),
+                name=str(raw.get("name") or "weibo_seed_harvest"),
+                max_comments=int(raw.get("max_comments", 20)),
+                comment_pages=int(raw.get("comment_pages", 1)),
+                max_reposts=int(raw.get("max_reposts", 0)),
+                repost_pages=int(raw.get("repost_pages", 1)),
+                author_posts=int(raw.get("author_posts", 0)),
+                author_pages=int(raw.get("author_pages", 1)),
+                max_retries=int(raw.get("max_retries", 2)),
+                base_backoff_seconds=float(raw.get("base_backoff_seconds", 5.0)),
+                max_inline_wait_seconds=float(raw.get("max_inline_wait_seconds", 120.0)),
+                inter_seed_delay_seconds=float(raw.get("inter_seed_delay_seconds", 1.0)),
+                continue_on_error=bool(raw.get("continue_on_error", True)),
+            )
+            outputs = run_weibo_seed_harvest(
+                harvest_config,
+                config.get("output_directory") or raw.get("output_directory") or ".",
+                cookie=secrets.get("weibo_cookie", ""),
+                progress=progress_event,
+            )
         elif args.command == "weibo-qualify":
             emit("starting", operation="weibo-qualify")
-            outputs = run_weibo_qualification(config, secrets_from_environment(), progress=progress_event)
+            outputs = run_weibo_qualification(config, secrets, progress=progress_event)
         elif args.command == "map":
             emit("starting", operation="map")
             emit("mapping", source_file=str(config.get("source_file", "")))
             outputs = run_map(config)
+        elif args.command == "overlap":
+            emit("starting", operation="spatial_overlap")
+            outputs = run_overlap(config, progress=progress_event)
         elif args.command == "analysis":
             emit("starting", operation="analysis")
             emit("analyzing", source_file=str(config.get("source_file", "")))
@@ -142,7 +170,7 @@ def main(argv=None) -> int:
             outputs = run_desktop_analytic_operation(
                 args.command,
                 config,
-                secrets_from_environment(),
+                secrets,
                 progress=progress_event,
             )
         emit("complete", outputs=outputs)
