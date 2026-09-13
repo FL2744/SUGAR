@@ -30,6 +30,7 @@ rtl = ["arabic-reshaper>=3,<4", "python-bidi>=0.6,<1"]
 [project.scripts]
 sugar = "sugar_core.cli:main"
 sugar-state = "sugar_core.state_cli:main"
+sugar-intel = "sugar_core.state_intel_cli:main"
 
 [tool.setuptools]
 packages = ["sugar_core"]
