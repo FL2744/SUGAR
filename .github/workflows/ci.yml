@@ -35,10 +35,10 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
-      - name: Bounded live public Weibo seed + qualification smoke
+      - name: Bounded live public Weibo seed, qualification, and bulk-seed smoke
         env:
           SUGAR_LIVE_WEIBO: "1"
-        run: python -m pytest -q -s tests/test_weibo_live.py tests/test_weibo_qualification_live.py
+        run: python -m pytest -q -s tests/test_weibo_live.py tests/test_weibo_qualification_live.py tests/test_weibo_seed_harvest_live.py
 
   macos-app:
     runs-on: macos-latest
