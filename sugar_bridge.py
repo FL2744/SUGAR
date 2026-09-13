@@ -35,6 +35,8 @@ def secrets_from_environment() -> dict[str, str]:
         "bluesky_identifier": os.environ.get("SUGAR_BLUESKY_IDENTIFIER", ""),
         "bluesky_app_password": os.environ.get("SUGAR_BLUESKY_APP_PASSWORD", ""),
         "mastodon_token": os.environ.get("SUGAR_MASTODON_TOKEN", ""),
+        # Optional only. SUGAR never generates or harvests a Weibo session cookie.
+        "weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", ""),
     }
 
 
