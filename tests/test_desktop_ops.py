@@ -76,7 +76,7 @@ def test_desktop_templates_and_intelligence_packet(tmp_path):
     assert outputs == [str(packet_path.resolve())]
     payload = json.loads(packet_path.read_text(encoding="utf-8"))
     assert payload["corpus"]["observations"] == 1
-    assert payload["representative_cases"][0]["country"] == "Kyrgyzstan"
+    assert payload["representative_cases"][0]["location"]["country"] == "Kyrgyzstan"
 
 
 def test_state_audit_desktop_operation_writes_json(tmp_path):
