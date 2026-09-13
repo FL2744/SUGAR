@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import sqlite3
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from statistics import mean
@@ -41,6 +42,7 @@ class QualificationThresholds:
     minimum_replicate_jaccard: float = 0.40
     minimum_human_audit_labels: int = 50
     minimum_human_relevance_rate: float = 0.50
+    minimum_human_provenance_ok_rate: float = 0.95
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any] | None) -> "QualificationThresholds":
@@ -163,6 +165,9 @@ def inspect_weibo_checkpoint(
         task["status"] in {"failed", "deferred"} and _looks_access_limited(task["last_error"])
         for task in tasks
     )
+    completed_rows = [task for task in tasks if task["status"] == "completed"]
+    productive_tasks = sum(task["records_seen"] > 0 for task in completed_rows)
+    zero_yield_tasks = sum(task["records_seen"] == 0 for task in completed_rows)
     terms = [str(term).strip() for term in expected_terms if str(term).strip()]
     observed_terms: set[str] = set()
     for record in records:
@@ -187,6 +192,15 @@ def inspect_weibo_checkpoint(
         for task in tasks
         if task["status"] == "completed" and task["page_start"] > 0
     ]
+    task_yield = [
+        {
+            "query": task["query"],
+            "page_start": task["page_start"],
+            "page_end": task["page_start"] + max(0, task["page_count"] - 1),
+            "records_seen": task["records_seen"],
+        }
+        for task in completed_rows
+    ]
 
     return {
         "checkpoint": str(Path(checkpoint).resolve()),
@@ -198,6 +212,11 @@ def inspect_weibo_checkpoint(
         "failed_tasks": failed,
         "deferred_tasks": deferred,
         "access_limited_tasks": access_limited,
+        "productive_tasks": productive_tasks,
+        "zero_yield_tasks": zero_yield_tasks,
+        "productive_task_rate": _safe_ratio(productive_tasks, completed) or 0.0,
+        "zero_yield_task_rate": _safe_ratio(zero_yield_tasks, completed) or 0.0,
+        "mean_records_per_completed_task": round(raw_returned / completed, 3) if completed else 0.0,
         "task_completion_rate": _safe_ratio(completed, task_total) or 0.0,
         "failed_task_rate": _safe_ratio(failed, task_total) or 0.0,
         "access_limited_task_rate": _safe_ratio(access_limited, task_total) or 0.0,
@@ -206,7 +225,9 @@ def inspect_weibo_checkpoint(
         "query_coverage": _safe_ratio(sum(1 for term in terms if term in observed_terms), len(terms)) if terms else None,
         "queries_expected": len(terms),
         "queries_observed": sum(1 for term in terms if term in observed_terms) if terms else len(observed_terms),
+        "zero_yield_queries": [term for term in terms if query_yield.get(term, 0) == 0],
         "query_yield": query_yield,
+        "task_yield": task_yield,
         "identity_coverage": coverage(lambda row: bool(row.native_id and row.canonical_url)),
         "provenance_coverage": coverage(
             lambda row: bool(row.source_mode and row.source_url and row.collected_at and _record_queries(row))
@@ -229,8 +250,9 @@ def compare_replicates(metrics: list[dict[str, Any]]) -> dict[str, Any]:
             left = set(metrics[left_index].get("record_keys") or [])
             right = set(metrics[right_index].get("record_keys") or [])
             union = left | right
-            score = 1.0 if not union else round(len(left & right) / len(union), 4)
-            values.append(score)
+            score = None if not union else round(len(left & right) / len(union), 4)
+            if score is not None:
+                values.append(score)
             pairs.append({"left": left_index + 1, "right": right_index + 1, "jaccard": score})
     return {
         "replicates": len(metrics),
@@ -263,13 +285,54 @@ def _investigation_summary(seed: str, result: WeiboInvestigation | None, error: 
     }
 
 
+def _stable_record_hash(row: PostRecord) -> str:
+    return hashlib.sha256((row.record_key or row.canonical_url).encode("utf-8")).hexdigest()
+
+
 def _deterministic_audit_sample(records: list[PostRecord], size: int) -> list[PostRecord]:
+    """Take a deterministic, query-stratified sample before filling from the global pool."""
     size = max(0, int(size))
-    ranked = sorted(
-        records,
-        key=lambda row: hashlib.sha256((row.record_key or row.canonical_url).encode("utf-8")).hexdigest(),
-    )
-    return ranked[: min(size, len(ranked))]
+    if size == 0 or not records:
+        return []
+    target = min(size, len(records))
+    ranked = sorted(records, key=_stable_record_hash)
+    buckets: dict[str, list[PostRecord]] = defaultdict(list)
+    for row in ranked:
+        for query in sorted(_record_queries(row)) or ["__unqueried__"]:
+            buckets[query].append(row)
+
+    selected: list[PostRecord] = []
+    selected_keys: set[str] = set()
+    indices = {query: 0 for query in buckets}
+    query_order = sorted(buckets)
+    while len(selected) < target and query_order:
+        made_progress = False
+        for query in list(query_order):
+            bucket = buckets[query]
+            index = indices[query]
+            while index < len(bucket) and bucket[index].record_key in selected_keys:
+                index += 1
+            indices[query] = index
+            if index >= len(bucket):
+                query_order.remove(query)
+                continue
+            row = bucket[index]
+            indices[query] += 1
+            selected.append(row)
+            selected_keys.add(row.record_key)
+            made_progress = True
+            if len(selected) >= target:
+                break
+        if not made_progress:
+            break
+    if len(selected) < target:
+        for row in ranked:
+            if row.record_key not in selected_keys:
+                selected.append(row)
+                selected_keys.add(row.record_key)
+                if len(selected) >= target:
+                    break
+    return selected
 
 
 def write_human_audit_sample(records: list[PostRecord], path: str | Path, *, size: int = 100) -> str:
@@ -311,7 +374,7 @@ def write_human_audit_sample(records: list[PostRecord], path: str | Path, *, siz
 
 def read_human_audit(path: str | Path | None) -> dict[str, Any]:
     if not path:
-        return {"provided": False, "labeled": 0, "relevance_rate": None, "provenance_ok_rate": None}
+        return {"provided": False, "labeled": 0, "provenance_labeled": 0, "relevance_rate": None, "provenance_ok_rate": None}
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(path)
@@ -343,6 +406,7 @@ def _aggregate_runs(metrics: list[dict[str, Any]]) -> dict[str, Any]:
     numeric_min = (
         "unique_records",
         "task_completion_rate",
+        "productive_task_rate",
         "query_coverage",
         "identity_coverage",
         "provenance_coverage",
@@ -352,6 +416,7 @@ def _aggregate_runs(metrics: list[dict[str, Any]]) -> dict[str, Any]:
     numeric_max = (
         "failed_task_rate",
         "access_limited_task_rate",
+        "zero_yield_task_rate",
         "estimated_duplicate_fraction",
         "rate_limit_events",
     )
@@ -411,9 +476,13 @@ def evaluate_qualification(
         minimum("replicate_minimum_jaccard", reproducibility.get("minimum_jaccard"), thresholds.minimum_replicate_jaccard, severity="advisory")
 
     audit_labels = int(audit.get("labeled", 0) or 0)
+    provenance_labels = int(audit.get("provenance_labeled", 0) or 0)
     minimum("human_audit_labels", audit_labels, thresholds.minimum_human_audit_labels, severity="human")
+    minimum("human_provenance_labels", provenance_labels, thresholds.minimum_human_audit_labels, severity="human")
     if audit_labels:
         minimum("human_relevance_rate", audit.get("relevance_rate"), thresholds.minimum_human_relevance_rate, severity="human")
+    if provenance_labels:
+        minimum("human_provenance_ok_rate", audit.get("provenance_ok_rate"), thresholds.minimum_human_provenance_ok_rate, severity="human")
 
     required_failures = [check for check in checks if check.severity == "required" and not check.passed]
     human_failures = [check for check in checks if check.severity == "human" and not check.passed]
@@ -428,8 +497,8 @@ def evaluate_qualification(
     limitations = [
         "This is a SUGAR project qualification profile for State-facing research, not an official Department of State security authorization, ATO, records determination, procurement approval, or AI certification.",
         "Weibo public/mobile surfaces can change independently; successful seed retrieval does not imply search, repost, or account-timeline access is complete.",
-        "Search-result reproducibility measures accessible ranked-result overlap, not recall against the full Weibo corpus.",
-        "A human relevance audit is required before a technically successful collection campaign should be described as analytically qualified.",
+        "Search-result reproducibility measures accessible ranked-result overlap, not recall against the full Weibo corpus; empty snapshots are not scored as reproducible.",
+        "Human relevance and provenance review are required before a technically successful collection campaign should be described as analytically qualified.",
     ]
     return status, checks, limitations
 
