@@ -7,9 +7,9 @@ from typing import Any, Callable
 from .collector_registry import CollectorRequest, COLLECTORS, collect_registered_source
 from .enrichment import enrich_records
 from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
-from .mapping import create_map
+from .mapping import MapOptions, ReferenceLayer, create_map, load_map_frame
 from .reporting import create_analysis_report
-from .storage import load_results, save_records
+from .storage import save_records
 from .utils import JsonCache
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
@@ -142,10 +142,70 @@ def run_search(
     return outputs
 
 
+def _map_options(config: dict[str, Any]) -> MapOptions:
+    raw = config.get("map") or {}
+    heat_windows = raw.get("heat_windows", (30, 90, 365))
+    if isinstance(heat_windows, str):
+        heat_windows = [part.strip() for part in heat_windows.split(",") if part.strip()]
+    windows = tuple(sorted({int(value) for value in heat_windows if int(value) > 0})) or (30, 90, 365)
+    return MapOptions(
+        title=str(raw.get("title", "SUGAR Research Activity Map")),
+        subtitle=str(raw.get("subtitle", "Public-source activity, evidence, and geographic overlap")),
+        heat_windows=windows,
+        default_heat_window=int(raw.get("default_heat_window", 90)),
+        max_popup_chars=max(300, int(raw.get("max_popup_chars", 2200))),
+        cluster_disable_at_zoom=max(1, int(raw.get("cluster_disable_at_zoom", 11))),
+        show_minimap=bool(raw.get("show_minimap", True)),
+        show_measure_control=bool(raw.get("show_measure_control", True)),
+        show_mouse_position=bool(raw.get("show_mouse_position", True)),
+    )
+
+
+def _map_reference_layers(config: dict[str, Any]) -> list[ReferenceLayer]:
+    raw = config.get("map") or {}
+    specs = raw.get("reference_layers") or []
+    if isinstance(specs, (str, Path, dict)):
+        specs = [specs]
+
+    layers: list[ReferenceLayer] = []
+    for spec in specs:
+        if isinstance(spec, (str, Path)):
+            path = Path(spec)
+            name = path.stem.replace("_", " ").replace("-", " ").title()
+            color = ""
+            show = True
+        elif isinstance(spec, dict):
+            raw_path = spec.get("file") or spec.get("path")
+            if not raw_path:
+                raise ValueError("Each map reference layer requires a file/path.")
+            path = Path(raw_path)
+            name = str(spec.get("name") or path.stem).strip() or "Reference"
+            color = str(spec.get("color") or "").strip()
+            show = bool(spec.get("show", True))
+        else:
+            raise TypeError("Map reference layers must be file paths or dictionaries.")
+        layers.append(
+            ReferenceLayer(
+                name=name,
+                frame=load_map_frame(path),
+                color=color,
+                show=show,
+            )
+        )
+    return layers
+
+
 def run_map(config: dict[str, Any]) -> list[str]:
     source = Path(config["source_file"])
     output = Path(config.get("output_file") or source.with_name(source.stem + "_map.html"))
-    return [create_map(load_results(source), output)]
+    return [
+        create_map(
+            load_map_frame(source),
+            output,
+            options=_map_options(config),
+            reference_layers=_map_reference_layers(config),
+        )
+    ]
 
 
 def run_analysis(config: dict[str, Any]) -> list[str]:
