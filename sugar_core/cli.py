@@ -156,7 +156,7 @@ def build_parser() -> argparse.ArgumentParser:
     qualify.add_argument("--seed", action="append", default=[], help="Real public Weibo post URL/ID. Repeatable.")
     qualify.add_argument("--seeds-file", action="append", default=[], help="UTF-8 seed file, one post URL/ID per line.")
     qualify.add_argument("--replicates", type=int, default=2, help="Independent fresh harvest snapshots for stability measurement.")
-    qualify.add_argument("--target", type=int, default=1000)
+    qualify.add_argument("--target", type=int, default=1000, help="Minimum unique-record acceptance floor per fresh replicate; does not stop the query plan early.")
     qualify.add_argument("--posts-per-task", type=int, default=250)
     qualify.add_argument("--pages-per-task", type=int, default=2)
     qualify.add_argument("--max-pages-per-query", type=int, default=25)
@@ -227,13 +227,15 @@ def main(argv=None) -> int:
         if not seeds:
             parser.error("weibo-qualify requires at least one --seed or --seeds-file entry for real-post validation")
         thresholds = _json_mapping(args.thresholds)
+        thresholds.setdefault("minimum_unique_records", args.target)
         config = {
             "sources": ["weibo"],
             "terms": terms,
             "output_directory": args.output,
             "weibo_hydrate_details": not args.no_weibo_hydrate,
             "harvest": {
-                "target_records": args.target,
+                # Qualification must run the full bounded query/page plan; --target is an acceptance floor.
+                "target_records": None,
                 "posts_per_task": args.posts_per_task,
                 "pages_per_task": args.pages_per_task,
                 "max_pages_per_query": args.max_pages_per_query,
