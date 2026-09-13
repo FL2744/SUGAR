@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -8,6 +10,8 @@ from .models import PostRecord
 from .utils import JsonCache, normalize_whitespace, stable_hash
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
+_NOMINATIM_LOCK = threading.Lock()
+_NOMINATIM_LAST_REQUEST = 0.0
 
 
 def _notify(progress: ProgressCallback | None, event: str, **values: Any) -> None:
@@ -25,7 +29,12 @@ def _progress_tick(progress: ProgressCallback | None, event: str, current: int, 
 
 def detect_language(text: str) -> str:
     try:
-        from langdetect import detect
+        from langdetect import DetectorFactory, detect
+
+        # langdetect is nondeterministic for short/ambiguous text unless a seed is fixed.
+        # SUGAR treats language labels as research data, so identical input should produce
+        # identical output across reruns.
+        DetectorFactory.seed = 0
         return detect(text) if text.strip() else "unknown"
     except Exception:
         return "unknown"
@@ -58,7 +67,22 @@ def infer_location(client, llm: LLMConfig, cache: JsonCache | None, record: Post
     }
 
 
-def geocode_location(location: str, cache: JsonCache, user_agent: str = "SUGAR/1.1") -> dict:
+def _request_nominatim(location: str, user_agent: str):
+    from geopy.geocoders import Nominatim
+
+    geolocator = Nominatim(user_agent=user_agent)
+    return geolocator.geocode(location, exactly_one=True, timeout=20)
+
+
+def geocode_location(
+    location: str,
+    cache: JsonCache,
+    user_agent: str = "SUGAR/1.1 (Virginia Tech Diplomacy Lab)",
+    min_delay_seconds: float = 1.0,
+) -> dict:
+    """Geocode a broad location using the cache first and a process-wide request throttle."""
+    global _NOMINATIM_LAST_REQUEST
+
     location = normalize_whitespace(location)
     if not location:
         return {"latitude": None, "longitude": None, "display_name": ""}
@@ -66,9 +90,18 @@ def geocode_location(location: str, cache: JsonCache, user_agent: str = "SUGAR/1
     cached = cache.get(key)
     if isinstance(cached, dict):
         return cached
-    from geopy.geocoders import Nominatim
-    geolocator = Nominatim(user_agent=user_agent)
-    result = geolocator.geocode(location, exactly_one=True, timeout=20)
+
+    delay = max(0.0, float(min_delay_seconds))
+    with _NOMINATIM_LOCK:
+        now = time.monotonic()
+        wait = delay - (now - _NOMINATIM_LAST_REQUEST)
+        if wait > 0:
+            time.sleep(wait)
+        try:
+            result = _request_nominatim(location, user_agent)
+        finally:
+            _NOMINATIM_LAST_REQUEST = time.monotonic()
+
     data = {
         "latitude": float(result.latitude) if result else None,
         "longitude": float(result.longitude) if result else None,

@@ -9,14 +9,13 @@ import platform
 import sys
 from typing import Any
 
-# Frozen executables also need explicit flushing when connected to the UI pipe.
 for stream in (sys.stdout, sys.stderr):
     if stream is not None:
         stream.reconfigure(line_buffering=True, write_through=True)
 
 import sugar_core
 from sugar_core.collector_registry import collector_capabilities
-from sugar_core.service import run_analysis, run_harvest, run_map, run_search
+from sugar_core.service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from sugar_core.weibo_qualification import run_weibo_qualification
 
@@ -37,7 +36,6 @@ def secrets_from_environment() -> dict[str, str]:
         "bluesky_identifier": os.environ.get("SUGAR_BLUESKY_IDENTIFIER", ""),
         "bluesky_app_password": os.environ.get("SUGAR_BLUESKY_APP_PASSWORD", ""),
         "mastodon_token": os.environ.get("SUGAR_MASTODON_TOKEN", ""),
-        # Optional only. SUGAR never generates or harvests a Weibo session cookie.
         "weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", ""),
     }
 
@@ -56,6 +54,7 @@ def backend_info() -> dict[str, Any]:
             "weibo-investigate",
             "weibo-qualify",
             "map",
+            "overlap",
             "analysis",
             "diagnostics",
         ],
@@ -70,7 +69,16 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "command",
-        choices=["search", "harvest", "weibo-investigate", "weibo-qualify", "map", "analysis", "diagnostics"],
+        choices=[
+            "search",
+            "harvest",
+            "weibo-investigate",
+            "weibo-qualify",
+            "map",
+            "overlap",
+            "analysis",
+            "diagnostics",
+        ],
     )
     parser.add_argument("--config")
     args = parser.parse_args(argv)
@@ -79,7 +87,9 @@ def main(argv=None) -> int:
         emit("diagnostics", **backend_info())
         return 0
     if not args.config:
-        parser.error("--config is required for search, harvest, weibo-investigate, weibo-qualify, map, and analysis")
+        parser.error(
+            "--config is required for search, harvest, weibo-investigate, weibo-qualify, map, overlap, and analysis"
+        )
 
     try:
         emit("backend", **backend_info())
@@ -126,6 +136,9 @@ def main(argv=None) -> int:
             emit("starting", operation="map")
             emit("mapping", source_file=str(config.get("source_file", "")))
             outputs = run_map(config)
+        elif args.command == "overlap":
+            emit("starting", operation="spatial_overlap")
+            outputs = run_overlap(config, progress=progress_event)
         else:
             emit("starting", operation="analysis")
             emit("analyzing", source_file=str(config.get("source_file", "")))

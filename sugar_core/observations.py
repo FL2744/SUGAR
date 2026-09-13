@@ -8,7 +8,7 @@ from typing import Any, Iterable
 
 from .models import PostRecord
 
-OBSERVATION_SCHEMA_VERSION = "1.0"
+OBSERVATION_SCHEMA_VERSION = "1.1"
 
 OBSERVATION_TYPES = {
     "institution",
@@ -27,6 +27,8 @@ VERIFICATION_STATES = {
     "rejected",
     "needs_followup",
 }
+
+RELEVANCE_STATES = {"unknown", "relevant", "uncertain", "not_relevant"}
 
 _ALLOWED_TRANSITIONS = {
     "unreviewed": {"ai_triaged", "human_verified", "rejected", "needs_followup"},
@@ -66,6 +68,12 @@ def _bounded_confidence(value: float | int | None, field_name: str) -> float | N
     return number
 
 
+def _optional_float(value: Any) -> float | None:
+    if value is None or value == "" or str(value).casefold() == "nan":
+        return None
+    return float(value)
+
+
 def make_observation_id(*parts: Any) -> str:
     identity = "|".join(_clean(part).casefold() for part in parts if _clean(part))
     if not identity:
@@ -100,6 +108,46 @@ class EvidenceReference:
 
 
 @dataclass
+class SpatialMatch:
+    """A derived geographic relationship to a reference point.
+
+    This structure records proximity only. It must not be treated as evidence of influence,
+    coordination, competition, strategic overlap, or causation.
+    """
+
+    reference_layer: str
+    reference_id: str
+    reference_name: str
+    distance_km: float
+    reference_category: str = "reference"
+    distance_band: str = ""
+    same_city: bool = False
+    same_country: bool = False
+    latitude: float | None = None
+    longitude: float | None = None
+    source_url: str = ""
+
+    def __post_init__(self) -> None:
+        self.reference_layer = _clean(self.reference_layer) or "Reference"
+        self.reference_id = _clean(self.reference_id)
+        self.reference_name = _clean(self.reference_name) or self.reference_id or "Reference point"
+        self.reference_category = _clean(self.reference_category) or "reference"
+        self.distance_band = _clean(self.distance_band)
+        self.source_url = _clean(self.source_url)
+        self.distance_km = float(self.distance_km)
+        if self.distance_km < 0:
+            raise ValueError("Spatial match distance_km cannot be negative.")
+        self.latitude = _optional_float(self.latitude)
+        self.longitude = _optional_float(self.longitude)
+        if self.latitude is not None and not -90.0 <= self.latitude <= 90.0:
+            raise ValueError("Spatial match latitude must be between -90 and 90.")
+        if self.longitude is not None and not -180.0 <= self.longitude <= 180.0:
+            raise ValueError("Spatial match longitude must be between -180 and 180.")
+        self.same_city = bool(self.same_city)
+        self.same_country = bool(self.same_country)
+
+
+@dataclass
 class ResearchObservation:
     observation_type: str
     summary: str
@@ -124,11 +172,15 @@ class ResearchObservation:
     themes: list[str] = field(default_factory=list)
     us_overlap: list[str] = field(default_factory=list)
     overlap_note: str = ""
+    spatial_matches: list[SpatialMatch] = field(default_factory=list)
 
     evidence: list[EvidenceReference] = field(default_factory=list)
     source_record_keys: list[str] = field(default_factory=list)
 
+    relevance: str = "unknown"
+    relevance_confidence: float | None = None
     triage_labels: list[str] = field(default_factory=list)
+    triage_evidence: list[str] = field(default_factory=list)
     ai_confidence: float | None = None
     ai_model: str = ""
     ai_reason: str = ""
@@ -157,14 +209,35 @@ class ResearchObservation:
         ):
             setattr(self, attr, _clean(getattr(self, attr)))
 
+        self.latitude = _optional_float(self.latitude)
+        self.longitude = _optional_float(self.longitude)
         self.actors = _clean_list(self.actors)
         self.audiences = _clean_list(self.audiences)
         self.themes = _clean_list(self.themes)
         self.us_overlap = _clean_list(self.us_overlap)
         self.source_record_keys = _clean_list(self.source_record_keys)
         self.triage_labels = _clean_list(self.triage_labels)
+        self.triage_evidence = _clean_list(self.triage_evidence)
         self.location_confidence = _bounded_confidence(self.location_confidence, "location_confidence")
+        self.relevance_confidence = _bounded_confidence(self.relevance_confidence, "relevance_confidence")
         self.ai_confidence = _bounded_confidence(self.ai_confidence, "ai_confidence")
+
+        self.relevance = _clean(self.relevance).casefold() or "unknown"
+        if self.relevance not in RELEVANCE_STATES:
+            raise ValueError(f"Unsupported relevance: {self.relevance}")
+
+        normalized_matches: list[SpatialMatch] = []
+        for item in self.spatial_matches:
+            if isinstance(item, SpatialMatch):
+                normalized_matches.append(item)
+            elif isinstance(item, dict):
+                normalized_matches.append(SpatialMatch(**item))
+            else:
+                raise TypeError("spatial_matches entries must be SpatialMatch objects or dictionaries.")
+        self.spatial_matches = sorted(
+            normalized_matches,
+            key=lambda item: (item.distance_km, item.reference_layer.casefold(), item.reference_id.casefold()),
+        )
 
         normalized_evidence: list[EvidenceReference] = []
         for item in self.evidence:
@@ -202,13 +275,21 @@ class ResearchObservation:
     def primary_source_url(self) -> str:
         return self.evidence[0].url if self.evidence else ""
 
+    @property
+    def nearest_spatial_match(self) -> SpatialMatch | None:
+        return self.spatial_matches[0] if self.spatial_matches else None
+
+    def touch(self) -> None:
+        self.updated_at = _utc_now_iso()
+        self.schema_version = OBSERVATION_SCHEMA_VERSION
+
     def add_evidence(self, evidence: EvidenceReference | dict[str, Any]) -> None:
         item = evidence if isinstance(evidence, EvidenceReference) else EvidenceReference(**evidence)
         identity = (item.url.casefold(), item.platform.casefold(), item.native_id.casefold())
         existing = {(x.url.casefold(), x.platform.casefold(), x.native_id.casefold()) for x in self.evidence}
         if identity not in existing:
             self.evidence.append(item)
-            self.updated_at = _utc_now_iso()
+            self.touch()
 
     def set_ai_triage(
         self,
@@ -217,14 +298,23 @@ class ResearchObservation:
         confidence: float | int | None,
         model: str,
         reason: str = "",
+        relevance: str = "unknown",
+        relevance_confidence: float | int | None = None,
+        evidence_spans: Iterable[str] = (),
     ) -> None:
+        normalized_relevance = _clean(relevance).casefold() or "unknown"
+        if normalized_relevance not in RELEVANCE_STATES:
+            raise ValueError(f"Unsupported relevance: {normalized_relevance}")
+        self.relevance = normalized_relevance
+        self.relevance_confidence = _bounded_confidence(relevance_confidence, "relevance_confidence")
         self.triage_labels = _clean_list(labels)
+        self.triage_evidence = _clean_list(evidence_spans)
         self.ai_confidence = _bounded_confidence(confidence, "ai_confidence")
         self.ai_model = _clean(model)
         self.ai_reason = _clean(reason)
         if self.verification_state in {"unreviewed", "needs_followup"}:
             self.verification_state = "ai_triaged"
-        self.updated_at = _utc_now_iso()
+        self.touch()
 
     def transition_verification(self, state: str, *, reviewer: str = "", notes: str = "") -> None:
         target = _clean(state).casefold()
@@ -244,12 +334,15 @@ class ResearchObservation:
             self.reviewer = reviewer
             self.reviewed_at = _utc_now_iso()
         self.verification_notes = _clean(notes)
-        self.updated_at = _utc_now_iso()
+        self.touch()
 
     def export_dict(self) -> dict[str, Any]:
         data = asdict(self)
-        for key in ("actors", "audiences", "themes", "us_overlap", "source_record_keys", "triage_labels"):
+        for key in (
+            "actors", "audiences", "themes", "us_overlap", "source_record_keys", "triage_labels", "triage_evidence"
+        ):
             data[key] = json.dumps(data[key], ensure_ascii=False)
+        data["spatial_matches"] = json.dumps(data["spatial_matches"], ensure_ascii=False, sort_keys=True)
         data["evidence"] = json.dumps(data["evidence"], ensure_ascii=False, sort_keys=True)
         data["primary_source_url"] = self.primary_source_url
         return data
@@ -258,19 +351,22 @@ class ResearchObservation:
     def from_export_dict(cls, raw: dict[str, Any]) -> "ResearchObservation":
         data = dict(raw)
         data.pop("primary_source_url", None)
-        for key in ("actors", "audiences", "themes", "us_overlap", "source_record_keys", "triage_labels"):
+        for key in (
+            "actors", "audiences", "themes", "us_overlap", "source_record_keys", "triage_labels", "triage_evidence"
+        ):
             value = data.get(key, [])
             if isinstance(value, str):
                 value = json.loads(value) if value.strip() else []
             data[key] = value
-        evidence = data.get("evidence", [])
-        if isinstance(evidence, str):
-            evidence = json.loads(evidence) if evidence.strip() else []
-        data["evidence"] = evidence
-        for key in ("latitude", "longitude", "location_confidence", "ai_confidence"):
-            value = data.get(key)
-            if value is None or value == "" or str(value).casefold() == "nan":
-                data[key] = None
+        for key in ("evidence", "spatial_matches"):
+            value = data.get(key, [])
+            if isinstance(value, str):
+                value = json.loads(value) if value.strip() else []
+            data[key] = value
+        for key in (
+            "latitude", "longitude", "location_confidence", "relevance_confidence", "ai_confidence"
+        ):
+            data[key] = _optional_float(data.get(key))
         return cls(**data)
 
 
