@@ -17,6 +17,7 @@ import sugar_core
 from sugar_core.collector_registry import collector_capabilities
 from sugar_core.service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
+from sugar_core.weibo_qualification import run_weibo_qualification
 
 
 def emit(event: str, **values) -> None:
@@ -51,6 +52,7 @@ def backend_info() -> dict[str, Any]:
             "search",
             "harvest",
             "weibo-investigate",
+            "weibo-qualify",
             "map",
             "overlap",
             "analysis",
@@ -71,6 +73,7 @@ def main(argv=None) -> int:
             "search",
             "harvest",
             "weibo-investigate",
+            "weibo-qualify",
             "map",
             "overlap",
             "analysis",
@@ -85,7 +88,7 @@ def main(argv=None) -> int:
         return 0
     if not args.config:
         parser.error(
-            "--config is required for search, harvest, weibo-investigate, map, overlap, and analysis"
+            "--config is required for search, harvest, weibo-investigate, weibo-qualify, map, overlap, and analysis"
         )
 
     try:
@@ -121,6 +124,13 @@ def main(argv=None) -> int:
                 reposts=len(result.reposts),
                 author_posts=len(result.author_posts),
                 surface_status=result.surface_status,
+            )
+        elif args.command == "weibo-qualify":
+            emit("starting", operation="weibo-qualify")
+            outputs = run_weibo_qualification(
+                config,
+                secrets_from_environment(),
+                progress=progress_event,
             )
         elif args.command == "map":
             emit("starting", operation="map")
