@@ -37,9 +37,13 @@ def test_checkpoint_metrics(tmp_path: Path):
     assert metrics["raw_records_returned"] == 4
     assert metrics["estimated_duplicate_fraction"] == 0.25
     assert metrics["task_completion_rate"] == 1.0
+    assert metrics["productive_task_rate"] == 1.0
+    assert metrics["zero_yield_task_rate"] == 0.0
+    assert metrics["mean_records_per_completed_task"] == 2.0
     assert metrics["query_coverage"] == 1.0
     assert metrics["identity_coverage"] == 1.0
     assert metrics["provenance_coverage"] == 1.0
+    assert len(metrics["task_yield"]) == 2
 
 
 def test_access_gate_is_not_false_zero(tmp_path: Path):
@@ -53,6 +57,7 @@ def test_access_gate_is_not_false_zero(tmp_path: Path):
     assert metrics["failed_task_rate"] == 1.0
     assert metrics["access_limited_task_rate"] == 1.0
     assert metrics["query_coverage"] == 0.0
+    assert metrics["zero_yield_queries"] == [task.query]
 
 
 def test_replicate_jaccard():
@@ -61,3 +66,13 @@ def test_replicate_jaccard():
         {"record_keys": ["weibo:2", "weibo:3", "weibo:4"]},
     ])
     assert result["minimum_jaccard"] == 0.5
+
+
+def test_empty_replicates_are_not_perfect_reproducibility():
+    result = compare_replicates([
+        {"record_keys": []},
+        {"record_keys": []},
+    ])
+    assert result["pairwise_jaccard"][0]["jaccard"] is None
+    assert result["minimum_jaccard"] is None
+    assert result["mean_jaccard"] is None
