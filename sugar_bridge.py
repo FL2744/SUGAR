@@ -18,6 +18,7 @@ from sugar_core.collector_registry import collector_capabilities
 from sugar_core.service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from sugar_core.weibo_qualification import run_weibo_qualification
+from sugar_core.weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
 
 
 def emit(event: str, **values) -> None:
@@ -52,6 +53,7 @@ def backend_info() -> dict[str, Any]:
             "search",
             "harvest",
             "weibo-investigate",
+            "weibo-seed-harvest",
             "weibo-qualify",
             "map",
             "overlap",
@@ -73,6 +75,7 @@ def main(argv=None) -> int:
             "search",
             "harvest",
             "weibo-investigate",
+            "weibo-seed-harvest",
             "weibo-qualify",
             "map",
             "overlap",
@@ -87,21 +90,19 @@ def main(argv=None) -> int:
         emit("diagnostics", **backend_info())
         return 0
     if not args.config:
-        parser.error(
-            "--config is required for search, harvest, weibo-investigate, weibo-qualify, map, overlap, and analysis"
-        )
+        parser.error("--config is required for all non-diagnostics operations")
 
     try:
         emit("backend", **backend_info())
         config = load_config(args.config)
+        secrets = secrets_from_environment()
         if args.command == "search":
-            outputs = run_search(config, secrets_from_environment(), progress=progress_event)
+            outputs = run_search(config, secrets, progress=progress_event)
         elif args.command == "harvest":
             emit("starting", operation="harvest")
-            outputs = run_harvest(config, secrets_from_environment(), progress=progress_event)
+            outputs = run_harvest(config, secrets, progress=progress_event)
         elif args.command == "weibo-investigate":
             emit("starting", operation="weibo-investigate")
-            secrets = secrets_from_environment()
             result = investigate_weibo_seed(
                 config["seed"],
                 max_comments=int(config.get("max_comments", 100)),
@@ -125,13 +126,33 @@ def main(argv=None) -> int:
                 author_posts=len(result.author_posts),
                 surface_status=result.surface_status,
             )
-        elif args.command == "weibo-qualify":
-            emit("starting", operation="weibo-qualify")
-            outputs = run_weibo_qualification(
-                config,
-                secrets_from_environment(),
+        elif args.command == "weibo-seed-harvest":
+            emit("starting", operation="weibo-seed-harvest")
+            raw = config.get("seed_harvest") or config
+            harvest_config = SeedHarvestConfig(
+                seeds=tuple(raw.get("seeds") or []),
+                name=str(raw.get("name") or "weibo_seed_harvest"),
+                max_comments=int(raw.get("max_comments", 20)),
+                comment_pages=int(raw.get("comment_pages", 1)),
+                max_reposts=int(raw.get("max_reposts", 0)),
+                repost_pages=int(raw.get("repost_pages", 1)),
+                author_posts=int(raw.get("author_posts", 0)),
+                author_pages=int(raw.get("author_pages", 1)),
+                max_retries=int(raw.get("max_retries", 2)),
+                base_backoff_seconds=float(raw.get("base_backoff_seconds", 5.0)),
+                max_inline_wait_seconds=float(raw.get("max_inline_wait_seconds", 120.0)),
+                inter_seed_delay_seconds=float(raw.get("inter_seed_delay_seconds", 1.0)),
+                continue_on_error=bool(raw.get("continue_on_error", True)),
+            )
+            outputs = run_weibo_seed_harvest(
+                harvest_config,
+                config.get("output_directory") or raw.get("output_directory") or ".",
+                cookie=secrets.get("weibo_cookie", ""),
                 progress=progress_event,
             )
+        elif args.command == "weibo-qualify":
+            emit("starting", operation="weibo-qualify")
+            outputs = run_weibo_qualification(config, secrets, progress=progress_event)
         elif args.command == "map":
             emit("starting", operation="map")
             emit("mapping", source_file=str(config.get("source_file", "")))
