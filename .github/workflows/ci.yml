@@ -120,3 +120,10 @@ jobs:
         run: |
           if (-not (Test-Path .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip)) { throw "Portable Windows ZIP missing" }
           if ((Get-Item .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip).Length -lt 1000000) { throw "Portable Windows ZIP is unexpectedly small" }
+      - name: Publish validated portable Windows bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: SUGAR-Windows-x64
+          path: SUGAR-Windows/dist/SUGAR-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
