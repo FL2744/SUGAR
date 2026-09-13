@@ -9,6 +9,7 @@ from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
 from .state_aggregate import save_state_rollups
 from .state_entities import load_entity_registry, save_query_plan, write_entity_template
+from .state_freshness import save_freshness_report
 from .state_network import save_state_network
 from .state_review import apply_review_workbook_file, export_review_workbook
 from .state_triage import triage_observations
@@ -80,9 +81,16 @@ def build_parser() -> argparse.ArgumentParser:
     rollup.add_argument("--output", required=True)
     rollup.add_argument("--name", default="state_research")
 
+    freshness = sub.add_parser("freshness", help="Report current-period, historical, and stale collection coverage.")
+    freshness.add_argument("observations")
+    freshness.add_argument("assessments")
+    freshness.add_argument("--output", required=True)
+    freshness.add_argument("--current-start", default="2024-01-01")
+    freshness.add_argument("--stale-days", type=int, default=90)
+
     package = sub.add_parser(
         "package",
-        help="Build the complete State-facing bundle: audit, review queue/workbook, BLUF, map, network, and rollups.",
+        help="Build the complete State-facing bundle: audit, review queue/workbook, BLUF, map, network, rollups, and freshness.",
     )
     package.add_argument("observations")
     package.add_argument("--assessments")
@@ -91,6 +99,8 @@ def build_parser() -> argparse.ArgumentParser:
     package.add_argument("--output", required=True)
     package.add_argument("--name", default="state_research")
     package.add_argument("--title", default="PRC Cultural Influence Network Research Update")
+    package.add_argument("--current-start", default="2024-01-01")
+    package.add_argument("--stale-days", type=int, default=90)
 
     audit = sub.add_parser("audit", help="Audit claim/evidence/verification integrity before briefing.")
     audit.add_argument("observations")
@@ -199,6 +209,19 @@ def main(argv=None) -> int:
         print("\n".join(save_state_rollups(observations, assessments, args.output, name=args.name)))
         return 0
 
+    if args.command == "freshness":
+        observations, assessments, _ = _loaded_state_inputs(args)
+        print(
+            save_freshness_report(
+                observations,
+                assessments,
+                args.output,
+                current_activity_start=args.current_start,
+                collection_stale_days=args.stale_days,
+            )
+        )
+        return 0
+
     if args.command == "package":
         outputs = package_from_files(
             args.observations,
@@ -210,12 +233,23 @@ def main(argv=None) -> int:
             title=args.title,
         )
         observations, assessments, sites = _loaded_state_inputs(args)
-        assessed_snapshot = Path(args.output).expanduser().resolve() / f"{'_'.join(args.name.split())}.assessed.jsonl"
+        stem = "_".join(args.name.split())
+        assessed_snapshot = Path(args.output).expanduser().resolve() / f"{stem}.assessed.jsonl"
         outputs.append(save_state_assessments(assessments, assessed_snapshot))
         outputs.extend(save_state_rollups(observations, assessments, args.output, name=args.name))
         outputs.extend(save_state_network(observations, assessments, args.output, us_sites=sites, name=args.name, verified_only=True))
-        review_path = Path(args.output).expanduser().resolve() / f"{'_'.join(args.name.split())}.review.xlsx"
+        review_path = Path(args.output).expanduser().resolve() / f"{stem}.review.xlsx"
         outputs.append(export_review_workbook(observations, assessments, review_path))
+        freshness_path = Path(args.output).expanduser().resolve() / f"{stem}.freshness.json"
+        outputs.append(
+            save_freshness_report(
+                observations,
+                assessments,
+                freshness_path,
+                current_activity_start=args.current_start,
+                collection_stale_days=args.stale_days,
+            )
+        )
         print("\n".join(dict.fromkeys(outputs)))
         return 0
 
