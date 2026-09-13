@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+import json
+from collections import Counter
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlparse
 
@@ -256,3 +258,17 @@ def build_tradecraft_audit(
             "Analytic tensions are review prompts, not automatic findings that an assessment is wrong.",
         ],
     }
+
+
+def save_tradecraft_audit(
+    observations: Iterable[ResearchObservation],
+    assessments: Iterable[StateAssessment],
+    output_file: str | Path,
+) -> str:
+    target = Path(output_file).expanduser().resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(build_tradecraft_audit(observations, assessments), ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    return str(target)
