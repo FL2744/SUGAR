@@ -9,6 +9,7 @@ from .state_agentic import save_iterative_agentic_synthesis
 from .state_hypotheses import save_hypothesis_matrix
 from .state_intelligence import save_intelligence_packet
 from .state_longitudinal import save_longitudinal_comparison
+from .state_tradecraft import save_tradecraft_audit
 from .state_workflow import load_state_assessments
 
 
@@ -26,6 +27,11 @@ def build_parser() -> argparse.ArgumentParser:
     packet.add_argument("--country", default="")
     packet.add_argument("--observation-id", default="")
     packet.add_argument("--case-limit", type=int, default=20)
+
+    tradecraft = sub.add_parser("tradecraft", help="Audit source adequacy, analytic tensions, and epistemic debt without an LLM.")
+    tradecraft.add_argument("observations")
+    tradecraft.add_argument("assessments")
+    tradecraft.add_argument("--output", required=True)
 
     synthesize = sub.add_parser("synthesize", help="Run specialist agents, optional evidence-neighborhood refinement, integration, red-team critique, and revision.")
     synthesize.add_argument("observations")
@@ -78,6 +84,12 @@ def main(argv=None) -> int:
             country=args.country, observation_id=args.observation_id,
             representative_case_limit=args.case_limit,
         ))
+        return 0
+
+    if args.command == "tradecraft":
+        observations = load_observations(args.observations)
+        assessments = load_state_assessments(args.assessments)
+        print(save_tradecraft_audit(observations, assessments, args.output))
         return 0
 
     if args.command == "synthesize":
