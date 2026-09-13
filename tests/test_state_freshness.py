@@ -43,4 +43,4 @@ def test_freshness_separates_current_activity_from_background_and_collection_age
     assert report["current_period_verified"] == 1
     assert report["pre_period_observations"] == 1
     assert report["stale_collection_observations"] == 1
-    assert "does not invalidate older evidence" in report["guardrail"]
+    assert "do not invalidate older evidence" in report["guardrail"]
