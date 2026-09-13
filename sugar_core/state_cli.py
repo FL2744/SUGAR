@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
+from .state_aggregate import save_state_rollups
 from .state_network import save_state_network
 from .state_review import apply_review_workbook_file, export_review_workbook
 from .state_triage import triage_observations
@@ -63,7 +64,16 @@ def build_parser() -> argparse.ArgumentParser:
     network.add_argument("--name", default="state_network")
     network.add_argument("--include-unverified", action="store_true")
 
-    package = sub.add_parser("package", help="Build the State-facing research package, audit, review queue, BLUF, and GeoJSON.")
+    rollup = sub.add_parser("rollup", help="Export country/city activity and verification rollups (not an influence score).")
+    rollup.add_argument("observations")
+    rollup.add_argument("assessments")
+    rollup.add_argument("--output", required=True)
+    rollup.add_argument("--name", default="state_research")
+
+    package = sub.add_parser(
+        "package",
+        help="Build the complete State-facing bundle: audit, review queue/workbook, BLUF, map, network, and rollups.",
+    )
     package.add_argument("observations")
     package.add_argument("--assessments")
     package.add_argument("--us-sites")
@@ -107,6 +117,13 @@ def _write_or_print(payload: dict, output: str | None) -> None:
         print(text)
 
 
+def _loaded_state_inputs(args):
+    observations = load_observations(args.observations)
+    assessments = load_state_assessments(args.assessments) if getattr(args, "assessments", None) else blank_state_assessments(observations)
+    sites = load_us_presence_sites(args.us_sites) if getattr(args, "us_sites", None) else []
+    return observations, assessments, sites
+
+
 def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -142,9 +159,7 @@ def main(argv=None) -> int:
         return 0
 
     if args.command == "network":
-        observations = load_observations(args.observations)
-        assessments = load_state_assessments(args.assessments)
-        sites = load_us_presence_sites(args.us_sites) if args.us_sites else []
+        observations, assessments, sites = _loaded_state_inputs(args)
         print(
             "\n".join(
                 save_state_network(
@@ -159,6 +174,11 @@ def main(argv=None) -> int:
         )
         return 0
 
+    if args.command == "rollup":
+        observations, assessments, _ = _loaded_state_inputs(args)
+        print("\n".join(save_state_rollups(observations, assessments, args.output, name=args.name)))
+        return 0
+
     if args.command == "package":
         outputs = package_from_files(
             args.observations,
@@ -169,7 +189,12 @@ def main(argv=None) -> int:
             name=args.name,
             title=args.title,
         )
-        print("\n".join(outputs))
+        observations, assessments, sites = _loaded_state_inputs(args)
+        outputs.extend(save_state_rollups(observations, assessments, args.output, name=args.name))
+        outputs.extend(save_state_network(observations, assessments, args.output, us_sites=sites, name=args.name, verified_only=True))
+        review_path = Path(args.output).expanduser().resolve() / f"{'_'.join(args.name.split())}.review.xlsx"
+        outputs.append(export_review_workbook(observations, assessments, review_path))
+        print("\n".join(dict.fromkeys(outputs)))
         return 0
 
     if args.command == "audit":
