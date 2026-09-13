@@ -6,7 +6,10 @@ import json
 import os
 from pathlib import Path
 
-from .service import run_analysis, run_harvest, run_map, run_search
+from .llm import ARC_BASE_URL, LLMConfig
+from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
+from .triage import DEFAULT_PROJECT_CONTEXT
+from .triage_io import triage_dataset
 from .weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from .weibo_qualification import run_weibo_qualification
 from .weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
@@ -78,6 +81,21 @@ def _json_mapping(path: str | None) -> dict:
     return data
 
 
+def _reference_spec(value: str) -> dict[str, str]:
+    text = str(value).strip()
+    if not text:
+        raise argparse.ArgumentTypeError("Reference layer cannot be empty.")
+    if "=" in text:
+        name, path = text.split("=", 1)
+        name = name.strip()
+        path = path.strip()
+        if not name or not path:
+            raise argparse.ArgumentTypeError("Use --reference 'Layer name=path/to/file.csv'.")
+        return {"name": name, "file": path}
+    path = Path(text)
+    return {"name": path.stem.replace("_", " ").replace("-", " ").title(), "file": text}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sugar", description="SUGAR stable research pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -114,10 +132,10 @@ def build_parser() -> argparse.ArgumentParser:
     harvest.add_argument("--sources", default="bilibili,weibo")
     harvest.add_argument("--since")
     harvest.add_argument("--until")
-    harvest.add_argument("--target", type=int, default=5000, help="Stop after at least this many unique records.")
+    harvest.add_argument("--target", type=int, default=5000)
     harvest.add_argument("--posts-per-task", type=int, default=500)
-    harvest.add_argument("--pages-per-task", type=int, default=5, help="Durable checkpoint page chunk for numbered-page sources.")
-    harvest.add_argument("--max-pages-per-query", type=int, default=100, help="Maximum numbered pages planned for each query.")
+    harvest.add_argument("--pages-per-task", type=int, default=5)
+    harvest.add_argument("--max-pages-per-query", type=int, default=100)
     harvest.add_argument("--shard-days", type=int, default=7)
     harvest.add_argument("--max-retries", type=int, default=4)
     harvest.add_argument("--max-inline-wait", type=float, default=900.0)
@@ -197,15 +215,56 @@ def build_parser() -> argparse.ArgumentParser:
     qualify.add_argument("--name", default="weibo_qualification")
     qualify.add_argument("--no-weibo-hydrate", action="store_true")
 
+    triage = sub.add_parser(
+        "triage",
+        help="AI-triage an existing SUGAR post dataset into a human-review observation dataset",
+    )
+    triage.add_argument("source_file")
+    triage.add_argument("--output")
+    triage.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
+    triage.add_argument("--model", default="gpt-5.6-luna")
+    triage.add_argument("--base-url", default="")
+    triage.add_argument("--project-context-file")
+    triage.add_argument("--fail-fast", action="store_true")
+
     map_p = sub.add_parser("map")
     map_p.add_argument("source_file")
     map_p.add_argument("--output")
+
+    overlap = sub.add_parser(
+        "overlap",
+        help="Compute geographic proximity between research observations and reference networks.",
+    )
+    overlap.add_argument("source_file")
+    overlap.add_argument(
+        "--reference",
+        action="append",
+        type=_reference_spec,
+        required=True,
+        help="Reference file, optionally named as 'American Spaces=american_spaces.csv'. Repeat as needed.",
+    )
+    overlap.add_argument("--bands", default="5,25,100,250")
+    overlap.add_argument("--max-distance", type=float)
+    overlap.add_argument("--top-k", type=int, default=5)
+    overlap.add_argument("--include-rejected", action="store_true")
+    overlap.add_argument("--output")
+    overlap.add_argument("--map", action="store_true", dest="create_map")
+    overlap.add_argument("--map-output")
 
     report = sub.add_parser("analysis")
     report.add_argument("source_file")
     report.add_argument("--output-stem")
     report.add_argument("--format", choices=["docx", "pdf", "both"], default="both")
     return parser
+
+
+def _llm_from_cli(provider: str, model: str, base_url: str, api_key: str) -> LLMConfig:
+    base = base_url.strip()
+    if provider == "arc" and not base:
+        base = ARC_BASE_URL
+    if provider == "custom" and not base:
+        raise ValueError("--base-url is required when --provider custom is used.")
+    return LLMConfig(provider=provider, model=model, api_key=api_key, base_url=base)
 
 
 def main(argv=None) -> int:
@@ -217,12 +276,36 @@ def main(argv=None) -> int:
         print("\n".join(outputs))
         return 0
 
+    if args.command == "overlap":
+        config = {
+            "source_file": args.source_file,
+            "output_file": args.output,
+            "spatial": {
+                "reference_layers": args.reference,
+                "distance_bands_km": [float(value) for value in _csv(args.bands)],
+                "max_distance_km": args.max_distance,
+                "stored_matches_per_observation": args.top_k,
+                "include_rejected": args.include_rejected,
+                "create_map": args.create_map,
+                "map_output": args.map_output,
+            },
+        }
+        print("\n".join(run_overlap(config)))
+        return 0
+
     if args.command == "analysis":
         stem = args.output_stem or str(Path(args.source_file).with_suffix("")) + "_analysis"
-        outputs = run_analysis(
-            {"source_file": args.source_file, "output_stem": stem, "output_format": args.format}
+        print(
+            "\n".join(
+                run_analysis(
+                    {
+                        "source_file": args.source_file,
+                        "output_stem": stem,
+                        "output_format": args.format,
+                    }
+                )
+            )
         )
-        print("\n".join(outputs))
         return 0
 
     if args.command == "weibo-investigate":
@@ -282,7 +365,6 @@ def main(argv=None) -> int:
             "output_directory": args.output,
             "weibo_hydrate_details": not args.no_weibo_hydrate,
             "harvest": {
-                # Qualification must run the full bounded query/page plan; --target is an acceptance floor.
                 "target_records": None,
                 "posts_per_task": args.posts_per_task,
                 "pages_per_task": args.pages_per_task,
@@ -309,6 +391,30 @@ def main(argv=None) -> int:
         }
         secrets = {"weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", "")}
         print("\n".join(run_weibo_qualification(config, secrets)))
+        return 0
+
+    if args.command == "triage":
+        source = Path(args.source_file).expanduser()
+        output = (
+            Path(args.output).expanduser()
+            if args.output
+            else source.with_name(source.stem + "_observations.csv")
+        )
+        project_context = DEFAULT_PROJECT_CONTEXT
+        if args.project_context_file:
+            project_context = Path(args.project_context_file).expanduser().read_text(encoding="utf-8").strip()
+            if not project_context:
+                raise ValueError("The project context file is empty.")
+        api_key = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
+        llm = _llm_from_cli(args.provider, args.model, args.base_url, api_key)
+        outputs = triage_dataset(
+            source,
+            output,
+            llm=llm,
+            project_context=project_context,
+            continue_on_error=not args.fail_fast,
+        )
+        print("\n".join(outputs))
         return 0
 
     sources = _csv(args.sources)

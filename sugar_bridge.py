@@ -15,7 +15,7 @@ for stream in (sys.stdout, sys.stderr):
 
 import sugar_core
 from sugar_core.collector_registry import collector_capabilities
-from sugar_core.service import run_analysis, run_harvest, run_map, run_search
+from sugar_core.service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from sugar_core.weibo_qualification import run_weibo_qualification
 from sugar_core.weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
@@ -50,8 +50,15 @@ def backend_info() -> dict[str, Any]:
         "system": platform.platform(),
         "collectors": collector_capabilities(),
         "operations": [
-            "search", "harvest", "weibo-investigate", "weibo-seed-harvest", "weibo-qualify",
-            "map", "analysis", "diagnostics",
+            "search",
+            "harvest",
+            "weibo-investigate",
+            "weibo-seed-harvest",
+            "weibo-qualify",
+            "map",
+            "overlap",
+            "analysis",
+            "diagnostics",
         ],
     }
 
@@ -64,7 +71,17 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "command",
-        choices=["search", "harvest", "weibo-investigate", "weibo-seed-harvest", "weibo-qualify", "map", "analysis", "diagnostics"],
+        choices=[
+            "search",
+            "harvest",
+            "weibo-investigate",
+            "weibo-seed-harvest",
+            "weibo-qualify",
+            "map",
+            "overlap",
+            "analysis",
+            "diagnostics",
+        ],
     )
     parser.add_argument("--config")
     args = parser.parse_args(argv)
@@ -96,8 +113,19 @@ def main(argv=None) -> int:
                 author_pages=int(config.get("author_pages", 2)),
                 cookie=secrets.get("weibo_cookie", ""),
             )
-            outputs = save_weibo_investigation(result, config.get("output_directory") or ".", name=str(config.get("name") or "weibo_investigation"))
-            emit("weibo_investigation", seed_record_key=result.seed.record_key, comments=len(result.comments), reposts=len(result.reposts), author_posts=len(result.author_posts), surface_status=result.surface_status)
+            outputs = save_weibo_investigation(
+                result,
+                config.get("output_directory") or ".",
+                name=str(config.get("name") or "weibo_investigation"),
+            )
+            emit(
+                "weibo_investigation",
+                seed_record_key=result.seed.record_key,
+                comments=len(result.comments),
+                reposts=len(result.reposts),
+                author_posts=len(result.author_posts),
+                surface_status=result.surface_status,
+            )
         elif args.command == "weibo-seed-harvest":
             emit("starting", operation="weibo-seed-harvest")
             raw = config.get("seed_harvest") or config
@@ -116,7 +144,12 @@ def main(argv=None) -> int:
                 inter_seed_delay_seconds=float(raw.get("inter_seed_delay_seconds", 1.0)),
                 continue_on_error=bool(raw.get("continue_on_error", True)),
             )
-            outputs = run_weibo_seed_harvest(harvest_config, config.get("output_directory") or raw.get("output_directory") or ".", cookie=secrets.get("weibo_cookie", ""), progress=progress_event)
+            outputs = run_weibo_seed_harvest(
+                harvest_config,
+                config.get("output_directory") or raw.get("output_directory") or ".",
+                cookie=secrets.get("weibo_cookie", ""),
+                progress=progress_event,
+            )
         elif args.command == "weibo-qualify":
             emit("starting", operation="weibo-qualify")
             outputs = run_weibo_qualification(config, secrets, progress=progress_event)
@@ -124,6 +157,9 @@ def main(argv=None) -> int:
             emit("starting", operation="map")
             emit("mapping", source_file=str(config.get("source_file", "")))
             outputs = run_map(config)
+        elif args.command == "overlap":
+            emit("starting", operation="spatial_overlap")
+            outputs = run_overlap(config, progress=progress_event)
         else:
             emit("starting", operation="analysis")
             emit("analyzing", source_file=str(config.get("source_file", "")))
