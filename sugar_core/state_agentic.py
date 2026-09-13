@@ -21,7 +21,7 @@ from .state_synthesis import (
 from .state_tradecraft import build_tradecraft_audit
 from .utils import JsonCache, utc_iso
 
-AGENTIC_ORCHESTRATION_VERSION = "1.3"
+AGENTIC_ORCHESTRATION_VERSION = "1.4"
 
 
 def _clean(value: Any) -> str:
@@ -205,13 +205,7 @@ def _integration_packet(
     baseline_cases: int = 24,
     max_cases: int = 80,
 ) -> dict[str, Any]:
-    """Build a bounded integration context containing baseline and actually cited cases.
-
-    The final integrator should not receive hundreds of full case dossiers merely so citation
-    validation can see them. This function retains a focused set: high-priority baseline cases plus
-    every case referenced by a specialist output, resolved against both the global and country-task
-    packet indices.
-    """
+    """Build a bounded integration context containing baseline, cited cases, and hard tradecraft warnings."""
     selected: dict[str, dict[str, Any]] = {}
     for case in list(base_packet.get("representative_cases") or [])[:baseline_cases]:
         observation_id = _clean(case.get("observation_id"))
@@ -236,11 +230,32 @@ def _integration_packet(
 
     packet = dict(base_packet)
     packet["representative_cases"] = list(selected.values())[:max_cases]
+
+    audit = base_packet.get("tradecraft_audit") or {}
+    tensions = list(audit.get("high_severity_tensions") or [])
+    questions = list(base_packet.get("collection_questions") or [])
+    for tension in tensions[:20]:
+        questions.append({
+            "question": f"Resolve high-severity analytic tension `{_clean(tension.get('type'))}`: {_clean(tension.get('explanation'))}",
+            "priority": "high",
+            "affected_observation_ids": [_clean(tension.get("observation_id"))] if _clean(tension.get("observation_id")) else [],
+            "next_step": _clean(tension.get("next_step")),
+        })
+    packet["collection_questions"] = questions
+
+    guardrails = list(base_packet.get("guardrails") or [])
+    if tensions:
+        guardrails.append(
+            f"The deterministic tradecraft audit found {len(tensions)} high-severity analytic tension(s). "
+            "The final synthesis must either carry these limitations explicitly or explain how the cited evidence resolves them."
+        )
+    packet["guardrails"] = guardrails
     packet["integration_context"] = {
         "baseline_cases": min(baseline_cases, len(base_packet.get("representative_cases") or [])),
         "specialist_refs_considered": len(refs),
         "cases_in_integrator_context": len(packet["representative_cases"]),
-        "strategy": "high-priority baseline plus specialist-cited cases",
+        "high_severity_tensions_injected": len(tensions),
+        "strategy": "high-priority baseline plus specialist-cited cases plus deterministic tradecraft tensions",
         "guardrail": "Cases absent from the bounded integration context cannot be cited by the final synthesis even if they exist elsewhere in the corpus.",
     }
     return packet
@@ -329,6 +344,7 @@ def run_iterative_agentic_synthesis(
             "deep_mode_iterative_retrieval": depth == "deep",
             "probability_confidence_separated": True,
             "source_adequacy_and_tensions_exposed_to_agents": True,
+            "high_severity_tensions_forced_into_integration_context": True,
             "evidence_allowlist_enforced": True,
             "human_verification_mutated": False,
         },
