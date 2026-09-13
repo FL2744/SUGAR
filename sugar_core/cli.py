@@ -9,6 +9,7 @@ from pathlib import Path
 from .service import run_analysis, run_harvest, run_map, run_search
 from .weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from .weibo_qualification import run_weibo_qualification
+from .weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
 
 
 def _secret(prompt: str, env: str) -> str:
@@ -147,6 +148,26 @@ def build_parser() -> argparse.ArgumentParser:
     investigate.add_argument("--output", default=".")
     investigate.add_argument("--name", default="weibo_investigation")
 
+    seed_harvest = sub.add_parser(
+        "weibo-seed-harvest",
+        help="Durably expand hundreds/thousands of known public Weibo post URLs or IDs without relying on keyword search.",
+    )
+    seed_harvest.add_argument("seeds", nargs="*", help="Inline public Weibo URLs/IDs. Can be combined with --seeds-file.")
+    seed_harvest.add_argument("--seeds-file", action="append", default=[], help="UTF-8 file with one public Weibo URL/ID per line. Repeatable.")
+    seed_harvest.add_argument("--comments", type=int, default=20)
+    seed_harvest.add_argument("--comment-pages", type=int, default=1)
+    seed_harvest.add_argument("--reposts", type=int, default=0)
+    seed_harvest.add_argument("--repost-pages", type=int, default=1)
+    seed_harvest.add_argument("--author-posts", type=int, default=0)
+    seed_harvest.add_argument("--author-pages", type=int, default=1)
+    seed_harvest.add_argument("--max-retries", type=int, default=2)
+    seed_harvest.add_argument("--base-backoff", type=float, default=5.0)
+    seed_harvest.add_argument("--max-inline-wait", type=float, default=120.0)
+    seed_harvest.add_argument("--seed-delay", type=float, default=1.0)
+    seed_harvest.add_argument("--fail-fast", action="store_true")
+    seed_harvest.add_argument("--output", default=".")
+    seed_harvest.add_argument("--name", default="weibo_seed_harvest")
+
     qualify = sub.add_parser(
         "weibo-qualify",
         help="Run a reproducible Weibo collection/investigation acceptance campaign for State-facing research.",
@@ -217,6 +238,33 @@ def main(argv=None) -> int:
             cookie=cookie,
         )
         print("\n".join(save_weibo_investigation(investigation, args.output, name=args.name)))
+        return 0
+
+    if args.command == "weibo-seed-harvest":
+        seeds = _merge_terms(args.seeds, args.seeds_file)
+        if not seeds:
+            parser.error("weibo-seed-harvest requires at least one inline seed or --seeds-file entry")
+        config = SeedHarvestConfig(
+            seeds=tuple(seeds),
+            name=args.name,
+            max_comments=args.comments,
+            comment_pages=args.comment_pages,
+            max_reposts=args.reposts,
+            repost_pages=args.repost_pages,
+            author_posts=args.author_posts,
+            author_pages=args.author_pages,
+            max_retries=args.max_retries,
+            base_backoff_seconds=args.base_backoff,
+            max_inline_wait_seconds=args.max_inline_wait,
+            inter_seed_delay_seconds=args.seed_delay,
+            continue_on_error=not args.fail_fast,
+        )
+        outputs = run_weibo_seed_harvest(
+            config,
+            args.output,
+            cookie=os.environ.get("SUGAR_WEIBO_COOKIE", ""),
+        )
+        print("\n".join(outputs))
         return 0
 
     if args.command == "weibo-qualify":
