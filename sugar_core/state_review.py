@@ -23,6 +23,7 @@ from .state_schema import (
     SupportAssessment,
 )
 from .state_workflow import load_state_assessments, save_state_assessments
+from .utils import safe_cell
 
 
 def _clean(value: Any) -> str:
@@ -40,6 +41,14 @@ def _parse_list(value: Any) -> list[str]:
     if not text:
         return []
     return [part.strip() for part in text.replace("|", ";").split(";") if part.strip()]
+
+
+def _formula_safe_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
+    frame = pd.DataFrame(rows)
+    if not frame.empty:
+        for column in frame.columns:
+            frame[column] = frame[column].map(lambda value: safe_cell(value, formula_safe=True))
+    return frame
 
 
 def export_review_workbook(
@@ -113,7 +122,7 @@ def export_review_workbook(
                 }
             )
 
-    instructions = pd.DataFrame(
+    instructions = _formula_safe_frame(
         [
             {"rule": "Purpose", "guidance": "This workbook records human analytic decisions. It does not edit raw source evidence."},
             {"rule": "Evidence", "guidance": "Do not verify a claim unless its evidence_refs identify source evidence attached to the observation."},
@@ -122,12 +131,13 @@ def export_review_workbook(
             {"rule": "Anti-U.S./coordination", "guidance": "Use these labels only when the content or relationship is explicit and source-supported."},
             {"rule": "Decision", "guidance": "Use human_verified, rejected, needs_followup, ai_triaged, or unreviewed. A reviewer is required for human_verified/rejected."},
             {"rule": "Taxonomy edits", "guidance": "Semicolon-separated audience/domain/narrative values may be corrected; unknown taxonomy values will fail import rather than silently enter the dataset."},
+            {"rule": "Spreadsheet safety", "guidance": "Source-derived text is exported formula-safe so untrusted content cannot execute as an Excel formula when the workbook opens."},
         ]
     )
 
     with pd.ExcelWriter(target, engine="openpyxl") as writer:
-        pd.DataFrame(assessment_rows).to_excel(writer, index=False, sheet_name="assessments")
-        pd.DataFrame(claim_rows).to_excel(writer, index=False, sheet_name="claims")
+        _formula_safe_frame(assessment_rows).to_excel(writer, index=False, sheet_name="assessments")
+        _formula_safe_frame(claim_rows).to_excel(writer, index=False, sheet_name="claims")
         instructions.to_excel(writer, index=False, sheet_name="instructions")
 
     workbook = load_workbook(target)
@@ -302,7 +312,6 @@ def apply_review_workbook(
             payload["review_note"] = note
         assessment.claims[index] = AnalyticClaim(**payload)
 
-    # Reconstruct every object through schema validation after mutable spreadsheet edits.
     return [StateAssessment.from_dict(asdict(row)) for row in assessments]
 
 
