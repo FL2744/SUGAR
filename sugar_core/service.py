@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from .collectors import collect_x, collect_bluesky, collect_mastodon, create_bluesky_access_token, create_session
+from .collector_registry import CollectorRequest, COLLECTORS, collect_registered_source
 from .enrichment import enrich_records
 from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
 from .mapping import create_map
@@ -67,12 +67,9 @@ def run_search(
 ) -> list[str]:
     secrets = secrets or {}
     sources = [str(x).strip().lower() for x in (config.get("sources") or ["x"]) if str(x).strip()]
-    supported = {"x", "bluesky", "mastodon"}
-    unknown = sorted(set(sources) - supported)
+    unknown = sorted(set(sources) - set(COLLECTORS))
     if unknown:
         raise ValueError(f"Unsupported source(s): {', '.join(unknown)}")
-    if "x" in sources and not secrets.get("x_bearer_token", "").strip():
-        raise ValueError("X is selected, but no X bearer token was provided.")
 
     translate = bool(config.get("translate_posts", True))
     infer = bool(config.get("infer_locations", True))
@@ -95,49 +92,22 @@ def run_search(
     if not terms:
         raise ValueError("Enter at least one search term.")
 
-    common = dict(
+    request = CollectorRequest(
         search_terms=terms,
         since=config.get("since") or None,
         until=config.get("until") or None,
         max_posts_per_query=int(config.get("max_posts_per_query", 10)),
         max_pages_per_query=int(config.get("max_pages_per_query", 1)),
+        config=config,
+        secrets=secrets,
     )
+
     records = []
-
-    if "x" in sources:
-        _notify(progress, "collecting", source="x")
-        rows = collect_x(
-            bearer_token=secrets.get("x_bearer_token", ""),
-            search_mode=config.get("x_search_mode", "recent"),
-            post_languages=config.get("post_languages") or [],
-            include_reposts=bool(config.get("include_retweets", False)),
-            **common,
-        )
-        records += rows
-        _notify(progress, "collected", source="x", records=len(rows))
-
-    if "bluesky" in sources:
-        _notify(progress, "collecting", source="bluesky")
-        jwt = ""
-        if secrets.get("bluesky_identifier") and secrets.get("bluesky_app_password"):
-            _notify(progress, "authenticating", source="bluesky")
-            jwt = create_bluesky_access_token(
-                create_session(), secrets["bluesky_identifier"], secrets["bluesky_app_password"]
-            )
-        rows = collect_bluesky(access_jwt=jwt, **common)
-        records += rows
-        _notify(progress, "collected", source="bluesky", records=len(rows))
-
-    if "mastodon" in sources:
-        _notify(progress, "collecting", source="mastodon")
-        rows = collect_mastodon(
-            instance_url=config.get("mastodon_url", "https://mastodon.social"),
-            access_token=secrets.get("mastodon_token", ""),
-            include_reposts=bool(config.get("include_retweets", False)),
-            **common,
-        )
-        records += rows
-        _notify(progress, "collected", source="mastodon", records=len(rows))
+    for source in sources:
+        _notify(progress, "collecting", source=source)
+        rows = collect_registered_source(source, request)
+        records.extend(rows)
+        _notify(progress, "collected", source=source, records=len(rows))
 
     _notify(progress, "enriching", records=len(records), translate=translate, infer_locations=infer)
     records = enrich_records(
@@ -155,6 +125,9 @@ def run_search(
         "terms": terms,
         "since": config.get("since") or None,
         "until": config.get("until") or None,
+        "collector_capabilities": {
+            source: COLLECTORS[source].capabilities.as_dict() for source in sources
+        },
         "llm_provider": llm.provider if (translate or infer) else None,
         "llm_model": llm.model if (translate or infer) else None,
     }

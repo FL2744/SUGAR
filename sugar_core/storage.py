@@ -13,13 +13,13 @@ from .models import PostRecord
 from .utils import safe_cell, utc_iso
 
 PREFERRED_COLUMNS = [
-    "platform", "native_id", "content_type", "published_at", "author_handle", "author_name",
-    "author_location", "platform_language", "detected_language", "inferred_location",
-    "location_confidence", "location_source", "location_reason", "latitude", "longitude",
-    "original_text", "translated_text", "canonical_url", "engagement", "query_matches",
-    "query", "source_mode", "source_host", "source_url", "collected_at", "collector_version",
-    "schema_version", "raw_stats", "is_repost", "tweet_id", "post_url", "x_url", "username",
-    "display_name", "date_iso", "date_raw", "translated_en", "is_retweet",
+    "platform", "native_id", "record_key", "content_type", "parent_record_key", "thread_root_key",
+    "conversation_id", "published_at", "author_handle", "author_name", "author_location",
+    "platform_language", "detected_language", "inferred_location", "location_confidence",
+    "location_source", "location_reason", "latitude", "longitude", "original_text", "translated_text",
+    "canonical_url", "engagement", "query_matches", "query", "source_mode", "source_host", "source_url",
+    "collected_at", "collector_version", "schema_version", "raw_stats", "is_repost", "tweet_id",
+    "post_url", "x_url", "username", "display_name", "date_iso", "date_raw", "translated_en", "is_retweet",
 ]
 
 

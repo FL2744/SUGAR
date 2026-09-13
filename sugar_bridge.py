@@ -7,6 +7,7 @@ import json
 import os
 import platform
 import sys
+from typing import Any
 
 # Frozen executables also need explicit flushing when connected to the UI pipe.
 for stream in (sys.stdout, sys.stderr):
@@ -14,6 +15,7 @@ for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(line_buffering=True, write_through=True)
 
 import sugar_core
+from sugar_core.collector_registry import collector_capabilities
 from sugar_core.service import run_analysis, run_map, run_search
 
 
@@ -36,13 +38,14 @@ def secrets_from_environment() -> dict[str, str]:
     }
 
 
-def backend_info() -> dict[str, str]:
+def backend_info() -> dict[str, Any]:
     return {
         "version": sugar_core.__version__,
         "architecture": platform.machine() or "unknown",
         "python": platform.python_version(),
         "runtime": "bundled" if getattr(sys, "frozen", False) else "python",
         "system": platform.platform(),
+        "collectors": collector_capabilities(),
     }
 
 

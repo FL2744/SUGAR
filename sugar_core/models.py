@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 COLLECTOR_VERSION = "sugar-core-1.1"
 
 
@@ -21,6 +21,9 @@ class PostRecord:
     query: str
     query_matches: list[str] = field(default_factory=list)
     content_type: str = "post"
+    parent_record_key: str = ""
+    thread_root_key: str = ""
+    conversation_id: str = ""
     source_mode: str = "api"
     source_host: str = ""
     source_url: str = ""
@@ -45,6 +48,11 @@ class PostRecord:
     latitude: float | None = None
     longitude: float | None = None
     geocode_display_name: str = ""
+
+    @property
+    def record_key(self) -> str:
+        identity = (self.native_id or self.canonical_url or "").strip()
+        return f"{self.platform}:{identity}" if self.platform and identity else identity
 
     @property
     def tweet_id(self) -> str:
@@ -91,6 +99,7 @@ class PostRecord:
 
     def export_dict(self) -> dict[str, Any]:
         data = asdict(self)
+        data["record_key"] = self.record_key
         data["query_matches"] = json.dumps(self.query_matches, ensure_ascii=False)
         data["engagement"] = json.dumps(self.engagement, sort_keys=True)
         data["raw_stats"] = json.dumps(self.raw_stats, ensure_ascii=False, sort_keys=True)
@@ -111,7 +120,16 @@ class PostRecord:
 def merge_record(existing: PostRecord, incoming: PostRecord) -> PostRecord:
     for query in incoming.query_matches or [incoming.query]:
         existing.add_query_match(query)
-    for attr in ("author_name", "author_location", "platform_language", "original_text", "published_at"):
+    for attr in (
+        "author_name",
+        "author_location",
+        "platform_language",
+        "original_text",
+        "published_at",
+        "parent_record_key",
+        "thread_root_key",
+        "conversation_id",
+    ):
         if not getattr(existing, attr) and getattr(incoming, attr):
             setattr(existing, attr, getattr(incoming, attr))
     if sum(incoming.engagement.values()) > sum(existing.engagement.values()):
