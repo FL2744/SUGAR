@@ -7,12 +7,15 @@ from pathlib import Path
 
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
+from .state_network import save_state_network
+from .state_review import apply_review_workbook_file, export_review_workbook
 from .state_triage import triage_observations
 from .state_workflow import (
     audit_state_records,
     blank_state_assessments,
     compare_state_snapshots,
     load_state_assessments,
+    load_us_presence_sites,
     package_from_files,
     save_state_assessments,
     write_us_presence_template,
@@ -41,6 +44,24 @@ def build_parser() -> argparse.ArgumentParser:
     triage.add_argument("--base-url", default="")
     triage.add_argument("--cache-dir", default=".sugar-cache")
     triage.add_argument("--limit", type=int)
+
+    review_export = sub.add_parser("review-export", help="Create an analyst Excel workbook for assessment and claim review.")
+    review_export.add_argument("observations")
+    review_export.add_argument("assessments")
+    review_export.add_argument("--output", required=True)
+
+    review_apply = sub.add_parser("review-apply", help="Apply analyst workbook decisions back into validated State assessments.")
+    review_apply.add_argument("assessments")
+    review_apply.add_argument("workbook")
+    review_apply.add_argument("--output", required=True)
+
+    network = sub.add_parser("network", help="Export typed, evidence-backed relationship nodes and edges.")
+    network.add_argument("observations")
+    network.add_argument("assessments")
+    network.add_argument("--us-sites")
+    network.add_argument("--output", required=True)
+    network.add_argument("--name", default="state_network")
+    network.add_argument("--include-unverified", action="store_true")
 
     package = sub.add_parser("package", help="Build the State-facing research package, audit, review queue, BLUF, and GeoJSON.")
     package.add_argument("observations")
@@ -108,6 +129,34 @@ def main(argv=None) -> int:
             limit=args.limit,
         )
         print(save_state_assessments(assessments, args.output))
+        return 0
+
+    if args.command == "review-export":
+        observations = load_observations(args.observations)
+        assessments = load_state_assessments(args.assessments)
+        print(export_review_workbook(observations, assessments, args.output))
+        return 0
+
+    if args.command == "review-apply":
+        print(apply_review_workbook_file(args.assessments, args.workbook, args.output))
+        return 0
+
+    if args.command == "network":
+        observations = load_observations(args.observations)
+        assessments = load_state_assessments(args.assessments)
+        sites = load_us_presence_sites(args.us_sites) if args.us_sites else []
+        print(
+            "\n".join(
+                save_state_network(
+                    observations,
+                    assessments,
+                    args.output,
+                    us_sites=sites,
+                    name=args.name,
+                    verified_only=not args.include_unverified,
+                )
+            )
+        )
         return 0
 
     if args.command == "package":
