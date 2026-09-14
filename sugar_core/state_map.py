@@ -129,6 +129,36 @@ def _add_uncertainty_circle(group, location: ResolvedLocation, tooltip: str) -> 
     ).add_to(group)
 
 
+def _resolution_ledger(
+    mapped: list[tuple[ResearchObservation, StateAssessment, ResolvedLocation]],
+) -> list[dict[str, object]]:
+    ledger: list[dict[str, object]] = []
+    for observation, _, location in mapped:
+        ledger.append(
+            {
+                "observation_id": observation.observation_id,
+                "title": observation.title or observation.program_name or observation.institution_name,
+                "recorded_country": observation.country,
+                "recorded_region": observation.region,
+                "recorded_city": observation.city,
+                "latitude": location.latitude,
+                "longitude": location.longitude,
+                "precision": location.precision,
+                "confidence": location.confidence,
+                "basis": location.basis,
+                "source": location.source,
+                "derived": location.derived,
+                "query": location.query,
+                "display_name": location.display_name,
+                "provider_type": location.provider_type,
+                "provider_category": location.provider_category,
+                "uncertainty_km": location.uncertainty_km,
+                "density_eligible": location.density_eligible,
+            }
+        )
+    return ledger
+
+
 def create_state_map(
     observations: Iterable[ResearchObservation],
     assessments: Iterable[StateAssessment],
@@ -234,9 +264,11 @@ def create_state_map(
         _add_uncertainty_circle(group, location, tooltip)
 
     density_locations = [location for _, _, location in mapped if location.density_eligible]
-    if include_activity_density and density_locations:
+    density_scope = "Verified" if verified_only else "Eligible"
+    density_rendered = bool(include_activity_density and density_locations)
+    if density_rendered:
         density_group = folium.FeatureGroup(
-            name="Verified observation density — defensible locations only (not influence)",
+            name=f"{density_scope} observation density — defensible locations only (not influence)",
             show=False,
         )
         # Every retained observation receives equal weight. Regional/country centroids and
@@ -305,12 +337,15 @@ def create_state_map(
                 "mapped_observations": len(mapped),
                 "derived_geocoded_observations": derived_count,
                 "precision_counts": dict(sorted(precision_counts.items())),
+                "resolved_locations": _resolution_ledger(mapped),
                 "unresolved_eligible_observations": len(unresolved),
                 "unresolved": unresolved,
                 "mapped_us_sites": len(site_coordinates),
+                "activity_density_requested": include_activity_density,
+                "activity_density_rendered": density_rendered,
                 "density_eligible_observations": len(density_locations),
                 "density_excluded_for_precision": density_excluded,
-                "density_semantics": "equal-weight verified activity locations with exact/site/locality/city precision and sufficient location confidence; not influence",
+                "density_semantics": f"equal-weight {'verified' if verified_only else 'eligible'} activity locations with exact/site/locality/city precision and sufficient location confidence; not influence",
                 "precision_semantics": "recorded and derived coordinates are classified by evidentiary precision; geocoder results may downgrade query precision; site/city/region centroids are explicitly labeled and uncertainty envelopes are rendered where appropriate; country-only records without coordinates are not plotted at national centroids",
             },
             indent=2,
