@@ -1,0 +1,57 @@
+name: Feature request
+description: Propose a scoped SUGAR capability or research-workflow improvement.
+title: "[Feature] "
+labels: []
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the user/research problem before proposing implementation details.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Collection / new source
+        - High-volume harvest
+        - Evidence / ResearchObservation
+        - Project workspace
+        - State workflow
+        - Spatial / mapping
+        - Intelligence / synthesis
+        - Windows desktop
+        - macOS desktop
+        - ARC / compute
+        - Documentation / developer experience
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should a user be able to do when this is complete?
+    validations:
+      required: true
+  - type: textarea
+    id: methodology
+    attributes:
+      label: Research / methodology implications
+      description: Note evidence, provenance, access, review-state, metric-comparability, or interpretation concerns. Write "None" if not applicable.
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints / known boundaries
+      description: Include platform access limits, packaging requirements, compatibility needs, or intentionally unsupported behavior.
+  - type: checkboxes
+    id: architecture
+    attributes:
+      label: Architecture check
+      options:
+        - label: This should be implemented in the shared core when it changes research logic rather than duplicated in a desktop frontend.
+          required: true
+        - label: This request does not depend on bypassing CAPTCHA, login, rate limits, or other platform access controls.
+          required: true

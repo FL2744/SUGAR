@@ -78,7 +78,9 @@ def create_state_map(
         center = [20.0, 0.0]
         zoom = 2
 
-    map_obj = folium.Map(location=center, zoom_start=zoom, control_scale=True, tiles="CartoDB positron")
+    # Use a no-key-required default basemap. Provider-specific paid/keyed tiles can be
+    # added deliberately later without making ordinary State-map generation fragile.
+    map_obj = folium.Map(location=center, zoom_start=zoom, control_scale=True, tiles="OpenStreetMap")
 
     prc_group = folium.FeatureGroup(name="Verified PRC-network observations" if verified_only else "PRC-network observations", show=True)
     cluster = MarkerCluster(name="Observation markers").add_to(prc_group)

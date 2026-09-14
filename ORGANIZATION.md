@@ -1,37 +1,43 @@
-# SUGAR folder guide
+# SUGAR repository guide
 
-The project root is the current working source. On September 10, 2026 it was
-updated from the imported nested `SUGAR/` folder, which contained newer macOS
-compatibility, Activity streaming, provider selection, and Word packaging fixes.
-The core SUGAR.py, sugar_analysis.py, requirements, and logo matched both copies.
+This file describes the current repository layout. Historical cleanup notes have been removed from the root documentation; Git history remains the source of truth for prior migrations.
 
-- `SUGAR.py`, `sugar_analysis.py`, `sugar_bridge.py`: current Python source.
-- `SUGAR-macOS/`: current native macOS source, scripts, and regression checks.
-- `examples/`: sample map, spreadsheet, and Word/PDF analysis.
-- `outputs/2026-09-09/`: existing generated research results.
-- `scratch/`: the existing test HTML file, preserved for reference.
-- `private-notes/`: existing RTF notes, including credential notes; kept local and ignored by Git.
-- `archive/2026-09-10-cleanup/imported-source-original/`: untouched imported source snapshot.
-- `archive/2026-09-10-cleanup/previous-working-copy/`: previous root source and its
-  `.build` and `.build-native` directories, including the existing unsigned DMG.
-  Those artifacts belong to the older source, not the current working version.
-  Moved build environments may contain absolute paths; treat them as historical
-  artifacts rather than reusable build environments.
+## Supported source
 
-The existing `.git` history and `.venv` remain in place. `.x_bearer_token` and
-`geocode_cache.json` remain at the root because the Python app uses those paths.
-Archive, outputs, scratch, and private notes are ignored by Git. Nothing was
-deleted, built, signed, published, or committed during this cleanup. Files outside
-this project were not moved. The existing README and macOS README still describe
-the application and its build process.
+- `sugar_core/` — supported Python research core. New collection, evidence, State, spatial, reporting, intelligence, and workspace work belongs here.
+- `sugar_bridge.py` — typed line-delimited JSON backend used by native desktop clients.
+- `SUGAR-macOS/` — SwiftUI macOS client and packaging scripts.
+- `SUGAR-Windows/` — PySide6 Windows client and packaging scripts.
+- `tests/` — deterministic Python regression suite plus bounded live-network tests.
+- `docs/` — methodology, architecture, collector, workflow, and platform documentation.
+- `examples/` — sample research outputs retained for demonstration/regression context.
 
-The archive's `inventory.json` records source checksums and relocated files.
+## Command-line entry points
 
-## GitHub integration
+- `sugar` — general collection, harvest, triage, mapping, overlap, and reporting.
+- `sugar-project` — persistent project workspace creation and artifact management.
+- `sugar-state` — State/Diplomacy Lab evidence-to-brief workflow.
+- `sugar-intel` — structured analytic-intelligence workflow.
 
-The working source now also includes GitHub main through `07cad07`, including
-merged pull requests #1, #2, #3, #5, and #7. Local macOS provider credentials,
-streaming, compatibility, and Word template fixes were combined with those changes
-on `integrate/github-local-2026-09-10`. The original cleanup snapshots remain
-unchanged. Examples removed from GitHub's root are preserved locally in `examples/`.
-The cleanup and integration are committed locally; no changes have been pushed.
+## Legacy compatibility
+
+`SUGAR.py` and `sugar_analysis.py` are historical monoliths retained for compatibility/reference. They are not the target for new features. Do not add new collectors, State logic, workspace behavior, or frontend-specific branches to those files.
+
+## Local/generated state
+
+The following are intentionally local or generated and ignored by Git:
+
+- `.venv/`, Python caches, build outputs;
+- `.sugar/` workspace registry/cache state;
+- `.sugar-cache/` legacy/general cache state;
+- `outputs/`, `scratch/`, `archive/`, and `private-notes/`;
+- native macOS/Windows build directories;
+- credential/token files matched by `.gitignore`.
+
+A workspace's portable `sugar-project.json` manifest is not ignored by default. It contains project identity/layout metadata only and must never contain secrets.
+
+## Engineering rule
+
+The repository has one research core and multiple clients. Desktop applications may own native UI, credential storage, packaging, and process management, but they should call shared `sugar_core` logic through typed operations rather than reimplementing methodology.
+
+See `docs/architecture.md` for dependency direction and design rules, and `CONTRIBUTING.md` for the pull-request/test standard.

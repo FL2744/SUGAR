@@ -41,9 +41,12 @@ def _dataset(tmp_path: Path) -> tuple[Path, Path]:
 
 def test_bridge_advertises_typed_desktop_operations():
     info = sugar_bridge.backend_info()
-    assert info["bridge_protocol"] == 2
+    assert info["bridge_protocol"] == 3
     assert "state-package" in info["operations"]
     assert "intel-synthesize" in info["operations"]
+    assert "workspace-init" in info["operations"]
+    assert "workspace-status" in info["operations"]
+    assert "workspace-register" in info["operations"]
     assert set(DESKTOP_ANALYTIC_OPERATIONS).issubset(info["operations"])
 
 

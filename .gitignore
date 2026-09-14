@@ -17,6 +17,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .sugar-cache/
+.sugar/
 *.egg-info/
 build/
 dist/
@@ -33,9 +34,11 @@ social_search_posts_*_analysis.pdf
 ~$*.xlsx
 geocode_cache.json
 
-# Native macOS build products
+# Native application build products
 SUGAR-macOS/.build/
 SUGAR-macOS/.build-native/
+SUGAR-Windows/build/
+SUGAR-Windows/dist/
 
 # Local history, private notes, and generated working files
 archive/
