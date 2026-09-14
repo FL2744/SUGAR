@@ -5,7 +5,7 @@ Use this index to find the current design or methodology document for the part o
 ## Architecture and development
 
 - [`architecture.md`](architecture.md) — system boundaries, dependency direction, desktop/core separation, and engineering rules.
-- [`project-workspaces.md`](project-workspaces.md) — persistent project manifest/artifact-registry contract.
+- [`project-workspaces.md`](project-workspaces.md) — persistent project manifest/artifact-registry contract and automatic workflow routing.
 - [`release-process.md`](release-process.md) — versioning, CI, packaged-app inspection, research-integrity review, and release checklist.
 - [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — contribution/test expectations.
 - [`../SECURITY.md`](../SECURITY.md) — security, credential, workspace, and packaging policy.
@@ -23,7 +23,8 @@ Use this index to find the current design or methodology document for the part o
 
 - [`research-observations.md`](research-observations.md) — source-grounded `ResearchObservation` evidence layer.
 - [`ai-triage.md`](ai-triage.md) — grounded AI triage and review boundaries.
-- [`research-map.md`](research-map.md) — map layers, density semantics, provenance, and reference overlays.
+- [`research-map.md`](research-map.md) — general map layers, density semantics, provenance, and reference overlays.
+- [`state-map-precision.md`](state-map-precision.md) — State-map location resolution, precision tiers, uncertainty envelopes, and false-precision guardrails.
 - [`spatial-overlap.md`](spatial-overlap.md) — reproducible geographic proximity/reference analysis.
 
 ## State / Diplomacy Lab workflow
