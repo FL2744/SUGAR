@@ -18,9 +18,9 @@ class StateProximity:
     """Uncertainty-aware geographic proximity to one U.S. public-diplomacy site.
 
     The distance range is a conservative interpretation aid built from the observation's
-    geographic precision envelope plus a small site-location envelope. It is not a statistical
-    confidence interval and must not be interpreted as evidence of strategic competition,
-    displacement, persuasion, coordination, or influence.
+    geographic precision envelope plus the U.S. site's own location envelope when available.
+    It is not a statistical confidence interval and must not be interpreted as evidence of
+    strategic competition, displacement, persuasion, coordination, or influence.
     """
 
     observation_id: str
@@ -35,7 +35,10 @@ class StateProximity:
     observation_precision: str
     observation_confidence: float
     observation_uncertainty_km: float
+    site_precision: str
+    site_confidence: float | None
     site_uncertainty_km: float
+    site_location_basis: str
     same_city: bool
     same_country: bool
 
@@ -95,9 +98,11 @@ def nearest_us_presence(
 ) -> StateProximity | None:
     """Return the physically nearest active, mapped U.S. presence site.
 
-    Unlike older same-country-first logic, this is purely geographic: a site immediately across
-    a border can be physically nearer than one elsewhere in the observation's country. Country
-    and city agreement are retained as descriptive fields, not ranking constraints.
+    Purely virtual services are excluded even if a source record happens to carry coordinates.
+    Hybrid services remain spatially eligible. Unlike older same-country-first logic, ranking is
+    purely geographic: a site immediately across a border can be physically nearer than one
+    elsewhere in the observation's country. Country and city agreement are retained as
+    descriptive fields, not ranking constraints.
     """
     if not location.resolved:
         return None
@@ -105,8 +110,7 @@ def nearest_us_presence(
         site
         for site in sites
         if site.status not in {"closed", "inactive"}
-        and site.latitude is not None
-        and site.longitude is not None
+        and site.is_spatial
     ]
     if not candidates:
         return None
@@ -114,6 +118,7 @@ def nearest_us_presence(
     observation_uncertainty = max(0.0, float(location.uncertainty_km or 0.0))
     ranked: list[tuple[float, USPresenceSite]] = []
     for site in candidates:
+        assert site.latitude is not None and site.longitude is not None
         center = haversine_km(
             float(location.latitude),
             float(location.longitude),
@@ -123,7 +128,12 @@ def nearest_us_presence(
         ranked.append((center, site))
     ranked.sort(key=lambda item: (item[0], item[1].site_id))
     center, site = ranked[0]
-    minimum, maximum = distance_range_km(center, observation_uncertainty, site_uncertainty_km)
+    effective_site_uncertainty = site.effective_location_uncertainty_km(site_uncertainty_km)
+    minimum, maximum = distance_range_km(
+        center,
+        observation_uncertainty,
+        effective_site_uncertainty,
+    )
     relation = classify_proximity(minimum, maximum, threshold_km)
     return StateProximity(
         observation_id=observation.observation_id,
@@ -138,7 +148,10 @@ def nearest_us_presence(
         observation_precision=location.precision,
         observation_confidence=float(location.confidence),
         observation_uncertainty_km=round(observation_uncertainty, 3),
-        site_uncertainty_km=round(max(0.0, float(site_uncertainty_km)), 3),
+        site_precision=site.location_precision,
+        site_confidence=site.location_confidence,
+        site_uncertainty_km=round(effective_site_uncertainty, 3),
+        site_location_basis=site.location_basis,
         same_city=_same_place(observation.city, site.city),
         same_country=_same_place(observation.country, site.country),
     )
@@ -155,8 +168,13 @@ def proximity_note(proximity: StateProximity) -> str:
         relation = f"location uncertainty intersects the {threshold:g} km reference threshold"
     else:
         relation = f"entire location-uncertainty range is outside the {threshold:g} km reference threshold"
+    site_precision = (
+        f" U.S. site precision: {proximity.site_precision}; site uncertainty {proximity.site_uncertainty_km:.1f} km."
+        if proximity.site_precision != "unknown" or proximity.site_uncertainty_km > 0
+        else ""
+    )
     return (
         f"nearest mapped U.S. presence: {proximity.site_name}; center-to-center {center:.1f} km; "
-        f"precision-aware range {minimum:.1f}–{maximum:.1f} km; {relation}. "
-        "Geographic proximity alone is not evidence of strategic overlap or influence."
+        f"precision-aware range {minimum:.1f}–{maximum:.1f} km; {relation}."
+        f"{site_precision} Geographic proximity alone is not evidence of strategic overlap or influence."
     )
