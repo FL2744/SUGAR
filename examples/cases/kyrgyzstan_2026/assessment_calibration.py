@@ -24,7 +24,7 @@ _SUPPORT_LEVEL_BY_TITLE = {
 
 def calibrate_support_assessments(observations, assessments: list[StateAssessment]) -> dict[str, int]:
     observation_by_id = {row.observation_id: row for row in observations}
-    counts = {"probable": 0, "possible": 0, "language_domain_migrations": 0}
+    counts = {"probable": 0, "possible": 0}
 
     for assessment in assessments:
         observation = observation_by_id.get(assessment.observation_id)
@@ -44,11 +44,13 @@ def calibrate_support_assessments(observations, assessments: list[StateAssessmen
         )
         counts[level] += 1
 
+        # Migrate language records away from the historical `other` fallback now that the core
+        # State schema has a generic language_education domain. This does not equate Chinese-
+        # language activity with English-language programming; those remain distinct domains.
         if observation and "language_education" in observation.triage_labels:
             domains = [value for value in assessment.program_domains if value != "other"]
             if "language_education" not in domains:
                 domains.append("language_education")
-                counts["language_domain_migrations"] += 1
             assessment.program_domains = domains
 
     return counts
