@@ -19,6 +19,7 @@ from location_enrichment import (
     apply_us_site_location_enrichment,
     location_reference_manifest,
 )
+from source_conflicts import source_conflict_findings, source_conflict_manifest
 from sugar_core.observation_storage import save_observations
 from sugar_core.state_map import create_state_map
 from sugar_core.state_workflow import audit_state_records, save_state_assessments, save_state_package
@@ -184,13 +185,17 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     workspace.register_outputs(observation_outputs, kind="observations", operation="kyrgyzstan-e2e")
 
     references_dir = workspace.path_for("references")
+    conflicts = source_conflict_manifest()
     sources = sources_manifest(observations, sites)
     sources["location_references"] = location_reference_manifest()
+    sources["source_conflicts"] = conflicts
     sources_path = _write_json(references_dir / "sources.json", sources)
     location_references_path = _write_json(references_dir / "location_references.json", location_reference_manifest())
+    source_conflicts_path = _write_json(references_dir / "source_conflicts.json", conflicts)
     us_site_paths = _write_us_sites(sites, references_dir / "us_presence.csv")
     workspace.register_artifact("reference", sources_path, metadata={"operation": "kyrgyzstan-e2e"})
     workspace.register_artifact("reference", location_references_path, metadata={"operation": "kyrgyzstan-e2e"})
+    workspace.register_artifact("reference", source_conflicts_path, metadata={"operation": "kyrgyzstan-e2e"})
     workspace.register_outputs(us_site_paths, kind="reference", operation="kyrgyzstan-e2e")
 
     state_dir = workspace.path_for("state")
@@ -245,6 +250,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
 
     audit = audit_state_records(observations, assessments)
     findings = _case_findings(observations, assessments, sites, location_summary)
+    findings.extend(source_conflict_findings())
     analyst_metadata = _read_json(analyst_map.with_suffix(analyst_map.suffix + ".metadata.json"))
     verified_metadata = _read_json(verified_map.with_suffix(verified_map.suffix + ".metadata.json"))
     proximity_ledger = analyst_metadata.get("us_proximity", [])
@@ -261,6 +267,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "physical_us_sites": sum(site.latitude is not None and site.longitude is not None for site in sites),
         "nonspatial_us_services": sum(site.latitude is None or site.longitude is None for site in sites),
         "location_enrichment": location_summary,
+        "source_conflicts": len(conflicts),
         "analyst_map_observations": analyst_metadata.get("mapped_observations"),
         "analyst_map_precision_counts": analyst_metadata.get("precision_counts", {}),
         "verified_map_observations": verified_metadata.get("mapped_observations"),
@@ -284,9 +291,9 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "",
         f"The bounded case contains **{len(observations)}** PRC-linked public-diplomacy observations through September 14, 2026. The record spans Chinese-language education, Confucius Institute activity, university cooperation, cultural exhibitions and performances, literary and city-level exchanges, and governance/civilizational programming.",
         "",
-        f"Seven source records name a venue/institution that can be refined to site-level geometry with separate public location references; four remain deliberately city-level. The U.S. layer contains eight physical American Spaces, of which two are address-refined in this case while six remain conservative city-centroid references, plus one non-spatial EducationUSA service. The analyst map is available before human verification; the verified-only map contains no PRC observations until review gates are satisfied.",
+        f"Seven source records name a venue/institution that can be refined to site-level geometry with separate public location references; four remain deliberately city-level. The U.S. layer contains eight physical American Spaces, of which two are address-refined in this case while six remain conservative city-centroid references, plus one non-spatial EducationUSA service. The current State EducationUSA directory and American Councils page conflict about whether the Bishkek advising service still has a physical location, so that contradiction is retained explicitly. The analyst map is available before human verification; the verified-only map contains no PRC observations until review gates are satisfied.",
         "",
-        "## Model findings from the real case",
+        "## Model and source findings from the real case",
         "",
     ]
     preliminary.extend(f"- **{item['code']}** — {item['description']}" for item in findings)
@@ -304,8 +311,8 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     report_outputs = [summary_json, findings_json, audit_json, note_path]
     workspace.register_outputs(report_outputs, kind="report", operation="kyrgyzstan-e2e")
 
-    # The core purpose of this case is to exercise real public data without weakening review or
-    # geographic precision merely to make the output look complete.
+    # The core purpose of this case is to exercise real public data without weakening review,
+    # geographic precision, or contradictory-source handling merely to make the output look complete.
     assert len(observations) == 11
     assert summary["human_verified_observations"] == 0
     assert summary["brief_eligible_assessments"] == 0
@@ -313,6 +320,8 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     assert summary["verified_map_observations"] == 0
     assert summary["physical_us_sites"] == 8
     assert summary["nonspatial_us_services"] == 1
+    assert summary["source_conflicts"] == 1
+    assert summary["case_findings"] == 8
     assert summary["location_enrichment"]["site_refined_observations"] == 7
     assert summary["location_enrichment"]["city_level_observations"] == 4
     assert summary["location_enrichment"]["address_refined_physical_us_sites"] == 2
