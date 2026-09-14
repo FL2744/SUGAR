@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from assessment_calibration import calibrate_support_assessments
 from case_data import build_assessments, build_observations, build_us_presence_sites, sources_manifest
 from location_enrichment import (
     apply_observation_location_enrichment,
@@ -164,6 +165,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     # Build assessments only after deterministic location enrichment so downstream State overlap
     # sees the same source-backed geometry used by the map.
     assessments = build_assessments(observations)
+    support_summary = calibrate_support_assessments(observations, assessments)
 
     observation_csv = workspace.path_for("observations") / f"{CASE_STEM}.observations.csv"
     save_observations(
@@ -264,6 +266,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "human_verified_observations": sum(row.verification_state == "human_verified" for row in observations),
         "brief_eligible_assessments": audit.get("brief_eligible", 0),
         "audit_status": audit.get("status"),
+        "support_levels": support_summary,
         "physical_us_sites": sum(site.latitude is not None and site.longitude is not None for site in sites),
         "nonspatial_us_services": sum(site.latitude is None or site.longitude is None for site in sites),
         "location_enrichment": location_summary,
@@ -291,7 +294,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "",
         f"The bounded case contains **{len(observations)}** PRC-linked public-diplomacy observations through September 14, 2026. The record spans Chinese-language education, Confucius Institute activity, university cooperation, cultural exhibitions and performances, literary and city-level exchanges, and governance/civilizational programming.",
         "",
-        f"Seven source records name a venue/institution that can be refined to site-level geometry with separate public location references; four remain deliberately city-level. The U.S. layer contains eight physical American Spaces, of which two are address-refined in this case while six remain conservative city-centroid references, plus one non-spatial EducationUSA service. The current State EducationUSA directory and American Councils page conflict about whether the Bishkek advising service still has a physical location, so that contradiction is retained explicitly. The analyst map is available before human verification; the verified-only map contains no PRC observations until review gates are satisfied.",
+        f"Seven source records name a venue/institution that can be refined to site-level geometry with separate public location references; four remain deliberately city-level. The U.S. layer contains eight physical American Spaces, of which two are address-refined in this case while six remain conservative city-centroid references, plus one non-spatial EducationUSA service. The current State EducationUSA directory and American Councils page conflict about whether the Bishkek advising service still has a physical location, so that contradiction is retained explicitly. PRC-support judgments are calibrated by evidence strength rather than assigned uniformly: {support_summary['probable']} are coded probable and {support_summary['possible']} possible, with none promoted to confirmed before human review. The analyst map is available before human verification; the verified-only map contains no PRC observations until review gates are satisfied.",
         "",
         "## Model and source findings from the real case",
         "",
@@ -312,10 +315,11 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     workspace.register_outputs(report_outputs, kind="report", operation="kyrgyzstan-e2e")
 
     # The core purpose of this case is to exercise real public data without weakening review,
-    # geographic precision, or contradictory-source handling merely to make the output look complete.
+    # geographic precision, source conflicts, or evidence calibration merely to make output look complete.
     assert len(observations) == 11
     assert summary["human_verified_observations"] == 0
     assert summary["brief_eligible_assessments"] == 0
+    assert summary["support_levels"] == {"probable": 9, "possible": 2}
     assert summary["analyst_map_observations"] == 11
     assert summary["verified_map_observations"] == 0
     assert summary["physical_us_sites"] == 8
