@@ -23,6 +23,8 @@ jobs:
       - run: python -m pytest
       - name: Import smoke test
         run: python -c "import sugar_core; print(sugar_core.__version__)"
+      - name: Workspace smoke test
+        run: python -c "import tempfile; from pathlib import Path; from sugar_core.workspace import SugarWorkspace; d=Path(tempfile.mkdtemp())/'project'; w=SugarWorkspace.create(d,name='CI'); p=w.path_for('raw')/'sample.txt'; p.write_text('ok',encoding='utf-8'); w.register_artifact('raw',p); assert SugarWorkspace.open(d).status()['artifact_count']==1"
 
   weibo-live-smoke:
     runs-on: ubuntu-latest
@@ -91,9 +93,10 @@ jobs:
           Write-Host $line
           $payload = $line | ConvertFrom-Json
           if ($payload.event -ne "diagnostics") { throw "Expected diagnostics event" }
-          if ($payload.bridge_protocol -ne 2) { throw "Unexpected desktop bridge protocol" }
+          if ($payload.bridge_protocol -ne 3) { throw "Unexpected desktop bridge protocol" }
           if ($payload.operations -notcontains "state-package") { throw "State desktop operations missing" }
           if ($payload.operations -notcontains "intel-synthesize") { throw "Intelligence desktop operations missing" }
+          if ($payload.operations -notcontains "workspace-init") { throw "Workspace desktop operations missing" }
       - name: Packaged GUI offscreen smoke test
         shell: pwsh
         env:
@@ -115,6 +118,12 @@ jobs:
           @{ output_file = "$env:RUNNER_TEMP\us-presence.csv" } | ConvertTo-Json | Set-Content -Encoding UTF8 $env:RUNNER_TEMP\state-template.json
           & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe state-template-us-sites --config $env:RUNNER_TEMP\state-template.json
           if (-not (Test-Path $env:RUNNER_TEMP\us-presence.csv)) { throw "Packaged State operation did not create output" }
+      - name: Typed workspace operation smoke test
+        shell: pwsh
+        run: |
+          @{ workspace = "$env:RUNNER_TEMP\sugar-project"; name = "CI Workspace" } | ConvertTo-Json | Set-Content -Encoding UTF8 $env:RUNNER_TEMP\workspace-init.json
+          & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe workspace-init --config $env:RUNNER_TEMP\workspace-init.json
+          if (-not (Test-Path $env:RUNNER_TEMP\sugar-project\sugar-project.json)) { throw "Packaged workspace operation did not create manifest" }
       - name: Verify portable artifact
         shell: pwsh
         run: |
