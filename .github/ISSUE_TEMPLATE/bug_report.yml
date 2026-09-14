@@ -1,0 +1,72 @@
+name: Bug report
+description: Report a reproducible SUGAR defect without posting credentials or private research data.
+title: "[Bug] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include API keys, passwords, session cookies, bearer tokens, or private research material. For security-sensitive issues, follow SECURITY.md instead.
+  - type: input
+    id: version
+    attributes:
+      label: SUGAR version / commit
+      placeholder: "1.2.0 or commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - Python CLI / sugar_core
+        - Windows desktop app
+        - macOS desktop app
+        - State workflow
+        - Intelligence workflow
+        - Project workspace
+        - Collector / platform integration
+        - Packaging / CI
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, OS version, Python version, and architecture/chip when relevant.
+      placeholder: "Windows 11 24H2, Python 3.12, x86_64"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include exact error text when safe. Redact all credentials/tokens/cookies.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Prefer synthetic/public fixture data and the smallest command/workflow that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: access
+    attributes:
+      label: Source/access context
+      description: If this involves a collector, say whether the failure is anonymous, authenticated/authorized, rate-limited, login-gated, or otherwise access-related. Do not paste credentials.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, session state, and private research data from this report.
+          required: true
