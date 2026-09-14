@@ -13,6 +13,11 @@ from .triage_io import triage_dataset
 from .weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from .weibo_qualification import run_weibo_qualification
 from .weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
+from .workspace_runtime import (
+    choose_output_directory,
+    optional_workspace,
+    register_workspace_outputs,
+)
 
 
 def _secret(prompt: str, env: str) -> str:
@@ -96,6 +101,13 @@ def _reference_spec(value: str) -> dict[str, str]:
     return {"name": path.stem.replace("_", " ").replace("-", " ").title(), "file": text}
 
 
+def _workspace_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--workspace",
+        help="SUGAR project directory. If omitted, discover sugar-project.json from the current directory upward.",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sugar", description="SUGAR stable research pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -107,7 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--until")
     search.add_argument("--posts", type=int, default=10)
     search.add_argument("--pages", type=int, default=1)
-    search.add_argument("--output", default=".")
+    search.add_argument("--output")
     search.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
     search.add_argument("--model", default="gpt-5.6-luna")
     search.add_argument("--base-url", default="")
@@ -117,6 +129,7 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--x-languages", default="")
     search.add_argument("--mastodon-url", default="https://mastodon.social")
     search.add_argument("--include-reposts", action="store_true")
+    _workspace_arg(search)
 
     harvest = sub.add_parser(
         "harvest",
@@ -140,7 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     harvest.add_argument("--max-retries", type=int, default=4)
     harvest.add_argument("--max-inline-wait", type=float, default=900.0)
     harvest.add_argument("--task-delay", type=float, default=1.0)
-    harvest.add_argument("--output", default=".")
+    harvest.add_argument("--output")
     harvest.add_argument("--name", default="sugar_harvest")
     harvest.add_argument("--time-shard-sources", default="x,bluesky")
     harvest.add_argument("--fail-fast", action="store_true")
@@ -151,6 +164,7 @@ def build_parser() -> argparse.ArgumentParser:
     harvest.add_argument("--bilibili-order", default="pubdate")
     harvest.add_argument("--no-bilibili-hydrate", action="store_true")
     harvest.add_argument("--no-weibo-hydrate", action="store_true")
+    _workspace_arg(harvest)
 
     investigate = sub.add_parser(
         "weibo-investigate",
@@ -163,8 +177,9 @@ def build_parser() -> argparse.ArgumentParser:
     investigate.add_argument("--repost-pages", type=int, default=5)
     investigate.add_argument("--author-posts", type=int, default=40)
     investigate.add_argument("--author-pages", type=int, default=2)
-    investigate.add_argument("--output", default=".")
+    investigate.add_argument("--output")
     investigate.add_argument("--name", default="weibo_investigation")
+    _workspace_arg(investigate)
 
     seed_harvest = sub.add_parser(
         "weibo-seed-harvest",
@@ -183,8 +198,9 @@ def build_parser() -> argparse.ArgumentParser:
     seed_harvest.add_argument("--max-inline-wait", type=float, default=120.0)
     seed_harvest.add_argument("--seed-delay", type=float, default=1.0)
     seed_harvest.add_argument("--fail-fast", action="store_true")
-    seed_harvest.add_argument("--output", default=".")
+    seed_harvest.add_argument("--output")
     seed_harvest.add_argument("--name", default="weibo_seed_harvest")
+    _workspace_arg(seed_harvest)
 
     qualify = sub.add_parser(
         "weibo-qualify",
@@ -211,9 +227,10 @@ def build_parser() -> argparse.ArgumentParser:
     qualify.add_argument("--audit-size", type=int, default=100)
     qualify.add_argument("--audit-file", help="Completed human-audit CSV from a prior qualification run.")
     qualify.add_argument("--thresholds", help="Optional JSON object overriding project acceptance thresholds.")
-    qualify.add_argument("--output", default=".")
+    qualify.add_argument("--output")
     qualify.add_argument("--name", default="weibo_qualification")
     qualify.add_argument("--no-weibo-hydrate", action="store_true")
+    _workspace_arg(qualify)
 
     triage = sub.add_parser(
         "triage",
@@ -226,10 +243,12 @@ def build_parser() -> argparse.ArgumentParser:
     triage.add_argument("--base-url", default="")
     triage.add_argument("--project-context-file")
     triage.add_argument("--fail-fast", action="store_true")
+    _workspace_arg(triage)
 
     map_p = sub.add_parser("map")
     map_p.add_argument("source_file")
     map_p.add_argument("--output")
+    _workspace_arg(map_p)
 
     overlap = sub.add_parser(
         "overlap",
@@ -250,11 +269,13 @@ def build_parser() -> argparse.ArgumentParser:
     overlap.add_argument("--output")
     overlap.add_argument("--map", action="store_true", dest="create_map")
     overlap.add_argument("--map-output")
+    _workspace_arg(overlap)
 
     report = sub.add_parser("analysis")
     report.add_argument("source_file")
     report.add_argument("--output-stem")
     report.add_argument("--format", choices=["docx", "pdf", "both"], default="both")
+    _workspace_arg(report)
     return parser
 
 
@@ -272,7 +293,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "map":
-        outputs = run_map({"source_file": args.source_file, "output_file": args.output})
+        outputs = run_map({"source_file": args.source_file, "output_file": args.output, "workspace": args.workspace})
         print("\n".join(outputs))
         return 0
 
@@ -280,6 +301,7 @@ def main(argv=None) -> int:
         config = {
             "source_file": args.source_file,
             "output_file": args.output,
+            "workspace": args.workspace,
             "spatial": {
                 "reference_layers": args.reference,
                 "distance_bands_km": [float(value) for value in _csv(args.bands)],
@@ -294,14 +316,14 @@ def main(argv=None) -> int:
         return 0
 
     if args.command == "analysis":
-        stem = args.output_stem or str(Path(args.source_file).with_suffix("")) + "_analysis"
         print(
             "\n".join(
                 run_analysis(
                     {
                         "source_file": args.source_file,
-                        "output_stem": stem,
+                        "output_stem": args.output_stem,
                         "output_format": args.format,
+                        "workspace": args.workspace,
                     }
                 )
             )
@@ -309,6 +331,8 @@ def main(argv=None) -> int:
         return 0
 
     if args.command == "weibo-investigate":
+        workspace = optional_workspace(args.workspace)
+        out_dir = choose_output_directory(args.output, workspace, "raw")
         cookie = os.environ.get("SUGAR_WEIBO_COOKIE", "")
         investigation = investigate_weibo_seed(
             args.seed,
@@ -320,10 +344,14 @@ def main(argv=None) -> int:
             author_pages=args.author_pages,
             cookie=cookie,
         )
-        print("\n".join(save_weibo_investigation(investigation, args.output, name=args.name)))
+        outputs = save_weibo_investigation(investigation, out_dir, name=args.name)
+        register_workspace_outputs(workspace, outputs, operation="weibo-investigate")
+        print("\n".join(outputs))
         return 0
 
     if args.command == "weibo-seed-harvest":
+        workspace = optional_workspace(args.workspace)
+        out_dir = choose_output_directory(args.output, workspace, "raw")
         seeds = _merge_terms(args.seeds, args.seeds_file)
         if not seeds:
             parser.error("weibo-seed-harvest requires at least one inline seed or --seeds-file entry")
@@ -344,13 +372,16 @@ def main(argv=None) -> int:
         )
         outputs = run_weibo_seed_harvest(
             config,
-            args.output,
+            out_dir,
             cookie=os.environ.get("SUGAR_WEIBO_COOKIE", ""),
         )
+        register_workspace_outputs(workspace, outputs, operation="weibo-seed-harvest", kind="harvest")
         print("\n".join(outputs))
         return 0
 
     if args.command == "weibo-qualify":
+        workspace = optional_workspace(args.workspace)
+        out_dir = choose_output_directory(args.output, workspace, "raw")
         terms = _merge_terms(args.terms, args.terms_file)
         seeds = _merge_terms(args.seed, args.seeds_file)
         if not terms:
@@ -362,7 +393,7 @@ def main(argv=None) -> int:
         config = {
             "sources": ["weibo"],
             "terms": terms,
-            "output_directory": args.output,
+            "output_directory": str(out_dir),
             "weibo_hydrate_details": not args.no_weibo_hydrate,
             "harvest": {
                 "target_records": None,
@@ -390,15 +421,22 @@ def main(argv=None) -> int:
             },
         }
         secrets = {"weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", "")}
-        print("\n".join(run_weibo_qualification(config, secrets)))
+        outputs = run_weibo_qualification(config, secrets)
+        register_workspace_outputs(workspace, outputs, operation="weibo-qualify")
+        print("\n".join(outputs))
         return 0
 
     if args.command == "triage":
+        workspace = optional_workspace(args.workspace)
         source = Path(args.source_file).expanduser()
         output = (
             Path(args.output).expanduser()
             if args.output
-            else source.with_name(source.stem + "_observations.csv")
+            else (
+                workspace.path_for("observations") / f"{source.stem}_observations.csv"
+                if workspace is not None
+                else source.with_name(source.stem + "_observations.csv")
+            )
         )
         project_context = DEFAULT_PROJECT_CONTEXT
         if args.project_context_file:
@@ -414,6 +452,7 @@ def main(argv=None) -> int:
             project_context=project_context,
             continue_on_error=not args.fail_fast,
         )
+        register_workspace_outputs(workspace, outputs, operation="triage", kind="observations")
         print("\n".join(outputs))
         return 0
 
@@ -430,6 +469,7 @@ def main(argv=None) -> int:
             "since": args.since,
             "until": args.until,
             "output_directory": args.output,
+            "workspace": args.workspace,
             "x_search_mode": args.x_mode,
             "post_languages": _csv(args.x_languages),
             "mastodon_url": args.mastodon_url,
@@ -464,6 +504,7 @@ def main(argv=None) -> int:
         "max_posts_per_query": args.posts,
         "max_pages_per_query": args.pages,
         "output_directory": args.output,
+        "workspace": args.workspace,
         "translate_posts": not args.no_translate,
         "infer_locations": not args.no_location,
         "include_retweets": args.include_reposts,
