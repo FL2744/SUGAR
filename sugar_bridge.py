@@ -7,6 +7,7 @@ import json
 import os
 import platform
 import sys
+from dataclasses import asdict
 from typing import Any
 
 for stream in (sys.stdout, sys.stderr):
@@ -20,8 +21,10 @@ from sugar_core.service import run_analysis, run_harvest, run_map, run_overlap, 
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from sugar_core.weibo_qualification import run_weibo_qualification
 from sugar_core.weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
+from sugar_core.workspace import SugarWorkspace
 
-BRIDGE_PROTOCOL_VERSION = 2
+BRIDGE_PROTOCOL_VERSION = 3
+WORKSPACE_OPERATIONS = {"workspace-init", "workspace-status", "workspace-register"}
 BASE_OPERATIONS = {
     "search",
     "harvest",
@@ -32,7 +35,7 @@ BASE_OPERATIONS = {
     "overlap",
     "analysis",
     "diagnostics",
-}
+} | WORKSPACE_OPERATIONS
 ALL_OPERATIONS = BASE_OPERATIONS | DESKTOP_ANALYTIC_OPERATIONS
 
 
@@ -105,6 +108,48 @@ def _run_weibo_investigation(config: dict[str, Any], secrets: dict[str, str]) ->
     return outputs
 
 
+def _workspace_path(config: dict[str, Any]) -> str:
+    value = str(config.get("workspace") or config.get("path") or "").strip()
+    if not value:
+        raise ValueError("workspace is required.")
+    return value
+
+
+def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
+    if command == "workspace-init":
+        workspace = SugarWorkspace.create(
+            _workspace_path(config),
+            name=str(config.get("name") or "").strip(),
+            description=str(config.get("description") or "").strip(),
+            exist_ok=bool(config.get("exist_ok", False)),
+        )
+        emit("workspace_status", **workspace.status())
+        return [str(workspace.manifest_path), str(workspace.database_path)]
+
+    workspace = SugarWorkspace.open(_workspace_path(config))
+    if command == "workspace-status":
+        emit("workspace_status", **workspace.status())
+        return [str(workspace.manifest_path)]
+
+    artifact_path = str(config.get("artifact") or config.get("artifact_path") or "").strip()
+    if not artifact_path:
+        raise ValueError("artifact is required.")
+    metadata = config.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        raise ValueError("workspace artifact metadata must be a JSON object.")
+    artifact = workspace.register_artifact(
+        str(config.get("kind") or ""),
+        artifact_path,
+        label=str(config.get("label") or ""),
+        metadata=metadata,
+        require_exists=not bool(config.get("allow_missing", False)),
+    )
+    payload = asdict(artifact)
+    payload["absolute_path"] = str(workspace.artifact_absolute_path(artifact))
+    emit("workspace_artifact", artifact=payload)
+    return [payload["absolute_path"]]
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=sorted(ALL_OPERATIONS))
@@ -121,7 +166,9 @@ def main(argv=None) -> int:
         emit("backend", **backend_info())
         config = load_config(args.config)
         secrets = secrets_from_environment()
-        if args.command == "search":
+        if args.command in WORKSPACE_OPERATIONS:
+            outputs = _run_workspace_operation(args.command, config)
+        elif args.command == "search":
             outputs = run_search(config, secrets, progress=progress_event)
         elif args.command == "harvest":
             emit("starting", operation="harvest")
