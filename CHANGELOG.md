@@ -2,6 +2,24 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
+## Unreleased
+
+### Changed
+
+- normal `sugar` and `sugar-state` workflows now auto-discover project workspaces, route outputs to canonical project directories when no explicit destination is supplied, and register generated artifacts automatically;
+- desktop State/intelligence operations can resolve the latest registered observations and assessment artifacts from a workspace instead of requiring every file path to be reselected;
+- added a typed `state-map` desktop operation;
+- State research maps now classify every mapped observation by geographic precision, separate precision classes into distinct layers, expose precision/confidence in popups and metadata, and display uncertainty envelopes for approximate locations;
+- missing State-map coordinates can optionally be resolved from explicit site/city/region evidence through a cached public geocoder;
+- geocoder feature metadata and bounding boxes are preserved so site queries that resolve only to a city/region are automatically downgraded rather than presented with false precision;
+- country-only observations are not placed at artificial national centroids, and broad/low-confidence locations are excluded from activity-density rendering.
+
+### Research integrity
+
+- geographic resolution does not infer an event venue from an institution name alone;
+- geocoded coordinates remain derived evidence and do not modify the underlying observation record or verification state;
+- State-map density remains equal-weight activity-location density rather than a reach, engagement, or influence score.
+
 ## 1.2.0 — 2026-09-14
 
 ### Added
