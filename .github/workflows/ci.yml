@@ -5,6 +5,10 @@ on:
     branches: [main, "stabilize/**", "fix/**"]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     strategy:
