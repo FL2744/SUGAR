@@ -66,6 +66,24 @@ Region, country, unknown, and low-confidence points do not contribute to density
 
 All retained observations receive equal weight. Likes, views, attendance, followers, and other heterogeneous reach metrics are not converted into an influence score.
 
+## Uncertainty-aware U.S. proximity
+
+A single center-to-center distance can overstate what the research actually knows. An observation localized only to a city may have a centroid 45 km from an American Space, for example, while the plausible activity location extends to either side of a 50 km analytic reference threshold.
+
+For every mapped observation with at least one active, geocoded U.S. public-diplomacy site, SUGAR therefore computes:
+
+- the physically nearest mapped U.S. site, regardless of national border;
+- the center-to-center distance;
+- a conservative minimum and maximum separation using the observation's precision envelope plus a small default site-location envelope;
+- whether the entire range is within the 50 km reference threshold, the range intersects the threshold, or the entire range is outside it;
+- same-city and same-country flags as descriptive context rather than ranking constraints.
+
+The physically nearest site is used instead of a same-country-first rule because border geography can make a site in a neighboring country much closer than one elsewhere in the observation's country.
+
+Two optional map layers visualize only the cases that are fully within the threshold or whose uncertainty range intersects it. They are hidden by default to avoid clutter. Solid lines represent ranges fully within the reference threshold; dashed lines represent threshold-intersecting uncertainty. Outside-threshold cases remain in the metadata ledger but are not connected on the map.
+
+These ranges are **not statistical confidence intervals**. They are conservative interpretation aids derived from map precision. Likewise, proximity to an American Space, EducationUSA site, embassy, or other U.S. presence is not itself evidence of competition, displacement, coordination, persuasion, or influence.
+
 ## CLI use
 
 Strict mode uses only coordinates already present in the observation dataset:
@@ -109,6 +127,7 @@ Every State map writes `<map>.metadata.json`. The sidecar records:
 - a structured list of unresolved observation IDs and reasons;
 - whether activity density was requested and actually rendered;
 - how many observations were density-eligible or excluded for precision;
-- the density and precision semantics used to generate the map.
+- the U.S.-proximity threshold, site uncertainty assumption, relation counts, and a per-observation `us_proximity` ledger with center/min/max distances and relation classification;
+- the density, proximity, and precision semantics used to generate the map.
 
-Analysts should inspect this sidecar when using the map in a brief. A map with excellent visual coverage but mostly city/region-derived points communicates something materially different from a map dominated by reviewed site-level coordinates.
+Analysts should inspect this sidecar when using the map in a brief. A map with excellent visual coverage but mostly city/region-derived points communicates something materially different from a map dominated by reviewed site-level coordinates. The same applies to proximity: a center distance inside a threshold is weaker evidence than an uncertainty range entirely inside it.
