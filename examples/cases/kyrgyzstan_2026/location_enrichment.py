@@ -137,10 +137,30 @@ def apply_us_site_location_enrichment(sites: list[USPresenceSite]) -> dict[str, 
             reference = LOCATION_REFERENCES[key]
             site.latitude = reference.latitude
             site.longitude = reference.longitude
+            site.delivery_mode = "physical"
+            site.coverage_scope = "site"
+            site.location_precision = "site"
+            site.location_confidence = 0.95
+            site.location_uncertainty_km = 0.25
+            site.location_basis = "official_address_public_coordinate_reference"
             refined += 1
         elif site.latitude is None or site.longitude is None:
+            # EducationUSA is intentionally non-spatial in this case. The scope fields make that
+            # machine-readable instead of relying on missing coordinates as an implicit signal.
+            site.delivery_mode = "virtual"
+            site.coverage_scope = "country"
+            site.location_precision = "unknown"
+            site.location_confidence = None
+            site.location_uncertainty_km = None
+            site.location_basis = "official_service_directory_nonspatial"
             nonspatial += 1
         else:
+            site.delivery_mode = "physical"
+            site.coverage_scope = "site"
+            site.location_precision = "city"
+            site.location_confidence = 0.75
+            site.location_uncertainty_km = 12.0
+            site.location_basis = "city_centroid_reference_not_building"
             city_centroid += 1
     return {
         "address_refined_physical_us_sites": refined,
