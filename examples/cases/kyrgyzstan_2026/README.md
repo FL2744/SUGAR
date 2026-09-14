@@ -14,7 +14,7 @@ Kyrgyzstan is a useful stress test because the 2026 public-diplomacy landscape i
 - literary and subnational/city exchange;
 - governance and civilizational-dialogue programming;
 - a physical U.S. American Spaces network distributed across the country; and
-- EducationUSA Kyrgyzstan operating as a fully online service beginning April 1, 2026.
+- EducationUSA Kyrgyzstan, whose current official State directory describes a fully online advising service beginning April 1, 2026.
 
 That mix forces SUGAR to distinguish physical proximity from service overlap and to represent evidence precision instead of treating every public-diplomacy activity as the same kind of object.
 
@@ -29,6 +29,20 @@ All observations and State assessments are intentionally marked **`ai_triaged`**
 - the State briefing package must not promote AI-triaged material into human-verified judgments.
 
 Do not change those review states merely to make the example brief look fuller. A human analyst should review the source evidence first.
+
+## Location precision workflow
+
+The first execution of this case exposed an important realism problem: using the same Bishkek city centroid for both PRC activities and the Bishkek American Space made multiple center-to-center distances equal to `0.0 km`. The uncertainty model prevented a literal same-building claim, but the geometry was still too coarse to be useful.
+
+The case therefore keeps the initial source coding separate from a deterministic location-enrichment stage:
+
+- **7 observations** name a venue or institution clearly enough to refine to site-level coordinates with a separate public location reference;
+- **4 observations** remain deliberately city-level because the public source is city-wide, venue-ambiguous, or describes activity at multiple sites;
+- the multi-university International Chinese Language Day record is intentionally *not* collapsed onto one university;
+- America Borboru Bishkek and American Corner Osh are address-refined from the official American Spaces locator plus public coordinate references;
+- the other six physical American Spaces remain city-centroid references until their current site coordinates are independently verified.
+
+The generated `references/location_references.json` preserves those coordinate sources and notes. Location references refine *where* a source-named venue sits; they do not add evidence that the event itself occurred there beyond the underlying activity source.
 
 ## Run it
 
@@ -46,6 +60,7 @@ Key outputs include:
 
 - `data/observations/kyrgyzstan_2026.observations.csv`
 - `references/sources.json`
+- `references/location_references.json`
 - `references/us_presence.csv`
 - `state/kyrgyzstan_2026.state.jsonl`
 - the normal State package under `state/`
@@ -63,18 +78,20 @@ CI runs this case and uploads the complete workspace as an artifact so the outpu
 
 The current American Spaces locator lists eight physical Spaces in Kyrgyzstan: Bishkek, Jalal-Abad, Talas, Batken, Kant, Karakol, Naryn, and Osh.
 
-For reproducibility, this case uses city-centroid coordinates for those physical Spaces rather than pretending that every current building coordinate has been independently verified. The map therefore receives a conservative **12 km U.S.-site uncertainty envelope**. This is deliberately less precise than a building-level point.
+The official locator provides current street addresses for America Borboru Bishkek and American Corner Osh, so the case refines those two reference points to their building areas. The remaining six Spaces continue to use city centroids. Because `USPresenceSite` cannot yet store different precision and uncertainty for individual sites, the map still receives a conservative **12 km U.S.-site uncertainty envelope for every physical site**. That deliberately overstates uncertainty for the two address-refined sites rather than overstating precision for the six city-centroid sites.
 
-EducationUSA Kyrgyzstan is represented without coordinates because its official EducationUSA page states that advising became fully online beginning April 1, 2026. A virtual national service should not be placed at a fake physical point.
+EducationUSA Kyrgyzstan is represented without coordinates because the current official EducationUSA directory says advising services became fully online on April 1, 2026 and lists `No physical Address`. However, the current American Councils Kyrgyzstan program page still describes an advising center at the Bayalinov Youth and Children's Library / American Corner in Bishkek. The case treats the Department of State directory as the current service-topology authority while preserving this contradiction as a **source-freshness conflict that requires analyst awareness**, not as proof that either page is fabricated.
 
 ## Current model gaps exposed by the case
 
-The case is designed to record real friction instead of hiding it. Its generated `case-findings.json` currently checks for four important modeling gaps:
+The case is designed to record real friction instead of hiding it. Its generated findings cover these important modeling gaps:
 
 1. **Generic language education.** The State domain taxonomy has `english_language` but no generic `language_education`, forcing Chinese-language activity into `other` even though language education is central to the case.
 2. **Virtual national services.** The existing U.S.-overlap model derives service overlap from the nearest physical site and therefore does not naturally aggregate a nationally available virtual EducationUSA service.
-3. **Per-site location precision.** U.S. presence records do not yet carry their own precision/confidence/uncertainty fields, so this case has to provide one conservative uncertainty assumption for the physical U.S. layer.
+3. **Per-site location precision.** U.S. presence records do not yet carry their own precision/confidence/provenance/uncertainty fields, so a mixed exact/centroid reference layer still requires one blanket uncertainty value.
 4. **Qualified reach metrics.** Public sources frequently say `about 300`, `hundreds`, or `more than 1,000`. Current `ReachMetrics` stores bare integers, so the case refuses to turn those statements into false exact totals.
+5. **Multi-site observations.** One source can report activity at several venues, but `ResearchObservation` currently carries one location. The case leaves the two-university Language Day record at city precision rather than inventing a canonical venue.
+6. **Source freshness/conflict.** Official State and implementing-partner pages can disagree about current service topology. SUGAR needs a first-class way to preserve and adjudicate contradictory reference records rather than silently selecting one.
 
 Those are product findings, not reasons to weaken the evidence gate.
 
@@ -97,7 +114,10 @@ PRC-linked observations:
 U.S. comparison references:
 
 - American Spaces locator, Kyrgyzstan: https://americanspaces.info/locator/spaces/KG
+- America Borboru Bishkek: https://americanspaces.info/locator/acamericaborborubishkek
+- American Corner Osh: https://americanspaces.info/locator/acosh
 - EducationUSA Advising Center, Kyrgyzstan: https://educationusa.state.gov/node/421
+- American Councils Kyrgyzstan EducationUSA page: https://kyrgyzstan.americancouncils.org/edusa
 
 ## Analytic guardrail
 
