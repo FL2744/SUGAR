@@ -57,16 +57,24 @@ jobs:
           assert summary["observations"] == 11
           assert summary["human_verified_observations"] == 0
           assert summary["brief_eligible_assessments"] == 0
+          assert summary["language_domain_fallbacks"] == 0
+          assert summary["spurious_english_service_overlaps"] == 0
+          assert summary["us_sites_missing_precision"] == 0
           assert analyst["mapped_observations"] == 11
           assert verified["mapped_observations"] == 0
           assert analyst["mapped_us_sites"] == 8
-          assert {row["code"] for row in findings} >= {
-              "language_education_domain_gap",
+          codes = {row["code"] for row in findings}
+          assert codes >= {
+              "language_education_domain_resolved",
+              "direct_service_overlap_semantics_resolved",
               "virtual_educationusa_service_gap",
-              "us_site_precision_gap",
+              "us_site_precision_resolved",
               "qualified_reach_metric_gap",
               "human_review_gate_working",
           }
+          assert "language_education_domain_gap" not in codes
+          assert "direct_service_overlap_semantics_gap" not in codes
+          assert "us_site_precision_gap" not in codes
           print(json.dumps(summary, indent=2, sort_keys=True))
           PY
       - name: Publish reproducible Kyrgyzstan workspace
