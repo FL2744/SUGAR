@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 WORKSPACE_SCHEMA_VERSION = "1.0"
+DATABASE_SCHEMA_VERSION = 1
 MANIFEST_FILENAME = "sugar-project.json"
 INTERNAL_DIRECTORY = ".sugar"
 DATABASE_FILENAME = "workspace.sqlite3"
@@ -57,7 +58,7 @@ class ArtifactRecord:
 class SugarWorkspace:
     """Persistent, portable project workspace for SUGAR research.
 
-    The JSON manifest defines the portable project identity and directory layout.
+    The JSON manifest defines portable project identity and directory layout.
     SQLite stores mutable local artifact metadata. Secrets are never stored in either.
     """
 
@@ -89,7 +90,9 @@ class SugarWorkspace:
     ) -> "SugarWorkspace":
         target = Path(root).expanduser().resolve()
         manifest_path = target / MANIFEST_FILENAME
-        if manifest_path.exists() and not exist_ok:
+        if manifest_path.exists():
+            if exist_ok:
+                return cls.open(target)
             raise FileExistsError(f"SUGAR workspace already exists: {manifest_path}")
 
         target.mkdir(parents=True, exist_ok=True)
@@ -104,6 +107,7 @@ class SugarWorkspace:
             layout=dict(DEFAULT_LAYOUT),
         )
         workspace = cls(target, manifest)
+        workspace._validate_layout()
         workspace._ensure_layout()
         workspace._write_manifest(manifest)
         workspace._initialize_database()
@@ -145,6 +149,7 @@ class SugarWorkspace:
         if not manifest.project_id:
             raise ValueError("Workspace manifest is missing project_id.")
         workspace = cls(manifest_path.parent, manifest)
+        workspace._validate_layout()
         workspace._ensure_layout()
         workspace._initialize_database()
         return workspace
@@ -166,7 +171,7 @@ class SugarWorkspace:
         except KeyError as exc:
             known = ", ".join(sorted(self.manifest.layout))
             raise KeyError(f"Unknown workspace path {key!r}. Known paths: {known}") from exc
-        return (self.root / relative).resolve()
+        return self._safe_layout_path(relative)
 
     def register_artifact(
         self,
@@ -256,6 +261,7 @@ class SugarWorkspace:
             external += int(artifact.external)
         return {
             "schema_version": self.manifest.schema_version,
+            "database_schema_version": DATABASE_SCHEMA_VERSION,
             "project_id": self.manifest.project_id,
             "name": self.manifest.name,
             "description": self.manifest.description,
@@ -274,6 +280,26 @@ class SugarWorkspace:
         if artifact.external or stored.is_absolute():
             return stored.expanduser().resolve()
         return (self.root / stored).resolve()
+
+    def _safe_layout_path(self, relative: str) -> Path:
+        raw = Path(str(relative))
+        if raw.is_absolute():
+            raise ValueError(f"Workspace layout paths must be relative: {relative!r}")
+        resolved = (self.root / raw).resolve()
+        try:
+            resolved.relative_to(self.root)
+        except ValueError as exc:
+            raise ValueError(f"Workspace layout path escapes project root: {relative!r}") from exc
+        return resolved
+
+    def _validate_layout(self) -> None:
+        missing = sorted(set(DEFAULT_LAYOUT) - set(self.manifest.layout))
+        if missing:
+            raise ValueError(f"Workspace manifest is missing required layout keys: {', '.join(missing)}")
+        for key, relative in self.manifest.layout.items():
+            if not str(key).strip():
+                raise ValueError("Workspace layout keys cannot be empty.")
+            self._safe_layout_path(relative)
 
     def _resolve_artifact_path(self, path: str | Path) -> Path:
         candidate = Path(path).expanduser()
@@ -313,8 +339,8 @@ class SugarWorkspace:
         )
 
     def _ensure_layout(self) -> None:
-        for relative in self.manifest.layout.values():
-            (self.root / relative).mkdir(parents=True, exist_ok=True)
+        for key in self.manifest.layout:
+            self.path_for(key).mkdir(parents=True, exist_ok=True)
         self.internal_path.mkdir(parents=True, exist_ok=True)
 
     def _write_manifest(self, manifest: WorkspaceManifest) -> None:
@@ -329,6 +355,12 @@ class SugarWorkspace:
     def _initialize_database(self) -> None:
         self.internal_path.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
+            current_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+            if current_version > DATABASE_SCHEMA_VERSION:
+                raise ValueError(
+                    f"Unsupported workspace database schema {current_version}; "
+                    f"maximum supported version is {DATABASE_SCHEMA_VERSION}."
+                )
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS artifacts (
@@ -346,6 +378,8 @@ class SugarWorkspace:
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_artifacts_kind_id ON artifacts(kind, id DESC)"
             )
+            if current_version < DATABASE_SCHEMA_VERSION:
+                connection.execute(f"PRAGMA user_version = {DATABASE_SCHEMA_VERSION}")
             connection.commit()
 
     def _connect(self) -> sqlite3.Connection:
