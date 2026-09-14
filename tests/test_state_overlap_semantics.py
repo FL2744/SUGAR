@@ -68,6 +68,7 @@ def test_nearest_us_presence_uses_site_specific_uncertainty_and_ignores_virtual_
     observation = ResearchObservation(
         observation_type="event",
         title="Example activity",
+        summary="Example activity for proximity regression testing.",
         country="Kyrgyzstan",
         city="Bishkek",
         latitude=42.8746,
