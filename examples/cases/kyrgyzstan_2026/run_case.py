@@ -70,6 +70,7 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
     missed_virtual_educationusa = [
         row for row in higher_ed_assessments
         if "educationusa" not in row.us_overlap.service_overlap
+        or "EducationUSA Kyrgyzstan" not in row.us_overlap.note
     ]
     physical_sites = [site for site in sites if site.is_spatial]
     virtual_sites = [site for site in sites if site.delivery_mode == "virtual"]
@@ -120,13 +121,19 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
             ),
         },
         {
-            "code": "virtual_educationusa_service_gap",
-            "severity": "model_gap",
-            "affected_records": len(missed_virtual_educationusa),
+            "code": "virtual_educationusa_service_resolved" if not missed_virtual_educationusa else "virtual_educationusa_service_gap",
+            "severity": "resolved" if not missed_virtual_educationusa else "model_gap",
+            "affected_records": len(higher_ed_assessments) if not missed_virtual_educationusa else len(missed_virtual_educationusa),
             "description": (
-                "EducationUSA Kyrgyzstan is now explicitly represented as a virtual, country-scoped service, but the current overlap workflow still derives service overlap from the nearest physical U.S. site and does not yet aggregate nationally available virtual advising."
+                "EducationUSA Kyrgyzstan is represented as a virtual, country-scoped service and now contributes higher-education service availability across Kyrgyzstan independently of nearest physical-site geography; the assessment note identifies the virtual service source while the map remains non-spatial."
+                if not missed_virtual_educationusa else
+                "At least one Kyrgyzstan higher-education assessment still fails to receive the applicable country-scoped virtual EducationUSA service or its source attribution."
             ),
-            "recommended_fix": "Aggregate applicable U.S. service sources by delivery mode and coverage scope independently of nearest-site geography.",
+            "recommended_fix": (
+                "No further country-scope aggregation fix required for this case; preserve service availability and physical proximity as independent dimensions."
+                if not missed_virtual_educationusa else
+                "Aggregate applicable U.S. service sources by delivery mode and coverage scope independently of nearest-site geography."
+            ),
         },
         {
             "code": "us_site_precision_resolved" if not sites_missing_precision else "us_site_precision_gap",
@@ -174,8 +181,8 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
             "code": "virtual_us_services_present",
             "severity": "context",
             "affected_records": len(virtual_sites),
-            "description": "At least one important U.S. public-diplomacy service is explicitly non-spatial and country-scoped rather than forced onto a fake map point.",
-            "recommended_fix": "Use coverage_scope in the next service-aggregation pass so non-spatial services can contribute without becoming geographic points.",
+            "description": "At least one important U.S. public-diplomacy service is explicitly non-spatial and country-scoped; it can contribute service availability without being forced onto a fake map point.",
+            "recommended_fix": "Preserve delivery_mode/coverage_scope semantics and source attribution when adding future virtual services.",
         },
     ]
 
@@ -306,6 +313,12 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "english_language" in assessment_by_id[row.observation_id].us_overlap.service_overlap
         for row in language_records
     )
+    higher_ed_assessments = [row for row in assessments if "higher_education" in row.program_domains]
+    higher_ed_missing_educationusa = sum(
+        "educationusa" not in row.us_overlap.service_overlap
+        or "EducationUSA Kyrgyzstan" not in row.us_overlap.note
+        for row in higher_ed_assessments
+    )
     sites_missing_precision = sum(
         site.location_precision == "unknown"
         or site.location_confidence is None
@@ -325,6 +338,8 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "support_levels": support_summary,
         "language_domain_fallbacks": language_fallbacks,
         "spurious_english_service_overlaps": spurious_english_service_overlaps,
+        "higher_ed_assessments": len(higher_ed_assessments),
+        "higher_ed_missing_educationusa_service": higher_ed_missing_educationusa,
         "us_sites_missing_precision": sites_missing_precision,
         "physical_us_sites": sum(site.is_spatial for site in sites),
         "nonspatial_us_services": sum(site.delivery_mode == "virtual" for site in sites),
@@ -353,7 +368,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "",
         f"The bounded case contains **{len(observations)}** PRC-linked public-diplomacy observations through September 14, 2026. The record spans Chinese-language education, Confucius Institute activity, university cooperation, cultural exhibitions and performances, literary and city-level exchanges, and governance/civilizational programming.",
         "",
-        f"Seven source records name a venue/institution that can be refined to site-level geometry with separate public location references; four remain deliberately city-level. The U.S. layer contains eight physical American Spaces, of which two are address-refined while six remain honestly labeled city-centroid references, plus one explicit virtual/country-scoped EducationUSA service. U.S. proximity now consumes each physical site's own precision/confidence/uncertainty metadata rather than treating every coordinate as equally exact. Chinese-language records now use the generic language_education domain and are kept distinct from English-language programming. The current State EducationUSA directory and American Councils page still conflict about whether the Bishkek advising service has a physical location, so that contradiction is retained explicitly. PRC-support judgments remain evidence-calibrated: {support_summary['probable']} probable and {support_summary['possible']} possible, with none confirmed before human review. The analyst map is available before human verification; the verified-only map contains no PRC observations until review gates are satisfied.",
+        f"Seven source records name a venue/institution that can be refined to site-level geometry with separate public location references; four remain deliberately city-level. The U.S. layer contains eight physical American Spaces, of which two are address-refined while six remain honestly labeled city-centroid references, plus one explicit virtual/country-scoped EducationUSA service. Physical proximity and service availability are now independent: EducationUSA can contribute higher-education service overlap across Kyrgyzstan without becoming a map point or replacing the nearest physical American Space. U.S. proximity consumes each physical site's own precision/confidence/uncertainty metadata rather than treating every coordinate as equally exact. Chinese-language records use the generic language_education domain and remain distinct from English-language programming. The current State EducationUSA directory and American Councils page still conflict about whether the Bishkek advising service has a physical location, so that contradiction is retained explicitly. PRC-support judgments remain evidence-calibrated: {support_summary['probable']} probable and {support_summary['possible']} possible, with none confirmed before human review. The analyst map is available before human verification; the verified-only map contains no PRC observations until review gates are satisfied.",
         "",
         "## Model and source findings from the real case",
         "",
@@ -364,7 +379,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
             "",
             "## Interpretation guardrail",
             "",
-            "Mapped proximity, shared audience categories, or thematic similarity do not establish competition, displacement, persuasion, coordination, or causal influence. Human review remains required before State-facing judgments.",
+            "Mapped proximity, shared audience categories, thematic similarity, or service availability do not establish competition, displacement, persuasion, coordination, or causal influence. Human review remains required before State-facing judgments.",
             "",
         ]
     )
@@ -381,6 +396,8 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     assert summary["support_levels"] == {"probable": 9, "possible": 2}
     assert summary["language_domain_fallbacks"] == 0
     assert summary["spurious_english_service_overlaps"] == 0
+    assert summary["higher_ed_assessments"] > 0
+    assert summary["higher_ed_missing_educationusa_service"] == 0
     assert summary["us_sites_missing_precision"] == 0
     assert summary["analyst_map_observations"] == 11
     assert summary["verified_map_observations"] == 0
