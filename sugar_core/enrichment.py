@@ -71,21 +71,55 @@ def _request_nominatim(location: str, user_agent: str):
     from geopy.geocoders import Nominatim
 
     geolocator = Nominatim(user_agent=user_agent)
-    return geolocator.geocode(location, exactly_one=True, timeout=20)
+    return geolocator.geocode(
+        location,
+        exactly_one=True,
+        timeout=20,
+        addressdetails=True,
+        namedetails=True,
+    )
+
+
+def _normalise_boundingbox(raw: Any) -> list[float]:
+    if not isinstance(raw, (list, tuple)) or len(raw) != 4:
+        return []
+    try:
+        values = [float(value) for value in raw]
+    except (TypeError, ValueError):
+        return []
+    south, north, west, east = values
+    if not (-90 <= south <= 90 and -90 <= north <= 90 and -180 <= west <= 180 and -180 <= east <= 180):
+        return []
+    return values
 
 
 def geocode_location(
     location: str,
     cache: JsonCache,
-    user_agent: str = "SUGAR/1.1 (Virginia Tech Diplomacy Lab)",
+    user_agent: str = "SUGAR/1.2 (Virginia Tech Diplomacy Lab)",
     min_delay_seconds: float = 1.0,
 ) -> dict:
-    """Geocode a broad location using the cache first and a process-wide request throttle."""
+    """Geocode a broad public location with cached provider metadata.
+
+    The extra provider fields are retained so downstream mapping can reason about
+    precision instead of treating every returned latitude/longitude as equally exact.
+    Existing callers can continue using latitude/longitude/display_name only.
+    """
     global _NOMINATIM_LAST_REQUEST
 
     location = normalize_whitespace(location)
     if not location:
-        return {"latitude": None, "longitude": None, "display_name": ""}
+        return {
+            "latitude": None,
+            "longitude": None,
+            "display_name": "",
+            "query": "",
+            "category": "",
+            "type": "",
+            "addresstype": "",
+            "importance": None,
+            "boundingbox": [],
+        }
     key = stable_hash("geocode", location.casefold())
     cached = cache.get(key)
     if isinstance(cached, dict):
@@ -102,10 +136,24 @@ def geocode_location(
         finally:
             _NOMINATIM_LAST_REQUEST = time.monotonic()
 
+    raw = getattr(result, "raw", {}) if result else {}
+    raw = raw if isinstance(raw, dict) else {}
+    try:
+        importance = float(raw.get("importance")) if raw.get("importance") is not None else None
+    except (TypeError, ValueError):
+        importance = None
     data = {
         "latitude": float(result.latitude) if result else None,
         "longitude": float(result.longitude) if result else None,
         "display_name": str(result.address) if result else "",
+        "query": location,
+        "category": str(raw.get("category") or raw.get("class") or ""),
+        "type": str(raw.get("type") or ""),
+        "addresstype": str(raw.get("addresstype") or ""),
+        "importance": importance,
+        "boundingbox": _normalise_boundingbox(raw.get("boundingbox")),
+        "osm_type": str(raw.get("osm_type") or ""),
+        "osm_id": str(raw.get("osm_id") or ""),
     }
     cache.set(key, data)
     return data
