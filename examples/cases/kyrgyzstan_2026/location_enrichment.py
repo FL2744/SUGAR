@@ -110,7 +110,9 @@ def apply_observation_location_enrichment(
         observation.location_label = reference.label
         observation.latitude = reference.latitude
         observation.longitude = reference.longitude
-        observation.location_basis = "source_named_site+public_location_reference"
+        # Use underscore-delimited tokens because the shared State location resolver parses
+        # location_basis tokens that way; the explicit `site` token must remain machine-readable.
+        observation.location_basis = "source_named_site_public_location_reference"
         observation.location_confidence = 0.90
         _append_location_reference(observation, reference)
         observation.touch()
