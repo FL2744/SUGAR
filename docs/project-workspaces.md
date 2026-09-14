@@ -11,6 +11,7 @@ A workspace is intentionally boring and inspectable:
 - Research products remain ordinary files. CSV, XLSX, JSONL, GeoJSON, HTML, Word, PDF, and other outputs are not hidden inside SQLite.
 - Paths inside the workspace are stored relatively so the project directory can be moved between machines. External reference files are allowed but are explicitly reported as external/non-portable artifacts.
 - Missing registered files remain visible in workspace status rather than silently disappearing from project history.
+- Canonical layout paths must remain inside the project root. SUGAR rejects absolute or `..`-escaping layout entries rather than creating project directories elsewhere on the machine.
 
 ## Default layout
 
@@ -82,7 +83,9 @@ sugar-project list ./team4
 sugar-project list ./team4 --kind observations --json
 ```
 
-`SugarWorkspace.discover()` can also locate a workspace by walking upward from a nested project directory. This is useful for future desktop and automation flows where users should not need to re-select the manifest every time.
+`SugarWorkspace.discover()` can locate a workspace by walking upward from a nested project directory. This is useful for future desktop and automation flows where users should not need to re-select the manifest every time.
+
+`--exist-ok` is non-destructive: if a workspace already exists, SUGAR reopens it rather than replacing its project identity or manifest.
 
 ## Python API
 
@@ -117,10 +120,17 @@ They use the same workspace implementation as the Python API and `sugar-project`
 
 ## Portability and collaboration
 
-The manifest is designed to be safe to share with the rest of a research team. The SQLite registry may also be shared when useful, but it is primarily mutable project metadata and may contain paths to intentionally external files. Before moving a project between systems, `sugar-project status` should show zero missing artifacts and ideally zero external artifacts unless those references are deliberately machine-specific.
+The manifest is designed to be safe to share with the rest of a research team. The SQLite registry is local mutable metadata by default and is ignored by the repository's standard `.gitignore`; a team can still transfer it deliberately when that is appropriate. It may contain paths to intentionally external files.
+
+Before moving a project between systems, `sugar-project status` should show zero missing artifacts and ideally zero external artifacts unless those references are deliberately machine-specific.
 
 A workspace is not a security boundary. SUGAR still relies on the operating system, approved storage, and normal access controls to protect research data. Credentials remain environment-, Keychain-, or session-managed and must not be placed in the workspace manifest or registry metadata.
 
 ## Schema evolution
 
-The current workspace schema is `1.0`. SUGAR fails closed when opening an unknown workspace schema instead of guessing how to interpret it. Future schema changes should include an explicit migration path and regression fixtures before the version is changed.
+There are two versioned contracts:
+
+- workspace manifest schema: `1.0`;
+- workspace SQLite schema: `1` (stored in SQLite `PRAGMA user_version`).
+
+SUGAR fails closed when opening an unknown future manifest schema or database schema instead of guessing how to interpret it. Future changes should include an explicit migration path and regression fixtures before either version is advanced.
