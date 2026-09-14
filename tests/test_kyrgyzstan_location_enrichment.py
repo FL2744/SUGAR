@@ -46,6 +46,36 @@ def test_location_enrichment_breaks_city_centroid_collision_with_bishkek_space()
     museum = next(row for row in observations if row.title == "Chinese painting exhibition at the National Historical Museum")
     assert (museum.latitude, museum.longitude) != (america_borboru.latitude, america_borboru.longitude)
     assert museum.location_basis.startswith("source_named_site")
+    assert america_borboru.delivery_mode == "physical"
+    assert america_borboru.coverage_scope == "site"
+    assert america_borboru.location_precision == "site"
+    assert america_borboru.location_confidence == 0.95
+    assert america_borboru.location_uncertainty_km == 0.25
+
+
+def test_nonspatial_educationusa_is_explicitly_virtual_and_country_scoped():
+    sites = CASE_DATA.build_us_presence_sites()
+    summary = LOCATION.apply_us_site_location_enrichment(sites)
+    educationusa = next(site for site in sites if site.network == "educationusa")
+
+    assert summary["nonspatial_us_services"] == 1
+    assert educationusa.delivery_mode == "virtual"
+    assert educationusa.coverage_scope == "country"
+    assert educationusa.location_precision == "unknown"
+    assert educationusa.location_uncertainty_km is None
+    assert not educationusa.is_spatial
+
+
+def test_city_centroid_us_sites_are_labeled_broad_not_exact():
+    sites = CASE_DATA.build_us_presence_sites()
+    LOCATION.apply_us_site_location_enrichment(sites)
+    jalal_abad = next(site for site in sites if site.city == "Jalal-Abad")
+
+    assert jalal_abad.delivery_mode == "physical"
+    assert jalal_abad.location_precision == "city"
+    assert jalal_abad.location_confidence == 0.75
+    assert jalal_abad.location_uncertainty_km == 12.0
+    assert "city_centroid" in jalal_abad.location_basis
 
 
 def test_multi_site_language_day_record_stays_city_level():
