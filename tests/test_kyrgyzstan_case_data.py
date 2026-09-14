@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 
@@ -8,6 +9,7 @@ CASE_DIR = Path(__file__).resolve().parents[1] / "examples" / "cases" / "kyrgyzs
 SPEC = importlib.util.spec_from_file_location("kyrgyzstan_case_data", CASE_DIR / "case_data.py")
 assert SPEC is not None and SPEC.loader is not None
 CASE_DATA = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = CASE_DATA
 SPEC.loader.exec_module(CASE_DATA)
 
 
