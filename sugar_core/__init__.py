@@ -1,4 +1,4 @@
-"""Stable SUGAR core for repeatable OSINT collection and analysis."""
+"""Stable SUGAR core for repeatable public-source collection and analysis."""
 
 from .collector_registry import (
     COLLECTORS,
@@ -59,6 +59,12 @@ from .weibo_investigation import (
     render_weibo_brief,
     save_weibo_investigation,
 )
+from .workspace import (
+    ArtifactRecord,
+    SugarWorkspace,
+    WorkspaceManifest,
+    open_workspace,
+)
 
 __all__ = [
     "PostRecord",
@@ -118,6 +124,10 @@ __all__ = [
     "investigate_weibo_seed",
     "render_weibo_brief",
     "save_weibo_investigation",
+    "WorkspaceManifest",
+    "ArtifactRecord",
+    "SugarWorkspace",
+    "open_workspace",
 ]
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
