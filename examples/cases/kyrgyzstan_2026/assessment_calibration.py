@@ -23,11 +23,12 @@ _SUPPORT_LEVEL_BY_TITLE = {
 
 
 def calibrate_support_assessments(observations, assessments: list[StateAssessment]) -> dict[str, int]:
-    title_by_id = {row.observation_id: row.title for row in observations}
-    counts = {"probable": 0, "possible": 0}
+    observation_by_id = {row.observation_id: row for row in observations}
+    counts = {"probable": 0, "possible": 0, "language_domain_migrations": 0}
 
     for assessment in assessments:
-        title = title_by_id.get(assessment.observation_id, "")
+        observation = observation_by_id.get(assessment.observation_id)
+        title = observation.title if observation else ""
         level = _SUPPORT_LEVEL_BY_TITLE.get(title)
         if level is None:
             raise ValueError(f"No support calibration is defined for observation: {title or assessment.observation_id}")
@@ -42,5 +43,12 @@ def calibrate_support_assessments(observations, assessments: list[StateAssessmen
             review_state="ai_triaged",
         )
         counts[level] += 1
+
+        if observation and "language_education" in observation.triage_labels:
+            domains = [value for value in assessment.program_domains if value != "other"]
+            if "language_education" not in domains:
+                domains.append("language_education")
+                counts["language_domain_migrations"] += 1
+            assessment.program_domains = domains
 
     return counts
