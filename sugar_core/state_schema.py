@@ -26,6 +26,7 @@ STRATEGIC_AUDIENCES = {
 
 PROGRAM_DOMAINS = {
     "higher_education",
+    "language_education",
     "english_language",
     "entrepreneurship",
     "stem_technology",
@@ -37,6 +38,26 @@ PROGRAM_DOMAINS = {
     "exchange_alumni",
     "digital_connectivity",
     "other",
+}
+
+# This mapping is intentionally program/domain-based, not audience-based. It is used to keep
+# direct service overlap distinct from audience overlap. A Chinese-language program aimed at
+# students, for example, must not become an "english_language" service overlap merely because
+# U.S. student programming may include English instruction.
+_PROGRAM_DOMAIN_SERVICE_TAGS = {
+    "higher_education": {"educationusa", "study_in_the_us", "higher_education"},
+    "language_education": {"language_education"},
+    "english_language": {"english_language", "english_learning"},
+    "entrepreneurship": {"entrepreneurship", "business", "innovation"},
+    "stem_technology": {"stem", "technology", "makerspace", "innovation"},
+    "media_information_literacy": {"media_literacy", "information_literacy"},
+    "civic_engagement": {"civic_engagement", "democracy", "community_engagement"},
+    "culture_arts": {"culture", "arts"},
+    "economic_commercial": {"business", "entrepreneurship", "economic"},
+    "professional_skills": {"professional_skills", "career"},
+    "exchange_alumni": {"alumni", "exchange", "exchange_alumni"},
+    "digital_connectivity": {"digital_connectivity", "technology"},
+    "other": set(),
 }
 
 NARRATIVE_TAGS = {
@@ -124,6 +145,39 @@ NETWORK_TYPES = {
     "other_usg",
 }
 
+US_SERVICE_DELIVERY_MODES = {
+    "physical",
+    "virtual",
+    "hybrid",
+}
+
+US_SERVICE_COVERAGE_SCOPES = {
+    "site",
+    "city",
+    "country",
+    "global",
+}
+
+US_LOCATION_PRECISIONS = {
+    "exact",
+    "site",
+    "locality",
+    "city",
+    "region",
+    "country",
+    "unknown",
+}
+
+_US_LOCATION_DEFAULT_UNCERTAINTY_KM = {
+    "exact": 0.10,
+    "site": 0.75,
+    "locality": 3.0,
+    "city": 12.0,
+    "region": 75.0,
+    "country": 250.0,
+    "unknown": 100.0,
+}
+
 
 def _clean(value: Any) -> str:
     return " ".join(str(value or "").split())
@@ -163,6 +217,15 @@ def _nonnegative_int(value: Any) -> int | None:
     number = int(value)
     if number < 0:
         raise ValueError("Reach metrics cannot be negative.")
+    return number
+
+
+def _nonnegative_float(value: Any, field_name: str) -> float | None:
+    if value is None or value == "":
+        return None
+    number = float(value)
+    if number < 0:
+        raise ValueError(f"{field_name} cannot be negative.")
     return number
 
 
@@ -272,6 +335,12 @@ class USPresenceSite:
     source_url: str = ""
     status: str = "active"
     site_id: str = ""
+    delivery_mode: str = "physical"
+    coverage_scope: str = "site"
+    location_precision: str = "unknown"
+    location_confidence: float | None = None
+    location_uncertainty_km: float | None = None
+    location_basis: str = ""
 
     def __post_init__(self) -> None:
         self.name = _clean(self.name)
@@ -282,6 +351,20 @@ class USPresenceSite:
         self.service_tags = _clean_list(self.service_tags)
         self.source_url = _clean(self.source_url)
         self.status = _clean(self.status).casefold() or "active"
+        self.delivery_mode = _choice(
+            self.delivery_mode, US_SERVICE_DELIVERY_MODES, "U.S. service delivery mode", "physical"
+        )
+        self.coverage_scope = _choice(
+            self.coverage_scope, US_SERVICE_COVERAGE_SCOPES, "U.S. service coverage scope", "site"
+        )
+        self.location_precision = _choice(
+            self.location_precision, US_LOCATION_PRECISIONS, "U.S. site location precision", "unknown"
+        )
+        self.location_confidence = _confidence(self.location_confidence, "location_confidence")
+        self.location_uncertainty_km = _nonnegative_float(
+            self.location_uncertainty_km, "location_uncertainty_km"
+        )
+        self.location_basis = _clean(self.location_basis)
         if not self.name or not self.country:
             raise ValueError("U.S. presence sites require name and country.")
         if self.latitude not in (None, ""):
@@ -292,6 +375,8 @@ class USPresenceSite:
             self.longitude = float(self.longitude)
         else:
             self.longitude = None
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("U.S. presence coordinates require both latitude and longitude.")
         if self.latitude is not None and not -90 <= self.latitude <= 90:
             raise ValueError("latitude must be between -90 and 90")
         if self.longitude is not None and not -180 <= self.longitude <= 180:
@@ -300,6 +385,21 @@ class USPresenceSite:
             self.site_id = stable_state_id("us", self.network, self.name, self.country, self.city)
         else:
             self.site_id = _clean(self.site_id)
+
+    @property
+    def is_spatial(self) -> bool:
+        return bool(
+            self.delivery_mode in {"physical", "hybrid"}
+            and self.latitude is not None
+            and self.longitude is not None
+        )
+
+    def effective_location_uncertainty_km(self, default: float = 0.75) -> float:
+        if self.location_uncertainty_km is not None:
+            return float(self.location_uncertainty_km)
+        if self.location_precision != "unknown":
+            return float(_US_LOCATION_DEFAULT_UNCERTAINTY_KM[self.location_precision])
+        return max(0.0, float(default))
 
 
 @dataclass
@@ -321,7 +421,15 @@ class USOverlapAssessment:
         self.nearest_network = _clean(self.nearest_network)
         self.audience_overlap = _clean_list(self.audience_overlap)
         self.thematic_overlap = _clean_list(self.thematic_overlap)
-        self.service_overlap = _clean_list(self.service_overlap)
+        raw_service_overlap = _clean_list(self.service_overlap)
+        allowed_service_tags: set[str] = set()
+        for domain in self.thematic_overlap:
+            allowed_service_tags.update(_PROGRAM_DOMAIN_SERVICE_TAGS.get(domain.casefold(), set()))
+        # Keep service overlap program-semantic. Audience similarity is already represented by
+        # audience_overlap and must not manufacture a direct service/program equivalence.
+        self.service_overlap = [
+            value for value in raw_service_overlap if value.casefold() in allowed_service_tags
+        ]
         self.note = _clean(self.note)
         if self.distance_km not in (None, ""):
             self.distance_km = max(0.0, float(self.distance_km))
