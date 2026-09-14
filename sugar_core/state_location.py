@@ -31,11 +31,38 @@ _PRECISION_DEFAULT_CONFIDENCE = {
     "unknown": 0.45,
 }
 
+_PRECISION_RANK = {
+    "exact": 0,
+    "site": 1,
+    "locality": 2,
+    "city": 3,
+    "region": 4,
+    "country": 5,
+    "unknown": 6,
+}
+
 _SITE_BASIS_HINTS = {"site", "venue", "institution", "address", "facility", "campus"}
 _EXACT_BASIS_HINTS = {"gps", "exact", "native_geo", "native_geotag", "coordinates"}
 _CITY_BASIS_HINTS = {"city", "locality", "profile"}
 _REGION_BASIS_HINTS = {"region", "province", "state", "oblast", "prefecture"}
 _COUNTRY_BASIS_HINTS = {"country"}
+
+_PROVIDER_SITE_TYPES = {
+    "house", "building", "amenity", "university", "college", "school", "office",
+    "library", "museum", "theatre", "cinema", "stadium", "hotel", "hospital",
+    "station", "attraction", "campus", "facility", "commercial", "retail",
+}
+_PROVIDER_LOCALITY_TYPES = {
+    "suburb", "neighbourhood", "neighborhood", "quarter", "borough", "district",
+    "locality", "hamlet", "isolated_dwelling",
+}
+_PROVIDER_CITY_TYPES = {
+    "city", "town", "village", "municipality", "municipal", "city_district",
+}
+_PROVIDER_REGION_TYPES = {
+    "state", "province", "region", "county", "oblast", "prefecture", "administrative",
+}
+_PROVIDER_COUNTRY_TYPES = {"country"}
 
 
 @dataclass(frozen=True)
@@ -102,6 +129,39 @@ def _precision_from_basis(observation: ResearchObservation) -> str:
     if observation.country:
         return "country"
     return "unknown"
+
+
+def _provider_precision(result: dict[str, Any]) -> str | None:
+    """Infer the granularity of the geocoder feature itself.
+
+    A search query may ask for a campus but resolve to a city or region. The returned
+    feature type therefore constrains how precisely SUGAR may describe the point.
+    Unknown provider feature types do not upgrade or downgrade the query precision.
+    """
+    values = {
+        _clean(result.get("addresstype")).casefold(),
+        _clean(result.get("type")).casefold(),
+    }
+    values.discard("")
+    if values & _PROVIDER_COUNTRY_TYPES:
+        return "country"
+    if values & _PROVIDER_REGION_TYPES:
+        return "region"
+    if values & _PROVIDER_CITY_TYPES:
+        return "city"
+    if values & _PROVIDER_LOCALITY_TYPES:
+        return "locality"
+    if values & _PROVIDER_SITE_TYPES:
+        return "site"
+    return None
+
+
+def _conservative_precision(requested: str, provider: str | None) -> str:
+    if provider is None:
+        return requested
+    # Never claim more precision than either the research evidence/query or the returned
+    # provider feature supports. Higher rank means broader/weaker geographic precision.
+    return max((requested, provider), key=lambda value: _PRECISION_RANK.get(value, 6))
 
 
 def _confidence(observation: ResearchObservation, precision: str, *, derived: bool) -> float:
@@ -270,21 +330,28 @@ def resolve_observation_location(
         pair = _valid_coordinate_pair(result.get("latitude"), result.get("longitude"))
         if pair is None:
             continue
-        confidence = _confidence(observation, candidate_precision, derived=True)
+        provider_precision = _provider_precision(result)
+        resolved_precision = _conservative_precision(candidate_precision, provider_precision)
+        # A result no more specific than an entire country is not useful as a point for a
+        # site/city/region observation. Continue to a lower-risk fallback rather than drawing
+        # a national centroid that visually implies local knowledge.
+        if resolved_precision == "country":
+            continue
+        confidence = _confidence(observation, resolved_precision, derived=True)
         return ResolvedLocation(
             observation_id=observation.observation_id,
             latitude=pair[0],
             longitude=pair[1],
-            precision=candidate_precision,
+            precision=resolved_precision,
             confidence=confidence,
             basis=basis,
             label=label or query,
             source=f"geocoded_{source}",
             query=query,
             display_name=_clean(result.get("display_name")) or query,
-            uncertainty_km=_uncertainty_from_geocode(result, candidate_precision),
+            uncertainty_km=_uncertainty_from_geocode(result, resolved_precision),
             derived=True,
-            density_eligible=candidate_precision in {"exact", "site", "locality", "city"} and confidence >= minimum_confidence,
+            density_eligible=resolved_precision in {"exact", "site", "locality", "city"} and confidence >= minimum_confidence,
             provider_type=_clean(result.get("addresstype") or result.get("type")),
             provider_category=_clean(result.get("category")),
         )
