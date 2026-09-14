@@ -278,7 +278,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     assert summary["nonspatial_us_services"] == 1
     assert analyst_metadata.get("mapped_us_sites") == 8
     assert verified_metadata.get("mapped_us_sites") == 8
-    assert workspace.status()["missing_artifact_count"] == 0
+    assert workspace.status()["missing_artifacts"] == 0
 
     return summary
 
