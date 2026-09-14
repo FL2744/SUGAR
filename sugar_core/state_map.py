@@ -194,12 +194,13 @@ def create_state_map(
         ]
     else:
         center = [20.0, 0.0]
+    zoom_start = 10 if len(coordinates) == 1 else 2
 
-    map_obj = folium.Map(location=center, zoom_start=2, control_scale=True, tiles="OpenStreetMap")
+    map_obj = folium.Map(location=center, zoom_start=zoom_start, control_scale=True, tiles="OpenStreetMap")
 
     groups: dict[str, folium.FeatureGroup] = {}
     clusters: dict[str, MarkerCluster] = {}
-    precision_order = ("exact", "site", "locality", "city", "region", "unknown")
+    precision_order = ("exact", "site", "locality", "city", "region", "country", "unknown")
     for precision in precision_order:
         if not any(loc.precision == precision for _, _, loc in mapped):
             continue
@@ -214,7 +215,7 @@ def create_state_map(
         group.add_to(map_obj)
 
     for obs, assessment, location in mapped:
-        precision = location.precision if location.precision in groups else "unknown"
+        precision = location.precision
         group = groups[precision]
         cluster = clusters[precision]
         color = _PRECISION_COLORS.get(precision, "#64748b")
@@ -232,16 +233,14 @@ def create_state_map(
         ).add_to(cluster)
         _add_uncertainty_circle(group, location, tooltip)
 
-    density_locations = [
-        location for _, _, location in mapped if location.density_eligible
-    ]
+    density_locations = [location for _, _, location in mapped if location.density_eligible]
     if include_activity_density and density_locations:
         density_group = folium.FeatureGroup(
             name="Verified observation density — defensible locations only (not influence)",
             show=False,
         )
-        # Every retained observation receives equal weight. Regional centroids and low-confidence
-        # points are excluded so uncertainty does not become an artificial hotspot.
+        # Every retained observation receives equal weight. Regional/country centroids and
+        # low-confidence points are excluded so uncertainty does not become an artificial hotspot.
         HeatMap(
             [[location.latitude, location.longitude, 1] for location in density_locations],
             radius=20,
@@ -272,9 +271,6 @@ def create_state_map(
 
     if len(coordinates) >= 2:
         map_obj.fit_bounds([[float(lat), float(lon)] for lat, lon in coordinates], padding=(24, 24))
-    elif len(coordinates) == 1:
-        map_obj.location = [float(coordinates[0][0]), float(coordinates[0][1])]
-        map_obj.zoom_start = 10
 
     precision_counts = Counter(location.precision for _, _, location in mapped)
     derived_count = sum(int(location.derived) for _, _, location in mapped)
@@ -315,7 +311,7 @@ def create_state_map(
                 "density_eligible_observations": len(density_locations),
                 "density_excluded_for_precision": density_excluded,
                 "density_semantics": "equal-weight verified activity locations with exact/site/locality/city precision and sufficient location confidence; not influence",
-                "precision_semantics": "site/city/region centroids are explicitly labeled and uncertainty envelopes are rendered where appropriate; country-only records are not plotted at national centroids",
+                "precision_semantics": "recorded and derived coordinates are classified by evidentiary precision; geocoder results may downgrade query precision; site/city/region centroids are explicitly labeled and uncertainty envelopes are rendered where appropriate; country-only records without coordinates are not plotted at national centroids",
             },
             indent=2,
             sort_keys=True,
