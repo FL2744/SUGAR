@@ -20,6 +20,11 @@ from .spatial import (
 )
 from .storage import save_records
 from .utils import JsonCache
+from .workspace_runtime import (
+    choose_output_directory,
+    register_workspace_outputs,
+    workspace_from_config,
+)
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 
@@ -75,6 +80,7 @@ def run_search(
     progress: ProgressCallback | None = None,
 ) -> list[str]:
     secrets = secrets or {}
+    workspace = workspace_from_config(config)
     sources = [str(x).strip().lower() for x in (config.get("sources") or ["x"]) if str(x).strip()]
     unknown = sorted(set(sources) - set(COLLECTORS))
     if unknown:
@@ -87,11 +93,10 @@ def run_search(
     if ai_needed and not secrets.get("llm_api_key", "").strip():
         raise ValueError("AI enrichment is enabled, but no LLM API key was provided.")
 
-    out_dir = Path(config.get("output_directory") or Path.cwd()).expanduser().resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = choose_output_directory(config.get("output_directory"), workspace, "raw", fallback=Path.cwd())
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     csv_path = out_dir / f"social_search_posts_{stamp}.csv"
-    cache_dir = out_dir / ".sugar-cache"
+    cache_dir = workspace.path_for("cache") if workspace is not None else out_dir / ".sugar-cache"
     llm = _llm_config(config, secrets)
 
     _notify(progress, "starting", operation="search", sources=sources)
@@ -135,10 +140,12 @@ def run_search(
         "collector_capabilities": {source: COLLECTORS[source].capabilities.as_dict() for source in sources},
         "llm_provider": llm.provider if (translate or infer) else None,
         "llm_model": llm.model if (translate or infer) else None,
+        "workspace_project_id": workspace.manifest.project_id if workspace is not None else None,
     }
     _notify(progress, "saving", records=len(records), output=str(csv_path))
     save_records(records, csv_path, metadata=metadata)
     outputs = [str(csv_path), str(csv_path.with_suffix(".xlsx")), str(csv_path.with_suffix(".metadata.json"))]
+    register_workspace_outputs(workspace, outputs, operation="search", kind="raw_collection")
     _notify(progress, "saved", outputs=outputs)
     return outputs
 
@@ -176,8 +183,13 @@ def run_harvest(
     progress: ProgressCallback | None = None,
 ) -> list[str]:
     secrets = secrets or {}
-    modes = _harvest_access_modes(config, secrets)
-    marker = _harvest_access_marker(config)
+    workspace = workspace_from_config(config)
+    effective = dict(config)
+    effective["output_directory"] = str(
+        choose_output_directory(config.get("output_directory"), workspace, "raw", fallback=Path.cwd())
+    )
+    modes = _harvest_access_modes(effective, secrets)
+    marker = _harvest_access_marker(effective)
     marker.parent.mkdir(parents=True, exist_ok=True)
     if marker.is_file():
         existing = json.loads(marker.read_text(encoding="utf-8"))
@@ -187,19 +199,33 @@ def run_harvest(
                 "Use a new harvest --name instead of mixing anonymous and authenticated coverage."
             )
     else:
-        marker.write_text(json.dumps({"access_modes": modes}, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+        marker.write_text(
+            json.dumps(
+                {
+                    "access_modes": modes,
+                    "workspace_project_id": workspace.manifest.project_id if workspace is not None else None,
+                },
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
 
-    outputs = _run_harvest(config, secrets, progress=progress)
-    raw = config.get("harvest") or {}
-    out_dir = Path(config.get("output_directory") or raw.get("output_directory") or Path.cwd()).expanduser().resolve()
-    name = "_".join(str(raw.get("name") or config.get("name") or "sugar_harvest").split())
+    outputs = _run_harvest(effective, secrets, progress=progress)
+    raw = effective.get("harvest") or {}
+    out_dir = Path(effective["output_directory"]).expanduser().resolve()
+    name = "_".join(str(raw.get("name") or effective.get("name") or "sugar_harvest").split())
     manifest = out_dir / f"{name}.harvest.json"
     if manifest.is_file():
         payload = json.loads(manifest.read_text(encoding="utf-8"))
         payload["access_modes"] = modes
+        if workspace is not None:
+            payload["workspace_project_id"] = workspace.manifest.project_id
         manifest.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     if str(marker.resolve()) not in outputs:
         outputs.append(str(marker.resolve()))
+    register_workspace_outputs(workspace, outputs, operation="harvest", kind="harvest")
     return outputs
 
 
@@ -255,12 +281,28 @@ def _map_reference_layers(config: dict[str, Any]) -> list[ReferenceLayer]:
 
 
 def run_map(config: dict[str, Any]) -> list[str]:
-    source = Path(config["source_file"])
-    output = Path(config.get("output_file") or source.with_name(source.stem + "_map.html"))
-    return [create_map(load_map_frame(source), output, options=_map_options(config), reference_layers=_map_reference_layers(config))]
+    workspace = workspace_from_config(config)
+    source = Path(config["source_file"]).expanduser().resolve()
+    if config.get("output_file"):
+        output = Path(config["output_file"]).expanduser().resolve()
+    elif workspace is not None:
+        output = workspace.path_for("maps") / f"{source.stem}_map.html"
+    else:
+        output = source.with_name(source.stem + "_map.html")
+    outputs = [
+        create_map(
+            load_map_frame(source),
+            output,
+            options=_map_options(config),
+            reference_layers=_map_reference_layers(config),
+        )
+    ]
+    register_workspace_outputs(workspace, outputs, operation="map", kind="map")
+    return outputs
 
 
 def run_overlap(config: dict[str, Any], progress: ProgressCallback | None = None) -> list[str]:
+    workspace = workspace_from_config(config)
     source = Path(config["source_file"]).expanduser().resolve()
     raw = config.get("spatial") or {}
     specs = raw.get("reference_layers") or raw.get("references") or config.get("reference_layers") or []
@@ -289,7 +331,13 @@ def run_overlap(config: dict[str, Any], progress: ProgressCallback | None = None
     _notify(progress, "spatial_matching", observations=len(observations), reference_layers=len(reference_layers), max_distance_km=overlap_config.max_distance_km)
     enriched, matches, summary = analyze_spatial_overlap(observations, reference_layers, config=overlap_config)
 
-    output = Path(config.get("output_file") or raw.get("output_file") or source.with_name(source.stem + "_spatial.csv")).expanduser().resolve()
+    explicit_output = config.get("output_file") or raw.get("output_file")
+    if explicit_output:
+        output = Path(explicit_output).expanduser().resolve()
+    elif workspace is not None:
+        output = workspace.path_for("observations") / f"{source.stem}_spatial.csv"
+    else:
+        output = source.with_name(source.stem + "_spatial.csv")
     output_csv = output if output.suffix.casefold() == ".csv" else output.with_suffix(".csv")
     output_stem = output_csv.with_suffix("")
     save_observations(enriched, output_csv, metadata={"spatial_analysis": summary})
@@ -298,15 +346,33 @@ def run_overlap(config: dict[str, Any], progress: ProgressCallback | None = None
     outputs.append(save_spatial_summary(summary, output_stem.with_name(output_stem.name + "_summary.json")))
 
     if bool(raw.get("create_map", config.get("create_map", False))):
-        map_output = Path(raw.get("map_output") or config.get("map_output") or output_stem.with_name(output_stem.name + "_map.html"))
+        explicit_map = raw.get("map_output") or config.get("map_output")
+        if explicit_map:
+            map_output = Path(explicit_map).expanduser().resolve()
+        elif workspace is not None:
+            map_output = workspace.path_for("maps") / f"{output_stem.name}_map.html"
+        else:
+            map_output = output_stem.with_name(output_stem.name + "_map.html")
         map_config = dict(config)
         map_config["map"] = {**(config.get("map") or {}), "reference_layers": []}
         create_map(observations_to_frame(enriched), map_output, options=_map_options(map_config), reference_layers=map_layers)
         outputs.append(str(map_output.expanduser().resolve()))
 
+    register_workspace_outputs(workspace, outputs, operation="overlap")
     _notify(progress, "spatial_complete", observations_matched=summary["observations_matched"], pair_matches=summary["retained_pair_matches"], outputs=outputs)
     return outputs
 
 
 def run_analysis(config: dict[str, Any]) -> list[str]:
-    return create_analysis_report(config["source_file"], config["output_stem"], config.get("output_format", "both"))
+    workspace = workspace_from_config(config)
+    source = Path(config["source_file"]).expanduser().resolve()
+    stem_value = config.get("output_stem")
+    if stem_value:
+        stem = Path(stem_value).expanduser().resolve()
+    elif workspace is not None:
+        stem = workspace.path_for("reports") / f"{source.stem}_analysis"
+    else:
+        stem = source.with_name(source.stem + "_analysis")
+    outputs = create_analysis_report(source, stem, config.get("output_format", "both"))
+    register_workspace_outputs(workspace, outputs, operation="analysis", kind="report")
+    return outputs

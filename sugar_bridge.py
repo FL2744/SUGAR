@@ -22,6 +22,11 @@ from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_in
 from sugar_core.weibo_qualification import run_weibo_qualification
 from sugar_core.weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
 from sugar_core.workspace import SugarWorkspace
+from sugar_core.workspace_runtime import (
+    choose_output_directory,
+    register_workspace_outputs,
+    workspace_from_config,
+)
 
 BRIDGE_PROTOCOL_VERSION = 3
 WORKSPACE_OPERATIONS = {"workspace-init", "workspace-status", "workspace-register"}
@@ -82,6 +87,8 @@ def progress_event(event: str, values: dict[str, Any]) -> None:
 
 def _run_weibo_investigation(config: dict[str, Any], secrets: dict[str, str]) -> list[str]:
     emit("starting", operation="weibo-investigate")
+    workspace = workspace_from_config(config)
+    out_dir = choose_output_directory(config.get("output_directory"), workspace, "raw")
     result = investigate_weibo_seed(
         config["seed"],
         max_comments=int(config.get("max_comments", 100)),
@@ -94,9 +101,10 @@ def _run_weibo_investigation(config: dict[str, Any], secrets: dict[str, str]) ->
     )
     outputs = save_weibo_investigation(
         result,
-        config.get("output_directory") or ".",
+        out_dir,
         name=str(config.get("name") or "weibo_investigation"),
     )
+    register_workspace_outputs(workspace, outputs, operation="weibo-investigate")
     emit(
         "weibo_investigation",
         seed_record_key=result.seed.record_key,
@@ -177,7 +185,13 @@ def main(argv=None) -> int:
             outputs = _run_weibo_investigation(config, secrets)
         elif args.command == "weibo-seed-harvest":
             emit("starting", operation="weibo-seed-harvest")
+            workspace = workspace_from_config(config)
             raw = config.get("seed_harvest") or config
+            out_dir = choose_output_directory(
+                config.get("output_directory") or raw.get("output_directory"),
+                workspace,
+                "raw",
+            )
             harvest_config = SeedHarvestConfig(
                 seeds=tuple(raw.get("seeds") or []),
                 name=str(raw.get("name") or "weibo_seed_harvest"),
@@ -195,13 +209,20 @@ def main(argv=None) -> int:
             )
             outputs = run_weibo_seed_harvest(
                 harvest_config,
-                config.get("output_directory") or raw.get("output_directory") or ".",
+                out_dir,
                 cookie=secrets.get("weibo_cookie", ""),
                 progress=progress_event,
             )
+            register_workspace_outputs(workspace, outputs, operation="weibo-seed-harvest", kind="harvest")
         elif args.command == "weibo-qualify":
             emit("starting", operation="weibo-qualify")
-            outputs = run_weibo_qualification(config, secrets, progress=progress_event)
+            workspace = workspace_from_config(config)
+            effective = dict(config)
+            effective["output_directory"] = str(
+                choose_output_directory(config.get("output_directory"), workspace, "raw")
+            )
+            outputs = run_weibo_qualification(effective, secrets, progress=progress_event)
+            register_workspace_outputs(workspace, outputs, operation="weibo-qualify")
         elif args.command == "map":
             emit("starting", operation="map")
             emit("mapping", source_file=str(config.get("source_file", "")))

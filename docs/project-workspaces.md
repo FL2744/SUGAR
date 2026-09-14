@@ -68,7 +68,7 @@ Resolve a canonical directory:
 sugar-project path ./team4 observations
 ```
 
-Register an output:
+Register an output manually when needed:
 
 ```bash
 sugar-project register ./team4 observations data/observations/kyrgyzstan.xlsx \
@@ -83,9 +83,41 @@ sugar-project list ./team4
 sugar-project list ./team4 --kind observations --json
 ```
 
-`SugarWorkspace.discover()` can locate a workspace by walking upward from a nested project directory. This is useful for future desktop and automation flows where users should not need to re-select the manifest every time.
+`SugarWorkspace.discover()` locates a workspace by walking upward from a nested project directory. The normal `sugar` and `sugar-state` CLIs use the same behavior, so users working anywhere inside a project normally do not need to repeat `--workspace`.
 
 `--exist-ok` is non-destructive: if a workspace already exists, SUGAR reopens it rather than replacing its project identity or manifest.
+
+## Automatic workflow routing
+
+A workspace is now an active execution context rather than only an artifact catalog. When a normal workflow runs inside a project and an explicit output path is not supplied, SUGAR routes the result to the canonical project directory and registers it automatically.
+
+Current routing is:
+
+| Workflow/product | Default workspace destination |
+| --- | --- |
+| bounded search, high-volume harvest, Weibo investigation/qualification | `data/raw` |
+| general AI triage and spatially enriched observation datasets | `data/observations` |
+| monitored-entity and U.S.-presence reference templates | `references` |
+| State assessments, review workbooks, audits, rollups, networks, freshness and gap products | `state` |
+| general and State research maps | `outputs/maps` |
+| analysis Word/PDF products | `outputs/reports` |
+| analytic-intelligence packets, synthesis, hypotheses, tradecraft and comparisons | `outputs/intelligence` |
+| uncategorized exports | `outputs/exports` |
+
+An explicit `--output` / `--output-stem` remains authoritative. This preserves scripted and standalone workflows while allowing project users to stop hand-assembling directory paths.
+
+Examples from anywhere under the project root:
+
+```bash
+sugar harvest "American Space" --sources bilibili,weibo
+sugar triage data/raw/social_search_posts_20260914_120000.csv
+sugar-state triage data/observations/social_search_posts_20260914_120000_observations.csv
+sugar-state map data/observations/social_search_posts_20260914_120000_observations.csv state/state_triage.jsonl
+```
+
+The resulting artifacts are registered with an operation name, so desktop and automation flows can discover the latest observations, State assessment snapshot, maps, or intelligence product instead of requiring the user to select every file again.
+
+Desktop State/intelligence operations use the same contract. For example, `state-map` can receive only a workspace when that workspace already has registered `observations` and `state_assessments` artifacts.
 
 ## Python API
 
@@ -110,13 +142,13 @@ print(workspace.status())
 
 ## Desktop bridge
 
-Bridge protocol 3 adds these typed operations:
+Bridge protocol 3 exposes the workspace primitives:
 
 - `workspace-init`
 - `workspace-status`
 - `workspace-register`
 
-They use the same workspace implementation as the Python API and `sugar-project` CLI. Desktop applications should consume these operations rather than reimplementing manifest or SQLite logic.
+State/intelligence desktop operations also consume the same workspace implementation. Desktop applications should pass the workspace path and use typed operations rather than reimplementing manifest, artifact-discovery, or SQLite logic.
 
 ## Portability and collaboration
 
