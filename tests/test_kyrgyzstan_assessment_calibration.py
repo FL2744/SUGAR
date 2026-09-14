@@ -30,7 +30,7 @@ def test_support_calibration_distinguishes_direct_and_weaker_support_evidence():
         for observation, assessment in zip(observations, assessments, strict=True)
     }
 
-    assert summary == {"probable": 9, "possible": 2, "language_domain_migrations": 4}
+    assert summary == {"probable": 9, "possible": 2}
     assert by_title["Chinese painting exhibition at the National Historical Museum"].prc_support.level == "probable"
     assert by_title["Chinese Bridge school competition Kyrgyzstan qualifier"].prc_support.level == "probable"
     assert by_title["Kyrgyz and Chinese writers organizations sign cooperation agreement"].prc_support.level == "possible"
