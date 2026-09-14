@@ -1,164 +1,132 @@
-![sugar logo](sugar-logo.png)
+![SUGAR logo](sugar-logo.png)
 
 # SUGAR
 
 **System for User-Generated Content Gathering, Analysis, and Representation**
 
-SUGAR helps researchers collect public social-media content, organize and translate it, infer broad geographic context, build maps, and create descriptive analytical reports. It is being developed for Virginia Tech Diplomacy Lab work on public diplomacy and cultural-influence networks.
+SUGAR is a cross-platform public-source research system for collecting social-media material, preserving provenance, organizing evidence, conducting spatial and structured analysis, and producing reviewable research products. It is developed for Virginia Tech Diplomacy Lab work on public diplomacy and PRC-supported cultural/public-engagement networks, while the core remains platform-neutral.
 
-The stable Python core currently includes collectors/workflows for **X, Bluesky, Mastodon, Bilibili, and Weibo**. The native macOS UI may expose a smaller subset while newer research workflows are validated. SUGAR can be used through the native macOS app or from the Python command line.
+Current package version: **1.2.0**.
 
-## Quick start for macOS users
+## What SUGAR does
 
-If you received a SUGAR `.app` or `.dmg` build from the project team, you do **not** need to install Python or use Terminal.
+SUGAR provides one shared Python research core with native macOS and Windows clients. The supported pipeline is:
 
-### 1. Check your Mac first
+**Collect → Normalize → Enrich/triage → Human review → Evidence dataset → Spatial/analytic products → Refresh**
 
-The current SUGAR GUI requires **macOS 13 Ventura or newer**.
+The core currently supports collection/workflows for **X, Bluesky, Mastodon, Bilibili, and Weibo**, including resumable high-volume harvesting, source provenance, thread relationships, AI-assisted triage, research observations, project workspaces, mapping, State-specific assessment/review, networks, rollups, freshness/change detection, and analytic-intelligence workflows.
 
-To check:
+SUGAR deliberately distinguishes **presence, activity, reach, engagement, outcomes, and causal influence**. It does not manufacture a universal influence score or treat collection density as influence.
 
-1. Open the Apple menu.
-2. Choose **About This Mac**.
-3. Note your **macOS version**.
-4. Note whether the machine uses an **Apple chip** (M1, M2, M3, M4, etc.) or an **Intel processor**.
+## Entry points
 
-If SUGAR does not launch, include both of those details when reporting the problem. Architecture compatibility is still being tested across team machines, so do not assume that an app build produced on one Mac will necessarily work on every Intel and Apple Silicon Mac.
-
-### 2. Open SUGAR
-
-Open the supplied SUGAR application normally.
-
-Some development/test builds are not publicly notarized. If macOS says that the developer cannot be verified or blocks the app, only override that warning if the copy came from a trusted project source. If you are unsure, stop and ask the project maintainer rather than bypassing the warning.
-
-### 3. Enter credentials if your task requires them
-
-Open **Settings** inside SUGAR. Credentials entered in the macOS app are stored in macOS Keychain rather than in the project folder.
-
-| What you want to do | What you may need |
+| Surface | Purpose |
 | --- | --- |
-| Search X | X API bearer token |
-| Search Bluesky public results | No Bluesky login is required for the public search path |
-| Use authenticated Bluesky search | Bluesky identifier + app password |
-| Search Mastodon | Depends on the server; a token may improve or enable search behavior |
-| Translate or infer locations with an LLM | OpenAI, Virginia Tech ARC, or compatible API key |
-| Map an existing SUGAR CSV/XLSX | No social-media API credential |
-| Analyze an existing SUGAR CSV/XLSX | No social-media API credential |
+| `SUGAR-macOS/` | Native SwiftUI application for macOS 13+ |
+| `SUGAR-Windows/` | Native PySide6 research workbench for Windows |
+| `sugar` | General collection, harvest, triage, overlap, mapping, and reporting CLI |
+| `sugar-project` | Persistent project-workspace management |
+| `sugar-state` | State/Diplomacy Lab evidence-to-brief workflow |
+| `sugar-intel` | Structured analytic-intelligence workflow |
+| `sugar_bridge.py` | Typed line-delimited JSON process boundary used by desktop clients |
 
-### 4. Run your first search
+Both desktop applications call the same `sugar_core` implementation. Collection semantics, evidence rules, assessment logic, maps, and synthesis should not be reimplemented in individual frontends.
 
-Open **Search** and:
+## Desktop use
 
-1. Choose one or more sources exposed by the current GUI build.
-2. Enter one or more search terms, separated by commas.
-3. Optionally set a start and end date in `YYYY-MM-DD` format.
-4. Choose how many posts/pages you want to request.
-5. Turn translation, location inference, and repost inclusion on or off as needed.
-6. Choose an output folder.
-7. Click **Run Search**.
+### macOS
 
-The **Activity** panel at the bottom of the app shows whether SUGAR is running and lists generated output files when the task finishes.
+The packaged macOS application requires **macOS 13 Ventura or newer**. Development/test builds may not be publicly notarized; only override Gatekeeper warnings for builds obtained from a trusted project source. Credentials entered through the native app are stored using macOS Keychain where supported.
 
-### 5. Work with the results
+See [`SUGAR-macOS/README.md`](SUGAR-macOS/README.md) for build, packaging, compatibility, signing, and troubleshooting details.
 
-A normal search can create:
+### Windows
 
-- `social_search_posts_<timestamp>.csv` — plain tabular results.
-- `social_search_posts_<timestamp>.xlsx` — Excel version of the same results.
-- `social_search_posts_<timestamp>.metadata.json` — run metadata and provenance information.
+The Windows workbench packages `SUGAR.exe` plus a separate `sugar-bridge.exe` child process. That separation keeps the UI responsive, provides real cancellation, and isolates backend failures. Development/CI bundles are unsigned and may trigger SmartScreen; production distribution should use normal Authenticode signing rather than weakening endpoint protections.
 
-Use the **Map** tab to create an interactive HTML map from an existing CSV/XLSX file.
+See [`SUGAR-Windows/README.md`](SUGAR-Windows/README.md) for development, packaging, credentials, and troubleshooting.
 
-Use the **Analysis** tab to create Word and/or PDF descriptive reports from an existing CSV/XLSX file. Mapping and analysis do not rerun social-media collection.
+## Python installation
 
-## Troubleshooting
+Python **3.11–3.13** is supported.
 
-### SUGAR will not open at all
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # Windows PowerShell: .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
 
-First collect these three details:
+For development:
 
-- Mac model/chip: Apple Silicon or Intel.
-- macOS version.
-- Exact message shown by macOS, or what happens when you click the app.
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest
+```
 
-Examples of useful reports:
+SUGAR never installs or upgrades packages at runtime.
 
-`2020 MacBook Pro — Intel — macOS 13.7 — icon bounces once and closes`
+## Project workspaces
 
-`MacBook Air M2 — macOS 15.6 — "developer cannot be verified"`
+SUGAR 1.2 adds persistent project workspaces. A workspace keeps a portable `sugar-project.json` manifest, a local `.sugar/workspace.sqlite3` artifact registry, and standardized locations for raw collection, research observations, reference layers, State assessments, maps, reports, and intelligence outputs.
 
-That information is much more useful than reporting only that "SUGAR does not work."
+```bash
+sugar-project init ./team4 \
+  --name "Diplomacy Lab Team 4" \
+  --description "PRC public-diplomacy research"
 
-### macOS says the system version is unsupported
+sugar-project status ./team4
+sugar-project path ./team4 observations
+sugar-project register ./team4 observations data/observations/kyrgyzstan.xlsx
+```
 
-The current native GUI declares **macOS 13.0 or newer** as its minimum. macOS 12 Monterey and older are not currently supported by the GUI build.
+Research files remain ordinary CSV/XLSX/JSONL/GeoJSON/HTML/Word/PDF files rather than being hidden inside the project database. Secrets are never stored in the workspace manifest or registry by SUGAR.
 
-### macOS says the developer cannot be verified
+See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the workspace schema, layout, portability rules, Python API, and desktop bridge operations.
 
-This usually indicates a signing/notarization issue with a development build rather than a SUGAR data-processing error. Confirm that the app came from the project team before overriding any Gatekeeper warning.
+## Collection
 
-### The app opens, but a search fails
+| Source | Current supported surface |
+| --- | --- |
+| X | API v2 recent/full-archive search, subject to caller access/billing |
+| Bluesky | Public AppView search; optional authenticated PDS proxy path |
+| Mastodon | Instance-scoped status search |
+| Bilibili | Public video search, known-video metadata, and public comments |
+| Weibo | Public/authorized search where available, known-public-post retrieval, comments, seed expansion, qualification workflows |
 
-Check the **Activity** panel and copy the error message. Common causes include:
+All collectors normalize into the shared `PostRecord` model. SUGAR preserves stable native IDs, canonical URLs, collection/published times, query matches, canonical engagement fields, raw platform metrics, source mode, and schema/collector versions.
 
-- missing or invalid API credentials;
-- API access, billing, or rate-limit restrictions;
-- source-specific search/login limitations;
-- network connectivity problems;
-- the bundled backend failing to start.
+One content object can match multiple queries; deduplication retains every matching query rather than discarding discovery provenance.
 
-When reporting the problem, include the source you were searching, whether the app itself opened successfully, and the exact error text. Do **not** send API keys, cookies, or passwords in a bug report.
+### High-volume harvesting
 
-### The search runs but returns no posts
+`harvest` is the durable collection path for thousands or tens of thousands of records. It decomposes work into deterministic tasks, checkpoints completed work to SQLite, resumes without recollection, records rate-limit/defer events, and separates raw collection from later AI processing.
 
-A zero-result search does not always mean SUGAR is broken. Search coverage differs by platform and access mode. A platform may also gate a search route even while known public items remain accessible.
+```bash
+sugar harvest \
+  --sources bilibili,weibo \
+  --terms-file csm_terms_zh.txt \
+  --target 10000 \
+  --output ./runs/csm_sep14 \
+  --name csm_sep14
+```
 
-SUGAR should record access-limited or unavailable surfaces distinctly rather than silently turning an access failure into evidence of zero activity.
+See [`docs/high-volume-harvest.md`](docs/high-volume-harvest.md).
 
-### I do not know where the output went
+## State / Diplomacy Lab workflow
 
-The Search screen lets you choose an output directory. Completed files are also listed in the **Activity** panel. The Map and Analysis screens allow you to choose their output paths separately.
+The `sugar-state` suite keeps source-grounded `ResearchObservation` evidence separate from sponsor-specific `StateAssessment` judgments. It supports:
 
-### I am reporting a launch problem to the team
-
-Please include:
-
-1. Mac model or chip.
-2. macOS version.
-3. Whether the SUGAR window ever appears.
-4. Exact warning/error text.
-5. Whether the failure occurs at launch or only after clicking **Run Search**, **Create Map**, or **Create Analysis**.
-
-Do not include credentials, tokens, passwords, session cookies, or other secrets.
-
-## What SUGAR is doing under the hood
-
-The supported implementation lives in `sugar_core/`. The original `SUGAR.py` monolith is retained as the historical prototype, but new work should target the stable package.
-
-The research pipeline is:
-
-**Collect → Normalize → AI enrich/triage → Human review → Dataset → Map/analysis → Refresh**
-
-The stable schema is platform-neutral. It records native IDs, canonical URLs, authors, publication and collection times, original text, language, query provenance, canonical engagement metrics, location evidence, collector/schema versions, and raw platform metrics. Backward-compatible aliases are still exported for older SUGAR workbooks.
-
-## State Department / Diplomacy Lab research workflow
-
-The `sugar-state` command suite is the evidence-to-brief workflow for the Diplomacy Lab project. It keeps raw `ResearchObservation` evidence separate from State-specific analytic assessments and adds:
-
-- strategic audiences and program domains;
-- narrative/theme coding;
-- explicit PRC-support basis and evidence;
-- claim-level evidence and epistemic status;
+- monitored-entity/alias registries and reproducible query plans;
+- strategic-audience, program-domain, and narrative coding;
+- explicit PRC-support basis/evidence;
+- guarded AI triage followed by human review;
 - American Spaces/EducationUSA/U.S. public-diplomacy overlap;
-- human-review workbooks and evidence-integrity audits;
-- verified-only BLUF, map, relationship network, and country/city rollups;
-- monitored-entity/alias registries and reproducible watch-query plans;
-- collection freshness and change detection;
-- research-gap prioritization.
+- evidence-integrity auditing;
+- verified-only maps, networks, BLUFs, and country/city rollups;
+- collection freshness, change detection, and research-gap prioritization.
 
-The State workflow deliberately separates **presence, activity, reach, engagement, outcomes, and causal influence**. It does not create a universal influence score. Maps/networks/briefs default to human-verified material, and missing observations are described as collection gaps rather than proof of no activity.
-
-A complete package can be generated with:
+Example:
 
 ```bash
 sugar-state package observations.xlsx \
@@ -170,134 +138,62 @@ sugar-state package observations.xlsx \
   --name quarterly_update
 ```
 
-See [`docs/state-department-workflow.md`](docs/state-department-workflow.md) for the full methodology, review rules, guardrails, entity monitoring, network semantics, freshness rules, and command examples.
+See [`docs/state-department-workflow.md`](docs/state-department-workflow.md) and [`docs/state-analytic-intelligence.md`](docs/state-analytic-intelligence.md).
 
-## Collection behavior
+## Mapping and spatial analysis
 
-### X
+The research map can consume raw source exports or richer research-observation datasets. It supports marker clustering, reference overlays, review-state layers, activity-density windows, verified-only density, geographic-confidence weighting, nearest-reference proximity, and explicit U.S.-overlap views.
 
-SUGAR uses X API v2 recent or full-archive search. Full archive depends on the account's X API access/billing. Selected language filters are added to the X query. Start and end dates are inclusive.
+Heat layers represent mapped-record density, **not influence**. Geographic proximity represents distance, **not competition or coordination**.
 
-### Bluesky
+See [`docs/research-map.md`](docs/research-map.md) and [`docs/spatial-overlap.md`](docs/spatial-overlap.md).
 
-SUGAR uses `app.bsky.feed.searchPosts` through the public AppView or, when credentials are supplied, an authenticated PDS proxy. Query syntax and coverage are not assumed to be equivalent to X.
+## AI use
 
-### Mastodon
+LLM enrichment and triage are optional. Source text is treated as untrusted data and separated from model instructions. SUGAR does not infer a country from language alone and does not infer private/street-level locations.
 
-Mastodon search is instance-scoped, not a global Fediverse index. Search coverage depends on the selected server and its indexing settings. Favorites, replies, and reblogs are mapped into SUGAR's canonical engagement fields for cross-platform analysis.
+For State-specific analysis, AI cannot self-verify evidence, confirm PRC support, invent acceptable evidence references, or establish causal influence. High-consequence claims remain subject to explicit evidence and human review.
 
-### Bilibili
+Supported LLM configuration includes OpenAI-compatible providers and Virginia Tech ARC. Credentials are supplied at runtime; they must not be committed to the repository or inserted into project manifests.
 
-SUGAR includes fail-closed public Bilibili video search, known-video metadata, and comment collection. It does not attempt to defeat login, verification, anti-bot, or rate-limit controls.
+## Research and access boundaries
 
-### Weibo
+SUGAR is designed for ordinary public or explicitly authorized access. It does **not** solve CAPTCHAs, manufacture authentication/session state, spoof devices, rotate proxies/accounts to evade limits, or bypass platform access controls. When a source denies access, requires unsupported login/verification, or rate-limits collection, the collector must fail or defer explicitly rather than converting that failure into evidence of zero activity.
 
-SUGAR distinguishes Weibo keyword search from known-public-post retrieval and comment expansion. Access can vary by surface. A legitimate team-supplied session may be used where a platform requires authentication, but SUGAR does not generate, harvest, or bypass credentials. Known public seed expansion and collection qualification are separate workflows so search-access failure is not confused with zero matching activity.
+The State workflow is a research methodology and product for the Diplomacy Lab project. It is not a Department of State security authorization, ATO, official intelligence product, procurement approval, or AI certification.
 
-## AI enrichment
+## Repository architecture
 
-LLM enrichment is optional. Source text is treated as untrusted data and is separated from model instructions. Location inference is broad and exploratory: SUGAR will not choose a country from language alone and does not infer private or street-level locations.
+The supported implementation lives in `sugar_core/`. The original `SUGAR.py` and `sugar_analysis.py` are retained for historical compatibility/reference; new engineering work should not extend those monoliths.
 
-State-specific AI triage is additionally fail-closed for high-consequence claims: the model cannot confirm PRC support, cannot self-verify findings, cannot invent acceptable evidence references, and cannot establish causal influence.
+See [`docs/architecture.md`](docs/architecture.md) for module boundaries, frontend/core dependency rules, bridge architecture, test expectations, and legacy-code policy.
 
-LLM and geocoding results are cached under `.sugar-cache/` so reruns can reuse prior work and reduce cost.
+## Documentation
 
-## Provenance and deduplication
+- [`docs/architecture.md`](docs/architecture.md) — current system architecture and engineering rules
+- [`docs/project-workspaces.md`](docs/project-workspaces.md) — persistent project-workspace contract
+- [`docs/collector-interface.md`](docs/collector-interface.md) — collector capabilities and normalization contract
+- [`docs/high-volume-harvest.md`](docs/high-volume-harvest.md) — durable large-scale collection
+- [`docs/bilibili-public.md`](docs/bilibili-public.md) — Bilibili public collector
+- [`docs/weibo-public.md`](docs/weibo-public.md) — Weibo public collector
+- [`docs/weibo-investigation.md`](docs/weibo-investigation.md) — known-post investigation workflow
+- [`docs/weibo-qualification.md`](docs/weibo-qualification.md) — reproducible Weibo acceptance/qualification
+- [`docs/research-observations.md`](docs/research-observations.md) — evidence-layer schema
+- [`docs/research-map.md`](docs/research-map.md) — analytical map methodology
+- [`docs/spatial-overlap.md`](docs/spatial-overlap.md) — reference-network proximity analysis
+- [`docs/state-department-workflow.md`](docs/state-department-workflow.md) — State workflow and integrity rules
+- [`docs/state-analytic-intelligence.md`](docs/state-analytic-intelligence.md) — structured analytic products
+- [`docs/state-agentic-deep-mode.md`](docs/state-agentic-deep-mode.md) — iterative synthesis mode
 
-One content object can match multiple queries. SUGAR stores a single normalized record while preserving every matching query in `query_matches`. This prevents deduplication from silently destroying search provenance.
+## Development and contribution
 
-Every export also records the collection time, collector version, schema version, source URL, raw metrics, and a run-level `.metadata.json` sidecar.
-
-## Command-line installation
-
-The sections below are for developers, ARC users, and anyone intentionally running SUGAR from Python rather than the macOS GUI.
-
-Python **3.11–3.13** is supported.
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e .
-```
-
-For development/testing:
+Before opening a pull request:
 
 ```bash
 python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-SUGAR never installs or upgrades packages at runtime.
+CI runs the Python suite on Ubuntu, macOS, and Windows with Python 3.11–3.13 and separately builds/smoke-tests the packaged macOS and Windows applications. Schema, collector, bridge, workspace, or methodology changes should include regression tests and documentation in the same pull request.
 
-## CLI examples
-
-Search X with translation/location enrichment:
-
-```bash
-export SUGAR_X_BEARER_TOKEN='...'
-export SUGAR_LLM_API_KEY='...'
-python -m sugar_core search "Confucius Institute" --sources x --since 2026-01-01 --until 2026-09-10
-```
-
-Use Virginia Tech ARC for enrichment:
-
-```bash
-python -m sugar_core search "孔子学院" --sources x,bluesky \
-  --provider arc --model gpt-oss-120b --since 2026-01-01 --until 2026-09-10
-```
-
-Collect without LLM enrichment:
-
-```bash
-python -m sugar_core search "democracy" --sources bluesky --no-translate --no-location
-```
-
-Create a map from an existing SUGAR CSV/XLSX:
-
-```bash
-python -m sugar_core map social_search_posts_YYYYMMDD_HHMMSS.csv
-```
-
-Create deterministic Word/PDF analysis:
-
-```bash
-python -m sugar_core analysis social_search_posts_YYYYMMDD_HHMMSS.csv --format both
-```
-
-## Virginia Tech ARC / Open OnDemand
-
-On Virginia Tech ARC, create and activate a virtual environment in your project space, install the repository once, and run the same CLI. The stable analysis path contains no hard-coded macOS font dependency.
-
-ARC's OpenAI-compatible LLM endpoint is supported with provider `arc`. Supply a personal ARC API key through `SUGAR_LLM_API_KEY` or the macOS application's Keychain-backed settings.
-
-## Credentials for command-line use
-
-Credentials are never committed to the repository or written into result files. Supported environment variables include:
-
-- `SUGAR_X_BEARER_TOKEN`
-- `SUGAR_LLM_API_KEY`
-- `SUGAR_BLUESKY_IDENTIFIER`
-- `SUGAR_BLUESKY_APP_PASSWORD`
-- `SUGAR_MASTODON_TOKEN`
-- `SUGAR_WEIBO_COOKIE` — optional legitimate team-supplied Weibo session state for routes that require it; SUGAR does not generate it.
-
-The native macOS application stores supported GUI credentials in macOS Keychain and passes them to the bundled backend only for execution.
-
-## Native macOS application development
-
-`SUGAR-macOS/` contains the SwiftUI UI. Its backend is `sugar_bridge.py`, which calls `sugar_core`. Build, signing, packaging, and notarization scripts live under `SUGAR-macOS/scripts/`.
-
-The current GUI deployment target is macOS 13.0. Before claiming wider architecture or older-macOS compatibility for a release, test the packaged application and bundled backend on the intended target machines.
-
-See `SUGAR-macOS/README.md` for build and distribution details.
-
-## Contributing
-
-Please keep changes reviewable and preserve the research/provenance guarantees in the stable core.
-
-Do not add another platform by adding another large function to `SUGAR.py`. New collectors should normalize into `sugar_core.models.PostRecord`, preserve native/raw fields, and include tests for pagination, date semantics, deduplication/provenance, and engagement normalization.
-
-For larger architectural changes, prefer a focused design discussion or staged pull requests rather than replacing multiple components at once.
-
-See `STABILIZATION.md` for the v1.1 stabilization baseline.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), and [`CHANGELOG.md`](CHANGELOG.md).
