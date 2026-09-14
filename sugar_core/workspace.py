@@ -116,10 +116,10 @@ class SugarWorkspace:
     @classmethod
     def open(cls, path: str | Path) -> "SugarWorkspace":
         candidate = Path(path).expanduser()
-        if candidate.is_file():
-            if candidate.name != MANIFEST_FILENAME:
-                raise ValueError(f"Expected {MANIFEST_FILENAME}, got {candidate.name}")
+        if candidate.name == MANIFEST_FILENAME:
             manifest_path = candidate.resolve()
+        elif candidate.is_file():
+            raise ValueError(f"Expected {MANIFEST_FILENAME}, got {candidate.name}")
         else:
             manifest_path = candidate.resolve() / MANIFEST_FILENAME
         if not manifest_path.is_file():
@@ -195,23 +195,24 @@ class SugarWorkspace:
         with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO artifacts(kind, path, label, registered_at, updated_at, metadata_json)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO artifacts(kind, path, label, registered_at, updated_at, metadata_json, external)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(kind, path) DO UPDATE SET
                     label = excluded.label,
                     updated_at = excluded.updated_at,
-                    metadata_json = excluded.metadata_json
+                    metadata_json = excluded.metadata_json,
+                    external = excluded.external
                 """,
-                (kind, stored_path, str(label).strip(), now, now, metadata_json),
+                (kind, stored_path, str(label).strip(), now, now, metadata_json, int(external)),
             )
             connection.commit()
             row = connection.execute(
-                "SELECT id, kind, path, label, registered_at, updated_at, metadata_json "
+                "SELECT id, kind, path, label, registered_at, updated_at, metadata_json, external "
                 "FROM artifacts WHERE kind = ? AND path = ?",
                 (kind, stored_path),
             ).fetchone()
         assert row is not None
-        return self._artifact_from_row(row, external=external)
+        return self._artifact_from_row(row)
 
     def register_outputs(
         self,
@@ -232,18 +233,15 @@ class SugarWorkspace:
         return records
 
     def list_artifacts(self, kind: str | None = None) -> list[ArtifactRecord]:
+        select = "SELECT id, kind, path, label, registered_at, updated_at, metadata_json, external FROM artifacts"
         with self._connect() as connection:
             if kind:
                 rows = connection.execute(
-                    "SELECT id, kind, path, label, registered_at, updated_at, metadata_json "
-                    "FROM artifacts WHERE kind = ? ORDER BY id DESC",
+                    select + " WHERE kind = ? ORDER BY id DESC",
                     (str(kind).strip().casefold().replace(" ", "_"),),
                 ).fetchall()
             else:
-                rows = connection.execute(
-                    "SELECT id, kind, path, label, registered_at, updated_at, metadata_json "
-                    "FROM artifacts ORDER BY id DESC"
-                ).fetchall()
+                rows = connection.execute(select + " ORDER BY id DESC").fetchall()
         return [self._artifact_from_row(row) for row in rows]
 
     def latest_artifact(self, kind: str) -> ArtifactRecord | None:
@@ -277,7 +275,7 @@ class SugarWorkspace:
 
     def artifact_absolute_path(self, artifact: ArtifactRecord) -> Path:
         stored = Path(artifact.path)
-        if artifact.external or stored.is_absolute():
+        if artifact.external:
             return stored.expanduser().resolve()
         return (self.root / stored).resolve()
 
@@ -313,11 +311,10 @@ class SugarWorkspace:
         except ValueError:
             return str(path), True
 
-    def _artifact_from_row(self, row: sqlite3.Row, *, external: bool | None = None) -> ArtifactRecord:
+    def _artifact_from_row(self, row: sqlite3.Row) -> ArtifactRecord:
         stored = str(row["path"])
+        external = bool(row["external"])
         path_obj = Path(stored)
-        if external is None:
-            external = path_obj.is_absolute()
         absolute = path_obj.expanduser().resolve() if external else (self.root / path_obj).resolve()
         raw_metadata = str(row["metadata_json"] or "{}")
         try:
@@ -334,7 +331,7 @@ class SugarWorkspace:
             registered_at=str(row["registered_at"]),
             updated_at=str(row["updated_at"]),
             metadata=metadata,
-            external=bool(external),
+            external=external,
             exists=absolute.exists(),
         )
 
@@ -371,10 +368,14 @@ class SugarWorkspace:
                     registered_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     metadata_json TEXT NOT NULL DEFAULT '{}',
+                    external INTEGER NOT NULL DEFAULT 0,
                     UNIQUE(kind, path)
                 )
                 """
             )
+            columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(artifacts)").fetchall()}
+            if "external" not in columns:
+                connection.execute("ALTER TABLE artifacts ADD COLUMN external INTEGER NOT NULL DEFAULT 0")
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_artifacts_kind_id ON artifacts(kind, id DESC)"
             )
