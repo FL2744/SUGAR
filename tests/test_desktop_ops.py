@@ -9,6 +9,7 @@ from sugar_core.observation_storage import save_observations
 from sugar_core.observations import EvidenceReference, ResearchObservation
 from sugar_core.state_schema import StateAssessment
 from sugar_core.state_workflow import save_state_assessments
+from sugar_core.workspace import SugarWorkspace
 
 
 def _dataset(tmp_path: Path) -> tuple[Path, Path]:
@@ -43,6 +44,7 @@ def test_bridge_advertises_typed_desktop_operations():
     info = sugar_bridge.backend_info()
     assert info["bridge_protocol"] == 3
     assert "state-package" in info["operations"]
+    assert "state-map" in info["operations"]
     assert "intel-synthesize" in info["operations"]
     assert "workspace-init" in info["operations"]
     assert "workspace-status" in info["operations"]
@@ -97,3 +99,44 @@ def test_state_audit_desktop_operation_writes_json(tmp_path):
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["observations"] == 1
     assert payload["assessments"] == 1
+
+
+def test_desktop_state_map_can_resolve_registered_workspace_inputs(tmp_path):
+    workspace = SugarWorkspace.create(tmp_path / "project", name="Project")
+    observation = ResearchObservation(
+        observation_type="event",
+        title="Verified event",
+        summary="Verified public event.",
+        country="Kyrgyzstan",
+        city="Bishkek",
+        latitude=42.8746,
+        longitude=74.5698,
+        location_basis="reported_city",
+        location_confidence=0.8,
+        evidence=[EvidenceReference(url="https://example.org/event")],
+        verification_state="human_verified",
+        reviewer="analyst",
+    )
+    observations_path = workspace.path_for("observations") / "observations.csv"
+    save_observations([observation], observations_path)
+    assessments_path = workspace.path_for("state") / "assessments.jsonl"
+    save_state_assessments(
+        [
+            StateAssessment(
+                observation_id=observation.observation_id,
+                review_state="human_verified",
+                reviewer="analyst",
+            )
+        ],
+        assessments_path,
+    )
+    workspace.register_artifact("observations", observations_path)
+    workspace.register_artifact("state_assessments", assessments_path)
+
+    outputs = run_desktop_analytic_operation("state-map", {"workspace": str(workspace.root)})
+
+    html_outputs = [Path(value) for value in outputs if str(value).endswith(".html")]
+    assert len(html_outputs) == 1
+    assert html_outputs[0].parent == workspace.path_for("maps")
+    assert html_outputs[0].is_file()
+    assert workspace.latest_artifact("map") is not None
