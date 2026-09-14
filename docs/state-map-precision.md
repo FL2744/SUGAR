@@ -104,8 +104,10 @@ Every State map writes `<map>.metadata.json`. The sidecar records:
 - the minimum confidence threshold;
 - counts by precision tier;
 - how many mapped points were derived/geocoded;
+- a complete `resolved_locations` ledger for every plotted observation, including coordinates, precision, confidence, basis, original/derived status, resolution query, provider feature type, uncertainty radius, and density eligibility;
 - how many eligible observations remained unresolved;
 - a structured list of unresolved observation IDs and reasons;
+- whether activity density was requested and actually rendered;
 - how many observations were density-eligible or excluded for precision;
 - the density and precision semantics used to generate the map.
 
