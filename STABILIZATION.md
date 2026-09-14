@@ -1,34 +1,49 @@
-# SUGAR stabilization baseline — v1.1
+# SUGAR v1.1 stabilization baseline (historical)
 
-This branch establishes a supported, testable core for SUGAR before new platform collectors are added.
+This document records the v1.1 stabilization baseline that established the supported `sugar_core` architecture. It is retained for historical context; **it is not the current feature roadmap**. Current capabilities and contribution rules are documented in `README.md`, `docs/architecture.md`, and `CHANGELOG.md`.
 
-## Supported path
+## What v1.1 established
 
-Use the `sugar_core` package (`python -m sugar_core` or the `sugar` console script). The historical `SUGAR.py` monolith remains in the repository for reference and backward compatibility, but new engineering work should target `sugar_core`.
+The v1.1 stabilization moved new engineering work away from the historical `SUGAR.py` monolith and into a supported, testable Python package. It established the following invariants:
 
-## What this baseline fixes
+- no runtime package installation or dependency upgrades;
+- Linux/ARC as a first-class environment;
+- platform-neutral engagement normalization;
+- multi-query deduplication that preserves query provenance;
+- consistent inclusive date semantics;
+- spreadsheet formula-injection protection without corrupting coordinates;
+- preservation of raw platform metrics alongside canonical fields;
+- collection timestamps, schema/collector versions, stable IDs/URLs, and metadata sidecars;
+- instruction/source separation for AI enrichment;
+- cached LLM/geocoding results;
+- the native macOS bridge calling the shared core instead of importing the legacy monolith;
+- CI coverage across supported Python versions and operating systems.
 
-- No package installation or dependency upgrades occur at runtime.
-- Linux/ARC is a first-class supported environment; report generation no longer depends on macOS font paths.
-- Platform-specific engagement is normalized before analysis. Mastodon favorites/reblogs are no longer silently omitted.
-- Duplicate posts found through multiple search queries retain all query matches rather than losing provenance.
-- Date ranges use inclusive start and end dates consistently.
-- Spreadsheet formula-injection protection does not alter numeric coordinates.
-- Raw platform metrics are preserved alongside canonical engagement fields.
-- Collection outputs include `collected_at`, schema/collector versions, native IDs, canonical URLs, and a metadata sidecar.
-- AI enrichment separates instructions from untrusted source content and never uses language alone to infer geography.
-- LLM and geocoding outputs are cached locally for repeatability and cost control.
-- The macOS bridge calls the stable core instead of importing the legacy monolith.
-- CI tests the core on Ubuntu and macOS with Python 3.11–3.13.
+## Capabilities added after the baseline
 
-## Data model
+The earlier document intentionally deferred Bilibili, Weibo, other Chinese-platform work, richer State methodology, and expanded desktop support. Those statements are now obsolete. Subsequent development added, among other things:
 
-The stable record keeps platform-neutral fields (`native_id`, `canonical_url`, `published_at`, `author_handle`, `engagement`, `query_matches`) and also exports legacy aliases such as `tweet_id`, `username`, and `translated_en` so older SUGAR workbooks remain usable.
+- public/fail-closed Bilibili collection;
+- public/authorized Weibo collection, known-post investigation, qualification, and seed harvesting;
+- collector capability/registry interfaces and thread relationships;
+- durable high-volume harvesting;
+- `ResearchObservation` evidence storage and grounded triage;
+- spatial-overlap and substantially richer research maps;
+- State-specific schemas, review/audit, overlap, networks, rollups, freshness, gaps, and briefing products;
+- structured analytic-intelligence and iterative synthesis workflows;
+- native Windows workbench packaging over the shared backend;
+- persistent project workspaces in v1.2.
 
-Canonical engagement fields are `likes`, `replies`, `reposts`, `quotes`, `bookmarks`, and `impressions`. Missing metrics remain zero rather than being inferred.
+## Invariants that still apply
 
-## Deliberately deferred
+The core stabilization principles remain binding even as features expand:
 
-This stabilization does **not** add Weibo, Bilibili, Douyin, WeChat, Xiaohongshu, or other new collectors. Those should be implemented only after this baseline is accepted, using the platform-neutral collector model rather than extending `SUGAR.py`.
+1. New engineering work targets `sugar_core`, not the legacy monolith.
+2. Source provenance and raw evidence are preserved before analysis.
+3. Access failures are explicit and are not converted into zero-activity findings.
+4. Cross-platform engagement metrics are not treated as directly equivalent causal measures.
+5. AI analysis remains distinguishable from human verification.
+6. Frontends call shared backend logic rather than duplicating methodology.
+7. Schema/bridge/workspace changes require tests and documentation.
 
-Likewise, an influence/overlap score is not fabricated here. That methodology should be built from explicit, reviewable dimensions after the Diplomacy Lab master-data schema is agreed.
+For the current system, start with `README.md` and `docs/architecture.md`.
