@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security-sensitive report
+    url: https://github.com/FL2744/SUGAR/blob/main/SECURITY.md
+    about: Read the security policy before sharing vulnerabilities, credentials, or sensitive research details.
