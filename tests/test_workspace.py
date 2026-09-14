@@ -89,13 +89,18 @@ def test_workspace_tracks_external_and_missing_artifacts(tmp_path: Path) -> None
     assert status["artifact_counts"] == {"reference": 2}
     assert status["external_artifacts"] == 1
     assert status["missing_artifacts"] == 1
+    assert status["database_schema_version"] == 1
 
 
 def test_workspace_rejects_duplicate_creation_without_exist_ok(tmp_path: Path) -> None:
     root = tmp_path / "project"
-    SugarWorkspace.create(root, name="Project")
+    workspace = SugarWorkspace.create(root, name="Project")
     with pytest.raises(FileExistsError):
         SugarWorkspace.create(root, name="Again")
+
+    reopened = SugarWorkspace.create(root, name="Ignored", exist_ok=True)
+    assert reopened.manifest.project_id == workspace.manifest.project_id
+    assert reopened.manifest.name == "Project"
 
 
 def test_workspace_rejects_unknown_schema_version(tmp_path: Path) -> None:
@@ -105,4 +110,24 @@ def test_workspace_rejects_unknown_schema_version(tmp_path: Path) -> None:
     workspace.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(ValueError, match="Unsupported workspace schema"):
+        SugarWorkspace.open(workspace.root)
+
+
+def test_workspace_rejects_layout_path_escape(tmp_path: Path) -> None:
+    workspace = SugarWorkspace.create(tmp_path / "project", name="Project")
+    payload = json.loads(workspace.manifest_path.read_text(encoding="utf-8"))
+    payload["layout"]["reports"] = "../../outside"
+    workspace.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="escapes project root"):
+        SugarWorkspace.open(workspace.root)
+
+
+def test_workspace_rejects_missing_required_layout_key(tmp_path: Path) -> None:
+    workspace = SugarWorkspace.create(tmp_path / "project", name="Project")
+    payload = json.loads(workspace.manifest_path.read_text(encoding="utf-8"))
+    payload["layout"].pop("state")
+    workspace.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="missing required layout keys"):
         SugarWorkspace.open(workspace.root)
