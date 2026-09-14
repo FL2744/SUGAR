@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
@@ -31,11 +31,19 @@ from .state_workflow import (
     save_state_assessments,
     write_us_presence_template,
 )
+from .workspace import SugarWorkspace
+from .workspace_runtime import (
+    choose_output_directory,
+    latest_workspace_artifact_path,
+    register_workspace_outputs,
+    workspace_from_config,
+)
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 
 DESKTOP_STATE_OPERATIONS = {
     "state-package",
+    "state-map",
     "state-triage",
     "state-review-export",
     "state-review-apply",
@@ -62,23 +70,60 @@ def _notify(progress: ProgressCallback | None, event: str, **values: Any) -> Non
         progress(event, values)
 
 
-def _required_path(config: dict[str, Any], key: str, *, directory: bool = False) -> Path:
+def _optional_input_path(
+    config: dict[str, Any],
+    key: str,
+    workspace: SugarWorkspace | None,
+    *,
+    workspace_kinds: str | Iterable[str] = (),
+) -> Path | None:
     raw = str(config.get(key) or "").strip()
-    if not raw:
-        raise ValueError(f"{key} is required.")
-    path = Path(raw).expanduser()
-    if directory:
-        path.mkdir(parents=True, exist_ok=True)
+    if raw:
+        path = Path(raw).expanduser().resolve()
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        return path
+    kinds = workspace_kinds if workspace_kinds else []
+    return latest_workspace_artifact_path(workspace, kinds) if kinds else None
+
+
+def _required_path(
+    config: dict[str, Any],
+    key: str,
+    *,
+    workspace: SugarWorkspace | None = None,
+    workspace_kinds: str | Iterable[str] = (),
+    directory: bool = False,
+) -> Path:
+    raw = str(config.get(key) or "").strip()
+    if raw:
+        path = Path(raw).expanduser()
+        if directory:
+            path.mkdir(parents=True, exist_ok=True)
+            return path.resolve()
+        if not path.is_file():
+            raise FileNotFoundError(path)
         return path.resolve()
-    if not path.is_file():
-        raise FileNotFoundError(path)
-    return path.resolve()
+    if not directory and workspace is not None and workspace_kinds:
+        candidate = latest_workspace_artifact_path(workspace, workspace_kinds)
+        if candidate is not None:
+            return candidate
+    raise ValueError(f"{key} is required.")
 
 
-def _output_path(config: dict[str, Any], key: str, default_name: str) -> Path:
+def _output_path(
+    config: dict[str, Any],
+    key: str,
+    default_name: str,
+    *,
+    workspace: SugarWorkspace | None = None,
+    workspace_key: str = "exports",
+) -> Path:
     raw = str(config.get(key) or "").strip()
     if raw:
         target = Path(raw).expanduser()
+    elif workspace is not None:
+        target = workspace.path_for(workspace_key) / default_name
     else:
         directory = Path(str(config.get("output_directory") or Path.cwd())).expanduser()
         target = directory / default_name
@@ -86,13 +131,20 @@ def _output_path(config: dict[str, Any], key: str, default_name: str) -> Path:
     return target.resolve()
 
 
-def _output_directory(config: dict[str, Any]) -> Path:
+def _output_directory(
+    config: dict[str, Any],
+    *,
+    workspace: SugarWorkspace | None = None,
+    workspace_key: str = "exports",
+) -> Path:
     raw = str(config.get("output_directory") or "").strip()
-    if not raw:
-        raise ValueError("output_directory is required.")
-    target = Path(raw).expanduser().resolve()
-    target.mkdir(parents=True, exist_ok=True)
-    return target
+    if raw:
+        target = Path(raw).expanduser().resolve()
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+    if workspace is not None:
+        return workspace.path_for(workspace_key)
+    raise ValueError("output_directory is required outside a SUGAR workspace.")
 
 
 def _llm_config(config: dict[str, Any], secrets: dict[str, str]) -> LLMConfig:
@@ -118,25 +170,56 @@ def _write_json(path: Path, payload: dict[str, Any]) -> str:
     return str(path.resolve())
 
 
-def _loaded_state_inputs(config: dict[str, Any]):
-    observations_path = _required_path(config, "observations")
+def _loaded_state_inputs(config: dict[str, Any], workspace: SugarWorkspace | None):
+    observations_path = _required_path(
+        config,
+        "observations",
+        workspace=workspace,
+        workspace_kinds=("observations",),
+    )
     observations = load_observations(observations_path)
-    assessment_path = str(config.get("assessments") or "").strip()
+    assessment_path = _optional_input_path(
+        config,
+        "assessments",
+        workspace,
+        workspace_kinds=("state_assessments",),
+    )
     assessments = load_state_assessments(assessment_path) if assessment_path else blank_state_assessments(observations)
-    sites_path = str(config.get("us_sites") or "").strip()
+    sites_path = _optional_input_path(config, "us_sites", workspace)
     sites = load_us_presence_sites(sites_path) if sites_path else []
     if sites:
         assessments = apply_us_overlaps(observations, assessments, sites)
     return observations, assessments, sites
 
 
-def _run_state_package(config: dict[str, Any], progress: ProgressCallback | None) -> list[str]:
-    observations_file = _required_path(config, "observations")
-    out_dir = _output_directory(config)
-    assessment_file = str(config.get("assessments") or "").strip() or None
-    us_sites_file = str(config.get("us_sites") or "").strip() or None
-    entities_file = str(config.get("entities") or "").strip() or None
-    previous_file = str(config.get("previous_assessments") or "").strip() or None
+def _register(
+    workspace: SugarWorkspace | None,
+    outputs: Iterable[str | Path],
+    *,
+    operation: str,
+    kind: str | None = None,
+) -> list[str]:
+    values = [str(Path(value).expanduser().resolve()) for value in outputs]
+    register_workspace_outputs(workspace, values, operation=operation, kind=kind)
+    return values
+
+
+def _run_state_package(
+    config: dict[str, Any],
+    progress: ProgressCallback | None,
+    workspace: SugarWorkspace | None,
+) -> list[str]:
+    observations_file = _required_path(
+        config,
+        "observations",
+        workspace=workspace,
+        workspace_kinds=("observations",),
+    )
+    out_dir = _output_directory(config, workspace=workspace, workspace_key="state")
+    assessment_path = _optional_input_path(config, "assessments", workspace, workspace_kinds=("state_assessments",))
+    us_sites_path = _optional_input_path(config, "us_sites", workspace)
+    entities_path = _optional_input_path(config, "entities", workspace)
+    previous_path = _optional_input_path(config, "previous_assessments", workspace)
     name = str(config.get("name") or "state_research").strip() or "state_research"
     title = str(config.get("title") or "PRC Cultural Influence Network Research Update").strip()
     current_start = str(config.get("current_start") or "2024-01-01").strip()
@@ -146,25 +229,27 @@ def _run_state_package(config: dict[str, Any], progress: ProgressCallback | None
     outputs = package_from_files(
         observations_file,
         out_dir,
-        assessments_file=assessment_file,
-        us_sites_file=us_sites_file,
-        previous_assessments_file=previous_file,
+        assessments_file=assessment_path,
+        us_sites_file=us_sites_path,
+        previous_assessments_file=previous_path,
         name=name,
         title=title,
     )
     observations, assessments, sites = _loaded_state_inputs(
         {
             "observations": str(observations_file),
-            "assessments": assessment_file or "",
-            "us_sites": us_sites_file or "",
-        }
+            "assessments": str(assessment_path) if assessment_path else "",
+            "us_sites": str(us_sites_path) if us_sites_path else "",
+        },
+        workspace,
     )
-    registry = load_entity_registry(entities_file) if entities_file else None
+    registry = load_entity_registry(entities_path) if entities_path else None
     stem = "_".join(name.split())
 
     _notify(progress, "state_package_stage", stage="assessed_snapshot")
     assessed_snapshot = out_dir / f"{stem}.assessed.jsonl"
-    outputs.append(save_state_assessments(assessments, assessed_snapshot))
+    assessed_output = save_state_assessments(assessments, assessed_snapshot)
+    outputs.append(assessed_output)
 
     _notify(progress, "state_package_stage", stage="rollups_network")
     outputs.extend(save_state_rollups(observations, assessments, out_dir, name=name))
@@ -195,20 +280,28 @@ def _run_state_package(config: dict[str, Any], progress: ProgressCallback | None
     )
 
     _notify(progress, "state_package_stage", stage="interactive_map")
-    map_path = out_dir / f"{stem}.interactive_map.html"
-    outputs.append(
-        create_state_map(
-            observations,
-            assessments,
-            map_path,
-            us_sites=sites,
-            verified_only=True,
-            include_activity_density=True,
-        )
+    map_dir = workspace.path_for("maps") if workspace is not None else out_dir
+    map_path = map_dir / f"{stem}.interactive_map.html"
+    map_output = create_state_map(
+        observations,
+        assessments,
+        map_path,
+        us_sites=sites,
+        verified_only=True,
+        include_activity_density=True,
+        resolve_missing_locations=bool(config.get("resolve_locations", False)),
+        geocode_cache=str(workspace.path_for("cache")) if workspace is not None else config.get("geocode_cache"),
+        minimum_location_confidence=float(config.get("min_location_confidence", 0.45)),
     )
+    outputs.append(map_output)
     metadata_path = map_path.with_suffix(map_path.suffix + ".metadata.json")
     if metadata_path.is_file():
         outputs.append(str(metadata_path.resolve()))
+
+    _register(workspace, [assessed_output], operation="state-package", kind="state_assessments")
+    _register(workspace, [map_output, metadata_path], operation="state-package", kind="map")
+    other = [value for value in outputs if str(Path(value).resolve()) not in {str(Path(assessed_output).resolve()), str(Path(map_output).resolve()), str(metadata_path.resolve())}]
+    _register(workspace, other, operation="state-package", kind="state")
     return list(dict.fromkeys(str(Path(value).resolve()) for value in outputs))
 
 
@@ -223,83 +316,111 @@ def run_desktop_analytic_operation(
     if operation not in DESKTOP_ANALYTIC_OPERATIONS:
         raise ValueError(f"Unsupported desktop analytic operation: {operation}")
 
+    workspace = workspace_from_config(config)
     _notify(progress, "starting", operation=operation)
 
     if operation == "state-package":
-        return _run_state_package(config, progress)
+        return _run_state_package(config, progress, workspace)
+
+    if operation == "state-map":
+        observations, assessments, sites = _loaded_state_inputs(config, workspace)
+        target = _output_path(
+            config,
+            "output_file",
+            "state_research.interactive_map.html",
+            workspace=workspace,
+            workspace_key="maps",
+        )
+        output = create_state_map(
+            observations,
+            assessments,
+            target,
+            us_sites=sites,
+            verified_only=not bool(config.get("include_unverified", False)),
+            include_activity_density=not bool(config.get("no_density", False)),
+            resolve_missing_locations=bool(config.get("resolve_locations", False)),
+            geocode_cache=str(workspace.path_for("cache")) if workspace is not None else config.get("geocode_cache"),
+            minimum_location_confidence=float(config.get("min_location_confidence", 0.45)),
+        )
+        metadata = Path(output).with_suffix(Path(output).suffix + ".metadata.json")
+        return _register(workspace, [output, metadata], operation=operation, kind="map")
 
     if operation == "state-triage":
-        observations = load_observations(_required_path(config, "observations"))
-        target = _output_path(config, "output_file", "state_triage.jsonl")
+        observations = load_observations(
+            _required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",))
+        )
+        target = _output_path(config, "output_file", "state_triage.jsonl", workspace=workspace, workspace_key="state")
         assessments = triage_observations(
             observations,
             llm=_llm_config(config, secrets),
-            cache_dir=str(config.get("cache_dir") or ".sugar-cache"),
+            cache_dir=str(config.get("cache_dir") or (workspace.path_for("cache") if workspace is not None else ".sugar-cache")),
             limit=int(config["limit"]) if config.get("limit") not in (None, "") else None,
             progress=progress,
         )
-        return [save_state_assessments(assessments, target)]
+        return _register(workspace, [save_state_assessments(assessments, target)], operation=operation, kind="state_assessments")
 
     if operation == "state-review-export":
-        observations = load_observations(_required_path(config, "observations"))
-        assessments = load_state_assessments(_required_path(config, "assessments"))
-        target = _output_path(config, "output_file", "state_review.xlsx")
-        return [export_review_workbook(observations, assessments, target)]
+        observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
+        assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
+        target = _output_path(config, "output_file", "state_review.xlsx", workspace=workspace, workspace_key="state")
+        return _register(workspace, [export_review_workbook(observations, assessments, target)], operation=operation, kind="state_review")
 
     if operation == "state-review-apply":
-        assessments = _required_path(config, "assessments")
-        workbook = _required_path(config, "workbook")
-        target = _output_path(config, "output_file", "state_reviewed.jsonl")
-        return [apply_review_workbook_file(assessments, workbook, target)]
+        assessments = _required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",))
+        workbook = _required_path(config, "workbook", workspace=workspace, workspace_kinds=("state_review",))
+        target = _output_path(config, "output_file", "state_reviewed.jsonl", workspace=workspace, workspace_key="state")
+        return _register(workspace, [apply_review_workbook_file(assessments, workbook, target)], operation=operation, kind="state_assessments")
 
     if operation == "state-audit":
-        observations = load_observations(_required_path(config, "observations"))
-        assessments = load_state_assessments(_required_path(config, "assessments"))
-        target = _output_path(config, "output_file", "state_audit.json")
-        return [_write_json(target, audit_state_records(observations, assessments))]
+        observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
+        assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
+        target = _output_path(config, "output_file", "state_audit.json", workspace=workspace, workspace_key="state")
+        return _register(workspace, [_write_json(target, audit_state_records(observations, assessments))], operation=operation, kind="state")
 
     if operation == "state-diff":
-        previous = load_state_assessments(_required_path(config, "previous"))
-        current = load_state_assessments(_required_path(config, "current"))
-        target = _output_path(config, "output_file", "state_diff.json")
-        return [_write_json(target, compare_state_snapshots(previous, current))]
+        previous = load_state_assessments(_required_path(config, "previous", workspace=workspace))
+        current = load_state_assessments(_required_path(config, "current", workspace=workspace, workspace_kinds=("state_assessments",)))
+        target = _output_path(config, "output_file", "state_diff.json", workspace=workspace, workspace_key="state")
+        return _register(workspace, [_write_json(target, compare_state_snapshots(previous, current))], operation=operation, kind="state")
 
     if operation == "state-template-us-sites":
-        return [write_us_presence_template(_output_path(config, "output_file", "us_presence.csv"))]
+        target = _output_path(config, "output_file", "us_presence.csv", workspace=workspace, workspace_key="references")
+        return _register(workspace, [write_us_presence_template(target)], operation=operation, kind="reference")
 
     if operation == "state-template-entities":
-        return [write_entity_template(_output_path(config, "output_file", "monitored_entities.csv"))]
+        target = _output_path(config, "output_file", "monitored_entities.csv", workspace=workspace, workspace_key="references")
+        return _register(workspace, [write_entity_template(target)], operation=operation, kind="reference")
 
     if operation == "state-query-plan":
-        registry = load_entity_registry(_required_path(config, "entities"))
-        return [save_query_plan(registry, _output_path(config, "output_file", "query_plan.txt"))]
+        registry = load_entity_registry(_required_path(config, "entities", workspace=workspace))
+        target = _output_path(config, "output_file", "query_plan.txt", workspace=workspace, workspace_key="state")
+        return _register(workspace, [save_query_plan(registry, target)], operation=operation, kind="state")
 
     if operation == "intel-packet":
-        observations = load_observations(_required_path(config, "observations"))
-        assessments = load_state_assessments(_required_path(config, "assessments"))
-        target = _output_path(config, "output_file", "intelligence_packet.json")
-        return [
-            save_intelligence_packet(
-                observations,
-                assessments,
-                target,
-                country=str(config.get("country") or ""),
-                observation_id=str(config.get("observation_id") or ""),
-                representative_case_limit=max(1, int(config.get("case_limit", 20))),
-            )
-        ]
+        observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
+        assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
+        target = _output_path(config, "output_file", "intelligence_packet.json", workspace=workspace, workspace_key="intelligence")
+        output = save_intelligence_packet(
+            observations,
+            assessments,
+            target,
+            country=str(config.get("country") or ""),
+            observation_id=str(config.get("observation_id") or ""),
+            representative_case_limit=max(1, int(config.get("case_limit", 20))),
+        )
+        return _register(workspace, [output], operation=operation, kind="intelligence")
 
     if operation == "intel-tradecraft":
-        observations = load_observations(_required_path(config, "observations"))
-        assessments = load_state_assessments(_required_path(config, "assessments"))
-        target = _output_path(config, "output_file", "tradecraft_audit.json")
-        return [save_tradecraft_audit(observations, assessments, target)]
+        observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
+        assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
+        target = _output_path(config, "output_file", "tradecraft_audit.json", workspace=workspace, workspace_key="intelligence")
+        return _register(workspace, [save_tradecraft_audit(observations, assessments, target)], operation=operation, kind="intelligence")
 
     if operation == "intel-synthesize":
-        observations = load_observations(_required_path(config, "observations"))
-        assessments = load_state_assessments(_required_path(config, "assessments"))
-        out_dir = _output_directory(config)
-        return save_iterative_agentic_synthesis(
+        observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
+        assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
+        out_dir = _output_directory(config, workspace=workspace, workspace_key="intelligence")
+        outputs = save_iterative_agentic_synthesis(
             observations,
             assessments,
             out_dir,
@@ -307,28 +428,29 @@ def run_desktop_analytic_operation(
             country=str(config.get("country") or ""),
             observation_id=str(config.get("observation_id") or ""),
             depth=str(config.get("depth") or "standard"),
-            cache_dir=str(config.get("cache_dir") or ".sugar-cache"),
+            cache_dir=str(config.get("cache_dir") or (workspace.path_for("cache") if workspace is not None else ".sugar-cache")),
             max_workers=max(1, int(config.get("workers", 4))),
             name=str(config.get("name") or "analytic_intelligence"),
         )
+        return _register(workspace, outputs, operation=operation, kind="intelligence")
 
     if operation == "intel-hypotheses":
-        synthesis = _required_path(config, "synthesis")
-        out_dir = _output_directory(config)
-        return save_hypothesis_matrix(
+        synthesis = _required_path(config, "synthesis", workspace=workspace, workspace_kinds=("intelligence",))
+        out_dir = _output_directory(config, workspace=workspace, workspace_key="intelligence")
+        outputs = save_hypothesis_matrix(
             synthesis,
             out_dir,
             name=str(config.get("name") or "analytic_intelligence"),
         )
+        return _register(workspace, outputs, operation=operation, kind="intelligence")
 
-    previous = _required_path(config, "previous")
-    current = _required_path(config, "current")
-    target = _output_path(config, "output_file", "intelligence_comparison.json")
-    return [
-        save_longitudinal_comparison(
-            previous,
-            current,
-            target,
-            kind=str(config.get("kind") or "synthesis"),
-        )
-    ]
+    previous = _required_path(config, "previous", workspace=workspace)
+    current = _required_path(config, "current", workspace=workspace, workspace_kinds=("intelligence",))
+    target = _output_path(config, "output_file", "intelligence_comparison.json", workspace=workspace, workspace_key="intelligence")
+    output = save_longitudinal_comparison(
+        previous,
+        current,
+        target,
+        kind=str(config.get("kind") or "synthesis"),
+    )
+    return _register(workspace, [output], operation=operation, kind="intelligence")
