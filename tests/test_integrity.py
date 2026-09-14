@@ -1,12 +1,21 @@
+from pathlib import Path
 from types import SimpleNamespace
+import tomllib
 
 import pandas as pd
 from langdetect import DetectorFactory
 
+import sugar_core
 from sugar_core import enrichment
 from sugar_core.enrichment import detect_language, geocode_location
 from sugar_core.reporting import _prepare
 from sugar_core.utils import JsonCache
+
+
+def test_package_version_matches_pyproject():
+    root = Path(__file__).resolve().parents[1]
+    metadata = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    assert metadata["project"]["version"] == sugar_core.__version__
 
 
 def test_language_detection_sets_deterministic_seed():
