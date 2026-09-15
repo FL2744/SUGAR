@@ -143,8 +143,9 @@ def test_qualified_reach_is_auditable_prioritized_and_not_falsely_summed():
     assert assessment.reach.observed_total == 0
 
     score, reasons = review_priority(assessment, obs)
-    assert score > 0
+    assert score == 0
     assert "high reported/observed event attendance" in reasons
+    assert "already human-verified" in reasons
 
     brief = render_state_bluf([obs], [assessment])
     assert "Exact totals exclude approximate and bounded values" in brief
