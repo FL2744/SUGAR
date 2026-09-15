@@ -4,7 +4,7 @@ import csv
 import json
 from pathlib import Path
 
-from sugar_core.observations import ResearchObservation
+from sugar_core.observations import ObservationLocation, ResearchObservation
 from sugar_core.state_schema import StateAssessment, USPresenceSite
 from sugar_core.state_workflow import (
     assess_us_overlap,
@@ -14,7 +14,14 @@ from sugar_core.state_workflow import (
 )
 
 
-def observation(*, country: str = "Kyrgyzstan", city: str = "Bishkek", lat: float = 42.8746, lon: float = 74.5698) -> ResearchObservation:
+def observation(
+    *,
+    country: str = "Kyrgyzstan",
+    city: str = "Bishkek",
+    lat: float = 42.8746,
+    lon: float = 74.5698,
+    locations: list[ObservationLocation] | None = None,
+) -> ResearchObservation:
     return ResearchObservation(
         observation_type="program",
         title="University advising activity",
@@ -23,6 +30,7 @@ def observation(*, country: str = "Kyrgyzstan", city: str = "Bishkek", lat: floa
         city=city,
         latitude=lat,
         longitude=lon,
+        locations=locations or [],
     )
 
 
@@ -124,6 +132,169 @@ def test_city_and_site_scopes_fail_closed_when_not_geographically_applicable():
         coverage_scope="site",
     )
     overlap = assess_us_overlap(obs, assessment, [city_service, distant_site], nearby_km=50.0)
+
+    assert overlap.service_overlap == []
+    assert overlap.thematic_overlap == []
+
+
+def test_structured_locations_supersede_stale_summary_city_for_service_scope():
+    obs = observation(
+        city="Bishkek",
+        locations=[
+            ObservationLocation(
+                label="Osh venue",
+                country="Kyrgyzstan",
+                city="Osh",
+                precision="city",
+                basis="source_stated",
+            )
+        ],
+    )
+    assessment = StateAssessment(observation_id=obs.observation_id, program_domains=["entrepreneurship"])
+    bishkek_service = USPresenceSite(
+        name="Bishkek city entrepreneurship service",
+        network="american_space",
+        country="Kyrgyzstan",
+        city="Bishkek",
+        service_tags=["entrepreneurship"],
+        delivery_mode="virtual",
+        coverage_scope="city",
+    )
+    osh_service = USPresenceSite(
+        name="Osh city entrepreneurship service",
+        network="american_space",
+        country="Kyrgyzstan",
+        city="Osh",
+        service_tags=["entrepreneurship"],
+        delivery_mode="virtual",
+        coverage_scope="city",
+    )
+
+    overlap = assess_us_overlap(obs, assessment, [bishkek_service, osh_service])
+
+    assert overlap.service_overlap == ["entrepreneurship"]
+    assert "Osh city entrepreneurship service [virtual/city]" in overlap.note
+    assert "Bishkek city entrepreneurship service" not in overlap.note
+
+
+def test_multi_country_structured_locations_union_applicable_service_sources():
+    obs = observation(
+        locations=[
+            ObservationLocation(
+                label="Bishkek venue",
+                country="Kyrgyzstan",
+                city="Bishkek",
+                precision="city",
+                basis="source_stated",
+            ),
+            ObservationLocation(
+                label="Almaty venue",
+                country="Kazakhstan",
+                city="Almaty",
+                precision="city",
+                basis="source_stated",
+            ),
+        ]
+    )
+    assessment = StateAssessment(
+        observation_id=obs.observation_id,
+        program_domains=["higher_education", "entrepreneurship"],
+    )
+    kg_service = USPresenceSite(
+        name="EducationUSA Kyrgyzstan",
+        network="educationusa",
+        country="Kyrgyzstan",
+        service_tags=["educationusa"],
+        delivery_mode="virtual",
+        coverage_scope="country",
+    )
+    kz_service = USPresenceSite(
+        name="Almaty entrepreneurship service",
+        network="american_space",
+        country="Kazakhstan",
+        city="Almaty",
+        service_tags=["entrepreneurship"],
+        delivery_mode="virtual",
+        coverage_scope="city",
+    )
+
+    overlap = assess_us_overlap(obs, assessment, [kg_service, kz_service])
+
+    assert overlap.service_overlap == ["educationusa", "entrepreneurship"]
+    assert "EducationUSA Kyrgyzstan [virtual/country]" in overlap.note
+    assert "Almaty entrepreneurship service [virtual/city]" in overlap.note
+    assert "2 structured activity locations" in overlap.note
+
+
+def test_nearest_physical_site_uses_structured_location_coordinates_not_summary_point():
+    obs = observation(
+        locations=[
+            ObservationLocation(
+                label="Osh venue",
+                country="Kyrgyzstan",
+                city="Osh",
+                latitude=40.53347,
+                longitude=72.792545,
+                precision="site",
+                basis="source_stated",
+            )
+        ]
+    )
+    osh_space = USPresenceSite(
+        name="American Corner Osh",
+        network="american_space",
+        country="Kyrgyzstan",
+        city="Osh",
+        latitude=40.53347,
+        longitude=72.792545,
+        service_tags=["culture"],
+        delivery_mode="physical",
+        coverage_scope="site",
+        location_precision="site",
+    )
+
+    overlap = assess_us_overlap(obs, StateAssessment(observation_id=obs.observation_id), [physical_space(), osh_space])
+
+    assert overlap.nearest_site_name == "American Corner Osh"
+    assert overlap.distance_km == 0.0
+
+
+def test_site_scope_distance_does_not_borrow_coordinates_from_other_country_location():
+    obs = observation(
+        locations=[
+            ObservationLocation(
+                label="Osh venue",
+                country="Kyrgyzstan",
+                city="Osh",
+                precision="city",
+                basis="source_stated",
+            ),
+            ObservationLocation(
+                label="Korday venue",
+                country="Kazakhstan",
+                city="Korday",
+                latitude=43.0339,
+                longitude=74.7129,
+                precision="site",
+                basis="source_stated",
+            ),
+        ]
+    )
+    assessment = StateAssessment(observation_id=obs.observation_id, program_domains=["entrepreneurship"])
+    bishkek_site_service = USPresenceSite(
+        name="Bishkek site entrepreneurship service",
+        network="american_space",
+        country="Kyrgyzstan",
+        city="Bishkek",
+        latitude=42.88,
+        longitude=74.60,
+        service_tags=["entrepreneurship"],
+        delivery_mode="physical",
+        coverage_scope="site",
+        location_precision="site",
+    )
+
+    overlap = assess_us_overlap(obs, assessment, [bishkek_site_service], nearby_km=50.0)
 
     assert overlap.service_overlap == []
     assert overlap.thematic_overlap == []
