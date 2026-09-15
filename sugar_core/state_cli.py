@@ -9,13 +9,17 @@ from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
 from .state_aggregate import save_state_rollups
 from .state_conflict_package import package_from_files_with_conflicts
-from .state_conflict_review import export_review_workbook_with_conflict_file
+from .state_conflict_review import (
+    apply_source_conflict_review_workbook_file,
+    export_review_workbook_with_conflict_file,
+    workbook_has_source_conflict_decisions,
+)
 from .state_entities import load_entity_registry, save_query_plan, write_entity_template
 from .state_freshness import save_freshness_report
 from .state_gaps import save_gap_report
 from .state_map import create_state_map
 from .state_network import save_state_network
-from .state_review import apply_review_workbook_file, export_review_workbook
+from .state_review import apply_review_workbook_file
 from .state_triage import triage_observations
 from .state_workflow import (
     apply_us_overlaps,
@@ -76,15 +80,18 @@ def build_parser() -> argparse.ArgumentParser:
     triage.add_argument("--limit", type=int)
     _workspace_arg(triage)
 
-    review_export = sub.add_parser("review-export", help="Create an analyst Excel workbook for assessment and claim review.")
+    review_export = sub.add_parser("review-export", help="Create an analyst Excel workbook for assessment, claim, and optional source-conflict review.")
     review_export.add_argument("observations")
     review_export.add_argument("assessments")
+    review_export.add_argument("--source-conflicts", help="Structured source-conflict JSON to include in the analyst review workbook.")
     review_export.add_argument("--output")
     _workspace_arg(review_export)
 
-    review_apply = sub.add_parser("review-apply", help="Apply analyst workbook decisions back into validated State assessments.")
+    review_apply = sub.add_parser("review-apply", help="Apply analyst workbook decisions back into validated State assessments and optional source conflicts.")
     review_apply.add_argument("assessments")
     review_apply.add_argument("workbook")
+    review_apply.add_argument("--source-conflicts", help="Original structured source-conflict JSON used to create the workbook.")
+    review_apply.add_argument("--source-conflicts-output", help="Output path for reviewed source conflicts. Defaults beside the reviewed assessment output.")
     review_apply.add_argument("--output")
     _workspace_arg(review_apply)
 
@@ -274,16 +281,45 @@ def main(argv=None) -> int:
         target = _file_output(args, workspace, "state", "state_review.xlsx")
         observations = load_observations(args.observations)
         assessments = load_state_assessments(args.assessments)
-        output = export_review_workbook(observations, assessments, target)
+        output = export_review_workbook_with_conflict_file(
+            observations,
+            assessments,
+            target,
+            source_conflicts_file=args.source_conflicts,
+        )
         register_workspace_outputs(workspace, [output], operation="state-review-export", kind="state_review")
         print(output)
         return 0
 
     if args.command == "review-apply":
+        if args.source_conflicts_output and not args.source_conflicts:
+            raise ValueError("--source-conflicts-output requires --source-conflicts.")
+        has_conflict_decisions = workbook_has_source_conflict_decisions(args.workbook)
+        if has_conflict_decisions and not args.source_conflicts:
+            raise ValueError(
+                "Review workbook contains source-conflict decisions. Provide --source-conflicts so they can be validated and applied."
+            )
+
         target = _file_output(args, workspace, "state", "state_reviewed.jsonl")
-        output = apply_review_workbook_file(args.assessments, args.workbook, target)
-        register_workspace_outputs(workspace, [output], operation="state-review-apply", kind="state_assessments")
-        print(output)
+        assessment_output = apply_review_workbook_file(args.assessments, args.workbook, target)
+        outputs = [assessment_output]
+        register_workspace_outputs(workspace, [assessment_output], operation="state-review-apply", kind="state_assessments")
+
+        if args.source_conflicts:
+            if args.source_conflicts_output:
+                conflict_target = Path(args.source_conflicts_output).expanduser().resolve()
+            else:
+                conflict_target = target.with_name(f"{target.stem}.source_conflicts.json")
+            conflict_target.parent.mkdir(parents=True, exist_ok=True)
+            conflict_output = apply_source_conflict_review_workbook_file(
+                args.source_conflicts,
+                args.workbook,
+                conflict_target,
+            )
+            outputs.append(conflict_output)
+            register_workspace_outputs(workspace, [conflict_output], operation="state-review-apply", kind="state")
+
+        print("\n".join(outputs))
         return 0
 
     if args.command == "network":
