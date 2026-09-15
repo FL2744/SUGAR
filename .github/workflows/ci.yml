@@ -61,6 +61,9 @@ jobs:
           assert summary["spurious_english_service_overlaps"] == 0
           assert summary["higher_ed_assessments"] > 0
           assert summary["higher_ed_missing_educationusa_service"] == 0
+          assert summary["qualified_reach_assessments"] == 3
+          assert summary["qualified_reach_missing_source_or_semantics"] == 0
+          assert summary["qualified_reach_exact_total"] == 0
           assert summary["us_sites_missing_precision"] == 0
           assert analyst["mapped_observations"] == 11
           assert verified["mapped_observations"] == 0
@@ -71,13 +74,14 @@ jobs:
               "direct_service_overlap_semantics_resolved",
               "virtual_educationusa_service_resolved",
               "us_site_precision_resolved",
-              "qualified_reach_metric_gap",
+              "qualified_reach_metric_resolved",
               "human_review_gate_working",
           }
           assert "language_education_domain_gap" not in codes
           assert "direct_service_overlap_semantics_gap" not in codes
           assert "virtual_educationusa_service_gap" not in codes
           assert "us_site_precision_gap" not in codes
+          assert "qualified_reach_metric_gap" not in codes
           print(json.dumps(summary, indent=2, sort_keys=True))
           PY
       - name: Publish reproducible Kyrgyzstan workspace
