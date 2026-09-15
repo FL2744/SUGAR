@@ -384,6 +384,21 @@ def _resolve_legacy_location(
             derived=False,
             density_eligible=precision in {"exact", "site", "locality", "city"} and confidence >= minimum_confidence,
         )
+    if (observation.latitude is None) != (observation.longitude is None):
+        return ResolvedLocation(
+            observation_id=observation.observation_id,
+            latitude=None,
+            longitude=None,
+            precision="unknown",
+            confidence=0.0,
+            basis=basis,
+            label=label,
+            source="invalid_coordinates",
+            country=observation.country,
+            region=observation.region,
+            city=observation.city,
+            unresolved_reason="Only one coordinate in the latitude/longitude pair is present.",
+        )
     if not resolve_missing:
         return ResolvedLocation(
             observation_id=observation.observation_id,
