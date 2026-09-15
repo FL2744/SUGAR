@@ -154,3 +154,35 @@ def test_range_reach_requires_valid_bounds():
             maximum=200,
             source_note="Invalid range.",
         )
+
+
+def test_minimum_and_maximum_qualifiers_reject_contradictory_explicit_bounds():
+    with pytest.raises(ValueError, match="Minimum reach bound must equal the reported value"):
+        QualifiedReachValue(
+            value=1000,
+            qualifier="minimum",
+            minimum=900,
+            source_note="Source reports more than 1,000 attendees.",
+        )
+
+    with pytest.raises(ValueError, match="Maximum reach bound must equal the reported value"):
+        QualifiedReachValue(
+            value=500,
+            qualifier="maximum",
+            maximum=600,
+            source_note="Source reports fewer than 500 attendees.",
+        )
+
+
+def test_qualified_reach_rejects_empty_or_unknown_metric_names():
+    for metric_name in ("", "impressions"):
+        with pytest.raises(ValueError, match="Unsupported reach metric name"):
+            ReachMetrics(
+                qualified={
+                    metric_name: {
+                        "value": 100,
+                        "qualifier": "approximate",
+                        "source_note": "Approximate source count.",
+                    }
+                }
+            )
