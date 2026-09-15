@@ -58,24 +58,41 @@ def _formula_safe_frame(rows: Iterable[dict[str, Any]]) -> pd.DataFrame:
     return frame
 
 
-def _record_source_urls(
-    observation: ResearchObservation | None,
-    assessment: StateAssessment,
-) -> set[str]:
-    urls: set[str] = set()
-    if observation is not None:
-        urls.update(_clean(item.url) for item in observation.evidence if _clean(item.url))
-        urls.update(
-            _clean(value)
-            for value in observation.source_record_keys
-            if _clean(value).startswith(("http://", "https://"))
-        )
+def _observation_source_urls(observation: ResearchObservation | None) -> set[str]:
+    if observation is None:
+        return set()
+    urls = {_clean(item.url) for item in observation.evidence if _clean(item.url)}
     urls.update(
-        _clean(source.source_url)
-        for source in assessment.us_overlap.service_sources
-        if _clean(source.source_url)
+        _clean(value)
+        for value in observation.source_record_keys
+        if _clean(value).startswith(("http://", "https://"))
     )
     return urls
+
+
+def _conflict_applies_to_record(
+    conflict: SourceConflict,
+    observation: ResearchObservation | None,
+    assessment: StateAssessment,
+) -> bool:
+    """Link a conflict only through source provenance that materially contributed to the record.
+
+    Direct observation evidence always counts. Structured U.S.-service sources also count, except
+    that service-topology conflicts require a program/service contribution. Audience-only service
+    association is intentionally insufficient so audience similarity cannot manufacture a direct
+    service-topology dependency.
+    """
+    conflict_urls = {claim.source_url for claim in conflict.claims}
+    if conflict_urls & _observation_source_urls(observation):
+        return True
+
+    for source in assessment.us_overlap.service_sources:
+        if not source.source_url or source.source_url not in conflict_urls:
+            continue
+        if conflict.conflict_type == "service_topology" and not source.program_service_matches:
+            continue
+        return True
+    return False
 
 
 def source_conflicts_for_record(
@@ -83,19 +100,11 @@ def source_conflicts_for_record(
     assessment: StateAssessment,
     source_conflicts: Iterable[SourceConflict | dict[str, Any]],
 ) -> list[SourceConflict]:
-    """Return conflicts linked by exact source provenance, not topic similarity.
-
-    Matching at exact source-URL identity is intentionally conservative. A conflict is attached to
-    a record only when the observation evidence or a structured U.S.-service source actually uses
-    one of the conflicting source URLs.
-    """
-    urls = _record_source_urls(observation, assessment)
-    if not urls:
-        return []
+    """Return conflicts linked by exact, material source provenance, not topic similarity."""
     return [
         conflict
         for conflict in _normalize_conflicts(source_conflicts)
-        if any(claim.source_url in urls for claim in conflict.claims)
+        if _conflict_applies_to_record(conflict, observation, assessment)
     ]
 
 
@@ -116,11 +125,10 @@ def build_conflict_aware_review_queue(
         if assessment is None:
             continue
         observation = observation_map.get(assessment.observation_id)
-        urls = _record_source_urls(observation, assessment)
         matched = [
             conflict
             for conflict in conflicts
-            if any(claim.source_url in urls for claim in conflict.claims)
+            if _conflict_applies_to_record(conflict, observation, assessment)
         ]
         unresolved = [conflict for conflict in matched if conflict.requires_human_review]
         row["source_conflict_count"] = len(matched)
