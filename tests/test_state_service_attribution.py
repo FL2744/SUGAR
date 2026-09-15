@@ -117,7 +117,9 @@ def test_review_queue_exposes_service_source_ids_and_names_without_parsing_note(
     row = build_review_queue([obs], [assessment])[0]
 
     assert row["us_service_source_ids"] == "; ".join(assessment.us_overlap.service_source_ids)
-    assert row["us_service_source_names"] == "American Space Bishkek; EducationUSA Kyrgyzstan"
+    assert row["us_service_source_names"] == "; ".join(
+        source.name for source in assessment.us_overlap.service_sources
+    )
 
 
 def test_geojson_carries_structured_service_source_attribution():
