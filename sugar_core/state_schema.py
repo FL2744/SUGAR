@@ -5,7 +5,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable
 
-STATE_SCHEMA_VERSION = "1.0"
+STATE_SCHEMA_VERSION = "1.1"
 
 STRATEGIC_AUDIENCES = {
     "students",
@@ -178,6 +178,23 @@ _US_LOCATION_DEFAULT_UNCERTAINTY_KM = {
     "unknown": 100.0,
 }
 
+REACH_METRIC_NAMES = {
+    "attendance",
+    "views",
+    "likes",
+    "comments",
+    "shares_reposts",
+    "followers",
+}
+
+REACH_QUALIFIERS = {
+    "exact",
+    "approximate",
+    "minimum",
+    "maximum",
+    "range",
+}
+
 
 def _clean(value: Any) -> str:
     return " ".join(str(value or "").split())
@@ -237,6 +254,69 @@ def stable_state_id(prefix: str, *parts: Any) -> str:
 
 
 @dataclass
+class QualifiedReachValue:
+    value: int | None = None
+    qualifier: str = "exact"
+    minimum: int | None = None
+    maximum: int | None = None
+    source_note: str = ""
+    source_ref: str = ""
+
+    def __post_init__(self) -> None:
+        self.qualifier = _choice(self.qualifier, REACH_QUALIFIERS, "reach qualifier", "exact")
+        self.value = _nonnegative_int(self.value)
+        self.minimum = _nonnegative_int(self.minimum)
+        self.maximum = _nonnegative_int(self.maximum)
+        self.source_note = _clean(self.source_note)
+        self.source_ref = _clean(self.source_ref)
+
+        if self.qualifier == "range":
+            if self.minimum is None or self.maximum is None:
+                raise ValueError("Range reach values require minimum and maximum bounds.")
+            if self.minimum > self.maximum:
+                raise ValueError("Reach minimum cannot exceed maximum.")
+            if self.value is not None and not self.minimum <= self.value <= self.maximum:
+                raise ValueError("Reach range representative value must fall within its bounds.")
+        else:
+            if self.value is None:
+                raise ValueError(f"{self.qualifier} reach values require a value.")
+            if self.qualifier == "exact":
+                if self.minimum not in (None, self.value) or self.maximum not in (None, self.value):
+                    raise ValueError("Exact reach bounds must equal the exact value.")
+                self.minimum = self.value
+                self.maximum = self.value
+            elif self.qualifier == "minimum":
+                if self.maximum is not None:
+                    raise ValueError("Minimum reach values cannot also set a maximum bound.")
+                self.minimum = self.value
+            elif self.qualifier == "maximum":
+                if self.minimum is not None:
+                    raise ValueError("Maximum reach values cannot also set a minimum bound.")
+                self.maximum = self.value
+            elif self.qualifier == "approximate" and (self.minimum is not None or self.maximum is not None):
+                raise ValueError("Approximate reach should not invent numeric bounds; use range when bounds are reported.")
+
+        if self.qualifier != "exact" and not (self.source_note or self.source_ref):
+            raise ValueError("Non-exact reach values require a source note or source reference preserving the qualifier.")
+
+    @property
+    def is_exact(self) -> bool:
+        return self.qualifier == "exact"
+
+    @property
+    def lower_bound(self) -> int | None:
+        if self.qualifier in {"exact", "minimum", "range"}:
+            return self.minimum
+        return None
+
+    @property
+    def upper_bound(self) -> int | None:
+        if self.qualifier in {"exact", "maximum", "range"}:
+            return self.maximum
+        return None
+
+
+@dataclass
 class ReachMetrics:
     attendance: int | None = None
     views: int | None = None
@@ -244,15 +324,48 @@ class ReachMetrics:
     comments: int | None = None
     shares_reposts: int | None = None
     followers: int | None = None
+    qualified: dict[str, QualifiedReachValue | dict[str, Any]] = field(default_factory=dict)
     source_note: str = ""
 
     def __post_init__(self) -> None:
-        for field_name in ("attendance", "views", "likes", "comments", "shares_reposts", "followers"):
+        for field_name in REACH_METRIC_NAMES:
             setattr(self, field_name, _nonnegative_int(getattr(self, field_name)))
+
+        normalized: dict[str, QualifiedReachValue] = {}
+        for metric_name, raw_value in (self.qualified or {}).items():
+            metric = _choice(metric_name, REACH_METRIC_NAMES, "reach metric name", "attendance")
+            qualified = raw_value if isinstance(raw_value, QualifiedReachValue) else QualifiedReachValue(**dict(raw_value))
+            exact_value = getattr(self, metric)
+            if qualified.is_exact:
+                if exact_value is None:
+                    setattr(self, metric, qualified.value)
+                elif exact_value != qualified.value:
+                    raise ValueError(f"Exact qualified {metric} conflicts with the legacy exact value.")
+            elif exact_value is not None:
+                raise ValueError(
+                    f"Non-exact qualified {metric} cannot also be stored as a bare exact integer."
+                )
+            normalized[metric] = qualified
+        self.qualified = normalized
         self.source_note = _clean(self.source_note)
+
+    def metric(self, metric_name: str) -> QualifiedReachValue | None:
+        metric = _choice(metric_name, REACH_METRIC_NAMES, "reach metric name", "attendance")
+        if metric in self.qualified:
+            return self.qualified[metric]
+        exact_value = getattr(self, metric)
+        if exact_value is None:
+            return None
+        return QualifiedReachValue(value=exact_value, qualifier="exact")
+
+    @property
+    def has_nonexact_values(self) -> bool:
+        return any(not value.is_exact for value in self.qualified.values())
 
     @property
     def observed_total(self) -> int:
+        # Preserve backward compatibility for exact integer data while deliberately excluding
+        # approximate/bounded observations from a falsely precise aggregate.
         return sum(
             value or 0
             for value in (self.attendance, self.views, self.likes, self.comments, self.shares_reposts)
