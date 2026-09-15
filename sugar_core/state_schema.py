@@ -219,6 +219,13 @@ def _choice(value: Any, allowed: set[str], field_name: str, default: str) -> str
     return text
 
 
+def _reach_metric_name(value: Any) -> str:
+    text = _clean(value).casefold()
+    if not text or text not in REACH_METRIC_NAMES:
+        raise ValueError(f"Unsupported reach metric name: {text or '<empty>'}")
+    return text
+
+
 def _confidence(value: Any, field_name: str = "confidence") -> float | None:
     if value is None or value == "":
         return None
@@ -288,10 +295,14 @@ class QualifiedReachValue:
             elif self.qualifier == "minimum":
                 if self.maximum is not None:
                     raise ValueError("Minimum reach values cannot also set a maximum bound.")
+                if self.minimum not in (None, self.value):
+                    raise ValueError("Minimum reach bound must equal the reported value.")
                 self.minimum = self.value
             elif self.qualifier == "maximum":
                 if self.minimum is not None:
                     raise ValueError("Maximum reach values cannot also set a minimum bound.")
+                if self.maximum not in (None, self.value):
+                    raise ValueError("Maximum reach bound must equal the reported value.")
                 self.maximum = self.value
             elif self.qualifier == "approximate" and (self.minimum is not None or self.maximum is not None):
                 raise ValueError("Approximate reach should not invent numeric bounds; use range when bounds are reported.")
@@ -333,7 +344,7 @@ class ReachMetrics:
 
         normalized: dict[str, QualifiedReachValue] = {}
         for metric_name, raw_value in (self.qualified or {}).items():
-            metric = _choice(metric_name, REACH_METRIC_NAMES, "reach metric name", "attendance")
+            metric = _reach_metric_name(metric_name)
             qualified = raw_value if isinstance(raw_value, QualifiedReachValue) else QualifiedReachValue(**dict(raw_value))
             exact_value = getattr(self, metric)
             if qualified.is_exact:
@@ -350,7 +361,7 @@ class ReachMetrics:
         self.source_note = _clean(self.source_note)
 
     def metric(self, metric_name: str) -> QualifiedReachValue | None:
-        metric = _choice(metric_name, REACH_METRIC_NAMES, "reach metric name", "attendance")
+        metric = _reach_metric_name(metric_name)
         if metric in self.qualified:
             return self.qualified[metric]
         exact_value = getattr(self, metric)
