@@ -4,7 +4,7 @@ import json
 
 import pandas as pd
 
-from sugar_core.observations import ResearchObservation
+from sugar_core.observations import EvidenceReference, ResearchObservation
 from sugar_core.source_conflicts import SourceClaim, SourceConflict
 from sugar_core.state_conflict_package import (
     build_conflict_aware_review_queue,
@@ -17,6 +17,7 @@ from sugar_core.state_workflow import build_review_queue
 
 STATE_URL = "https://educationusa.state.gov/node/421"
 OPERATOR_URL = "https://kyrgyzstan.americancouncils.org/edusa"
+OBSERVATION_URL = "https://example.org/observation"
 
 
 def observation() -> ResearchObservation:
@@ -28,6 +29,13 @@ def observation() -> ResearchObservation:
         city="Bishkek",
         latitude=42.8746,
         longitude=74.5698,
+        evidence=[
+            EvidenceReference(
+                url=OBSERVATION_URL,
+                source_type="official_host_source",
+            )
+        ],
+        source_record_keys=[OBSERVATION_URL],
     )
 
 
@@ -129,6 +137,23 @@ def test_provisional_conflict_is_linked_by_structured_service_source_and_priorit
     assert "requires human review" in enriched["reasons"]
 
 
+def test_service_topology_conflict_ignores_audience_only_service_association():
+    obs = observation()
+    row = StateAssessment(
+        observation_id=obs.observation_id,
+        strategic_audiences=["students"],
+        program_domains=["culture_arts"],
+    )
+    _apply_overlap(obs, row)
+
+    source = next(
+        item for item in row.us_overlap.service_sources if item.source_url == STATE_URL
+    )
+    assert source.program_service_matches == []
+    assert source.audience_service_matches
+    assert source_conflicts_for_record(obs, row, [provisional_conflict()]) == []
+
+
 def test_exact_source_identity_prevents_topic_only_conflict_linkage():
     obs = observation()
     row = assessment(obs)
@@ -168,11 +193,13 @@ def test_state_package_persists_provisional_conflict_across_analyst_surfaces(tmp
     assert conflict_payload[0]["status"] == "provisional_treatment"
 
     audit = json.loads((tmp_path / "case.audit.json").read_text(encoding="utf-8"))
+    assert audit["errors"] == 0
     assert audit["status"] == "conditional"
     assert audit["source_conflicts"]["requiring_human_review"] == 1
     assert any(item["code"] == "source_conflict_requires_human_review" for item in audit["findings"])
 
     snapshot = json.loads((tmp_path / "case.snapshot.json").read_text(encoding="utf-8"))
+    assert snapshot["audit_status"] == "conditional"
     assert snapshot["source_conflicts"]["provisional_treatment"] == 1
     assert snapshot["source_conflict_ids"] == [conflict.conflict_id]
 
@@ -210,9 +237,14 @@ def test_human_adjudicated_conflict_is_preserved_without_unresolved_review_penal
     assert outputs
 
     audit = json.loads((tmp_path / "resolved.audit.json").read_text(encoding="utf-8"))
+    assert audit["errors"] == 0
+    assert audit["warnings"] == 0
     assert audit["status"] == "pass"
     assert audit["source_conflicts"]["human_adjudicated"] == 1
     assert audit["source_conflicts"]["requiring_human_review"] == 0
+
+    snapshot = json.loads((tmp_path / "resolved.snapshot.json").read_text(encoding="utf-8"))
+    assert snapshot["audit_status"] == "pass"
 
     base = build_review_queue([obs], [row])[0]
     queue = pd.read_csv(tmp_path / "resolved.review_queue.csv")
