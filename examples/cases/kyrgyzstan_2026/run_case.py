@@ -26,10 +26,15 @@ from location_enrichment import (
     apply_us_site_location_enrichment,
     location_reference_manifest,
 )
-from source_conflicts import source_conflict_findings, source_conflict_manifest
+from source_conflicts import (
+    build_source_conflicts,
+    source_conflict_findings,
+    source_conflict_manifest,
+)
 from sugar_core.observation_storage import save_observations
+from sugar_core.state_conflict_package import save_state_package_with_conflicts
 from sugar_core.state_map import create_state_map
-from sugar_core.state_workflow import audit_state_records, save_state_assessments, save_state_package
+from sugar_core.state_workflow import audit_state_records, save_state_assessments
 from sugar_core.workspace import SugarWorkspace
 
 CASE_NAME = "Kyrgyzstan 2026 Public Diplomacy E2E"
@@ -250,6 +255,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     workspace.register_outputs(observation_outputs, kind="observations", operation="kyrgyzstan-e2e")
 
     references_dir = workspace.path_for("references")
+    structured_conflicts = build_source_conflicts()
     conflicts = source_conflict_manifest()
     sources = sources_manifest(observations, sites)
     sources["location_references"] = location_reference_manifest()
@@ -269,13 +275,14 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
 
     package_outputs = [
         Path(path)
-        for path in save_state_package(
+        for path in save_state_package_with_conflicts(
             observations,
             assessments,
             state_dir,
             name=CASE_STEM,
             us_sites=sites,
             title="Kyrgyzstan 2026 Public Diplomacy Research Update",
+            source_conflicts=structured_conflicts,
         )
     ]
     workspace.register_outputs(package_outputs, kind="state_output", operation="kyrgyzstan-e2e")
@@ -313,7 +320,8 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     ]
     workspace.register_outputs(map_outputs, kind="map", operation="kyrgyzstan-e2e")
 
-    audit = audit_state_records(observations, assessments)
+    record_audit = audit_state_records(observations, assessments)
+    audit = _read_json(state_dir / f"{CASE_STEM}.audit.json")
     findings = _case_findings(observations, assessments, sites, location_summary)
     findings.extend(source_conflict_findings())
     analyst_metadata = _read_json(analyst_map.with_suffix(analyst_map.suffix + ".metadata.json"))
@@ -365,6 +373,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "assessments": len(assessments),
         "human_verified_observations": sum(row.verification_state == "human_verified" for row in observations),
         "brief_eligible_assessments": audit.get("brief_eligible", 0),
+        "record_audit_status": record_audit.get("status"),
         "audit_status": audit.get("status"),
         "support_levels": support_summary,
         "language_domain_fallbacks": language_fallbacks,
@@ -382,6 +391,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "nonspatial_us_services": sum(site.delivery_mode == "virtual" for site in sites),
         "location_enrichment": location_summary,
         "source_conflicts": len(conflicts),
+        "source_conflicts_requiring_human_review": audit.get("source_conflicts", {}).get("requiring_human_review", 0),
         "analyst_map_observations": analyst_metadata.get("mapped_observations"),
         "analyst_map_locations": analyst_metadata.get("mapped_locations"),
         "analyst_map_multi_location_observations": analyst_metadata.get("multi_location_observations"),
@@ -402,6 +412,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     summary_json = _write_json(reports_dir / "case-summary.json", summary)
     findings_json = _write_json(reports_dir / "case-findings.json", findings)
     audit_json = _write_json(reports_dir / "case-audit.json", audit)
+    record_audit_json = _write_json(reports_dir / "record-integrity-audit.json", record_audit)
 
     preliminary = [
         "# Kyrgyzstan 2026 — preliminary analyst note",
@@ -410,7 +421,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "",
         f"The bounded case contains **{len(observations)}** PRC-linked public-diplomacy observations through September 14, 2026. The record spans Chinese-language education, Confucius Institute activity, university cooperation, cultural exhibitions and performances, literary and city-level exchanges, and governance/civilizational programming.",
         "",
-        f"Seven single-site source records are refined to site-level geometry, three other observations remain deliberately city-level, and one Chinese Language Day observation now carries two venue entries without becoming two activities. Bishkek State University is represented at site precision; International University of Kyrgyzstan remains city-level because the event-specific campus is unresolved. The analyst map therefore contains 12 activity locations for 11 observations, while its density layer still totals 11.0 activity units. The U.S. layer contains eight spatially resolved physical American Spaces plus one source-declared virtual/country-scoped EducationUSA service; missing coordinates alone never create virtual-service semantics. Chinese-language records remain language-neutral, qualified attendance retains its original source semantics, and the EducationUSA topology conflict remains explicit. PRC-support judgments remain evidence-calibrated: {support_summary['probable']} probable and {support_summary['possible']} possible, with none confirmed before human review.",
+        f"Seven single-site source records are refined to site-level geometry, three other observations remain deliberately city-level, and one Chinese Language Day observation now carries two venue entries without becoming two activities. Bishkek State University is represented at site precision; International University of Kyrgyzstan remains city-level because the event-specific campus is unresolved. The analyst map therefore contains 12 activity locations for 11 observations, while its density layer still totals 11.0 activity units. The U.S. layer contains eight spatially resolved physical American Spaces plus one source-declared virtual/country-scoped EducationUSA service; missing coordinates alone never create virtual-service semantics. Chinese-language records remain language-neutral, qualified attendance retains its original source semantics, and the EducationUSA topology conflict remains explicit. The record-integrity audit passes, while the complete State package is conditional because that source conflict still requires human review. PRC-support judgments remain evidence-calibrated: {support_summary['probable']} probable and {support_summary['possible']} possible, with none confirmed before human review.",
         "",
         "## Model and source findings from the real case",
         "",
@@ -427,12 +438,14 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     )
     note_path = reports_dir / "preliminary-analyst-note.md"
     note_path.write_text("\n".join(preliminary), encoding="utf-8")
-    report_outputs = [summary_json, findings_json, audit_json, note_path]
+    report_outputs = [summary_json, findings_json, audit_json, record_audit_json, note_path]
     workspace.register_outputs(report_outputs, kind="report", operation="kyrgyzstan-e2e")
 
     assert len(observations) == 11
     assert summary["human_verified_observations"] == 0
     assert summary["brief_eligible_assessments"] == 0
+    assert summary["record_audit_status"] == "pass"
+    assert summary["audit_status"] == "conditional"
     assert summary["support_levels"] == {"probable": 9, "possible": 2}
     assert summary["language_domain_fallbacks"] == 0
     assert summary["spurious_english_service_overlaps"] == 0
@@ -455,6 +468,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     assert summary["physical_us_sites"] == 8
     assert summary["nonspatial_us_services"] == 1
     assert summary["source_conflicts"] == 1
+    assert summary["source_conflicts_requiring_human_review"] == 1
     assert summary["case_findings"] == 9
     assert summary["location_enrichment"]["site_refined_observations"] == 7
     assert summary["location_enrichment"]["city_level_observations"] == 3
@@ -470,6 +484,21 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     assert analyst_metadata.get("mapped_us_sites") == 8
     assert verified_metadata.get("mapped_us_sites") == 8
     assert workspace.status()["missing_artifacts"] == 0
+
+    package_conflict_path = state_dir / f"{CASE_STEM}.source_conflicts.json"
+    package_queue = pd.read_csv(state_dir / f"{CASE_STEM}.review_queue.csv")
+    affected_conflict_rows = package_queue[
+        package_queue["source_conflicts_requiring_human_review"] == 1
+    ]
+    package_workbook = pd.ExcelFile(state_dir / f"{CASE_STEM}.state.xlsx")
+    package_brief = (state_dir / f"{CASE_STEM}.brief.md").read_text(encoding="utf-8")
+    assert package_conflict_path.is_file()
+    assert str(package_conflict_path.resolve()) in {str(path.resolve()) for path in package_outputs}
+    assert len(affected_conflict_rows) == 2
+    assert all("higher_education" in value for value in affected_conflict_rows["program_domains"])
+    assert "source_conflicts" in package_workbook.sheet_names
+    assert "EducationUSA Kyrgyzstan service topology" in package_brief
+    assert "not a human adjudication" in package_brief
 
     finding_codes = {item["code"] for item in findings}
     assert "multi_site_observation_resolved" in finding_codes
