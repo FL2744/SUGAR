@@ -277,7 +277,9 @@ def augment_state_package_with_conflicts(
         encoding="utf-8",
     )
 
+    package_audit = json.loads(audit_path.read_text(encoding="utf-8"))
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    snapshot["audit_status"] = package_audit.get("status")
     snapshot["source_conflicts"] = source_conflict_summary(conflicts)
     snapshot["source_conflict_ids"] = [conflict.conflict_id for conflict in conflicts]
     snapshot_path.write_text(
