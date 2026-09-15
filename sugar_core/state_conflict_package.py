@@ -17,7 +17,6 @@ from .source_conflicts import (
 )
 from .state_schema import StateAssessment, USPresenceSite
 from .state_workflow import (
-    apply_us_overlaps,
     blank_state_assessments,
     build_review_queue,
     load_state_assessments,
@@ -104,7 +103,12 @@ def build_conflict_aware_review_queue(
         if assessment is None:
             continue
         observation = observation_map.get(assessment.observation_id)
-        matched = source_conflicts_for_record(observation, assessment, conflicts)
+        urls = _record_source_urls(observation, assessment)
+        matched = [
+            conflict
+            for conflict in conflicts
+            if any(claim.source_url in urls for claim in conflict.claims)
+        ]
         unresolved = [conflict for conflict in matched if conflict.requires_human_review]
         row["source_conflict_count"] = len(matched)
         row["source_conflicts_requiring_human_review"] = len(unresolved)
@@ -181,7 +185,11 @@ def render_source_conflict_section(
     ]
     for conflict in conflicts:
         preferred = conflict.preferred_claim
-        preferred_label = preferred.publisher or preferred.source_label or preferred.source_url if preferred else "none"
+        preferred_label = (
+            preferred.publisher or preferred.source_label or preferred.source_url
+            if preferred
+            else "none"
+        )
         review = "human review required" if conflict.requires_human_review else "resolved"
         treatment = f" Treatment: {conflict.treatment}" if conflict.treatment else ""
         lines.append(
@@ -333,8 +341,6 @@ def package_from_files_with_conflicts(
         else blank_state_assessments(observations)
     )
     sites = load_us_presence_sites(us_sites_file) if us_sites_file else []
-    if sites:
-        assessments = apply_us_overlaps(observations, assessments, sites)
     previous = (
         load_state_assessments(previous_assessments_file)
         if previous_assessments_file
