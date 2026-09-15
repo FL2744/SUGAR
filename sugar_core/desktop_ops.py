@@ -9,7 +9,11 @@ from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
 from .state_aggregate import save_state_rollups
 from .state_conflict_package import package_from_files_with_conflicts
-from .state_conflict_review import export_review_workbook_with_conflict_file
+from .state_conflict_review import (
+    apply_source_conflict_review_workbook_file,
+    export_review_workbook_with_conflict_file,
+    workbook_has_source_conflict_decisions,
+)
 from .state_entities import load_entity_registry, save_query_plan, write_entity_template
 from .state_freshness import save_freshness_report
 from .state_gaps import save_gap_report
@@ -18,7 +22,7 @@ from .state_intelligence import save_intelligence_packet
 from .state_longitudinal import save_longitudinal_comparison
 from .state_map import create_state_map
 from .state_network import save_state_network
-from .state_review import apply_review_workbook_file, export_review_workbook
+from .state_review import apply_review_workbook_file
 from .state_agentic import save_iterative_agentic_synthesis
 from .state_tradecraft import save_tradecraft_audit
 from .state_triage import triage_observations
@@ -372,14 +376,45 @@ def run_desktop_analytic_operation(
     if operation == "state-review-export":
         observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
         assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
+        source_conflicts = _optional_input_path(config, "source_conflicts", workspace)
         target = _output_path(config, "output_file", "state_review.xlsx", workspace=workspace, workspace_key="state")
-        return _register(workspace, [export_review_workbook(observations, assessments, target)], operation=operation, kind="state_review")
+        output = export_review_workbook_with_conflict_file(
+            observations,
+            assessments,
+            target,
+            source_conflicts_file=source_conflicts,
+        )
+        return _register(workspace, [output], operation=operation, kind="state_review")
 
     if operation == "state-review-apply":
         assessments = _required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",))
         workbook = _required_path(config, "workbook", workspace=workspace, workspace_kinds=("state_review",))
+        source_conflicts = _optional_input_path(config, "source_conflicts", workspace)
+        has_conflict_decisions = workbook_has_source_conflict_decisions(workbook)
+        if has_conflict_decisions and source_conflicts is None:
+            raise ValueError(
+                "Review workbook contains source-conflict decisions. Provide source_conflicts so they can be validated and applied."
+            )
+
         target = _output_path(config, "output_file", "state_reviewed.jsonl", workspace=workspace, workspace_key="state")
-        return _register(workspace, [apply_review_workbook_file(assessments, workbook, target)], operation=operation, kind="state_assessments")
+        assessment_output = apply_review_workbook_file(assessments, workbook, target)
+        outputs = _register(workspace, [assessment_output], operation=operation, kind="state_assessments")
+
+        if source_conflicts is not None:
+            raw_conflict_output = str(config.get("source_conflicts_output_file") or "").strip()
+            if raw_conflict_output:
+                conflict_target = Path(raw_conflict_output).expanduser().resolve()
+            else:
+                conflict_target = target.with_name(f"{target.stem}.source_conflicts.json")
+            conflict_target.parent.mkdir(parents=True, exist_ok=True)
+            conflict_output = apply_source_conflict_review_workbook_file(
+                source_conflicts,
+                workbook,
+                conflict_target,
+            )
+            outputs.extend(_register(workspace, [conflict_output], operation=operation, kind="state"))
+
+        return list(dict.fromkeys(outputs))
 
     if operation == "state-audit":
         observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
