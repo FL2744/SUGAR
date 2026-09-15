@@ -68,7 +68,7 @@ def test_geojson_emits_two_venue_features_for_one_multi_site_observation():
     assert {row["properties"]["location_precision"] for row in features} == {"site", "city"}
     assert {row["properties"]["activity_location_index"] for row in features} == {1, 2}
     assert {row["properties"]["activity_location_count"] for row in features} == {2}
-    assert [42.8746, 74.5698] not in [row["geometry"]["coordinates"] for row in features]
+    assert [74.5698, 42.8746] not in [row["geometry"]["coordinates"] for row in features]
     assert all(row["properties"]["location_source_ref"] for row in features)
 
 
