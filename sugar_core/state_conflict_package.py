@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import pandas as pd
+from openpyxl import load_workbook
 
 from .observation_storage import load_observations
 from .observations import ResearchObservation
@@ -15,6 +16,7 @@ from .source_conflicts import (
     save_source_conflicts,
     source_conflict_summary,
 )
+from .state_review import export_review_workbook
 from .state_schema import StateAssessment, USPresenceSite
 from .state_workflow import (
     blank_state_assessments,
@@ -23,6 +25,7 @@ from .state_workflow import (
     load_us_presence_sites,
     save_state_package,
 )
+from .utils import safe_cell
 
 _CONFLICT_SECTION_START = "<!-- SUGAR_SOURCE_CONFLICTS_START -->"
 _CONFLICT_SECTION_END = "<!-- SUGAR_SOURCE_CONFLICTS_END -->"
@@ -43,6 +46,16 @@ def _normalize_conflicts(
         row if isinstance(row, SourceConflict) else SourceConflict(**dict(row))
         for row in conflicts
     ]
+
+
+def _formula_safe_frame(rows: Iterable[dict[str, Any]]) -> pd.DataFrame:
+    frame = pd.DataFrame(list(rows))
+    if not frame.empty:
+        for column in frame.columns:
+            frame[column] = frame[column].map(
+                lambda value: safe_cell(value, formula_safe=True)
+            )
+    return frame
 
 
 def _record_source_urls(
@@ -117,7 +130,11 @@ def build_conflict_aware_review_queue(
         row["source_conflict_statuses"] = "; ".join(conflict.status for conflict in matched)
         if unresolved:
             row["review_priority"] = int(row.get("review_priority") or 0) + 4
-            reasons = [value.strip() for value in str(row.get("reasons") or "").split(";") if value.strip()]
+            reasons = [
+                value.strip()
+                for value in str(row.get("reasons") or "").split(";")
+                if value.strip()
+            ]
             reason = "source conflict affecting record requires human review"
             if reason not in reasons:
                 reasons.append(reason)
@@ -230,7 +247,99 @@ def _augment_audit(path: Path, conflicts: list[SourceConflict]) -> None:
         audit["findings"] = findings
         if audit.get("status") == "pass":
             audit["status"] = "conditional"
-    path.write_text(json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    path.write_text(
+        json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
+def _conflict_fields_for_record(
+    observation: ResearchObservation | None,
+    assessment: StateAssessment,
+    conflicts: list[SourceConflict],
+) -> dict[str, Any]:
+    matched = source_conflicts_for_record(observation, assessment, conflicts)
+    unresolved = [conflict for conflict in matched if conflict.requires_human_review]
+    return {
+        "source_conflict_count": len(matched),
+        "source_conflicts_requiring_human_review": len(unresolved),
+        "source_conflict_ids": "; ".join(conflict.conflict_id for conflict in matched),
+        "source_conflict_topics": "; ".join(conflict.topic for conflict in matched),
+        "source_conflict_statuses": "; ".join(conflict.status for conflict in matched),
+    }
+
+
+def export_review_workbook_with_conflicts(
+    observations: Iterable[ResearchObservation],
+    assessments: Iterable[StateAssessment],
+    output_file: str | Path,
+    *,
+    source_conflicts: Iterable[SourceConflict | dict[str, Any]] = (),
+) -> str:
+    """Export the analyst review workbook and carry source conflicts into the same file."""
+    observations = list(observations)
+    assessments = list(assessments)
+    conflicts = _normalize_conflicts(source_conflicts)
+    output = export_review_workbook(observations, assessments, output_file)
+    if not conflicts:
+        return output
+
+    observation_map = {row.observation_id: row for row in observations}
+    assessment_map = {row.assessment_id: row for row in assessments}
+    workbook = load_workbook(output)
+    assessment_sheet = workbook["assessments"]
+    headers = {str(cell.value): cell.column for cell in assessment_sheet[1]}
+    conflict_headers = [
+        "source_conflict_count",
+        "source_conflicts_requiring_human_review",
+        "source_conflict_ids",
+        "source_conflict_topics",
+        "source_conflict_statuses",
+    ]
+    start_column = assessment_sheet.max_column + 1
+    for offset, header in enumerate(conflict_headers):
+        assessment_sheet.cell(row=1, column=start_column + offset, value=header)
+
+    assessment_id_column = headers["assessment_id"]
+    for row_number in range(2, assessment_sheet.max_row + 1):
+        assessment_id = _clean(
+            assessment_sheet.cell(row=row_number, column=assessment_id_column).value
+        )
+        assessment = assessment_map.get(assessment_id)
+        if assessment is None:
+            continue
+        fields = _conflict_fields_for_record(
+            observation_map.get(assessment.observation_id),
+            assessment,
+            conflicts,
+        )
+        for offset, header in enumerate(conflict_headers):
+            assessment_sheet.cell(
+                row=row_number,
+                column=start_column + offset,
+                value=safe_cell(fields[header], formula_safe=True),
+            )
+
+    if "source_conflicts" in workbook.sheetnames:
+        del workbook["source_conflicts"]
+    conflict_sheet = workbook.create_sheet("source_conflicts")
+    conflict_frame = _formula_safe_frame(_source_conflict_rows(conflicts))
+    if not conflict_frame.empty:
+        conflict_sheet.append(list(conflict_frame.columns))
+        for row in conflict_frame.itertuples(index=False, name=None):
+            conflict_sheet.append(list(row))
+        conflict_sheet.freeze_panes = "A2"
+        conflict_sheet.auto_filter.ref = conflict_sheet.dimensions
+
+    instructions = workbook["instructions"]
+    instructions.append(
+        [
+            "Source conflicts",
+            "Open or provisional source conflicts require human review. A provisional preferred claim is not a human adjudication and does not establish influence, competition, displacement, persuasion, or causal effect.",
+        ]
+    )
+    workbook.save(output)
+    return str(Path(output).resolve())
 
 
 def augment_state_package_with_conflicts(
@@ -260,14 +369,12 @@ def augment_state_package_with_conflicts(
     save_source_conflicts(conflicts, conflict_path)
 
     review_rows = build_conflict_aware_review_queue(observations, assessments, conflicts)
-    pd.DataFrame(review_rows).to_csv(queue_path, index=False, encoding="utf-8-sig")
+    review_frame = _formula_safe_frame(review_rows)
+    conflict_frame = _formula_safe_frame(_source_conflict_rows(conflicts))
+    review_frame.to_csv(queue_path, index=False, encoding="utf-8-sig")
     with pd.ExcelWriter(xlsx_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-        pd.DataFrame(review_rows).to_excel(writer, index=False, sheet_name="review_queue")
-        pd.DataFrame(_source_conflict_rows(conflicts)).to_excel(
-            writer,
-            index=False,
-            sheet_name="source_conflicts",
-        )
+        review_frame.to_excel(writer, index=False, sheet_name="review_queue")
+        conflict_frame.to_excel(writer, index=False, sheet_name="source_conflicts")
 
     _augment_audit(audit_path, conflicts)
 
