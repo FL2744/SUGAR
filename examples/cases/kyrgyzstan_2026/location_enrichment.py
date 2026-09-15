@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sugar_core.observations import EvidenceReference, ResearchObservation
+from sugar_core.observations import EvidenceReference, ObservationLocation, ResearchObservation
 from sugar_core.state_schema import USPresenceSite
 
 
@@ -15,9 +15,6 @@ class LocationReference:
     note: str
 
 
-# Public map/directory coordinates are used only when the underlying activity source names the
-# venue/institution. They refine the display/analysis location; they do not add evidence that the
-# activity itself occurred beyond what the activity source already states.
 LOCATION_REFERENCES = {
     "national_history_museum": LocationReference(
         label="National Historical Museum of the Kyrgyz Republic, Chui Avenue 203A, Bishkek",
@@ -54,6 +51,13 @@ LOCATION_REFERENCES = {
         source_url="https://www.wikidata.org/wiki/Q25578268",
         note="Public coordinate for the named Kyrgyz National Philharmonic venue.",
     ),
+    "bsu_main": LocationReference(
+        label="Bishkek State University named after Academician Kusein Karasaev, 27 Chyngyz Aitmatov Avenue, Bishkek",
+        latitude=42.85035,
+        longitude=74.58509,
+        source_url="https://mapcarta.com/W321082545",
+        note="OpenStreetMap-derived coordinate for K. Karasaev Bishkek State University; the university's official site lists 27 Chyngyz Aitmatov Avenue as its address.",
+    ),
     "america_borboru_bishkek": LocationReference(
         label="America Borboru Bishkek, 242 Tynystanov Street, Bishkek",
         latitude=42.8776054,
@@ -81,6 +85,12 @@ OBSERVATION_LOCATION_KEYS = {
     "Nanjing Week opens at the Osmonov National Library": "national_library",
 }
 
+CHINESE_LANGUAGE_DAY_TITLE = "International Chinese Language Day events at Bishkek universities"
+CHINESE_LANGUAGE_DAY_SOURCE = "https://kg.china-embassy.gov.cn/chn/dssghd/202604/t20260424_11899331.htm"
+BSU_OFFICIAL_SOURCE = "https://bhu.kg/en/universitet/"
+IUK_OFFICIAL_SOURCE = "https://iuc.edu.kg/"
+BISHKEK_CITY_CENTROID = (42.8746, 74.5698)
+
 
 def _append_location_reference(observation: ResearchObservation, reference: LocationReference) -> None:
     if any(item.url == reference.source_url for item in observation.evidence):
@@ -96,12 +106,84 @@ def _append_location_reference(observation: ResearchObservation, reference: Loca
     )
 
 
+def _append_evidence_once(observation: ResearchObservation, evidence: EvidenceReference) -> None:
+    if not any(item.url == evidence.url for item in observation.evidence):
+        observation.evidence.append(evidence)
+
+
+def _apply_chinese_language_day_locations(observation: ResearchObservation) -> None:
+    bsu = LOCATION_REFERENCES["bsu_main"]
+    observation.locations = [
+        ObservationLocation(
+            label=bsu.label,
+            country="Kyrgyzstan",
+            city="Bishkek",
+            latitude=bsu.latitude,
+            longitude=bsu.longitude,
+            precision="site",
+            confidence=0.90,
+            uncertainty_km=0.75,
+            basis="source_named_institution_official_address_public_coordinate_reference",
+            source_ref=BSU_OFFICIAL_SOURCE,
+            note="The Embassy source names Bishkek State University as a venue. Official BSU material supplies the address; the public OSM-derived reference supplies the coordinate.",
+        ),
+        ObservationLocation(
+            label="International University of Kyrgyzstan — reported Bishkek venue; specific campus unresolved",
+            country="Kyrgyzstan",
+            city="Bishkek",
+            latitude=BISHKEK_CITY_CENTROID[0],
+            longitude=BISHKEK_CITY_CENTROID[1],
+            precision="city",
+            confidence=0.75,
+            uncertainty_km=12.0,
+            basis="source_named_institution_campus_unresolved_city_centroid",
+            source_ref=CHINESE_LANGUAGE_DAY_SOURCE,
+            note="The Embassy source names International University of Kyrgyzstan, but current university material exposes multiple campus/service locations. The case therefore retains only city-level placement instead of selecting a campus without event-specific evidence.",
+        ),
+    ]
+    # The legacy scalar fields remain a backwards-compatible summary geography, not a venue claim.
+    observation.location_label = "Bishkek, Kyrgyzstan — multi-site activity"
+    observation.latitude = BISHKEK_CITY_CENTROID[0]
+    observation.longitude = BISHKEK_CITY_CENTROID[1]
+    observation.location_basis = "multi_site_summary_city"
+    observation.location_confidence = 0.75
+    _append_location_reference(observation, bsu)
+    _append_evidence_once(
+        observation,
+        EvidenceReference(
+            url=BSU_OFFICIAL_SOURCE,
+            title="Bishkek State University official address",
+            source_type="official_host_location_reference",
+            collected_at="2026-09-15T00:00:00Z",
+            note="Official BSU site lists 27 Chyngyz Aitmatov Avenue, Bishkek.",
+        ),
+    )
+    _append_evidence_once(
+        observation,
+        EvidenceReference(
+            url=IUK_OFFICIAL_SOURCE,
+            title="International University of Kyrgyzstan current site",
+            source_type="official_host_location_reference",
+            collected_at="2026-09-15T00:00:00Z",
+            note="Current university material is retained to document campus ambiguity; it is not used to assert a specific event campus.",
+        ),
+    )
+    observation.touch()
+
+
 def apply_observation_location_enrichment(
     observations: list[ResearchObservation],
 ) -> dict[str, int]:
     refined = 0
     unchanged_city = 0
+    multi_site_observations = 0
+    structured_activity_locations = 0
     for observation in observations:
+        if observation.title == CHINESE_LANGUAGE_DAY_TITLE:
+            _apply_chinese_language_day_locations(observation)
+            multi_site_observations += 1
+            structured_activity_locations += len(observation.locations)
+            continue
         key = OBSERVATION_LOCATION_KEYS.get(observation.title)
         if key is None:
             unchanged_city += 1
@@ -110,8 +192,6 @@ def apply_observation_location_enrichment(
         observation.location_label = reference.label
         observation.latitude = reference.latitude
         observation.longitude = reference.longitude
-        # Use underscore-delimited tokens because the shared State location resolver parses
-        # location_basis tokens that way; the explicit `site` token must remain machine-readable.
         observation.location_basis = "source_named_site_public_location_reference"
         observation.location_confidence = 0.90
         _append_location_reference(observation, reference)
@@ -120,6 +200,8 @@ def apply_observation_location_enrichment(
     return {
         "site_refined_observations": refined,
         "city_level_observations": unchanged_city,
+        "multi_site_observations": multi_site_observations,
+        "structured_activity_locations": structured_activity_locations,
     }
 
 
@@ -145,8 +227,6 @@ def apply_us_site_location_enrichment(sites: list[USPresenceSite]) -> dict[str, 
             site.location_basis = "official_address_public_coordinate_reference"
             refined += 1
         elif site.latitude is None or site.longitude is None:
-            # EducationUSA is intentionally non-spatial in this case. The scope fields make that
-            # machine-readable instead of relying on missing coordinates as an implicit signal.
             site.delivery_mode = "virtual"
             site.coverage_scope = "country"
             site.location_precision = "unknown"
