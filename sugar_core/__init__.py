@@ -30,6 +30,19 @@ from .observations import (
     observations_from_posts,
 )
 from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
+from .source_conflicts import (
+    SOURCE_AUTHORITY_TYPES,
+    SOURCE_CONFLICT_STATUSES,
+    SOURCE_CONFLICT_TYPES,
+    SOURCE_FRESHNESS_STATES,
+    SourceClaim,
+    SourceConflict,
+    load_source_conflicts,
+    save_source_conflicts,
+    source_conflict_summary,
+    source_conflict_to_dict,
+    source_conflicts_to_dicts,
+)
 from .spatial import (
     DEFAULT_DISTANCE_BANDS_KM,
     ReferencePoint,
@@ -95,6 +108,17 @@ __all__ = [
     "observations_to_frame",
     "save_observations",
     "load_observations",
+    "SourceClaim",
+    "SourceConflict",
+    "SOURCE_AUTHORITY_TYPES",
+    "SOURCE_FRESHNESS_STATES",
+    "SOURCE_CONFLICT_TYPES",
+    "SOURCE_CONFLICT_STATUSES",
+    "source_conflict_to_dict",
+    "source_conflicts_to_dicts",
+    "source_conflict_summary",
+    "save_source_conflicts",
+    "load_source_conflicts",
     "DEFAULT_DISTANCE_BANDS_KM",
     "ReferencePoint",
     "SpatialOverlapConfig",
