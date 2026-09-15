@@ -79,7 +79,7 @@ def _bounded_confidence(value: float | int | None, field_name: str) -> float | N
 
 
 def _optional_float(value: Any) -> float | None:
-    if value is None or value == "" or str(value).casefold() == "nan":
+    if value is None or value == "" or str(value).strip().casefold() in {"nan", "none", "<na>"}:
         return None
     return float(value)
 
@@ -290,14 +290,11 @@ class ResearchObservation:
         ):
             setattr(self, attr, _clean(getattr(self, attr)))
 
+        # Keep legacy scalar coordinates backward-compatible: incomplete pairs can still be loaded
+        # and are rejected as unresolved by the location resolver. New structured locations are
+        # stricter because each entry is an explicit venue/location claim.
         self.latitude = _optional_float(self.latitude)
         self.longitude = _optional_float(self.longitude)
-        if (self.latitude is None) != (self.longitude is None):
-            raise ValueError("Observation coordinates require both latitude and longitude when supplied.")
-        if self.latitude is not None and not -90.0 <= self.latitude <= 90.0:
-            raise ValueError("Observation latitude must be between -90 and 90.")
-        if self.longitude is not None and not -180.0 <= self.longitude <= 180.0:
-            raise ValueError("Observation longitude must be between -180 and 180.")
         self.actors = _clean_list(self.actors)
         self.audiences = _clean_list(self.audiences)
         self.themes = _clean_list(self.themes)
