@@ -23,6 +23,7 @@ from .utils import safe_cell, utc_iso
 
 DOMAIN_TO_US_SERVICES = {
     "higher_education": {"educationusa", "study_in_the_us", "higher_education"},
+    "language_education": {"language_education"},
     "english_language": {"english_language", "english_learning"},
     "entrepreneurship": {"entrepreneurship", "business", "innovation"},
     "stem_technology": {"stem", "technology", "makerspace", "innovation"},
@@ -83,7 +84,15 @@ def _list_cell(value: Any) -> list[str]:
 
 
 def _float_or_none(value: Any) -> float | None:
-    if value is None or value == "" or str(value).casefold() == "nan":
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    if not text or text.casefold() in {"nan", "none", "<na>"}:
         return None
     return float(value)
 
@@ -113,6 +122,12 @@ def load_us_presence_sites(path: str | Path) -> list[USPresenceSite]:
                 service_tags=_list_cell(raw.get("service_tags")),
                 source_url=_clean(raw.get("source_url", "")),
                 status=_clean(raw.get("status", "active")) or "active",
+                delivery_mode=_clean(raw.get("delivery_mode", "physical")) or "physical",
+                coverage_scope=_clean(raw.get("coverage_scope", "site")) or "site",
+                location_precision=_clean(raw.get("location_precision", "unknown")) or "unknown",
+                location_confidence=_float_or_none(raw.get("location_confidence")),
+                location_uncertainty_km=_float_or_none(raw.get("location_uncertainty_km")),
+                location_basis=_clean(raw.get("location_basis", "")),
             )
         )
     return sites
@@ -123,7 +138,8 @@ def write_us_presence_template(path: str | Path) -> str:
     target.parent.mkdir(parents=True, exist_ok=True)
     fields = [
         "site_id", "name", "network", "subtype", "country", "city", "latitude", "longitude",
-        "service_tags", "source_url", "status",
+        "service_tags", "source_url", "status", "delivery_mode", "coverage_scope",
+        "location_precision", "location_confidence", "location_uncertainty_km", "location_basis",
     ]
     with target.open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
@@ -135,9 +151,35 @@ def write_us_presence_template(path: str | Path) -> str:
                 "subtype": "American Corner",
                 "country": "Example Country",
                 "city": "Example City",
-                "service_tags": "educationusa;english_language;entrepreneurship;stem",
+                "latitude": "",
+                "longitude": "",
+                "service_tags": "english_language;entrepreneurship;stem",
                 "source_url": "https://example.gov/source",
                 "status": "active",
+                "delivery_mode": "physical",
+                "coverage_scope": "site",
+                "location_precision": "city",
+                "location_confidence": "0.75",
+                "location_uncertainty_km": "12",
+                "location_basis": "city_reference_replace_with_verified_site_data_when_available",
+            }
+        )
+        writer.writerow(
+            {
+                "name": "Example virtual advising service",
+                "network": "educationusa",
+                "subtype": "Virtual advising",
+                "country": "Example Country",
+                "city": "",
+                "latitude": "",
+                "longitude": "",
+                "service_tags": "educationusa;study_in_the_us;higher_education",
+                "source_url": "https://example.gov/virtual-service",
+                "status": "active",
+                "delivery_mode": "virtual",
+                "coverage_scope": "country",
+                "location_precision": "unknown",
+                "location_basis": "official_service_directory_nonspatial",
             }
         )
     return str(target.resolve())
@@ -153,13 +195,123 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def _observation_services(assessment: StateAssessment) -> set[str]:
+def _distance_to_site(observation: ResearchObservation, site: USPresenceSite) -> float | None:
+    if (
+        observation.latitude is None
+        or observation.longitude is None
+        or site.latitude is None
+        or site.longitude is None
+    ):
+        return None
+    return _haversine_km(
+        float(observation.latitude),
+        float(observation.longitude),
+        float(site.latitude),
+        float(site.longitude),
+    )
+
+
+def _program_services(assessment: StateAssessment) -> set[str]:
     services: set[str] = set()
     for domain in assessment.program_domains:
         services.update(DOMAIN_TO_US_SERVICES.get(domain, set()))
+    return {value.casefold() for value in services}
+
+
+def _audience_services(assessment: StateAssessment) -> set[str]:
+    services: set[str] = set()
     for audience in assessment.strategic_audiences:
         services.update(AUDIENCE_TO_US_SERVICES.get(audience, set()))
     return {value.casefold() for value in services}
+
+
+def _service_source_applies(
+    observation: ResearchObservation,
+    site: USPresenceSite,
+    *,
+    nearby_km: float,
+) -> bool:
+    scope = site.coverage_scope
+    same_country = bool(observation.country and _key(site.country) == _key(observation.country))
+    same_city = bool(
+        same_country
+        and observation.city
+        and site.city
+        and _key(site.city) == _key(observation.city)
+    )
+    if scope == "global":
+        return True
+    if scope == "country":
+        return same_country
+    if scope == "city":
+        return same_city
+    if scope == "site":
+        if not same_country:
+            return False
+        if same_city:
+            return True
+        distance = _distance_to_site(observation, site)
+        return distance is not None and distance <= nearby_km
+    return False
+
+
+def _applicable_service_sources(
+    observation: ResearchObservation,
+    sites: Iterable[USPresenceSite],
+    *,
+    nearby_km: float,
+) -> list[USPresenceSite]:
+    return sorted(
+        [
+            site
+            for site in sites
+            if site.status not in {"closed", "inactive"}
+            and site.service_tags
+            and _service_source_applies(observation, site, nearby_km=nearby_km)
+        ],
+        key=lambda site: site.site_id,
+    )
+
+
+def _nearest_physical_site(
+    observation: ResearchObservation,
+    sites: Iterable[USPresenceSite],
+) -> tuple[USPresenceSite | None, float | None]:
+    spatial = [
+        site
+        for site in sites
+        if site.status not in {"closed", "inactive"} and site.is_spatial
+    ]
+    if not spatial:
+        return None, None
+
+    if observation.latitude is not None and observation.longitude is not None:
+        ranked = [
+            (distance, site)
+            for site in spatial
+            if (distance := _distance_to_site(observation, site)) is not None
+        ]
+        if ranked:
+            ranked.sort(key=lambda item: (item[0], item[1].site_id))
+            return ranked[0][1], ranked[0][0]
+
+    same_city = [
+        site
+        for site in spatial
+        if observation.country
+        and observation.city
+        and _key(site.country) == _key(observation.country)
+        and _key(site.city) == _key(observation.city)
+    ]
+    if same_city:
+        return sorted(same_city, key=lambda site: site.site_id)[0], None
+    same_country = [
+        site for site in spatial
+        if observation.country and _key(site.country) == _key(observation.country)
+    ]
+    if same_country:
+        return sorted(same_country, key=lambda site: site.site_id)[0], None
+    return sorted(spatial, key=lambda site: site.site_id)[0], None
 
 
 def assess_us_overlap(
@@ -170,55 +322,68 @@ def assess_us_overlap(
     nearby_km: float = 50.0,
 ) -> USOverlapAssessment:
     sites = [site for site in sites if site.status not in {"closed", "inactive"}]
-    same_country = [site for site in sites if _key(site.country) == _key(observation.country) and observation.country]
-    same_city = [site for site in same_country if _key(site.city) == _key(observation.city) and observation.city and site.city]
+    same_country_sites = [
+        site for site in sites
+        if observation.country and _key(site.country) == _key(observation.country)
+    ]
+    same_city_sites = [
+        site for site in same_country_sites
+        if observation.city and site.city and _key(site.city) == _key(observation.city)
+    ]
 
-    nearest: USPresenceSite | None = None
-    distance: float | None = None
-    if observation.latitude is not None and observation.longitude is not None:
-        for site in same_country or sites:
-            if site.latitude is None or site.longitude is None:
-                continue
-            candidate = _haversine_km(observation.latitude, observation.longitude, site.latitude, site.longitude)
-            if distance is None or candidate < distance:
-                distance = candidate
-                nearest = site
-    if nearest is None and same_city:
-        nearest = same_city[0]
-    if nearest is None and same_country:
-        nearest = same_country[0]
+    nearest, distance = _nearest_physical_site(observation, sites)
+    service_sources = _applicable_service_sources(observation, sites, nearby_km=nearby_km)
+    available_services = {
+        tag.casefold()
+        for site in service_sources
+        for tag in site.service_tags
+    }
 
-    desired_services = _observation_services(assessment)
-    site_services = {tag.casefold() for tag in (nearest.service_tags if nearest else [])}
-    service_overlap = sorted(desired_services & site_services)
+    program_services = _program_services(assessment)
+    audience_services = _audience_services(assessment)
+    service_overlap = sorted(program_services & available_services)
 
-    audience_overlap: list[str] = []
-    if nearest:
-        for audience in assessment.strategic_audiences:
-            if AUDIENCE_TO_US_SERVICES.get(audience, set()) & site_services:
-                audience_overlap.append(audience)
+    audience_overlap = [
+        audience
+        for audience in assessment.strategic_audiences
+        if {value.casefold() for value in AUDIENCE_TO_US_SERVICES.get(audience, set())} & available_services
+    ]
+    thematic_overlap = [
+        domain
+        for domain in assessment.program_domains
+        if {value.casefold() for value in DOMAIN_TO_US_SERVICES.get(domain, set())} & available_services
+    ]
 
-    thematic_overlap: list[str] = []
-    if nearest:
-        for domain in assessment.program_domains:
-            if DOMAIN_TO_US_SERVICES.get(domain, set()) & site_services:
-                thematic_overlap.append(domain)
+    relevant_services = program_services | audience_services
+    contributing_sources = [
+        site
+        for site in service_sources
+        if {tag.casefold() for tag in site.service_tags} & relevant_services
+    ]
 
     note_parts: list[str] = []
-    if same_city:
+    if same_city_sites:
         note_parts.append("same-city U.S. public-diplomacy presence")
     elif distance is not None and distance <= nearby_km:
-        note_parts.append(f"U.S. presence within {distance:.1f} km")
-    elif same_country:
-        note_parts.append("same-country U.S. public-diplomacy presence")
+        note_parts.append(f"nearest physical U.S. presence within {distance:.1f} km")
+    elif same_country_sites:
+        note_parts.append("same-country U.S. public-diplomacy presence/service")
     if audience_overlap:
         note_parts.append("audience overlap: " + ", ".join(audience_overlap))
     if thematic_overlap:
         note_parts.append("thematic overlap: " + ", ".join(thematic_overlap))
+    if service_overlap:
+        note_parts.append("direct service overlap: " + ", ".join(service_overlap))
+    if contributing_sources:
+        labels = [
+            f"{site.name} [{site.delivery_mode}/{site.coverage_scope}]"
+            for site in contributing_sources
+        ]
+        note_parts.append("applicable U.S. service sources: " + "; ".join(labels))
 
     return USOverlapAssessment(
-        same_country=bool(same_country),
-        same_city=bool(same_city),
+        same_country=bool(same_country_sites),
+        same_city=bool(same_city_sites),
         nearest_site_id=nearest.site_id if nearest else "",
         nearest_site_name=nearest.name if nearest else "",
         nearest_network=nearest.network if nearest else "",
@@ -577,7 +742,7 @@ def state_geojson(
             }
         )
     for site in sites:
-        if site.latitude is None or site.longitude is None:
+        if not site.is_spatial:
             continue
         features.append(
             {
@@ -591,6 +756,12 @@ def state_geojson(
                     "subtype": site.subtype,
                     "country": site.country,
                     "city": site.city,
+                    "delivery_mode": site.delivery_mode,
+                    "coverage_scope": site.coverage_scope,
+                    "location_precision": site.location_precision,
+                    "location_confidence": site.location_confidence,
+                    "location_uncertainty_km": site.location_uncertainty_km,
+                    "location_basis": site.location_basis,
                     "service_tags": site.service_tags,
                     "source_url": site.source_url,
                 },
