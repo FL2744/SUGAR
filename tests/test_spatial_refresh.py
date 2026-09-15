@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from sugar_core.observations import ResearchObservation, SpatialMatch
+from sugar_core.observations import OBSERVATION_SCHEMA_VERSION, ResearchObservation, SpatialMatch
 from sugar_core.spatial import SpatialOverlapConfig, analyze_spatial_overlap
 
 
@@ -46,5 +46,5 @@ def test_spatial_refresh_clears_stale_match_when_reference_moves_out_of_range():
     assert enriched[0].spatial_matches == []
     assert matches.empty
     assert summary["observations_matched"] == 0
-    assert enriched[0].schema_version == "1.1"
+    assert enriched[0].schema_version == OBSERVATION_SCHEMA_VERSION
     assert enriched[0].updated_at >= previous_updated_at
