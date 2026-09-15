@@ -55,6 +55,8 @@ AUDIENCE_TO_US_SERVICES = {
 }
 
 SENSITIVE_NARRATIVES = {"anti_us", "china_russia_coordination", "third_party_coordination"}
+_REACH_METRIC_NAMES = ("attendance", "views", "likes", "comments", "shares_reposts", "followers")
+_ENGAGEMENT_METRIC_NAMES = ("likes", "comments", "shares_reposts")
 
 
 def _clean(value: Any) -> str:
@@ -423,6 +425,43 @@ def _evidence_identities(observation: ResearchObservation) -> set[str]:
     return identities
 
 
+def _has_reach_metric(assessment: StateAssessment, metric_names: Iterable[str] = _REACH_METRIC_NAMES) -> bool:
+    return any(assessment.reach.metric(name) is not None for name in metric_names)
+
+
+def _reported_metric_meets_threshold(metric: Any, threshold: int) -> bool:
+    if metric is None:
+        return False
+    qualifier = getattr(metric, "qualifier", "exact")
+    if qualifier == "maximum":
+        return False
+    if qualifier == "range":
+        lower = getattr(metric, "lower_bound", None)
+        return lower is not None and lower >= threshold
+    value = getattr(metric, "value", None)
+    return value is not None and value >= threshold
+
+
+def _qualified_reach_label(metric: Any) -> str:
+    source_note = _clean(getattr(metric, "source_note", ""))
+    if source_note:
+        return source_note.rstrip(".")
+    value = getattr(metric, "value", None)
+    qualifier = getattr(metric, "qualifier", "exact")
+    if qualifier == "approximate" and value is not None:
+        return f"approximately {value:,}"
+    if qualifier == "minimum" and value is not None:
+        return f"at least {value:,}"
+    if qualifier == "maximum" and value is not None:
+        return f"at most {value:,}"
+    if qualifier == "range":
+        lower = getattr(metric, "lower_bound", None)
+        upper = getattr(metric, "upper_bound", None)
+        if lower is not None and upper is not None:
+            return f"{lower:,}–{upper:,}"
+    return f"{value:,}" if value is not None else "qualified value"
+
+
 def audit_state_records(
     observations: Iterable[ResearchObservation],
     assessments: Iterable[StateAssessment],
@@ -466,12 +505,10 @@ def audit_state_records(
             missing = [ref for ref in assessment.prc_support.evidence_refs if ref not in evidence]
             if missing:
                 finding("error", "support_evidence_not_in_observation", assessment, f"PRC-support evidence references are not attached to the observation: {missing}")
-        if assessment.observability_level == "reach_observed" and assessment.reach.observed_total <= 0:
+        if assessment.observability_level == "reach_observed" and not _has_reach_metric(assessment):
             finding("warning", "reach_without_metric", assessment, "Reach is marked observed but no quantitative reach/engagement metric is stored.")
-        if assessment.observability_level == "engagement_observed":
-            engagement = sum(value or 0 for value in (assessment.reach.likes, assessment.reach.comments, assessment.reach.shares_reposts))
-            if engagement <= 0:
-                finding("warning", "engagement_without_metric", assessment, "Engagement is marked observed but no likes/comments/shares metric is stored.")
+        if assessment.observability_level == "engagement_observed" and not _has_reach_metric(assessment, _ENGAGEMENT_METRIC_NAMES):
+            finding("warning", "engagement_without_metric", assessment, "Engagement is marked observed but no likes/comments/shares metric is stored.")
         influence_claims = [claim for claim in assessment.claims if claim.claim_type == "influence"]
         if assessment.observability_level == "causal_influence_evidence" and not influence_claims:
             finding("error", "causal_level_without_claim", assessment, "Causal influence evidence requires an explicit claim with evidence references.")
@@ -547,12 +584,12 @@ def review_priority(assessment: StateAssessment, observation: ResearchObservatio
     if SENSITIVE_NARRATIVES & set(assessment.narrative_tags):
         score += 3
         reasons.append("sensitive narrative/coordination tag")
-    if assessment.reach.views and assessment.reach.views >= 10_000:
+    if _reported_metric_meets_threshold(assessment.reach.metric("views"), 10_000):
         score += 2
-        reasons.append("high observed digital reach")
-    if assessment.reach.attendance and assessment.reach.attendance >= 100:
+        reasons.append("high reported/observed digital reach")
+    if _reported_metric_meets_threshold(assessment.reach.metric("attendance"), 100):
         score += 2
-        reasons.append("high observed event attendance")
+        reasons.append("high reported/observed event attendance")
     if any(claim.claim_type in {"support_relationship", "coordination", "influence"} and claim.review_state != "human_verified" for claim in assessment.claims):
         score += 4
         reasons.append("high-consequence claim awaiting verification")
@@ -673,10 +710,27 @@ def render_state_bluf(
     comments = sum(assessment.reach.comments or 0 for _, assessment in verified)
     shares = sum(assessment.reach.shares_reposts or 0 for _, assessment in verified)
     lines.append(
-        f"Verified records contain observed metrics totaling {attendance:,} reported/observed attendees, {views:,} views, "
-        f"{likes:,} likes, {comments:,} comments, and {shares:,} shares/reposts. These metrics are reported separately because "
-        "cross-platform engagement units are not directly comparable and should not be collapsed into a single influence score."
+        f"Verified records contain exact observed metrics totaling {attendance:,} reported/observed attendees, {views:,} views, "
+        f"{likes:,} likes, {comments:,} comments, and {shares:,} shares/reposts. Exact totals exclude approximate and bounded values. "
+        "These metrics remain separate because cross-platform engagement units are not directly comparable and should not be collapsed into a single influence score."
     )
+    qualified_metrics: list[str] = []
+    for observation, assessment in verified:
+        label = observation.title or observation.program_name or observation.institution_name or observation.observation_id
+        for metric_name in _REACH_METRIC_NAMES:
+            metric = assessment.reach.metric(metric_name)
+            if metric is None or metric.is_exact:
+                continue
+            qualified_metrics.append(f"{label} — {metric_name}: {_qualified_reach_label(metric)}")
+    if qualified_metrics:
+        displayed = qualified_metrics[:8]
+        suffix = f"; plus {len(qualified_metrics) - len(displayed)} additional qualified metrics" if len(qualified_metrics) > len(displayed) else ""
+        lines.append(
+            "Qualified source-reported metrics are retained separately and not summed into exact totals: "
+            + "; ".join(displayed)
+            + suffix
+            + "."
+        )
 
     lines.extend(["", "## Verification and Collection Gaps", ""])
     lines.append(
@@ -696,7 +750,7 @@ def render_state_bluf(
             "- Confirmed PRC support requires explicit evidence and human verification; Chinese identity, language, branding, or location alone is insufficient.",
             "- Anti-U.S. or coordination labels should not enter briefing judgments without a human-verified narrative/coordination claim tied to source evidence.",
             "- Public comments and social engagement are observable response surfaces, not representative public-opinion samples.",
-            "- American Spaces/EducationUSA overlap identifies potential competitive or complementary engagement space; it does not itself establish displacement or persuasion.",
+            "- American Spaces/EducationUSA overlap identifies geographic, audience, thematic, or service co-presence; it does not itself establish competition, displacement, persuasion, or complementarity.",
             "",
         ]
     )
@@ -733,6 +787,7 @@ def state_geojson(
                     "verification_state": assessment.review_state,
                     "prc_support": assessment.prc_support.level,
                     "observability_level": assessment.observability_level,
+                    "reach": asdict(assessment.reach),
                     "strategic_audiences": assessment.strategic_audiences,
                     "program_domains": assessment.program_domains,
                     "narrative_tags": assessment.narrative_tags,
@@ -819,6 +874,8 @@ def compare_state_snapshots(previous: Iterable[StateAssessment], current: Iterab
             fields.append("review_state")
         if left.observability_level != right.observability_level:
             fields.append("observability_level")
+        if asdict(left.reach) != asdict(right.reach):
+            fields.append("reach")
         if left.us_overlap.material != right.us_overlap.material or left.us_overlap.nearest_site_id != right.us_overlap.nearest_site_id:
             fields.append("us_overlap")
         if left.strategic_audiences != right.strategic_audiences:

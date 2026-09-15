@@ -2,12 +2,20 @@ import json
 from pathlib import Path
 
 from sugar_core.observations import EvidenceReference, ResearchObservation
-from sugar_core.state_schema import AnalyticClaim, ReachMetrics, StateAssessment, SupportAssessment, USPresenceSite
+from sugar_core.state_schema import (
+    AnalyticClaim,
+    QualifiedReachValue,
+    ReachMetrics,
+    StateAssessment,
+    SupportAssessment,
+    USPresenceSite,
+)
 from sugar_core.state_workflow import (
     assess_us_overlap,
     audit_state_records,
     compare_state_snapshots,
     render_state_bluf,
+    review_priority,
     save_state_package,
     state_geojson,
 )
@@ -67,6 +75,22 @@ def verified_assessment(obs: ResearchObservation) -> StateAssessment:
     )
 
 
+def qualified_reach_assessment(obs: ResearchObservation) -> StateAssessment:
+    assessment = verified_assessment(obs)
+    assessment.reach = ReachMetrics(
+        qualified={
+            "attendance": QualifiedReachValue(
+                value=1000,
+                qualifier="minimum",
+                source_note="The source reports attendance by more than 1,000 people.",
+                source_ref=SOURCE,
+            )
+        }
+    )
+    assessment.observability_level = "reach_observed"
+    return assessment
+
+
 def us_site() -> USPresenceSite:
     return USPresenceSite(
         name="American Space Bishkek",
@@ -106,6 +130,32 @@ def test_audit_passes_verified_evidence_chain_and_bluf_is_guardrailed():
     assert "caused attitudinal or behavioral influence" in brief
     assert "10,000 views" in brief
     assert "American Space Bishkek" in brief
+
+
+def test_qualified_reach_is_auditable_prioritized_and_not_falsely_summed():
+    obs = verified_observation()
+    assessment = qualified_reach_assessment(obs)
+
+    audit = audit_state_records([obs], [assessment])
+    codes = {item["code"] for item in audit["findings"]}
+    assert audit["status"] == "pass"
+    assert "reach_without_metric" not in codes
+    assert assessment.reach.observed_total == 0
+
+    score, reasons = review_priority(assessment, obs)
+    assert score == 0
+    assert "high reported/observed event attendance" in reasons
+    assert "already human-verified" in reasons
+
+    brief = render_state_bluf([obs], [assessment])
+    assert "Exact totals exclude approximate and bounded values" in brief
+    assert "more than 1,000 people" in brief
+    assert "not summed into exact totals" in brief
+
+    geojson = state_geojson([obs], [assessment])
+    reach = geojson["features"][0]["properties"]["reach"]
+    assert reach["qualified"]["attendance"]["qualifier"] == "minimum"
+    assert reach["qualified"]["attendance"]["value"] == 1000
 
 
 def test_audit_rejects_unverified_influence_claim():
@@ -159,12 +209,23 @@ def test_snapshot_diff_calls_out_policy_relevant_changes():
         strategic_audiences=["students"],
         program_domains=["higher_education"],
         review_state="ai_triaged",
+        reach=ReachMetrics(
+            qualified={
+                "attendance": QualifiedReachValue(
+                    value=300,
+                    qualifier="approximate",
+                    source_note="Source reports roughly 300 participants.",
+                    source_ref=SOURCE,
+                )
+            }
+        ),
     )
     diff = compare_state_snapshots([old], [new])
     assert len(diff["changed"]) == 1
     assert "strategic_audiences" in diff["changed"][0]["changed_fields"]
     assert "program_domains" in diff["changed"][0]["changed_fields"]
     assert "review_state" in diff["changed"][0]["changed_fields"]
+    assert "reach" in diff["changed"][0]["changed_fields"]
 
 
 def test_geojson_excludes_unverified_observations_by_default():

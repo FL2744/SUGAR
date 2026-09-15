@@ -85,6 +85,19 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
         row for row in observations
         if any(marker in row.summary.casefold() for marker in ("roughly 300", "roughly 200", "more than 1,000", "hundreds"))
     ]
+    qualified_reach_missing = []
+    for observation in approximate_reach_records:
+        assessment = assessment_by_id[observation.observation_id]
+        metric = assessment.reach.metric("attendance")
+        if (
+            metric is None
+            or metric.qualifier == "exact"
+            or not metric.source_note
+            or not metric.source_ref
+            or assessment.reach.attendance is not None
+            or assessment.reach.observed_total != 0
+        ):
+            qualified_reach_missing.append(observation)
     multi_site_records = [
         row for row in observations
         if row.title == "International Chinese Language Day events at Bishkek universities"
@@ -151,13 +164,19 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
             ),
         },
         {
-            "code": "qualified_reach_metric_gap",
-            "severity": "model_gap",
-            "affected_records": len(approximate_reach_records),
+            "code": "qualified_reach_metric_resolved" if not qualified_reach_missing else "qualified_reach_metric_gap",
+            "severity": "resolved" if not qualified_reach_missing else "model_gap",
+            "affected_records": len(approximate_reach_records) if not qualified_reach_missing else len(qualified_reach_missing),
             "description": (
-                "Several public sources report approximate or bounded attendance ('roughly 200', 'roughly 300', 'more than 1,000'). ReachMetrics currently stores bare integers without qualifiers, so this case leaves those values out of aggregate reach totals rather than converting approximate claims into false exactness."
+                "All approximate or bounded attendance claims in the case are now preserved as structured qualified reach values with source attribution. 'Roughly 200' and 'roughly 300' remain approximate, while 'more than 1,000' is represented as a minimum bound; none are silently promoted into bare exact integers or exact aggregate totals."
+                if not qualified_reach_missing else
+                "At least one approximate or bounded attendance claim is still missing structured qualifier/source semantics or is leaking into an exact reach field."
             ),
-            "recommended_fix": "Support exact/approximate/minimum/maximum qualifiers and source notes per reach metric before aggregating them.",
+            "recommended_fix": (
+                "No further qualifier-schema fix required for this case; preserve the reported qualifier and source when adding future reach observations."
+                if not qualified_reach_missing else
+                "Encode the reported reach using exact/approximate/minimum/maximum/range semantics and prevent non-exact values from entering exact totals."
+            ),
         },
         {
             "code": "multi_site_observation_gap",
@@ -326,6 +345,17 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         or not site.location_basis
         for site in sites if site.is_spatial
     )
+    qualified_reach_assessments = [
+        row for row in assessments
+        if row.reach.metric("attendance") is not None and row.reach.metric("attendance").qualifier != "exact"
+    ]
+    qualified_reach_missing = sum(
+        not row.reach.metric("attendance").source_note
+        or not row.reach.metric("attendance").source_ref
+        or row.reach.attendance is not None
+        or row.reach.observed_total != 0
+        for row in qualified_reach_assessments
+    )
 
     summary = {
         "case": CASE_NAME,
@@ -340,6 +370,9 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "spurious_english_service_overlaps": spurious_english_service_overlaps,
         "higher_ed_assessments": len(higher_ed_assessments),
         "higher_ed_missing_educationusa_service": higher_ed_missing_educationusa,
+        "qualified_reach_assessments": len(qualified_reach_assessments),
+        "qualified_reach_missing_source_or_semantics": qualified_reach_missing,
+        "qualified_reach_exact_total": sum(row.reach.observed_total for row in qualified_reach_assessments),
         "us_sites_missing_precision": sites_missing_precision,
         "physical_us_sites": sum(site.is_spatial for site in sites),
         "nonspatial_us_services": sum(site.delivery_mode == "virtual" for site in sites),
@@ -368,7 +401,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "",
         f"The bounded case contains **{len(observations)}** PRC-linked public-diplomacy observations through September 14, 2026. The record spans Chinese-language education, Confucius Institute activity, university cooperation, cultural exhibitions and performances, literary and city-level exchanges, and governance/civilizational programming.",
         "",
-        f"Seven source records name a venue/institution that can be refined to site-level geometry with separate public location references; four remain deliberately city-level. The U.S. layer contains eight physical American Spaces, of which two are address-refined while six remain honestly labeled city-centroid references, plus one explicit virtual/country-scoped EducationUSA service. Physical proximity and service availability are now independent: EducationUSA can contribute higher-education service overlap across Kyrgyzstan without becoming a map point or replacing the nearest physical American Space. U.S. proximity consumes each physical site's own precision/confidence/uncertainty metadata rather than treating every coordinate as equally exact. Chinese-language records use the generic language_education domain and remain distinct from English-language programming. The current State EducationUSA directory and American Councils page still conflict about whether the Bishkek advising service has a physical location, so that contradiction is retained explicitly. PRC-support judgments remain evidence-calibrated: {support_summary['probable']} probable and {support_summary['possible']} possible, with none confirmed before human review. The analyst map is available before human verification; the verified-only map contains no PRC observations until review gates are satisfied.",
+        f"Seven source records name a venue/institution that can be refined to site-level geometry with separate public location references; four remain deliberately city-level. The U.S. layer contains eight physical American Spaces, of which two are address-refined while six remain honestly labeled city-centroid references, plus one explicit virtual/country-scoped EducationUSA service. Physical proximity and service availability are now independent: EducationUSA can contribute higher-education service overlap across Kyrgyzstan without becoming a map point or replacing the nearest physical American Space. U.S. proximity consumes each physical site's own precision/confidence/uncertainty metadata rather than treating every coordinate as equally exact. Chinese-language records use the generic language_education domain and remain distinct from English-language programming. Three reported attendance values now preserve their source qualifiers structurally: two approximate counts ('roughly 300' and 'roughly 200') and one minimum bound ('more than 1,000'); none enters an exact aggregate as though it were a precise count. The current State EducationUSA directory and American Councils page still conflict about whether the Bishkek advising service has a physical location, so that contradiction is retained explicitly. PRC-support judgments remain evidence-calibrated: {support_summary['probable']} probable and {support_summary['possible']} possible, with none confirmed before human review. The analyst map is available before human verification; the verified-only map contains no PRC observations until review gates are satisfied.",
         "",
         "## Model and source findings from the real case",
         "",
@@ -379,7 +412,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
             "",
             "## Interpretation guardrail",
             "",
-            "Mapped proximity, shared audience categories, thematic similarity, or service availability do not establish competition, displacement, persuasion, coordination, or causal influence. Human review remains required before State-facing judgments.",
+            "Mapped proximity, shared audience categories, thematic similarity, service availability, or reported reach do not establish competition, displacement, persuasion, coordination, or causal influence. Human review remains required before State-facing judgments.",
             "",
         ]
     )
@@ -389,7 +422,8 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     workspace.register_outputs(report_outputs, kind="report", operation="kyrgyzstan-e2e")
 
     # The core purpose of this case is to exercise real public data without weakening review,
-    # geographic precision, source conflicts, or evidence calibration merely to make output look complete.
+    # geographic precision, source conflicts, evidence calibration, or numeric qualifiers merely
+    # to make output look complete.
     assert len(observations) == 11
     assert summary["human_verified_observations"] == 0
     assert summary["brief_eligible_assessments"] == 0
@@ -398,6 +432,9 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     assert summary["spurious_english_service_overlaps"] == 0
     assert summary["higher_ed_assessments"] > 0
     assert summary["higher_ed_missing_educationusa_service"] == 0
+    assert summary["qualified_reach_assessments"] == 3
+    assert summary["qualified_reach_missing_source_or_semantics"] == 0
+    assert summary["qualified_reach_exact_total"] == 0
     assert summary["us_sites_missing_precision"] == 0
     assert summary["analyst_map_observations"] == 11
     assert summary["verified_map_observations"] == 0
