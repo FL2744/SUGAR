@@ -60,18 +60,9 @@ def source_conflict_findings() -> list[dict[str, object]]:
     preferred = conflict.preferred_claim
     return [
         {
-            "code": "source_conflict_provenance_resolved",
-            "severity": "resolved",
-            "affected_records": summary["conflicts"],
-            "description": (
-                "Reference-layer contradictions now use the shared SUGAR source-conflict schema with distinct source claims, authority/freshness metadata, stable claim IDs, an explicit conflict status, and a review-preserving operational treatment."
-            ),
-            "recommended_fix": "Use the shared source-conflict model for future contradictory reference records instead of bespoke dictionaries.",
-        },
-        {
             "code": "us_service_topology_source_conflict",
             "severity": "source_conflict",
-            "affected_records": 1,
+            "affected_records": summary["conflicts"],
             "description": (
                 "The current U.S. Department of State EducationUSA directory says EducationUSA Kyrgyzstan has no physical address and that advising services became fully online beginning April 1, 2026, while the current American Councils Kyrgyzstan program page still describes in-person services at the Bayalinov Youth and Children's Library / American Corner in Bishkek."
             ),
@@ -79,7 +70,10 @@ def source_conflict_findings() -> list[dict[str, object]]:
             "status": conflict.status,
             "requires_human_review": conflict.requires_human_review,
             "preferred_claim_id": preferred.claim_id if preferred else "",
+            "structured_provenance": True,
+            "provenance_model": "sugar_core.SourceConflict",
+            "distinct_sources": summary["distinct_sources"],
             "sources": [claim.source_url for claim in conflict.claims],
             "recommended_fix": "Retain the contradiction for human review and update the provisional treatment when authoritative source topology changes or an analyst adjudicates the conflict.",
-        },
+        }
     ]
