@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import html
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Iterable
 
@@ -10,7 +10,7 @@ import folium
 from folium.plugins import HeatMap, MarkerCluster
 
 from .observations import ResearchObservation
-from .state_location import ResolvedLocation, default_state_geocode_cache, resolve_observation_location
+from .state_location import ResolvedLocation, default_state_geocode_cache, resolve_observation_locations
 from .state_proximity import (
     DEFAULT_NEARBY_THRESHOLD_KM,
     DEFAULT_US_SITE_UNCERTAINTY_KM,
@@ -80,24 +80,22 @@ def _popup(
         if source else "No primary URL"
     )
     resolved_name = location.display_name or location.label or ", ".join(
-        value for value in (observation.city, observation.region, observation.country) if value
+        value for value in (location.city, location.region, location.country) if value
     )
     location_query = f"<br>Resolution query: {_safe(location.query)}" if location.query else ""
     provider = ""
     if location.provider_type or location.provider_category:
         provider = f"<br>Geocoder feature: {_safe(location.provider_type or location.provider_category)}"
-    map_proximity = (
-        f"<br>Map proximity: {_safe(proximity_note(proximity))}"
-        if proximity is not None else ""
-    )
+    source_ref = f"<br>Location source reference: {_safe(location.source_ref)}" if location.source_ref else ""
+    map_proximity = f"<br>Map proximity: {_safe(proximity_note(proximity))}" if proximity is not None else ""
+    multi = f"<br>Activity locations recorded: {len(observation.locations)}" if observation.locations else ""
     return (
         f"<b>{_safe(observation.title or observation.program_name or observation.institution_name or observation.observation_id)}</b><br>"
         f"Type: {_safe(observation.observation_type)}<br>"
-        f"Mapped location: {_safe(resolved_name)}<br>"
+        f"Mapped activity location: {_safe(resolved_name)}<br>"
         f"Location precision: {_safe(_location_summary(location))}<br>"
         f"Location basis: {_safe(location.basis)}; source: {_safe(location.source)}"
-        f"{location_query}{provider}<br>"
-        f"Recorded geography: {_safe(observation.city)}, {_safe(observation.region)}, {_safe(observation.country)}<br>"
+        f"{source_ref}{location_query}{provider}{multi}<br>"
         f"PRC support: {_safe(assessment.prc_support.level)}<br>"
         f"Observed level: {_safe(assessment.observability_level)}<br>"
         f"Audiences: {_safe(', '.join(assessment.strategic_audiences))}<br>"
@@ -105,16 +103,11 @@ def _popup(
         f"Narratives: {_safe(', '.join(assessment.narrative_tags))}<br>"
         f"Metrics: {_safe('; '.join(metrics) or 'none recorded')}<br>"
         f"U.S. overlap: {_safe(assessment.us_overlap.note or 'none coded')}"
-        f"{map_proximity}<br>"
-        f"{source_html}"
+        f"{map_proximity}<br>{source_html}"
     )
 
 
-def _eligible(
-    observation: ResearchObservation,
-    assessment: StateAssessment,
-    verified_only: bool,
-) -> bool:
+def _eligible(observation: ResearchObservation, assessment: StateAssessment, verified_only: bool) -> bool:
     if not verified_only:
         return True
     return bool(assessment.brief_eligible and observation.verification_state == "human_verified")
@@ -123,8 +116,6 @@ def _eligible(
 def _add_uncertainty_circle(group, location: ResolvedLocation, tooltip: str) -> None:
     if not location.resolved or location.uncertainty_km is None:
         return
-    # Exact/site coordinates are already visually precise; uncertainty rings are most useful
-    # for geocoded city/region centroids and other approximate locations.
     if location.precision not in {"city", "region", "locality"} and not location.derived:
         return
     radius_m = max(250.0, float(location.uncertainty_km) * 1000.0)
@@ -150,10 +141,13 @@ def _resolution_ledger(
         ledger.append(
             {
                 "observation_id": observation.observation_id,
+                "location_id": location.location_id,
                 "title": observation.title or observation.program_name or observation.institution_name,
-                "recorded_country": observation.country,
-                "recorded_region": observation.region,
-                "recorded_city": observation.city,
+                "recorded_country": location.country or observation.country,
+                "recorded_region": location.region or observation.region,
+                "recorded_city": location.city or observation.city,
+                "location_label": location.label,
+                "source_ref": location.source_ref,
                 "latitude": location.latitude,
                 "longitude": location.longitude,
                 "precision": location.precision,
@@ -174,17 +168,17 @@ def _resolution_ledger(
 
 def _proximity_ledger(
     mapped: list[tuple[ResearchObservation, StateAssessment, ResolvedLocation]],
-    proximity_by_observation: dict[str, StateProximity],
+    proximity_by_key: dict[tuple[str, str], StateProximity],
 ) -> list[dict[str, object]]:
     titles = {
-        observation.observation_id: observation.title or observation.program_name or observation.institution_name
-        for observation, _, _ in mapped
+        (observation.observation_id, location.location_id): observation.title or observation.program_name or observation.institution_name
+        for observation, _, location in mapped
     }
     result: list[dict[str, object]] = []
-    for observation_id in sorted(proximity_by_observation):
-        proximity = proximity_by_observation[observation_id]
+    for key in sorted(proximity_by_key):
+        proximity = proximity_by_key[key]
         row = proximity.as_dict()
-        row["title"] = titles.get(observation_id, "")
+        row["title"] = titles.get(key, "")
         result.append(row)
     return result
 
@@ -218,32 +212,38 @@ def create_state_map(
 
     mapped: list[tuple[ResearchObservation, StateAssessment, ResolvedLocation]] = []
     unresolved: list[dict[str, str]] = []
+    eligible_observation_ids: set[str] = set()
     for assessment in assessments:
-        obs = observation_map.get(assessment.observation_id)
-        if not obs or not _eligible(obs, assessment, verified_only):
+        observation = observation_map.get(assessment.observation_id)
+        if not observation or not _eligible(observation, assessment, verified_only):
             continue
-        location = resolve_observation_location(
-            obs,
+        eligible_observation_ids.add(observation.observation_id)
+        locations = resolve_observation_locations(
+            observation,
             cache=cache,
             resolve_missing=resolve_missing_locations,
             minimum_confidence=minimum_location_confidence,
         )
-        if not location.resolved:
-            unresolved.append(
-                {
-                    "observation_id": obs.observation_id,
-                    "title": obs.title or obs.program_name or obs.institution_name,
-                    "country": obs.country,
-                    "region": obs.region,
-                    "city": obs.city,
-                    "location_basis": obs.location_basis,
-                    "reason": location.unresolved_reason,
-                }
-            )
-            continue
-        mapped.append((obs, assessment, location))
+        for location in locations:
+            if location.resolved:
+                mapped.append((observation, assessment, location))
+            else:
+                unresolved.append(
+                    {
+                        "observation_id": observation.observation_id,
+                        "location_id": location.location_id,
+                        "title": observation.title or observation.program_name or observation.institution_name,
+                        "country": location.country or observation.country,
+                        "region": location.region or observation.region,
+                        "city": location.city or observation.city,
+                        "location_label": location.label,
+                        "location_basis": location.basis,
+                        "source_ref": location.source_ref,
+                        "reason": location.unresolved_reason,
+                    }
+                )
 
-    proximity_by_observation: dict[str, StateProximity] = {}
+    proximity_by_key: dict[tuple[str, str], StateProximity] = {}
     for observation, _, location in mapped:
         proximity = nearest_us_presence(
             observation,
@@ -253,23 +253,19 @@ def create_state_map(
             site_uncertainty_km=us_site_uncertainty_km,
         )
         if proximity is not None:
-            proximity_by_observation[observation.observation_id] = proximity
+            proximity_by_key[(observation.observation_id, location.location_id)] = proximity
 
-    site_coordinates = [
-        (float(site.latitude), float(site.longitude))
-        for site in sites
-        if site.latitude is not None and site.longitude is not None
-    ]
-    coordinates = [(loc.latitude, loc.longitude) for _, _, loc in mapped if loc.resolved] + site_coordinates
+    spatial_sites = [site for site in sites if site.is_spatial]
+    site_coordinates = [(float(site.latitude), float(site.longitude)) for site in spatial_sites]
+    coordinates = [(float(loc.latitude), float(loc.longitude)) for _, _, loc in mapped if loc.resolved] + site_coordinates
     if coordinates:
         center = [
-            sum(float(lat) for lat, _ in coordinates) / len(coordinates),
-            sum(float(lon) for _, lon in coordinates) / len(coordinates),
+            sum(lat for lat, _ in coordinates) / len(coordinates),
+            sum(lon for _, lon in coordinates) / len(coordinates),
         ]
     else:
         center = [20.0, 0.0]
     zoom_start = 10 if len(coordinates) == 1 else 2
-
     map_obj = folium.Map(location=center, zoom_start=zoom_start, control_scale=True, tiles="OpenStreetMap")
 
     groups: dict[str, folium.FeatureGroup] = {}
@@ -280,7 +276,7 @@ def create_state_map(
             continue
         label = _PRECISION_LABELS.get(precision, precision)
         group = folium.FeatureGroup(
-            name=f"{'Verified ' if verified_only else ''}PRC observations — {label}",
+            name=f"{'Verified ' if verified_only else ''}PRC activity locations — {label}",
             show=precision in {"exact", "site", "locality", "city"},
         )
         cluster = MarkerCluster(name=f"{label} markers").add_to(group)
@@ -288,12 +284,15 @@ def create_state_map(
         clusters[precision] = cluster
         group.add_to(map_obj)
 
-    for obs, assessment, location in mapped:
+    for observation, assessment, location in mapped:
         precision = location.precision
         group = groups[precision]
         cluster = clusters[precision]
         color = _PRECISION_COLORS.get(precision, "#64748b")
-        tooltip = obs.title or obs.program_name or obs.institution_name or "Research observation"
+        title = observation.title or observation.program_name or observation.institution_name or "Research observation"
+        venue = location.display_name or location.label
+        tooltip = f"{title} · {venue}" if venue else title
+        proximity = proximity_by_key.get((observation.observation_id, location.location_id))
         folium.CircleMarker(
             location=[location.latitude, location.longitude],
             radius=7 if precision in {"exact", "site"} else 6,
@@ -303,36 +302,33 @@ def create_state_map(
             fill_color=color,
             fill_opacity=0.82 if precision in {"exact", "site"} else 0.64,
             tooltip=f"{tooltip} · {_PRECISION_LABELS.get(precision, precision)}",
-            popup=folium.Popup(
-                _popup(obs, assessment, location, proximity_by_observation.get(obs.observation_id)),
-                max_width=560,
-            ),
+            popup=folium.Popup(_popup(observation, assessment, location, proximity), max_width=560),
         ).add_to(cluster)
         _add_uncertainty_circle(group, location, tooltip)
 
-    density_locations = [location for _, _, location in mapped if location.density_eligible]
+    density_by_observation: dict[str, list[ResolvedLocation]] = defaultdict(list)
+    for observation, _, location in mapped:
+        if location.density_eligible:
+            density_by_observation[observation.observation_id].append(location)
+    density_rows: list[list[float]] = []
+    for observation_id, locations in density_by_observation.items():
+        weight = 1.0 / len(locations)
+        for location in locations:
+            density_rows.append([float(location.latitude), float(location.longitude), weight])
     density_scope = "Verified" if verified_only else "Eligible"
-    density_rendered = bool(include_activity_density and density_locations)
+    density_rendered = bool(include_activity_density and density_rows)
     if density_rendered:
         density_group = folium.FeatureGroup(
-            name=f"{density_scope} observation density — defensible locations only (not influence)",
+            name=f"{density_scope} activity density — one total weight per observation (not influence)",
             show=False,
         )
-        # Every retained observation receives equal weight. Regional/country centroids and
-        # low-confidence points are excluded so uncertainty does not become an artificial hotspot.
-        HeatMap(
-            [[location.latitude, location.longitude, 1] for location in density_locations],
-            radius=20,
-            blur=15,
-            min_opacity=0.25,
-        ).add_to(density_group)
+        HeatMap(density_rows, radius=20, blur=15, min_opacity=0.25).add_to(density_group)
         density_group.add_to(map_obj)
 
     site_groups: dict[str, folium.FeatureGroup] = {}
     site_by_id: dict[str, USPresenceSite] = {}
-    for site in sites:
-        if site.latitude is None or site.longitude is None:
-            continue
+    for site in spatial_sites:
+        assert site.latitude is not None and site.longitude is not None
         site_by_id[site.site_id] = site
         group = site_groups.get(site.network)
         if group is None:
@@ -350,8 +346,9 @@ def create_state_map(
             popup=folium.Popup(popup, max_width=420),
         ).add_to(group)
 
-    mapped_location_by_id = {
-        observation.observation_id: location for observation, _, location in mapped
+    mapped_location_by_key = {
+        (observation.observation_id, location.location_id): location
+        for observation, _, location in mapped
     }
     proximity_groups: dict[str, folium.FeatureGroup] = {}
     proximity_group_labels = {
@@ -359,16 +356,15 @@ def create_state_map(
         "uncertainty_intersects_threshold": "U.S. proximity — uncertainty intersects threshold",
     }
     for relation, group_label in proximity_group_labels.items():
-        if not any(item.relation == relation for item in proximity_by_observation.values()):
+        if not any(item.relation == relation for item in proximity_by_key.values()):
             continue
         group = folium.FeatureGroup(name=group_label, show=False)
         proximity_groups[relation] = group
         group.add_to(map_obj)
-
-    for observation_id, proximity in proximity_by_observation.items():
+    for key, proximity in proximity_by_key.items():
         if proximity.relation not in proximity_groups:
             continue
-        location = mapped_location_by_id.get(observation_id)
+        location = mapped_location_by_key.get(key)
         site = site_by_id.get(proximity.site_id)
         if location is None or site is None:
             continue
@@ -386,12 +382,16 @@ def create_state_map(
         ).add_to(proximity_groups[proximity.relation])
 
     if len(coordinates) >= 2:
-        map_obj.fit_bounds([[float(lat), float(lon)] for lat, lon in coordinates], padding=(24, 24))
+        map_obj.fit_bounds([[lat, lon] for lat, lon in coordinates], padding=(24, 24))
 
+    mapped_observation_ids = {observation.observation_id for observation, _, _ in mapped}
     precision_counts = Counter(location.precision for _, _, location in mapped)
-    proximity_counts = Counter(item.relation for item in proximity_by_observation.values())
+    proximity_counts = Counter(item.relation for item in proximity_by_key.values())
     derived_count = sum(int(location.derived) for _, _, location in mapped)
-    density_excluded = len(mapped) - len(density_locations)
+    density_eligible_observations = len(density_by_observation)
+    density_eligible_locations = sum(len(locations) for locations in density_by_observation.values())
+    density_multi_location_observations = sum(len(locations) > 1 for locations in density_by_observation.values())
+    density_total_weight = sum(row[2] for row in density_rows)
     precision_text = ", ".join(
         f"{_PRECISION_LABELS.get(key, key)}: {precision_counts[key]}"
         for key in precision_order if precision_counts.get(key)
@@ -400,19 +400,19 @@ def create_state_map(
         f"within {proximity_threshold_km:g} km after uncertainty: {proximity_counts.get('within_threshold', 0)}; "
         f"threshold intersects uncertainty: {proximity_counts.get('uncertainty_intersects_threshold', 0)}; "
         f"outside: {proximity_counts.get('outside_threshold', 0)}"
-        if proximity_by_observation else "no mapped U.S. reference proximity available"
+        if proximity_by_key else "no mapped U.S. reference proximity available"
     )
     legend = f"""
-    <div style="position: fixed; bottom: 20px; left: 20px; z-index: 9999; background: white; border: 1px solid #888; padding: 10px; max-width: 420px; font-size: 12px;">
+    <div style="position: fixed; bottom: 20px; left: 20px; z-index: 9999; background: white; border: 1px solid #888; padding: 10px; max-width: 440px; font-size: 12px;">
       <b>SUGAR State research map</b><br>
-      Mapped {'verified ' if verified_only else ''}observations: {len(mapped)}.<br>
+      Mapped {'verified ' if verified_only else ''}observations: {len(mapped_observation_ids)}; mapped activity locations: {len(mapped)}.<br>
       Location precision: {_safe(precision_text)}.<br>
-      Derived/geocoded locations: {derived_count}; unresolved eligible observations: {len(unresolved)}.<br>
+      Derived/geocoded locations: {derived_count}; unresolved activity locations: {len(unresolved)}.<br>
       U.S. presence sites: {len(site_coordinates)}.<br>
       U.S. proximity: {_safe(proximity_text)}.<br>
-      Density-eligible observations: {len(density_locations)}; excluded for low/broad precision: {density_excluded}.<br>
+      Density-eligible observations: {density_eligible_observations}; density locations: {density_eligible_locations}; total density weight: {density_total_weight:.1f}.<br>
+      <b>Multi-site rule:</b> one activity may have multiple venue markers, but its defensible density locations split a total weight of 1.0 so venue count does not inflate activity count.<br>
       <b>Precision rule:</b> translucent circles show approximate geographic uncertainty; a centroid is not presented as an exact venue.<br>
-      <b>Proximity rule:</b> hidden connection layers distinguish cases fully inside the reference threshold from cases where the uncertainty envelope merely intersects it.<br>
       <b>Analytic guardrail:</b> density and proximity describe mapped activity/reference geography, not influence, and are never weighted by likes, views, or attendance.
     </div>
     """
@@ -427,24 +427,32 @@ def create_state_map(
                 "verified_only": verified_only,
                 "location_resolution_enabled": resolve_missing_locations,
                 "minimum_location_confidence": minimum_location_confidence,
-                "mapped_observations": len(mapped),
-                "derived_geocoded_observations": derived_count,
+                "eligible_observations": len(eligible_observation_ids),
+                "mapped_observations": len(mapped_observation_ids),
+                "mapped_locations": len(mapped),
+                "multi_location_observations": sum(1 for observation_id in mapped_observation_ids if sum(obs.observation_id == observation_id for obs, _, _ in mapped) > 1),
+                "derived_geocoded_observations": len({obs.observation_id for obs, _, loc in mapped if loc.derived}),
+                "derived_geocoded_locations": derived_count,
                 "precision_counts": dict(sorted(precision_counts.items())),
                 "resolved_locations": _resolution_ledger(mapped),
-                "unresolved_eligible_observations": len(unresolved),
+                "unresolved_eligible_observations": len({row['observation_id'] for row in unresolved}),
+                "unresolved_activity_locations": len(unresolved),
                 "unresolved": unresolved,
                 "mapped_us_sites": len(site_coordinates),
                 "us_proximity_threshold_km": float(proximity_threshold_km),
                 "us_site_default_uncertainty_km": float(us_site_uncertainty_km),
                 "us_proximity_counts": dict(sorted(proximity_counts.items())),
-                "us_proximity": _proximity_ledger(mapped, proximity_by_observation),
+                "us_proximity": _proximity_ledger(mapped, proximity_by_key),
                 "activity_density_requested": include_activity_density,
                 "activity_density_rendered": density_rendered,
-                "density_eligible_observations": len(density_locations),
-                "density_excluded_for_precision": density_excluded,
-                "density_semantics": f"equal-weight {'verified' if verified_only else 'eligible'} activity locations with exact/site/locality/city precision and sufficient location confidence; not influence",
-                "proximity_semantics": "center-to-center distance is accompanied by a conservative range derived from the observation precision envelope plus a small U.S.-site location envelope; the range is an interpretation aid, not a statistical confidence interval or evidence of strategic overlap/influence",
-                "precision_semantics": "recorded and derived coordinates are classified by evidentiary precision; geocoder results may downgrade query precision; site/city/region centroids are explicitly labeled and uncertainty envelopes are rendered where appropriate; country-only records without coordinates are not plotted at national centroids",
+                "density_eligible_observations": density_eligible_observations,
+                "density_eligible_locations": density_eligible_locations,
+                "density_multi_location_observations": density_multi_location_observations,
+                "density_total_weight": round(density_total_weight, 6),
+                "density_excluded_for_precision": len(eligible_observation_ids) - density_eligible_observations,
+                "density_semantics": "equal total weight per observation across all defensible exact/site/locality/city activity locations with sufficient confidence; multiple venues do not multiply one activity; not influence",
+                "proximity_semantics": "proximity is evaluated per resolved activity location; center-to-center distance is accompanied by a conservative range derived from activity-location precision plus the U.S.-site location envelope; not evidence of strategic overlap/influence",
+                "precision_semantics": "activity locations retain location-specific provenance and precision; geocoder results may downgrade query precision; country-only records without coordinates are not plotted at national centroids",
             },
             indent=2,
             sort_keys=True,
