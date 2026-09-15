@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pandas as pd
+
 from sugar_core.desktop_ops import run_desktop_analytic_operation
 from sugar_core.observation_storage import save_observations
 from sugar_core.observations import EvidenceReference, ResearchObservation
@@ -122,7 +124,15 @@ def test_desktop_state_package_carries_explicit_source_conflicts(tmp_path):
     snapshot = json.loads(
         (out_dir / "desktop_case.snapshot.json").read_text(encoding="utf-8")
     )
+    assert snapshot["audit_status"] == "conditional"
     assert snapshot["source_conflicts"]["conflicts"] == 1
+
+    review_path = out_dir / "desktop_case.review.xlsx"
+    review_workbook = pd.ExcelFile(review_path)
+    assert "source_conflicts" in review_workbook.sheet_names
+    assessments = pd.read_excel(review_path, sheet_name="assessments")
+    assert int(assessments.loc[0, "source_conflict_count"]) == 1
+    assert int(assessments.loc[0, "source_conflicts_requiring_human_review"]) == 1
 
     brief = (out_dir / "desktop_case.brief.md").read_text(encoding="utf-8")
     assert "## Source Conflicts" in brief
