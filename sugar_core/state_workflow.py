@@ -197,20 +197,63 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def _distance_to_site(observation: ResearchObservation, site: USPresenceSite) -> float | None:
-    if (
-        observation.latitude is None
-        or observation.longitude is None
-        or site.latitude is None
-        or site.longitude is None
-    ):
+def _observation_geo_contexts(observation: ResearchObservation) -> list[dict[str, Any]]:
+    """Return the defensible geographic contexts used for observation-level service analysis.
+
+    Structured locations are authoritative when present. The legacy scalar geography remains a
+    compatibility fallback only for observations without structured locations; it is not mixed
+    into a multi-location record because a stale summary city or country could otherwise make a
+    service appear applicable to a venue the source does not support.
+    """
+    if observation.locations:
+        return [
+            {
+                "location_id": location.location_id,
+                "label": location.label,
+                "country": location.country,
+                "city": location.city,
+                "latitude": location.latitude,
+                "longitude": location.longitude,
+            }
+            for location in observation.locations
+        ]
+    return [
+        {
+            "location_id": "",
+            "label": observation.location_label,
+            "country": observation.country,
+            "city": observation.city,
+            "latitude": observation.latitude,
+            "longitude": observation.longitude,
+        }
+    ]
+
+
+def _context_same_country(context: dict[str, Any], site: USPresenceSite) -> bool:
+    country = _clean(context.get("country", ""))
+    return bool(country and site.country and _key(site.country) == _key(country))
+
+
+def _context_same_city(context: dict[str, Any], site: USPresenceSite) -> bool:
+    city = _clean(context.get("city", ""))
+    return bool(_context_same_country(context, site) and city and site.city and _key(site.city) == _key(city))
+
+
+def _distance_from_context_to_site(context: dict[str, Any], site: USPresenceSite) -> float | None:
+    latitude = context.get("latitude")
+    longitude = context.get("longitude")
+    if latitude is None or longitude is None or site.latitude is None or site.longitude is None:
         return None
-    return _haversine_km(
-        float(observation.latitude),
-        float(observation.longitude),
-        float(site.latitude),
-        float(site.longitude),
-    )
+    return _haversine_km(float(latitude), float(longitude), float(site.latitude), float(site.longitude))
+
+
+def _distance_to_site(observation: ResearchObservation, site: USPresenceSite) -> float | None:
+    distances = [
+        distance
+        for context in _observation_geo_contexts(observation)
+        if (distance := _distance_from_context_to_site(context, site)) is not None
+    ]
+    return min(distances) if distances else None
 
 
 def _program_services(assessment: StateAssessment) -> set[str]:
@@ -234,26 +277,26 @@ def _service_source_applies(
     nearby_km: float,
 ) -> bool:
     scope = site.coverage_scope
-    same_country = bool(observation.country and _key(site.country) == _key(observation.country))
-    same_city = bool(
-        same_country
-        and observation.city
-        and site.city
-        and _key(site.city) == _key(observation.city)
-    )
+    contexts = _observation_geo_contexts(observation)
+    same_country_contexts = [context for context in contexts if _context_same_country(context, site)]
+    same_city_contexts = [context for context in same_country_contexts if _context_same_city(context, site)]
     if scope == "global":
         return True
     if scope == "country":
-        return same_country
+        return bool(same_country_contexts)
     if scope == "city":
-        return same_city
+        return bool(same_city_contexts)
     if scope == "site":
-        if not same_country:
+        if not same_country_contexts:
             return False
-        if same_city:
+        if same_city_contexts:
             return True
-        distance = _distance_to_site(observation, site)
-        return distance is not None and distance <= nearby_km
+        distances = [
+            distance
+            for context in same_country_contexts
+            if (distance := _distance_from_context_to_site(context, site)) is not None
+        ]
+        return bool(distances) and min(distances) <= nearby_km
     return False
 
 
@@ -287,29 +330,25 @@ def _nearest_physical_site(
     if not spatial:
         return None, None
 
-    if observation.latitude is not None and observation.longitude is not None:
-        ranked = [
-            (distance, site)
-            for site in spatial
-            if (distance := _distance_to_site(observation, site)) is not None
-        ]
-        if ranked:
-            ranked.sort(key=lambda item: (item[0], item[1].site_id))
-            return ranked[0][1], ranked[0][0]
-
-    same_city = [
-        site
+    ranked = [
+        (distance, site.site_id, site)
         for site in spatial
-        if observation.country
-        and observation.city
-        and _key(site.country) == _key(observation.country)
-        and _key(site.city) == _key(observation.city)
+        if (distance := _distance_to_site(observation, site)) is not None
+    ]
+    if ranked:
+        ranked.sort(key=lambda item: (item[0], item[1]))
+        return ranked[0][2], ranked[0][0]
+
+    contexts = _observation_geo_contexts(observation)
+    same_city = [
+        site for site in spatial
+        if any(_context_same_city(context, site) for context in contexts)
     ]
     if same_city:
         return sorted(same_city, key=lambda site: site.site_id)[0], None
     same_country = [
         site for site in spatial
-        if observation.country and _key(site.country) == _key(observation.country)
+        if any(_context_same_country(context, site) for context in contexts)
     ]
     if same_country:
         return sorted(same_country, key=lambda site: site.site_id)[0], None
@@ -324,13 +363,14 @@ def assess_us_overlap(
     nearby_km: float = 50.0,
 ) -> USOverlapAssessment:
     sites = [site for site in sites if site.status not in {"closed", "inactive"}]
+    contexts = _observation_geo_contexts(observation)
     same_country_sites = [
         site for site in sites
-        if observation.country and _key(site.country) == _key(observation.country)
+        if any(_context_same_country(context, site) for context in contexts)
     ]
     same_city_sites = [
         site for site in same_country_sites
-        if observation.city and site.city and _key(site.city) == _key(observation.city)
+        if any(_context_same_city(context, site) for context in contexts)
     ]
 
     nearest, distance = _nearest_physical_site(observation, sites)
@@ -364,6 +404,8 @@ def assess_us_overlap(
     ]
 
     note_parts: list[str] = []
+    if len(observation.locations) > 1:
+        note_parts.append(f"service availability evaluated across {len(observation.locations)} structured activity locations")
     if same_city_sites:
         note_parts.append("same-city U.S. public-diplomacy presence")
     elif distance is not None and distance <= nearby_km:
