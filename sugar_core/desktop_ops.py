@@ -8,6 +8,7 @@ from typing import Any, Callable, Iterable
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
 from .state_aggregate import save_state_rollups
+from .state_conflict_package import package_from_files_with_conflicts
 from .state_entities import load_entity_registry, save_query_plan, write_entity_template
 from .state_freshness import save_freshness_report
 from .state_gaps import save_gap_report
@@ -27,7 +28,6 @@ from .state_workflow import (
     compare_state_snapshots,
     load_state_assessments,
     load_us_presence_sites,
-    package_from_files,
     save_state_assessments,
     write_us_presence_template,
 )
@@ -218,6 +218,7 @@ def _run_state_package(
     out_dir = _output_directory(config, workspace=workspace, workspace_key="state")
     assessment_path = _optional_input_path(config, "assessments", workspace, workspace_kinds=("state_assessments",))
     us_sites_path = _optional_input_path(config, "us_sites", workspace)
+    source_conflicts_path = _optional_input_path(config, "source_conflicts", workspace)
     entities_path = _optional_input_path(config, "entities", workspace)
     previous_path = _optional_input_path(config, "previous_assessments", workspace)
     name = str(config.get("name") or "state_research").strip() or "state_research"
@@ -226,12 +227,13 @@ def _run_state_package(
     stale_days = int(config.get("stale_days", 90))
 
     _notify(progress, "state_package_stage", stage="core_package")
-    outputs = package_from_files(
+    outputs = package_from_files_with_conflicts(
         observations_file,
         out_dir,
         assessments_file=assessment_path,
         us_sites_file=us_sites_path,
         previous_assessments_file=previous_path,
+        source_conflicts_file=source_conflicts_path,
         name=name,
         title=title,
     )
