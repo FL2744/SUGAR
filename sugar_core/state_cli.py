@@ -8,6 +8,7 @@ from pathlib import Path
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
 from .state_aggregate import save_state_rollups
+from .state_conflict_package import package_from_files_with_conflicts
 from .state_entities import load_entity_registry, save_query_plan, write_entity_template
 from .state_freshness import save_freshness_report
 from .state_gaps import save_gap_report
@@ -22,7 +23,6 @@ from .state_workflow import (
     compare_state_snapshots,
     load_state_assessments,
     load_us_presence_sites,
-    package_from_files,
     save_state_assessments,
     write_us_presence_template,
 )
@@ -146,6 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     package.add_argument("observations")
     package.add_argument("--assessments")
     package.add_argument("--us-sites")
+    package.add_argument("--source-conflicts", help="Structured source-conflict JSON to preserve in audit, review, BLUF, workbook, and snapshot outputs.")
     package.add_argument("--entities")
     package.add_argument("--previous-assessments")
     package.add_argument("--output")
@@ -339,12 +340,13 @@ def main(argv=None) -> int:
 
     if args.command == "package":
         out_dir = _directory_output(args, workspace, "state")
-        outputs = package_from_files(
+        outputs = package_from_files_with_conflicts(
             args.observations,
             out_dir,
             assessments_file=args.assessments,
             us_sites_file=args.us_sites,
             previous_assessments_file=args.previous_assessments,
+            source_conflicts_file=args.source_conflicts,
             name=args.name,
             title=args.title,
         )
