@@ -5,7 +5,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable
 
-STATE_SCHEMA_VERSION = "1.1"
+STATE_SCHEMA_VERSION = "1.2"
 
 STRATEGIC_AUDIENCES = {
     "students",
@@ -527,6 +527,42 @@ class USPresenceSite:
 
 
 @dataclass
+class USServiceSourceAttribution:
+    """Structured provenance for a U.S. service record that contributed to overlap analysis.
+
+    Program-service matches are kept separate from audience-associated matches so audience
+    similarity cannot silently become direct program/service equivalence.
+    """
+
+    site_id: str
+    name: str
+    network: str
+    delivery_mode: str
+    coverage_scope: str
+    source_url: str = ""
+    program_service_matches: list[str] = field(default_factory=list)
+    audience_service_matches: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.site_id = _clean(self.site_id)
+        self.name = _clean(self.name)
+        self.network = _choice(self.network, NETWORK_TYPES, "network", "other_usg")
+        self.delivery_mode = _choice(
+            self.delivery_mode, US_SERVICE_DELIVERY_MODES, "U.S. service delivery mode", "physical"
+        )
+        self.coverage_scope = _choice(
+            self.coverage_scope, US_SERVICE_COVERAGE_SCOPES, "U.S. service coverage scope", "site"
+        )
+        self.source_url = _clean(self.source_url)
+        self.program_service_matches = _clean_list(self.program_service_matches)
+        self.audience_service_matches = _clean_list(self.audience_service_matches)
+        if not self.site_id or not self.name:
+            raise ValueError("U.S. service-source attribution requires site_id and name.")
+        if not self.program_service_matches and not self.audience_service_matches:
+            raise ValueError("U.S. service-source attribution requires a program or audience service match.")
+
+
+@dataclass
 class USOverlapAssessment:
     same_country: bool = False
     same_city: bool = False
@@ -537,6 +573,7 @@ class USOverlapAssessment:
     audience_overlap: list[str] = field(default_factory=list)
     thematic_overlap: list[str] = field(default_factory=list)
     service_overlap: list[str] = field(default_factory=list)
+    service_sources: list[USServiceSourceAttribution | dict[str, Any]] = field(default_factory=list)
     note: str = ""
 
     def __post_init__(self) -> None:
@@ -554,11 +591,32 @@ class USOverlapAssessment:
         self.service_overlap = [
             value for value in raw_service_overlap if value.casefold() in allowed_service_tags
         ]
+        self.service_sources = [
+            source
+            if isinstance(source, USServiceSourceAttribution)
+            else USServiceSourceAttribution(**dict(source))
+            for source in (self.service_sources or [])
+        ]
+        direct_services = {value.casefold() for value in self.service_overlap}
+        for source in self.service_sources:
+            unmatched = [
+                value for value in source.program_service_matches
+                if value.casefold() not in direct_services
+            ]
+            if unmatched:
+                raise ValueError(
+                    "Program service-source matches must also appear in direct service_overlap: "
+                    + ", ".join(unmatched)
+                )
         self.note = _clean(self.note)
         if self.distance_km not in (None, ""):
             self.distance_km = max(0.0, float(self.distance_km))
         else:
             self.distance_km = None
+
+    @property
+    def service_source_ids(self) -> list[str]:
+        return [source.site_id for source in self.service_sources]
 
     @property
     def material(self) -> bool:

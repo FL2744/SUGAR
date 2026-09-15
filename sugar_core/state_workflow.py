@@ -17,6 +17,7 @@ from .state_schema import (
     StateAssessment,
     USOverlapAssessment,
     USPresenceSite,
+    USServiceSourceAttribution,
 )
 from .utils import safe_cell, utc_iso
 
@@ -402,6 +403,23 @@ def assess_us_overlap(
         for site in service_sources
         if {tag.casefold() for tag in site.service_tags} & relevant_services
     ]
+    structured_sources = [
+        USServiceSourceAttribution(
+            site_id=site.site_id,
+            name=site.name,
+            network=site.network,
+            delivery_mode=site.delivery_mode,
+            coverage_scope=site.coverage_scope,
+            source_url=site.source_url,
+            program_service_matches=sorted(
+                {tag.casefold() for tag in site.service_tags} & program_services
+            ),
+            audience_service_matches=sorted(
+                {tag.casefold() for tag in site.service_tags} & audience_services
+            ),
+        )
+        for site in contributing_sources
+    ]
 
     note_parts: list[str] = []
     if len(observation.locations) > 1:
@@ -418,10 +436,10 @@ def assess_us_overlap(
         note_parts.append("thematic overlap: " + ", ".join(thematic_overlap))
     if service_overlap:
         note_parts.append("direct service overlap: " + ", ".join(service_overlap))
-    if contributing_sources:
+    if structured_sources:
         labels = [
-            f"{site.name} [{site.delivery_mode}/{site.coverage_scope}]"
-            for site in contributing_sources
+            f"{source.name} [{source.delivery_mode}/{source.coverage_scope}]"
+            for source in structured_sources
         ]
         note_parts.append("applicable U.S. service sources: " + "; ".join(labels))
 
@@ -435,6 +453,7 @@ def assess_us_overlap(
         audience_overlap=audience_overlap,
         thematic_overlap=thematic_overlap,
         service_overlap=service_overlap,
+        service_sources=structured_sources,
         note="; ".join(note_parts),
     )
 
@@ -668,6 +687,10 @@ def build_review_queue(
                 "program_domains": "; ".join(assessment.program_domains),
                 "narrative_tags": "; ".join(assessment.narrative_tags),
                 "us_overlap": assessment.us_overlap.note,
+                "us_service_source_ids": "; ".join(assessment.us_overlap.service_source_ids),
+                "us_service_source_names": "; ".join(
+                    source.name for source in assessment.us_overlap.service_sources
+                ),
                 "reasons": "; ".join(reasons),
                 "primary_source_url": observation.primary_source_url if observation else "",
             }
@@ -821,6 +844,9 @@ def _observation_geo_features(observation: ResearchObservation, assessment: Stat
         "program_domains": assessment.program_domains,
         "narrative_tags": assessment.narrative_tags,
         "us_overlap_material": assessment.us_overlap.material,
+        "us_service_sources": [
+            asdict(source) for source in assessment.us_overlap.service_sources
+        ],
         "primary_source_url": observation.primary_source_url,
     }
     if observation.locations:
@@ -972,7 +998,7 @@ def compare_state_snapshots(previous: Iterable[StateAssessment], current: Iterab
             fields.append("observability_level")
         if asdict(left.reach) != asdict(right.reach):
             fields.append("reach")
-        if left.us_overlap.material != right.us_overlap.material or left.us_overlap.nearest_site_id != right.us_overlap.nearest_site_id:
+        if asdict(left.us_overlap) != asdict(right.us_overlap):
             fields.append("us_overlap")
         if left.strategic_audiences != right.strategic_audiences:
             fields.append("strategic_audiences")
