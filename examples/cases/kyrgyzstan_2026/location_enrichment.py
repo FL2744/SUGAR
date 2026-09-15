@@ -85,6 +85,18 @@ OBSERVATION_LOCATION_KEYS = {
     "Nanjing Week opens at the Osmonov National Library": "national_library",
 }
 
+# Service delivery/coverage is source semantics, not a property that can be inferred from whether
+# coordinates happen to be present. This explicit declaration reflects the current EducationUSA
+# directory used by the case. Missing coordinates on any other physical/hybrid record remain a
+# spatial data gap and must never silently expand that record into a country-wide virtual service.
+US_SERVICE_TOPOLOGY = {
+    "EducationUSA Kyrgyzstan (fully online from April 1, 2026)": {
+        "delivery_mode": "virtual",
+        "coverage_scope": "country",
+        "location_basis": "official_service_directory_nonspatial",
+    },
+}
+
 CHINESE_LANGUAGE_DAY_TITLE = "International Chinese Language Day events at Bishkek universities"
 CHINESE_LANGUAGE_DAY_SOURCE = "https://kg.china-embassy.gov.cn/chn/dssghd/202604/t20260424_11899331.htm"
 BSU_OFFICIAL_SOURCE = "https://bhu.kg/en/universitet/"
@@ -213,30 +225,43 @@ def apply_us_site_location_enrichment(sites: list[USPresenceSite]) -> dict[str, 
     refined = 0
     city_centroid = 0
     nonspatial = 0
+    unresolved_physical = 0
     for site in sites:
         key = keys_by_name.get(site.name)
-        if key is not None:
+        declared_topology = US_SERVICE_TOPOLOGY.get(site.name)
+        if declared_topology is not None:
+            site.delivery_mode = declared_topology["delivery_mode"]
+            site.coverage_scope = declared_topology["coverage_scope"]
+            site.latitude = None
+            site.longitude = None
+            site.location_precision = "unknown"
+            site.location_confidence = None
+            site.location_uncertainty_km = None
+            site.location_basis = declared_topology["location_basis"]
+            nonspatial += 1
+        elif key is not None:
             reference = LOCATION_REFERENCES[key]
             site.latitude = reference.latitude
             site.longitude = reference.longitude
-            site.delivery_mode = "physical"
-            site.coverage_scope = "site"
             site.location_precision = "site"
             site.location_confidence = 0.95
             site.location_uncertainty_km = 0.25
             site.location_basis = "official_address_public_coordinate_reference"
             refined += 1
         elif site.latitude is None or site.longitude is None:
-            site.delivery_mode = "virtual"
-            site.coverage_scope = "country"
+            # Fail closed: missing spatial data does not change delivery or coverage semantics.
+            # A physical/hybrid site with unresolved coordinates remains physical/hybrid and
+            # non-mappable until better evidence appears; it must not become a virtual service.
             site.location_precision = "unknown"
             site.location_confidence = None
             site.location_uncertainty_km = None
-            site.location_basis = "official_service_directory_nonspatial"
-            nonspatial += 1
+            if site.delivery_mode == "virtual":
+                site.location_basis = site.location_basis or "declared_nonspatial_service"
+                nonspatial += 1
+            else:
+                site.location_basis = "unresolved_physical_site_missing_coordinates"
+                unresolved_physical += 1
         else:
-            site.delivery_mode = "physical"
-            site.coverage_scope = "site"
             site.location_precision = "city"
             site.location_confidence = 0.75
             site.location_uncertainty_km = 12.0
@@ -246,6 +271,7 @@ def apply_us_site_location_enrichment(sites: list[USPresenceSite]) -> dict[str, 
         "address_refined_physical_us_sites": refined,
         "city_centroid_physical_us_sites": city_centroid,
         "nonspatial_us_services": nonspatial,
+        "unresolved_physical_us_sites": unresolved_physical,
     }
 
 

@@ -14,7 +14,13 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from assessment_calibration import calibrate_support_assessments
-from case_data import build_assessments, build_observations, build_us_presence_sites, sources_manifest
+from case_data import (
+    EDUCATIONUSA_SOURCE,
+    build_assessments,
+    build_observations,
+    build_us_presence_sites,
+    sources_manifest,
+)
 from location_enrichment import (
     apply_observation_location_enrichment,
     apply_us_site_location_enrichment,
@@ -53,6 +59,18 @@ def _write_json(path: Path, payload: dict | list) -> Path:
     return path
 
 
+def _has_structured_educationusa_source(assessment) -> bool:
+    """Require structured current-service provenance; never infer it from analyst-note prose."""
+    return any(
+        source.network == "educationusa"
+        and source.delivery_mode == "virtual"
+        and source.coverage_scope == "country"
+        and source.source_url == EDUCATIONUSA_SOURCE
+        and "educationusa" in source.program_service_matches
+        for source in assessment.us_overlap.service_sources
+    )
+
+
 def _case_findings(observations, assessments, sites, location_summary: dict[str, int]) -> list[dict]:
     assessment_by_id = {row.observation_id: row for row in assessments}
     language_records = [row for row in observations if "language_education" in row.triage_labels]
@@ -69,9 +87,13 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
     missed_virtual_educationusa = [
         row for row in higher_ed_assessments
         if "educationusa" not in row.us_overlap.service_overlap
-        or "EducationUSA Kyrgyzstan" not in row.us_overlap.note
+        or not _has_structured_educationusa_source(row)
     ]
     physical_sites = [site for site in sites if site.is_spatial]
+    unresolved_physical_sites = [
+        site for site in sites
+        if site.delivery_mode in {"physical", "hybrid"} and not site.is_spatial
+    ]
     virtual_sites = [site for site in sites if site.delivery_mode == "virtual"]
     sites_missing_precision = [
         site for site in physical_sites
@@ -80,6 +102,7 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
         or site.location_uncertainty_km is None
         or not site.location_basis
     ]
+    us_site_reference_gaps = sites_missing_precision + unresolved_physical_sites
     approximate_reach_records = [
         row for row in observations
         if any(marker in row.summary.casefold() for marker in ("roughly 300", "roughly 200", "more than 1,000", "hundreds"))
@@ -135,22 +158,22 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
             "severity": "resolved" if not missed_virtual_educationusa else "model_gap",
             "affected_records": len(higher_ed_assessments) if not missed_virtual_educationusa else len(missed_virtual_educationusa),
             "description": (
-                "EducationUSA Kyrgyzstan remains a virtual, country-scoped service that contributes higher-education service availability independently of nearest physical-site geography."
+                "EducationUSA Kyrgyzstan remains a source-declared virtual, country-scoped service with structured State-directory provenance that contributes higher-education service availability independently of nearest physical-site geography."
                 if not missed_virtual_educationusa else
-                "At least one Kyrgyzstan higher-education assessment still misses the applicable country-scoped EducationUSA service or its source attribution."
+                "At least one Kyrgyzstan higher-education assessment still misses the applicable country-scoped EducationUSA service or its structured source attribution."
             ),
-            "recommended_fix": "Preserve service availability and physical proximity as independent dimensions." if not missed_virtual_educationusa else "Aggregate U.S. service sources by delivery mode and coverage scope independently of nearest-site geography.",
+            "recommended_fix": "Preserve service availability, structured source attribution, and physical proximity as independent dimensions." if not missed_virtual_educationusa else "Aggregate U.S. service sources by declared delivery mode and coverage scope independently of nearest-site geography.",
         },
         {
-            "code": "us_site_precision_resolved" if not sites_missing_precision else "us_site_precision_gap",
-            "severity": "resolved" if not sites_missing_precision else "model_gap",
-            "affected_records": len(physical_sites) if not sites_missing_precision else len(sites_missing_precision),
+            "code": "us_site_precision_resolved" if not us_site_reference_gaps else "us_site_precision_gap",
+            "severity": "resolved" if not us_site_reference_gaps else "model_gap",
+            "affected_records": len(physical_sites) if not us_site_reference_gaps else len(us_site_reference_gaps),
             "description": (
-                f"All physical U.S. presence records carry explicit location precision, confidence, basis, and uncertainty. {location_summary['address_refined_physical_us_sites']} are site/address refined and {location_summary['city_centroid_physical_us_sites']} remain honestly labeled city-centroid references."
-                if not sites_missing_precision else
-                "Some physical U.S. presence records still lack explicit precision/confidence/provenance/uncertainty."
+                f"All physical/hybrid U.S. presence records are spatially resolved with explicit location precision, confidence, basis, and uncertainty. {location_summary['address_refined_physical_us_sites']} are site/address refined and {location_summary['city_centroid_physical_us_sites']} remain honestly labeled city-centroid references; no missing-coordinate physical record is reclassified as virtual."
+                if not us_site_reference_gaps else
+                "Some physical/hybrid U.S. presence records remain spatially unresolved or lack explicit precision/confidence/provenance/uncertainty."
             ),
-            "recommended_fix": "Continue improving individual reference quality when better source data appears." if not sites_missing_precision else "Populate per-site location precision, confidence, basis, and uncertainty.",
+            "recommended_fix": "Continue improving individual reference quality when better source data appears; never infer virtual delivery from missing coordinates." if not us_site_reference_gaps else "Resolve spatial data separately from delivery/coverage semantics and keep unresolved physical/hybrid records non-mappable until supported.",
         },
         {
             "code": "qualified_reach_metric_resolved" if not qualified_reach_missing else "qualified_reach_metric_gap",
@@ -185,8 +208,8 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
             "code": "virtual_us_services_present",
             "severity": "context",
             "affected_records": len(virtual_sites),
-            "description": "At least one important U.S. public-diplomacy service is explicitly non-spatial and country-scoped; it can contribute service availability without a fake map point.",
-            "recommended_fix": "Preserve delivery_mode/coverage_scope semantics and source attribution for virtual services.",
+            "description": "At least one important U.S. public-diplomacy service is explicitly source-declared as non-spatial and country-scoped; it can contribute service availability without a fake map point.",
+            "recommended_fix": "Preserve delivery_mode/coverage_scope semantics and structured source attribution for virtual services.",
         },
     ]
 
@@ -312,7 +335,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     higher_ed_assessments = [row for row in assessments if "higher_education" in row.program_domains]
     higher_ed_missing_educationusa = sum(
         "educationusa" not in row.us_overlap.service_overlap
-        or "EducationUSA Kyrgyzstan" not in row.us_overlap.note
+        or not _has_structured_educationusa_source(row)
         for row in higher_ed_assessments
     )
     sites_missing_precision = sum(
@@ -354,6 +377,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "multi_site_observations": len(multi_site_records),
         "structured_activity_locations": sum(len(row.locations) for row in observations),
         "us_sites_missing_precision": sites_missing_precision,
+        "unresolved_physical_us_sites": location_summary.get("unresolved_physical_us_sites", 0),
         "physical_us_sites": sum(site.is_spatial for site in sites),
         "nonspatial_us_services": sum(site.delivery_mode == "virtual" for site in sites),
         "location_enrichment": location_summary,
@@ -386,7 +410,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "",
         f"The bounded case contains **{len(observations)}** PRC-linked public-diplomacy observations through September 14, 2026. The record spans Chinese-language education, Confucius Institute activity, university cooperation, cultural exhibitions and performances, literary and city-level exchanges, and governance/civilizational programming.",
         "",
-        f"Seven single-site source records are refined to site-level geometry, three other observations remain deliberately city-level, and one Chinese Language Day observation now carries two venue entries without becoming two activities. Bishkek State University is represented at site precision; International University of Kyrgyzstan remains city-level because the event-specific campus is unresolved. The analyst map therefore contains 12 activity locations for 11 observations, while its density layer still totals 11.0 activity units. The U.S. layer contains eight physical American Spaces plus one virtual/country-scoped EducationUSA service. Chinese-language records remain language-neutral, qualified attendance retains its original source semantics, and the EducationUSA topology conflict remains explicit. PRC-support judgments remain evidence-calibrated: {support_summary['probable']} probable and {support_summary['possible']} possible, with none confirmed before human review.",
+        f"Seven single-site source records are refined to site-level geometry, three other observations remain deliberately city-level, and one Chinese Language Day observation now carries two venue entries without becoming two activities. Bishkek State University is represented at site precision; International University of Kyrgyzstan remains city-level because the event-specific campus is unresolved. The analyst map therefore contains 12 activity locations for 11 observations, while its density layer still totals 11.0 activity units. The U.S. layer contains eight spatially resolved physical American Spaces plus one source-declared virtual/country-scoped EducationUSA service; missing coordinates alone never create virtual-service semantics. Chinese-language records remain language-neutral, qualified attendance retains its original source semantics, and the EducationUSA topology conflict remains explicit. PRC-support judgments remain evidence-calibrated: {support_summary['probable']} probable and {support_summary['possible']} possible, with none confirmed before human review.",
         "",
         "## Model and source findings from the real case",
         "",
@@ -420,6 +444,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     assert summary["multi_site_observations"] == 1
     assert summary["structured_activity_locations"] == 2
     assert summary["us_sites_missing_precision"] == 0
+    assert summary["unresolved_physical_us_sites"] == 0
     assert summary["analyst_map_observations"] == 11
     assert summary["analyst_map_locations"] == 12
     assert summary["analyst_map_multi_location_observations"] == 1
@@ -436,6 +461,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     assert summary["location_enrichment"]["multi_site_observations"] == 1
     assert summary["location_enrichment"]["structured_activity_locations"] == 2
     assert summary["location_enrichment"]["address_refined_physical_us_sites"] == 2
+    assert summary["location_enrichment"]["unresolved_physical_us_sites"] == 0
     assert summary["analyst_map_precision_counts"] == {"city": 4, "site": 8}
     assert center_distances and min(center_distances) > 0.1
     assert len(proximity_ledger) == 12
@@ -448,6 +474,8 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     finding_codes = {item["code"] for item in findings}
     assert "multi_site_observation_resolved" in finding_codes
     assert "multi_site_observation_gap" not in finding_codes
+    assert "virtual_educationusa_service_resolved" in finding_codes
+    assert "virtual_educationusa_service_gap" not in finding_codes
 
     return summary
 
