@@ -27,6 +27,7 @@ PREFERRED_OBSERVATION_COLUMNS = [
     "longitude",
     "location_basis",
     "location_confidence",
+    "locations",
     "institution_name",
     "program_name",
     "actors",
@@ -64,6 +65,7 @@ _NUMERIC_COLUMNS = {
 _LONG_TEXT_COLUMNS = {
     "summary",
     "overlap_note",
+    "locations",
     "spatial_matches",
     "triage_evidence",
     "ai_reason",
@@ -76,8 +78,6 @@ def observations_to_frame(observations: Iterable[ResearchObservation]) -> pd.Dat
     frame = pd.DataFrame([observation.export_dict() for observation in observations])
     if frame.empty:
         return frame
-    # Export is a schema migration boundary: rows written by this version must advertise the
-    # current observation schema even when they were loaded from an older dataset and unchanged.
     frame["schema_version"] = OBSERVATION_SCHEMA_VERSION
     for column in frame.columns:
         if column not in _NUMERIC_COLUMNS:
