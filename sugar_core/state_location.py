@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .enrichment import geocode_location
-from .observations import ResearchObservation
+from .observations import ObservationLocation, ResearchObservation
 from .utils import JsonCache, normalize_whitespace
 
 Geocoder = Callable[[str, JsonCache], dict[str, Any]]
@@ -75,6 +75,11 @@ class ResolvedLocation:
     basis: str
     label: str
     source: str
+    location_id: str = ""
+    country: str = ""
+    region: str = ""
+    city: str = ""
+    source_ref: str = ""
     query: str = ""
     display_name: str = ""
     uncertainty_km: float | None = None
@@ -132,12 +137,6 @@ def _precision_from_basis(observation: ResearchObservation) -> str:
 
 
 def _provider_precision(result: dict[str, Any]) -> str | None:
-    """Infer the granularity of the geocoder feature itself.
-
-    A search query may ask for a campus but resolve to a city or region. The returned
-    feature type therefore constrains how precisely SUGAR may describe the point.
-    Unknown provider feature types do not upgrade or downgrade the query precision.
-    """
     values = {
         _clean(result.get("addresstype")).casefold(),
         _clean(result.get("type")).casefold(),
@@ -159,14 +158,22 @@ def _provider_precision(result: dict[str, Any]) -> str | None:
 def _conservative_precision(requested: str, provider: str | None) -> str:
     if provider is None:
         return requested
-    # Never claim more precision than either the research evidence/query or the returned
-    # provider feature supports. Higher rank means broader/weaker geographic precision.
     return max((requested, provider), key=lambda value: _PRECISION_RANK.get(value, 6))
 
 
 def _confidence(observation: ResearchObservation, precision: str, *, derived: bool) -> float:
     if observation.location_confidence is not None:
         value = max(0.0, min(1.0, float(observation.location_confidence)))
+    else:
+        value = _PRECISION_DEFAULT_CONFIDENCE.get(precision, 0.45)
+    if derived:
+        value = min(value, _PRECISION_DEFAULT_CONFIDENCE.get(precision, value))
+    return value
+
+
+def _location_confidence(location: ObservationLocation, precision: str, *, derived: bool) -> float:
+    if location.confidence is not None:
+        value = max(0.0, min(1.0, float(location.confidence)))
     else:
         value = _PRECISION_DEFAULT_CONFIDENCE.get(precision, 0.45)
     if derived:
@@ -211,27 +218,32 @@ def _join_location(*parts: str) -> str:
 
 
 def _candidate_queries(observation: ResearchObservation) -> list[tuple[str, str, str]]:
-    """Return (query, precision, source) in descending evidentiary precision.
-
-    Institution/site lookup is only attempted when the recorded location basis says the
-    location itself is a site/venue/address. An institution name alone is not treated as
-    proof that the observed activity occurred at that institution's headquarters.
-    """
     candidates: list[tuple[str, str, str]] = []
     basis_precision = _precision_from_basis(observation)
     label = _clean(observation.location_label)
-
     if label and basis_precision in {"exact", "site", "locality"}:
         query = _join_location(label, observation.city, observation.region, observation.country)
         candidates.append((query, "site" if basis_precision != "exact" else "exact", "location_label"))
-
     if observation.city:
-        candidates.append(
-            (_join_location(observation.city, observation.region, observation.country), "city", "city")
-        )
+        candidates.append((_join_location(observation.city, observation.region, observation.country), "city", "city"))
     if observation.region:
         candidates.append((_join_location(observation.region, observation.country), "region", "region"))
+    return _dedupe_queries(candidates)
 
+
+def _location_candidate_queries(location: ObservationLocation) -> list[tuple[str, str, str]]:
+    candidates: list[tuple[str, str, str]] = []
+    if location.label and location.precision in {"exact", "site", "locality"}:
+        query = _join_location(location.label, location.city, location.region, location.country)
+        candidates.append((query, "exact" if location.precision == "exact" else "site", "location_label"))
+    if location.city:
+        candidates.append((_join_location(location.city, location.region, location.country), "city", "city"))
+    if location.region:
+        candidates.append((_join_location(location.region, location.country), "region", "region"))
+    return _dedupe_queries(candidates)
+
+
+def _dedupe_queries(candidates: list[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
     unique: list[tuple[str, str, str]] = []
     seen: set[str] = set()
     for query, precision, source in candidates:
@@ -242,45 +254,136 @@ def _candidate_queries(observation: ResearchObservation) -> list[tuple[str, str,
     return unique
 
 
-def resolve_observation_location(
+def _resolve_structured_location(
     observation: ResearchObservation,
+    location: ObservationLocation,
     *,
-    cache: JsonCache | None = None,
-    geocoder: Geocoder = geocode_location,
-    resolve_missing: bool = False,
-    minimum_confidence: float = 0.45,
+    cache: JsonCache | None,
+    geocoder: Geocoder,
+    resolve_missing: bool,
+    minimum_confidence: float,
 ) -> ResolvedLocation:
-    """Resolve the best defensible mappable location for one observation.
-
-    Existing coordinates remain authoritative but are assigned an explicit precision tier.
-    Missing coordinates may be geocoded from recorded site/city/region evidence when
-    ``resolve_missing`` is enabled. Country-only observations are intentionally not placed at
-    a national centroid because doing so would create a highly precise-looking false point.
-    """
-    pair = _valid_coordinate_pair(observation.latitude, observation.longitude)
-    precision = _precision_from_basis(observation)
-    label = _clean(observation.location_label) or _join_location(
-        observation.city, observation.region, observation.country
+    pair = _valid_coordinate_pair(location.latitude, location.longitude)
+    precision = location.precision
+    confidence = _location_confidence(location, precision, derived=False)
+    label = location.label or _join_location(location.city, location.region, location.country)
+    uncertainty = (
+        location.uncertainty_km
+        if location.uncertainty_km is not None
+        else _PRECISION_DEFAULT_UNCERTAINTY_KM.get(precision, 100.0)
     )
-    basis = _clean(observation.location_basis) or "unknown"
-
+    common = {
+        "observation_id": observation.observation_id,
+        "location_id": location.location_id,
+        "country": location.country,
+        "region": location.region,
+        "city": location.city,
+        "source_ref": location.source_ref,
+        "basis": location.basis or "unknown",
+        "label": label,
+    }
     if pair is not None:
-        confidence = _confidence(observation, precision, derived=False)
         return ResolvedLocation(
-            observation_id=observation.observation_id,
+            **common,
             latitude=pair[0],
             longitude=pair[1],
             precision=precision,
             confidence=confidence,
-            basis=basis,
-            label=label,
-            source="recorded_coordinates",
+            source="structured_location_coordinates",
+            display_name=label,
+            uncertainty_km=uncertainty,
+            derived=False,
+            density_eligible=precision in {"exact", "site", "locality", "city"} and confidence >= minimum_confidence,
+        )
+    if not resolve_missing:
+        return ResolvedLocation(
+            **common,
+            latitude=None,
+            longitude=None,
+            precision=precision,
+            confidence=confidence,
+            source="structured_location_unresolved",
+            uncertainty_km=uncertainty,
+            unresolved_reason="No coordinate pair is recorded for this evidenced activity location and location resolution is disabled.",
+        )
+    if cache is None:
+        raise ValueError("A geocode cache is required when resolve_missing=True.")
+    candidates = _location_candidate_queries(location)
+    if not candidates:
+        reason = "Country-only location is not plotted at a national centroid." if location.country else "No site, city, or region evidence is available."
+        return ResolvedLocation(
+            **common,
+            latitude=None,
+            longitude=None,
+            precision=precision,
+            confidence=_location_confidence(location, precision, derived=True),
+            source="structured_location_unresolved",
+            uncertainty_km=uncertainty,
+            unresolved_reason=reason,
+        )
+    for query, candidate_precision, source in candidates:
+        result = geocoder(query, cache)
+        pair = _valid_coordinate_pair(result.get("latitude"), result.get("longitude"))
+        if pair is None:
+            continue
+        resolved_precision = _conservative_precision(candidate_precision, _provider_precision(result))
+        if resolved_precision == "country":
+            continue
+        derived_confidence = _location_confidence(location, resolved_precision, derived=True)
+        return ResolvedLocation(
+            **common,
+            latitude=pair[0],
+            longitude=pair[1],
+            precision=resolved_precision,
+            confidence=derived_confidence,
+            source=f"structured_geocoded_{source}",
+            query=query,
+            display_name=_clean(result.get("display_name")) or query,
+            uncertainty_km=max(
+                float(location.uncertainty_km or 0.0),
+                _uncertainty_from_geocode(result, resolved_precision),
+            ),
+            derived=True,
+            density_eligible=resolved_precision in {"exact", "site", "locality", "city"} and derived_confidence >= minimum_confidence,
+            provider_type=_clean(result.get("addresstype") or result.get("type")),
+            provider_category=_clean(result.get("category")),
+        )
+    return ResolvedLocation(
+        **common,
+        latitude=None,
+        longitude=None,
+        precision=precision,
+        confidence=_location_confidence(location, precision, derived=True),
+        source="structured_geocode_no_match",
+        uncertainty_km=uncertainty,
+        unresolved_reason="No site/city/region geocode candidate returned a defensible coordinate for this activity location.",
+    )
+
+
+def _resolve_legacy_location(
+    observation: ResearchObservation,
+    *,
+    cache: JsonCache | None,
+    geocoder: Geocoder,
+    resolve_missing: bool,
+    minimum_confidence: float,
+) -> ResolvedLocation:
+    pair = _valid_coordinate_pair(observation.latitude, observation.longitude)
+    precision = _precision_from_basis(observation)
+    label = _clean(observation.location_label) or _join_location(observation.city, observation.region, observation.country)
+    basis = _clean(observation.location_basis) or "unknown"
+    if pair is not None:
+        confidence = _confidence(observation, precision, derived=False)
+        return ResolvedLocation(
+            observation_id=observation.observation_id,
+            latitude=pair[0], longitude=pair[1], precision=precision, confidence=confidence,
+            basis=basis, label=label, source="recorded_coordinates",
+            country=observation.country, region=observation.region, city=observation.city,
             display_name=label,
             uncertainty_km=_PRECISION_DEFAULT_UNCERTAINTY_KM.get(precision, 100.0),
             derived=False,
             density_eligible=precision in {"exact", "site", "locality", "city"} and confidence >= minimum_confidence,
         )
-
     if (observation.latitude is None) != (observation.longitude is None):
         return ResolvedLocation(
             observation_id=observation.observation_id,
@@ -291,82 +394,113 @@ def resolve_observation_location(
             basis=basis,
             label=label,
             source="invalid_coordinates",
+            country=observation.country,
+            region=observation.region,
+            city=observation.city,
             unresolved_reason="Only one coordinate in the latitude/longitude pair is present.",
         )
-
     if not resolve_missing:
         return ResolvedLocation(
             observation_id=observation.observation_id,
-            latitude=None,
-            longitude=None,
-            precision=precision,
-            confidence=_confidence(observation, precision, derived=True),
-            basis=basis,
-            label=label,
-            source="unresolved",
+            latitude=None, longitude=None, precision=precision,
+            confidence=_confidence(observation, precision, derived=True), basis=basis, label=label,
+            source="unresolved", country=observation.country, region=observation.region, city=observation.city,
             unresolved_reason="No recorded coordinate pair and location resolution is disabled.",
         )
-
     if cache is None:
         raise ValueError("A geocode cache is required when resolve_missing=True.")
-
     candidates = _candidate_queries(observation)
     if not candidates:
         reason = "Country-only location is not plotted at a national centroid." if observation.country else "No site, city, or region evidence is available."
         return ResolvedLocation(
             observation_id=observation.observation_id,
-            latitude=None,
-            longitude=None,
-            precision=precision,
-            confidence=_confidence(observation, precision, derived=True),
-            basis=basis,
-            label=label,
-            source="unresolved",
+            latitude=None, longitude=None, precision=precision,
+            confidence=_confidence(observation, precision, derived=True), basis=basis, label=label,
+            source="unresolved", country=observation.country, region=observation.region, city=observation.city,
             unresolved_reason=reason,
         )
-
     for query, candidate_precision, source in candidates:
         result = geocoder(query, cache)
         pair = _valid_coordinate_pair(result.get("latitude"), result.get("longitude"))
         if pair is None:
             continue
-        provider_precision = _provider_precision(result)
-        resolved_precision = _conservative_precision(candidate_precision, provider_precision)
-        # A result no more specific than an entire country is not useful as a point for a
-        # site/city/region observation. Continue to a lower-risk fallback rather than drawing
-        # a national centroid that visually implies local knowledge.
+        resolved_precision = _conservative_precision(candidate_precision, _provider_precision(result))
         if resolved_precision == "country":
             continue
         confidence = _confidence(observation, resolved_precision, derived=True)
         return ResolvedLocation(
             observation_id=observation.observation_id,
-            latitude=pair[0],
-            longitude=pair[1],
-            precision=resolved_precision,
-            confidence=confidence,
-            basis=basis,
-            label=label or query,
-            source=f"geocoded_{source}",
-            query=query,
+            latitude=pair[0], longitude=pair[1], precision=resolved_precision, confidence=confidence,
+            basis=basis, label=label or query, source=f"geocoded_{source}", query=query,
+            country=observation.country, region=observation.region, city=observation.city,
             display_name=_clean(result.get("display_name")) or query,
-            uncertainty_km=_uncertainty_from_geocode(result, resolved_precision),
-            derived=True,
+            uncertainty_km=_uncertainty_from_geocode(result, resolved_precision), derived=True,
             density_eligible=resolved_precision in {"exact", "site", "locality", "city"} and confidence >= minimum_confidence,
             provider_type=_clean(result.get("addresstype") or result.get("type")),
             provider_category=_clean(result.get("category")),
         )
-
     return ResolvedLocation(
         observation_id=observation.observation_id,
-        latitude=None,
-        longitude=None,
-        precision=precision,
-        confidence=_confidence(observation, precision, derived=True),
-        basis=basis,
-        label=label,
-        source="geocode_no_match",
+        latitude=None, longitude=None, precision=precision,
+        confidence=_confidence(observation, precision, derived=True), basis=basis, label=label,
+        source="geocode_no_match", country=observation.country, region=observation.region, city=observation.city,
         unresolved_reason="No site/city/region geocode candidate returned a defensible coordinate.",
     )
+
+
+def resolve_observation_locations(
+    observation: ResearchObservation,
+    *,
+    cache: JsonCache | None = None,
+    geocoder: Geocoder = geocode_location,
+    resolve_missing: bool = False,
+    minimum_confidence: float = 0.45,
+) -> list[ResolvedLocation]:
+    """Resolve every evidenced activity location without multiplying the observation itself."""
+    if observation.locations:
+        return [
+            _resolve_structured_location(
+                observation,
+                location,
+                cache=cache,
+                geocoder=geocoder,
+                resolve_missing=resolve_missing,
+                minimum_confidence=minimum_confidence,
+            )
+            for location in observation.locations
+        ]
+    return [
+        _resolve_legacy_location(
+            observation,
+            cache=cache,
+            geocoder=geocoder,
+            resolve_missing=resolve_missing,
+            minimum_confidence=minimum_confidence,
+        )
+    ]
+
+
+def resolve_observation_location(
+    observation: ResearchObservation,
+    *,
+    cache: JsonCache | None = None,
+    geocoder: Geocoder = geocode_location,
+    resolve_missing: bool = False,
+    minimum_confidence: float = 0.45,
+) -> ResolvedLocation:
+    """Backward-compatible primary location resolver.
+
+    Multi-site observations return their first resolved location when one exists, otherwise the
+    first structured location. Call ``resolve_observation_locations`` when every venue matters.
+    """
+    locations = resolve_observation_locations(
+        observation,
+        cache=cache,
+        geocoder=geocoder,
+        resolve_missing=resolve_missing,
+        minimum_confidence=minimum_confidence,
+    )
+    return next((location for location in locations if location.resolved), locations[0])
 
 
 def default_state_geocode_cache(path: str | Path) -> JsonCache:

@@ -15,13 +15,7 @@ DEFAULT_US_SITE_UNCERTAINTY_KM = 0.75
 
 @dataclass(frozen=True)
 class StateProximity:
-    """Uncertainty-aware geographic proximity to one U.S. public-diplomacy site.
-
-    The distance range is a conservative interpretation aid built from the observation's
-    geographic precision envelope plus the U.S. site's own location envelope when available.
-    It is not a statistical confidence interval and must not be interpreted as evidence of
-    strategic competition, displacement, persuasion, coordination, or influence.
-    """
+    """Uncertainty-aware geographic proximity to one U.S. public-diplomacy site."""
 
     observation_id: str
     site_id: str
@@ -41,6 +35,8 @@ class StateProximity:
     site_location_basis: str
     same_city: bool
     same_country: bool
+    location_id: str = ""
+    location_label: str = ""
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -67,7 +63,6 @@ def distance_range_km(
     observation_uncertainty_km: float,
     site_uncertainty_km: float = DEFAULT_US_SITE_UNCERTAINTY_KM,
 ) -> tuple[float, float]:
-    """Return a conservative min/max separation implied by two location envelopes."""
     center = max(0.0, float(center_distance_km))
     combined = max(0.0, float(observation_uncertainty_km)) + max(0.0, float(site_uncertainty_km))
     return max(0.0, center - combined), center + combined
@@ -96,21 +91,13 @@ def nearest_us_presence(
     threshold_km: float = DEFAULT_NEARBY_THRESHOLD_KM,
     site_uncertainty_km: float = DEFAULT_US_SITE_UNCERTAINTY_KM,
 ) -> StateProximity | None:
-    """Return the physically nearest active, mapped U.S. presence site.
-
-    Purely virtual services are excluded even if a source record happens to carry coordinates.
-    Hybrid services remain spatially eligible. Unlike older same-country-first logic, ranking is
-    purely geographic: a site immediately across a border can be physically nearer than one
-    elsewhere in the observation's country. Country and city agreement are retained as
-    descriptive fields, not ranking constraints.
-    """
+    """Return the physically nearest active, mapped U.S. presence site for one resolved venue."""
     if not location.resolved:
         return None
     candidates = [
         site
         for site in sites
-        if site.status not in {"closed", "inactive"}
-        and site.is_spatial
+        if site.status not in {"closed", "inactive"} and site.is_spatial
     ]
     if not candidates:
         return None
@@ -129,14 +116,14 @@ def nearest_us_presence(
     ranked.sort(key=lambda item: (item[0], item[1].site_id))
     center, site = ranked[0]
     effective_site_uncertainty = site.effective_location_uncertainty_km(site_uncertainty_km)
-    minimum, maximum = distance_range_km(
-        center,
-        observation_uncertainty,
-        effective_site_uncertainty,
-    )
+    minimum, maximum = distance_range_km(center, observation_uncertainty, effective_site_uncertainty)
     relation = classify_proximity(minimum, maximum, threshold_km)
+    location_city = location.city or observation.city
+    location_country = location.country or observation.country
     return StateProximity(
         observation_id=observation.observation_id,
+        location_id=location.location_id,
+        location_label=location.display_name or location.label,
         site_id=site.site_id,
         site_name=site.name,
         network=site.network,
@@ -152,8 +139,8 @@ def nearest_us_presence(
         site_confidence=site.location_confidence,
         site_uncertainty_km=round(effective_site_uncertainty, 3),
         site_location_basis=site.location_basis,
-        same_city=_same_place(observation.city, site.city),
-        same_country=_same_place(observation.country, site.country),
+        same_city=_same_place(location_city, site.city),
+        same_country=_same_place(location_country, site.country),
     )
 
 

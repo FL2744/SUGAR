@@ -28,9 +28,8 @@ from sugar_core.workspace import SugarWorkspace
 
 CASE_NAME = "Kyrgyzstan 2026 Public Diplomacy E2E"
 CASE_STEM = "kyrgyzstan_2026"
-# This remains a conservative fallback for legacy/unknown U.S. records. The current case populates
-# per-site uncertainty, and the proximity engine now prefers each site's own value.
 US_SITE_UNCERTAINTY_KM = 12.0
+MULTI_SITE_TITLE = "International Chinese Language Day events at Bishkek universities"
 
 
 def _write_us_sites(sites, output_csv: Path) -> list[Path]:
@@ -98,25 +97,27 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
             or assessment.reach.observed_total != 0
         ):
             qualified_reach_missing.append(observation)
-    multi_site_records = [
-        row for row in observations
-        if row.title == "International Chinese Language Day events at Bishkek universities"
+
+    multi_site_records = [row for row in observations if row.title == MULTI_SITE_TITLE]
+    multi_site_missing = [
+        row for row in multi_site_records
+        if len(row.locations) != 2
+        or len({item.location_id for item in row.locations}) != 2
+        or {item.precision for item in row.locations} != {"site", "city"}
+        or any(not item.source_ref for item in row.locations)
     ]
+
     return [
         {
             "code": "language_education_domain_resolved" if not language_fallback else "language_education_domain_gap",
             "severity": "resolved" if not language_fallback else "model_gap",
             "affected_records": len(language_records) if not language_fallback else len(language_fallback),
             "description": (
-                "Chinese-language education is now represented by the generic language_education State domain without being equated to English-language programming."
+                "Chinese-language education is represented by the generic language_education State domain without being equated to English-language programming."
                 if not language_fallback else
                 "Some Chinese-language education records still fall back to an undifferentiated domain instead of language_education."
             ),
-            "recommended_fix": (
-                "No further taxonomy fix required for this case; preserve language_education as language-neutral."
-                if not language_fallback else
-                "Migrate remaining language records to the language_education domain."
-            ),
+            "recommended_fix": "Preserve language_education as language-neutral." if not language_fallback else "Migrate remaining language records to language_education.",
         },
         {
             "code": "direct_service_overlap_semantics_resolved" if not false_english_overlap else "direct_service_overlap_semantics_gap",
@@ -125,83 +126,67 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
             "description": (
                 "Audience similarity no longer manufactures a direct English-language service overlap for Chinese-language activities; audience, thematic, and service overlap remain separate dimensions."
                 if not false_english_overlap else
-                "At least one Chinese-language record is still being labeled with a direct English-language service overlap because audience and service semantics are conflated."
+                "At least one Chinese-language record still receives a direct English-language service overlap from audience/service conflation."
             ),
-            "recommended_fix": (
-                "No further fix required for the audience-to-service conflation regression."
-                if not false_english_overlap else
-                "Restrict direct service overlap to program-domain-supported service tags."
-            ),
+            "recommended_fix": "No further fix required for this regression." if not false_english_overlap else "Restrict direct service overlap to program-domain-supported service tags.",
         },
         {
             "code": "virtual_educationusa_service_resolved" if not missed_virtual_educationusa else "virtual_educationusa_service_gap",
             "severity": "resolved" if not missed_virtual_educationusa else "model_gap",
             "affected_records": len(higher_ed_assessments) if not missed_virtual_educationusa else len(missed_virtual_educationusa),
             "description": (
-                "EducationUSA Kyrgyzstan is represented as a virtual, country-scoped service and now contributes higher-education service availability across Kyrgyzstan independently of nearest physical-site geography; the assessment note identifies the virtual service source while the map remains non-spatial."
+                "EducationUSA Kyrgyzstan remains a virtual, country-scoped service that contributes higher-education service availability independently of nearest physical-site geography."
                 if not missed_virtual_educationusa else
-                "At least one Kyrgyzstan higher-education assessment still fails to receive the applicable country-scoped virtual EducationUSA service or its source attribution."
+                "At least one Kyrgyzstan higher-education assessment still misses the applicable country-scoped EducationUSA service or its source attribution."
             ),
-            "recommended_fix": (
-                "No further country-scope aggregation fix required for this case; preserve service availability and physical proximity as independent dimensions."
-                if not missed_virtual_educationusa else
-                "Aggregate applicable U.S. service sources by delivery mode and coverage scope independently of nearest-site geography."
-            ),
+            "recommended_fix": "Preserve service availability and physical proximity as independent dimensions." if not missed_virtual_educationusa else "Aggregate U.S. service sources by delivery mode and coverage scope independently of nearest-site geography.",
         },
         {
             "code": "us_site_precision_resolved" if not sites_missing_precision else "us_site_precision_gap",
             "severity": "resolved" if not sites_missing_precision else "model_gap",
             "affected_records": len(physical_sites) if not sites_missing_precision else len(sites_missing_precision),
             "description": (
-                f"All physical U.S. presence records now carry explicit location precision, confidence, basis, and uncertainty. {location_summary['address_refined_physical_us_sites']} are site/address refined and {location_summary['city_centroid_physical_us_sites']} remain honestly labeled city-centroid references; proximity consumes the per-site envelope before the legacy fallback."
+                f"All physical U.S. presence records carry explicit location precision, confidence, basis, and uncertainty. {location_summary['address_refined_physical_us_sites']} are site/address refined and {location_summary['city_centroid_physical_us_sites']} remain honestly labeled city-centroid references."
                 if not sites_missing_precision else
                 "Some physical U.S. presence records still lack explicit precision/confidence/provenance/uncertainty."
             ),
-            "recommended_fix": (
-                "No further core precision-field fix required; continue improving individual reference quality as better source data becomes available."
-                if not sites_missing_precision else
-                "Populate per-site location precision, confidence, basis, and uncertainty."
-            ),
+            "recommended_fix": "Continue improving individual reference quality when better source data appears." if not sites_missing_precision else "Populate per-site location precision, confidence, basis, and uncertainty.",
         },
         {
             "code": "qualified_reach_metric_resolved" if not qualified_reach_missing else "qualified_reach_metric_gap",
             "severity": "resolved" if not qualified_reach_missing else "model_gap",
             "affected_records": len(approximate_reach_records) if not qualified_reach_missing else len(qualified_reach_missing),
             "description": (
-                "All approximate or bounded attendance claims in the case are now preserved as structured qualified reach values with source attribution. 'Roughly 200' and 'roughly 300' remain approximate, while 'more than 1,000' is represented as a minimum bound; none are silently promoted into bare exact integers or exact aggregate totals."
+                "Approximate and bounded attendance claims retain structured qualifiers and sources; none are silently promoted into bare exact integers or exact aggregate totals."
                 if not qualified_reach_missing else
-                "At least one approximate or bounded attendance claim is still missing structured qualifier/source semantics or is leaking into an exact reach field."
+                "At least one approximate or bounded attendance claim lacks qualifier/source semantics or leaks into an exact reach field."
             ),
-            "recommended_fix": (
-                "No further qualifier-schema fix required for this case; preserve the reported qualifier and source when adding future reach observations."
-                if not qualified_reach_missing else
-                "Encode the reported reach using exact/approximate/minimum/maximum/range semantics and prevent non-exact values from entering exact totals."
-            ),
+            "recommended_fix": "Preserve source qualifiers for future reach observations." if not qualified_reach_missing else "Encode reported reach using exact/approximate/minimum/maximum/range semantics.",
         },
         {
-            "code": "multi_site_observation_gap",
-            "severity": "model_gap",
-            "affected_records": len(multi_site_records),
+            "code": "multi_site_observation_resolved" if multi_site_records and not multi_site_missing else "multi_site_observation_gap",
+            "severity": "resolved" if multi_site_records and not multi_site_missing else "model_gap",
+            "affected_records": len(multi_site_records) if not multi_site_missing else len(multi_site_missing),
             "description": (
-                "The International Chinese Language Day source describes programming at more than one Bishkek university, but ResearchObservation currently carries a single point/location. The case therefore leaves that record at city precision rather than inventing one canonical venue."
+                "The International Chinese Language Day activity remains one research observation while carrying two independently sourced activity locations: Bishkek State University at site precision and International University of Kyrgyzstan at deliberately broader city precision because the event-specific campus is unresolved. Map density splits one total activity weight across both defensible locations instead of counting two activities."
+                if multi_site_records and not multi_site_missing else
+                "The multi-university Chinese Language Day source still collapses into one artificial location or lacks venue-specific precision/provenance."
             ),
-            "recommended_fix": "Support multiple event locations or a parent activity with venue-specific child observations so multi-site source reporting does not collapse into one artificial point.",
+            "recommended_fix": "No further multi-site schema fix required for this case; keep venue provenance and activity counts separate." if multi_site_records and not multi_site_missing else "Represent all source-supported venues as structured locations without duplicating the observation.",
         },
         {
             "code": "human_review_gate_working",
             "severity": "expected_guardrail",
             "affected_records": len(observations),
-            "description": (
-                "All real-world records remain AI-triaged. The analyst map can display them for review, while the verified-only State map and briefing output must not promote them to human-verified judgments."
-            ),
-            "recommended_fix": "No fix; preserve this gate and provide a smoother human-review workflow in the desktop clients.",
+            "description": "All real-world records remain AI-triaged. The analyst map can display them for review, while verified-only outputs do not promote them to human-verified judgments.",
+            "recommended_fix": "No fix; preserve this gate.",
         },
         {
             "code": "virtual_us_services_present",
             "severity": "context",
             "affected_records": len(virtual_sites),
-            "description": "At least one important U.S. public-diplomacy service is explicitly non-spatial and country-scoped; it can contribute service availability without being forced onto a fake map point.",
-            "recommended_fix": "Preserve delivery_mode/coverage_scope semantics and source attribution when adding future virtual services.",
+            "description": "At least one important U.S. public-diplomacy service is explicitly non-spatial and country-scoped; it can contribute service availability without a fake map point.",
+            "recommended_fix": "Preserve delivery_mode/coverage_scope semantics and source attribution for virtual services.",
         },
     ]
 
@@ -214,9 +199,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     workspace = SugarWorkspace.create(
         output_root,
         name=CASE_NAME,
-        description=(
-            "Reproducible public-source Kyrgyzstan case through 2026-09-14. Records are AI-triaged, not human verified; intended to exercise collection-to-review-to-map-to-brief guardrails."
-        ),
+        description="Reproducible public-source Kyrgyzstan case through 2026-09-14. Records are AI-triaged, not human verified; intended to exercise collection-to-review-to-map-to-brief guardrails.",
         exist_ok=True,
     )
 
@@ -225,8 +208,6 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     observation_location_summary = apply_observation_location_enrichment(observations)
     us_location_summary = apply_us_site_location_enrichment(sites)
     location_summary = {**observation_location_summary, **us_location_summary}
-    # Build assessments only after deterministic location enrichment so downstream State overlap
-    # sees the same source-backed geometry used by the map.
     assessments = build_assessments(observations)
     support_summary = calibrate_support_assessments(observations, assessments)
 
@@ -242,11 +223,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
             "location_enrichment": location_summary,
         },
     )
-    observation_outputs = [
-        observation_csv,
-        observation_csv.with_suffix(".xlsx"),
-        observation_csv.with_suffix(".metadata.json"),
-    ]
+    observation_outputs = [observation_csv, observation_csv.with_suffix(".xlsx"), observation_csv.with_suffix(".metadata.json")]
     workspace.register_outputs(observation_outputs, kind="observations", operation="kyrgyzstan-e2e")
 
     references_dir = workspace.path_for("references")
@@ -356,6 +333,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         or row.reach.observed_total != 0
         for row in qualified_reach_assessments
     )
+    multi_site_records = [row for row in observations if row.title == MULTI_SITE_TITLE]
 
     summary = {
         "case": CASE_NAME,
@@ -373,14 +351,21 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "qualified_reach_assessments": len(qualified_reach_assessments),
         "qualified_reach_missing_source_or_semantics": qualified_reach_missing,
         "qualified_reach_exact_total": sum(row.reach.observed_total for row in qualified_reach_assessments),
+        "multi_site_observations": len(multi_site_records),
+        "structured_activity_locations": sum(len(row.locations) for row in observations),
         "us_sites_missing_precision": sites_missing_precision,
         "physical_us_sites": sum(site.is_spatial for site in sites),
         "nonspatial_us_services": sum(site.delivery_mode == "virtual" for site in sites),
         "location_enrichment": location_summary,
         "source_conflicts": len(conflicts),
         "analyst_map_observations": analyst_metadata.get("mapped_observations"),
+        "analyst_map_locations": analyst_metadata.get("mapped_locations"),
+        "analyst_map_multi_location_observations": analyst_metadata.get("multi_location_observations"),
         "analyst_map_precision_counts": analyst_metadata.get("precision_counts", {}),
+        "analyst_map_density_total_weight": analyst_metadata.get("density_total_weight"),
+        "analyst_map_density_multi_location_observations": analyst_metadata.get("density_multi_location_observations"),
         "verified_map_observations": verified_metadata.get("mapped_observations"),
+        "verified_map_locations": verified_metadata.get("mapped_locations"),
         "analyst_map_us_proximity_counts": analyst_metadata.get("us_proximity_counts", {}),
         "verified_map_us_proximity_counts": verified_metadata.get("us_proximity_counts", {}),
         "analyst_map_center_distance_km_min": round(min(center_distances), 3) if center_distances else None,
@@ -401,7 +386,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         "",
         f"The bounded case contains **{len(observations)}** PRC-linked public-diplomacy observations through September 14, 2026. The record spans Chinese-language education, Confucius Institute activity, university cooperation, cultural exhibitions and performances, literary and city-level exchanges, and governance/civilizational programming.",
         "",
-        f"Seven source records name a venue/institution that can be refined to site-level geometry with separate public location references; four remain deliberately city-level. The U.S. layer contains eight physical American Spaces, of which two are address-refined while six remain honestly labeled city-centroid references, plus one explicit virtual/country-scoped EducationUSA service. Physical proximity and service availability are now independent: EducationUSA can contribute higher-education service overlap across Kyrgyzstan without becoming a map point or replacing the nearest physical American Space. U.S. proximity consumes each physical site's own precision/confidence/uncertainty metadata rather than treating every coordinate as equally exact. Chinese-language records use the generic language_education domain and remain distinct from English-language programming. Three reported attendance values now preserve their source qualifiers structurally: two approximate counts ('roughly 300' and 'roughly 200') and one minimum bound ('more than 1,000'); none enters an exact aggregate as though it were a precise count. The current State EducationUSA directory and American Councils page still conflict about whether the Bishkek advising service has a physical location, so that contradiction is retained explicitly. PRC-support judgments remain evidence-calibrated: {support_summary['probable']} probable and {support_summary['possible']} possible, with none confirmed before human review. The analyst map is available before human verification; the verified-only map contains no PRC observations until review gates are satisfied.",
+        f"Seven single-site source records are refined to site-level geometry, three other observations remain deliberately city-level, and one Chinese Language Day observation now carries two venue entries without becoming two activities. Bishkek State University is represented at site precision; International University of Kyrgyzstan remains city-level because the event-specific campus is unresolved. The analyst map therefore contains 12 activity locations for 11 observations, while its density layer still totals 11.0 activity units. The U.S. layer contains eight physical American Spaces plus one virtual/country-scoped EducationUSA service. Chinese-language records remain language-neutral, qualified attendance retains its original source semantics, and the EducationUSA topology conflict remains explicit. PRC-support judgments remain evidence-calibrated: {support_summary['probable']} probable and {support_summary['possible']} possible, with none confirmed before human review.",
         "",
         "## Model and source findings from the real case",
         "",
@@ -421,9 +406,6 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     report_outputs = [summary_json, findings_json, audit_json, note_path]
     workspace.register_outputs(report_outputs, kind="report", operation="kyrgyzstan-e2e")
 
-    # The core purpose of this case is to exercise real public data without weakening review,
-    # geographic precision, source conflicts, evidence calibration, or numeric qualifiers merely
-    # to make output look complete.
     assert len(observations) == 11
     assert summary["human_verified_observations"] == 0
     assert summary["brief_eligible_assessments"] == 0
@@ -435,23 +417,37 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     assert summary["qualified_reach_assessments"] == 3
     assert summary["qualified_reach_missing_source_or_semantics"] == 0
     assert summary["qualified_reach_exact_total"] == 0
+    assert summary["multi_site_observations"] == 1
+    assert summary["structured_activity_locations"] == 2
     assert summary["us_sites_missing_precision"] == 0
     assert summary["analyst_map_observations"] == 11
+    assert summary["analyst_map_locations"] == 12
+    assert summary["analyst_map_multi_location_observations"] == 1
+    assert summary["analyst_map_density_total_weight"] == 11.0
+    assert summary["analyst_map_density_multi_location_observations"] == 1
     assert summary["verified_map_observations"] == 0
+    assert summary["verified_map_locations"] == 0
     assert summary["physical_us_sites"] == 8
     assert summary["nonspatial_us_services"] == 1
     assert summary["source_conflicts"] == 1
     assert summary["case_findings"] == 9
     assert summary["location_enrichment"]["site_refined_observations"] == 7
-    assert summary["location_enrichment"]["city_level_observations"] == 4
+    assert summary["location_enrichment"]["city_level_observations"] == 3
+    assert summary["location_enrichment"]["multi_site_observations"] == 1
+    assert summary["location_enrichment"]["structured_activity_locations"] == 2
     assert summary["location_enrichment"]["address_refined_physical_us_sites"] == 2
-    assert summary["analyst_map_precision_counts"] == {"city": 4, "site": 7}
+    assert summary["analyst_map_precision_counts"] == {"city": 4, "site": 8}
     assert center_distances and min(center_distances) > 0.1
-    assert proximity_ledger and all(row.get("site_precision") == "site" for row in proximity_ledger)
-    assert proximity_ledger and all(float(row.get("site_uncertainty_km", 0)) == 0.25 for row in proximity_ledger)
+    assert len(proximity_ledger) == 12
+    assert all(row.get("site_precision") == "site" for row in proximity_ledger)
+    assert all(float(row.get("site_uncertainty_km", 0)) == 0.25 for row in proximity_ledger)
     assert analyst_metadata.get("mapped_us_sites") == 8
     assert verified_metadata.get("mapped_us_sites") == 8
     assert workspace.status()["missing_artifacts"] == 0
+
+    finding_codes = {item["code"] for item in findings}
+    assert "multi_site_observation_resolved" in finding_codes
+    assert "multi_site_observation_gap" not in finding_codes
 
     return summary
 

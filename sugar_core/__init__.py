@@ -23,6 +23,7 @@ from .observation_storage import load_observations, observations_to_frame, save_
 from .observations import (
     OBSERVATION_SCHEMA_VERSION,
     EvidenceReference,
+    ObservationLocation,
     ResearchObservation,
     SpatialMatch,
     observation_from_post,
@@ -85,6 +86,7 @@ __all__ = [
     "build_harvest_tasks",
     "rate_limit_wait_seconds",
     "ResearchObservation",
+    "ObservationLocation",
     "EvidenceReference",
     "SpatialMatch",
     "OBSERVATION_SCHEMA_VERSION",

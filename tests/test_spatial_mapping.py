@@ -7,7 +7,7 @@ import pandas as pd
 
 from sugar_core.mapping import _normalize_rows, _popup_html, create_map
 from sugar_core.observation_storage import observations_to_frame
-from sugar_core.observations import ResearchObservation, SpatialMatch
+from sugar_core.observations import OBSERVATION_SCHEMA_VERSION, ResearchObservation, SpatialMatch
 
 
 def _spatial_observation() -> ResearchObservation:
@@ -86,6 +86,6 @@ def test_export_upgrades_legacy_schema_rows_to_current_schema():
 
     frame = observations_to_frame([observation])
 
-    assert frame.iloc[0]["schema_version"] == "1.1"
+    assert frame.iloc[0]["schema_version"] == OBSERVATION_SCHEMA_VERSION
     stored = json.loads(frame.iloc[0]["spatial_matches"])
     assert stored[0]["reference_id"] == "as_bishkek"

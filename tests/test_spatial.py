@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from sugar_core.observation_storage import load_observations, save_observations
-from sugar_core.observations import ResearchObservation, SpatialMatch
+from sugar_core.observations import OBSERVATION_SCHEMA_VERSION, ResearchObservation, SpatialMatch
 from sugar_core.service import run_overlap
 from sugar_core.spatial import (
     SpatialOverlapConfig,
@@ -181,7 +181,7 @@ def test_spatial_match_round_trip_through_observation_storage(tmp_path: Path):
     assert loaded[0].nearest_spatial_match is not None
     assert loaded[0].nearest_spatial_match.reference_id == "as_bishkek"
     assert loaded[0].nearest_spatial_match.distance_km == pytest.approx(2.7)
-    assert loaded[0].schema_version == "1.1"
+    assert loaded[0].schema_version == OBSERVATION_SCHEMA_VERSION
 
 
 def test_run_overlap_writes_enriched_dataset_match_table_summary_and_map(tmp_path: Path):

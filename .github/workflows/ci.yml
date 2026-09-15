@@ -64,9 +64,23 @@ jobs:
           assert summary["qualified_reach_assessments"] == 3
           assert summary["qualified_reach_missing_source_or_semantics"] == 0
           assert summary["qualified_reach_exact_total"] == 0
+          assert summary["multi_site_observations"] == 1
+          assert summary["structured_activity_locations"] == 2
           assert summary["us_sites_missing_precision"] == 0
+          assert summary["analyst_map_observations"] == 11
+          assert summary["analyst_map_locations"] == 12
+          assert summary["analyst_map_multi_location_observations"] == 1
+          assert summary["analyst_map_density_total_weight"] == 11.0
+          assert summary["analyst_map_density_multi_location_observations"] == 1
+          assert summary["verified_map_observations"] == 0
+          assert summary["verified_map_locations"] == 0
           assert analyst["mapped_observations"] == 11
+          assert analyst["mapped_locations"] == 12
+          assert analyst["multi_location_observations"] == 1
+          assert analyst["density_total_weight"] == 11.0
+          assert analyst["density_multi_location_observations"] == 1
           assert verified["mapped_observations"] == 0
+          assert verified["mapped_locations"] == 0
           assert analyst["mapped_us_sites"] == 8
           codes = {row["code"] for row in findings}
           assert codes >= {
@@ -75,6 +89,7 @@ jobs:
               "virtual_educationusa_service_resolved",
               "us_site_precision_resolved",
               "qualified_reach_metric_resolved",
+              "multi_site_observation_resolved",
               "human_review_gate_working",
           }
           assert "language_education_domain_gap" not in codes
@@ -82,6 +97,7 @@ jobs:
           assert "virtual_educationusa_service_gap" not in codes
           assert "us_site_precision_gap" not in codes
           assert "qualified_reach_metric_gap" not in codes
+          assert "multi_site_observation_gap" not in codes
           print(json.dumps(summary, indent=2, sort_keys=True))
           PY
       - name: Publish reproducible Kyrgyzstan workspace

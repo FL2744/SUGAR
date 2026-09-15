@@ -8,7 +8,7 @@ from typing import Any, Iterable
 
 from .models import PostRecord
 
-OBSERVATION_SCHEMA_VERSION = "1.1"
+OBSERVATION_SCHEMA_VERSION = "1.2"
 
 OBSERVATION_TYPES = {
     "institution",
@@ -29,6 +29,16 @@ VERIFICATION_STATES = {
 }
 
 RELEVANCE_STATES = {"unknown", "relevant", "uncertain", "not_relevant"}
+
+OBSERVATION_LOCATION_PRECISIONS = {
+    "exact",
+    "site",
+    "locality",
+    "city",
+    "region",
+    "country",
+    "unknown",
+}
 
 _ALLOWED_TRANSITIONS = {
     "unreviewed": {"ai_triaged", "human_verified", "rejected", "needs_followup"},
@@ -69,9 +79,16 @@ def _bounded_confidence(value: float | int | None, field_name: str) -> float | N
 
 
 def _optional_float(value: Any) -> float | None:
-    if value is None or value == "" or str(value).casefold() == "nan":
+    if value is None or value == "" or str(value).strip().casefold() in {"nan", "none", "<na>"}:
         return None
     return float(value)
+
+
+def _nonnegative_float(value: Any, field_name: str) -> float | None:
+    number = _optional_float(value)
+    if number is not None and number < 0:
+        raise ValueError(f"{field_name} cannot be negative.")
+    return number
 
 
 def make_observation_id(*parts: Any) -> str:
@@ -79,6 +96,13 @@ def make_observation_id(*parts: Any) -> str:
     if not identity:
         raise ValueError("Cannot create an observation ID without stable identifying information.")
     return "obs_" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20]
+
+
+def make_location_id(*parts: Any) -> str:
+    identity = "|".join(_clean(part).casefold() for part in parts if _clean(part))
+    if not identity:
+        raise ValueError("Cannot create a location ID without stable identifying information.")
+    return "loc_" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20]
 
 
 @dataclass
@@ -105,6 +129,62 @@ class EvidenceReference:
         self.note = _clean(self.note)
         if not self.url and not (self.platform and self.native_id):
             raise ValueError("Evidence requires a URL or a platform/native_id identity.")
+
+
+@dataclass
+class ObservationLocation:
+    """One evidenced or explicitly qualified location for a single research activity.
+
+    Multiple entries describe multiple venues/locations for the same observation; they do not
+    create multiple activities. Precision and provenance remain location-specific so a named
+    institution with an unresolved campus can coexist with a site-level venue without inventing
+    a precise point.
+    """
+
+    label: str
+    country: str = ""
+    region: str = ""
+    city: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
+    precision: str = "unknown"
+    confidence: float | None = None
+    uncertainty_km: float | None = None
+    basis: str = "unknown"
+    source_ref: str = ""
+    note: str = ""
+    location_id: str = ""
+
+    def __post_init__(self) -> None:
+        for attr in ("label", "country", "region", "city", "precision", "basis", "source_ref", "note"):
+            setattr(self, attr, _clean(getattr(self, attr)))
+        self.precision = self.precision.casefold() or "unknown"
+        if self.precision not in OBSERVATION_LOCATION_PRECISIONS:
+            raise ValueError(f"Unsupported observation location precision: {self.precision}")
+        self.latitude = _optional_float(self.latitude)
+        self.longitude = _optional_float(self.longitude)
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("Observation locations require both latitude and longitude when coordinates are supplied.")
+        if self.latitude is not None and not -90.0 <= self.latitude <= 90.0:
+            raise ValueError("Observation location latitude must be between -90 and 90.")
+        if self.longitude is not None and not -180.0 <= self.longitude <= 180.0:
+            raise ValueError("Observation location longitude must be between -180 and 180.")
+        self.confidence = _bounded_confidence(self.confidence, "observation location confidence")
+        self.uncertainty_km = _nonnegative_float(self.uncertainty_km, "observation location uncertainty_km")
+        if not any((self.label, self.city, self.region, self.country, self.latitude is not None)):
+            raise ValueError("Observation locations require a label, geographic name, or coordinate pair.")
+        if not self.location_id:
+            self.location_id = make_location_id(
+                self.label,
+                self.country,
+                self.region,
+                self.city,
+                self.latitude,
+                self.longitude,
+                self.source_ref,
+            )
+        else:
+            self.location_id = _clean(self.location_id)
 
 
 @dataclass
@@ -164,6 +244,7 @@ class ResearchObservation:
     longitude: float | None = None
     location_basis: str = "unknown"
     location_confidence: float | None = None
+    locations: list[ObservationLocation] = field(default_factory=list)
 
     institution_name: str = ""
     program_name: str = ""
@@ -209,6 +290,9 @@ class ResearchObservation:
         ):
             setattr(self, attr, _clean(getattr(self, attr)))
 
+        # Keep legacy scalar coordinates backward-compatible: incomplete pairs can still be loaded
+        # and are rejected as unresolved by the location resolver. New structured locations are
+        # stricter because each entry is an explicit venue/location claim.
         self.latitude = _optional_float(self.latitude)
         self.longitude = _optional_float(self.longitude)
         self.actors = _clean_list(self.actors)
@@ -221,6 +305,20 @@ class ResearchObservation:
         self.location_confidence = _bounded_confidence(self.location_confidence, "location_confidence")
         self.relevance_confidence = _bounded_confidence(self.relevance_confidence, "relevance_confidence")
         self.ai_confidence = _bounded_confidence(self.ai_confidence, "ai_confidence")
+
+        normalized_locations: list[ObservationLocation] = []
+        seen_location_ids: set[str] = set()
+        for item in self.locations:
+            if isinstance(item, ObservationLocation):
+                location = item
+            elif isinstance(item, dict):
+                location = ObservationLocation(**item)
+            else:
+                raise TypeError("locations entries must be ObservationLocation objects or dictionaries.")
+            if location.location_id not in seen_location_ids:
+                normalized_locations.append(location)
+                seen_location_ids.add(location.location_id)
+        self.locations = normalized_locations
 
         self.relevance = _clean(self.relevance).casefold() or "unknown"
         if self.relevance not in RELEVANCE_STATES:
@@ -278,6 +376,10 @@ class ResearchObservation:
     @property
     def nearest_spatial_match(self) -> SpatialMatch | None:
         return self.spatial_matches[0] if self.spatial_matches else None
+
+    @property
+    def has_multiple_locations(self) -> bool:
+        return len(self.locations) > 1
 
     def touch(self) -> None:
         self.updated_at = _utc_now_iso()
@@ -342,6 +444,7 @@ class ResearchObservation:
             "actors", "audiences", "themes", "us_overlap", "source_record_keys", "triage_labels", "triage_evidence"
         ):
             data[key] = json.dumps(data[key], ensure_ascii=False)
+        data["locations"] = json.dumps(data["locations"], ensure_ascii=False, sort_keys=True)
         data["spatial_matches"] = json.dumps(data["spatial_matches"], ensure_ascii=False, sort_keys=True)
         data["evidence"] = json.dumps(data["evidence"], ensure_ascii=False, sort_keys=True)
         data["primary_source_url"] = self.primary_source_url
@@ -358,7 +461,7 @@ class ResearchObservation:
             if isinstance(value, str):
                 value = json.loads(value) if value.strip() else []
             data[key] = value
-        for key in ("evidence", "spatial_matches"):
+        for key in ("evidence", "spatial_matches", "locations"):
             value = data.get(key, [])
             if isinstance(value, str):
                 value = json.loads(value) if value.strip() else []

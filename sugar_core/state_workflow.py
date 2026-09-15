@@ -737,7 +737,7 @@ def render_state_bluf(
         f"The package contains {len(assessments) - len(verified)} State assessments that are not yet briefing-eligible. "
         + ("Current review-state counts: " + ", ".join(f"{key}={value}" for key, value in sorted(gaps.items())) + "." if gaps else "")
     )
-    no_location = sum(1 for obs in observations if not obs.country and obs.latitude is None)
+    no_location = sum(1 for obs in observations if not obs.country and obs.latitude is None and not obs.locations)
     no_evidence = sum(1 for obs in observations if not obs.evidence and not obs.source_record_keys)
     lines.append(f"Location remains unresolved for {no_location} observations; {no_evidence} observations lack an auditable evidence identity.")
 
@@ -757,6 +757,83 @@ def render_state_bluf(
     return "\n".join(lines)
 
 
+def _observation_geo_features(observation: ResearchObservation, assessment: StateAssessment) -> list[dict[str, Any]]:
+    """Return one GeoJSON feature per defensible recorded activity location.
+
+    Structured locations supersede the legacy scalar point for mapping. An unresolved structured
+    location is not converted into a point here; interactive map resolution is handled separately.
+    All venue features retain one observation/assessment identity so feature count never implies
+    activity count.
+    """
+    common = {
+        "layer": "prc_observation",
+        "observation_id": observation.observation_id,
+        "assessment_id": assessment.assessment_id,
+        "title": observation.title,
+        "observation_type": observation.observation_type,
+        "verification_state": assessment.review_state,
+        "prc_support": assessment.prc_support.level,
+        "observability_level": assessment.observability_level,
+        "reach": asdict(assessment.reach),
+        "strategic_audiences": assessment.strategic_audiences,
+        "program_domains": assessment.program_domains,
+        "narrative_tags": assessment.narrative_tags,
+        "us_overlap_material": assessment.us_overlap.material,
+        "primary_source_url": observation.primary_source_url,
+    }
+    if observation.locations:
+        features: list[dict[str, Any]] = []
+        total = len(observation.locations)
+        for index, location in enumerate(observation.locations, 1):
+            if location.latitude is None or location.longitude is None:
+                continue
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [location.longitude, location.latitude]},
+                    "properties": {
+                        **common,
+                        "country": location.country or observation.country,
+                        "region": location.region or observation.region,
+                        "city": location.city or observation.city,
+                        "location_id": location.location_id,
+                        "location_label": location.label,
+                        "location_precision": location.precision,
+                        "location_confidence": location.confidence,
+                        "location_uncertainty_km": location.uncertainty_km,
+                        "location_basis": location.basis,
+                        "location_source_ref": location.source_ref,
+                        "activity_location_index": index,
+                        "activity_location_count": total,
+                    },
+                }
+            )
+        return features
+    if observation.latitude is None or observation.longitude is None:
+        return []
+    return [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [observation.longitude, observation.latitude]},
+            "properties": {
+                **common,
+                "country": observation.country,
+                "region": observation.region,
+                "city": observation.city,
+                "location_id": "",
+                "location_label": observation.location_label,
+                "location_precision": "",
+                "location_confidence": observation.location_confidence,
+                "location_uncertainty_km": None,
+                "location_basis": observation.location_basis,
+                "location_source_ref": "",
+                "activity_location_index": 1,
+                "activity_location_count": 1,
+            },
+        }
+    ]
+
+
 def state_geojson(
     observations: Iterable[ResearchObservation],
     assessments: Iterable[StateAssessment],
@@ -768,34 +845,11 @@ def state_geojson(
     features: list[dict[str, Any]] = []
     for assessment in assessments:
         observation = observation_map.get(assessment.observation_id)
-        if not observation or observation.latitude is None or observation.longitude is None:
+        if not observation:
             continue
         if verified_only and not (assessment.brief_eligible and observation.verification_state == "human_verified"):
             continue
-        features.append(
-            {
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [observation.longitude, observation.latitude]},
-                "properties": {
-                    "layer": "prc_observation",
-                    "observation_id": observation.observation_id,
-                    "assessment_id": assessment.assessment_id,
-                    "title": observation.title,
-                    "observation_type": observation.observation_type,
-                    "country": observation.country,
-                    "city": observation.city,
-                    "verification_state": assessment.review_state,
-                    "prc_support": assessment.prc_support.level,
-                    "observability_level": assessment.observability_level,
-                    "reach": asdict(assessment.reach),
-                    "strategic_audiences": assessment.strategic_audiences,
-                    "program_domains": assessment.program_domains,
-                    "narrative_tags": assessment.narrative_tags,
-                    "us_overlap_material": assessment.us_overlap.material,
-                    "primary_source_url": observation.primary_source_url,
-                },
-            }
-        )
+        features.extend(_observation_geo_features(observation, assessment))
     for site in sites:
         if not site.is_spatial:
             continue
