@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import pytest
-
 from sugar_core.observations import ObservationLocation, ResearchObservation
 from sugar_core.state_location import resolve_observation_location, resolve_observation_locations
 from sugar_core.utils import JsonCache
@@ -240,13 +238,16 @@ def test_country_only_location_is_not_mapped_to_false_centroid(tmp_path: Path):
     assert "national centroid" in resolved.unresolved_reason
 
 
-def test_partial_coordinate_pair_fails_closed_at_schema_boundary():
-    with pytest.raises(ValueError, match="both latitude and longitude"):
-        ResearchObservation(
-            observation_type="event",
-            summary="Malformed coordinate record.",
-            city="Nairobi",
-            country="Kenya",
-            latitude=-1.2864,
-            longitude=None,
-        )
+def test_legacy_partial_coordinate_pair_is_loaded_but_resolver_fails_closed():
+    observation = ResearchObservation(
+        observation_type="event",
+        summary="Malformed legacy coordinate record.",
+        city="Nairobi",
+        country="Kenya",
+        latitude=-1.2864,
+        longitude=None,
+    )
+    resolved = resolve_observation_location(observation)
+    assert resolved.resolved is False
+    assert resolved.source == "invalid_coordinates"
+    assert "Only one coordinate" in resolved.unresolved_reason
