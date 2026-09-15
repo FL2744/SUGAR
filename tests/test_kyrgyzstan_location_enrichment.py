@@ -25,11 +25,18 @@ def test_location_enrichment_refines_supported_venues_without_upgrading_everythi
     observations = CASE_DATA.build_observations()
     summary = LOCATION.apply_observation_location_enrichment(observations)
 
-    assert summary == {"site_refined_observations": 7, "city_level_observations": 4}
+    assert summary == {
+        "site_refined_observations": 7,
+        "city_level_observations": 3,
+        "multi_site_observations": 1,
+        "structured_activity_locations": 2,
+    }
     site_rows = [row for row in observations if "source_named_site" in row.location_basis]
     city_rows = [row for row in observations if row.location_basis == "reported_city"]
+    multi_rows = [row for row in observations if row.locations]
     assert len(site_rows) == 7
-    assert len(city_rows) == 4
+    assert len(city_rows) == 3
+    assert len(multi_rows) == 1
     assert all(row.location_confidence == 0.90 for row in site_rows)
     assert all(any(ref.source_type == "location_reference" for ref in row.evidence) for row in site_rows)
     assert all(not any(ref.source_type == "location_reference" for ref in row.evidence) for row in city_rows)
@@ -78,9 +85,24 @@ def test_city_centroid_us_sites_are_labeled_broad_not_exact():
     assert "city_centroid" in jalal_abad.location_basis
 
 
-def test_multi_site_language_day_record_stays_city_level():
+def test_multi_site_language_day_record_preserves_two_venues_without_guessing_iuk_campus():
     observations = CASE_DATA.build_observations()
     LOCATION.apply_observation_location_enrichment(observations)
     row = next(obs for obs in observations if obs.title == "International Chinese Language Day events at Bishkek universities")
-    assert row.location_basis == "reported_city"
-    assert row.location_confidence == 0.80
+
+    assert row.location_basis == "multi_site_summary_city"
+    assert row.location_confidence == 0.75
+    assert len(row.locations) == 2
+    assert len({item.location_id for item in row.locations}) == 2
+
+    bsu = next(item for item in row.locations if "Bishkek State University" in item.label)
+    iuk = next(item for item in row.locations if "International University of Kyrgyzstan" in item.label)
+    assert bsu.precision == "site"
+    assert bsu.latitude is not None and bsu.longitude is not None
+    assert "bhu.kg" in bsu.source_ref
+    assert iuk.precision == "city"
+    assert iuk.uncertainty_km == 12.0
+    assert "campus_unresolved" in iuk.basis
+    assert "china-embassy" in iuk.source_ref
+    assert any(ref.url == LOCATION.BSU_OFFICIAL_SOURCE for ref in row.evidence)
+    assert any(ref.url == LOCATION.IUK_OFFICIAL_SOURCE for ref in row.evidence)
