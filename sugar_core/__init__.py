@@ -29,6 +29,7 @@ from .observations import (
     observation_from_post,
     observations_from_posts,
 )
+from .public_import import run_public_import
 from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from .source_conflicts import (
     SOURCE_AUTHORITY_TYPES,
@@ -141,6 +142,7 @@ __all__ = [
     "run_map",
     "run_overlap",
     "run_analysis",
+    "run_public_import",
     "WeiboInvestigation",
     "parse_weibo_seed",
     "fetch_weibo_seed_status",
@@ -156,4 +158,4 @@ __all__ = [
     "open_workspace",
 ]
 
-__version__ = "1.2.0"
+__version__ = "1.3.0rc1"
