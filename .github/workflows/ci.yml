@@ -127,6 +127,8 @@ jobs:
   arc-live-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    env:
+      ARC_API_KEY: ${{ secrets.SUGAR_ARC_API_KEY }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -146,9 +148,9 @@ jobs:
           print(f"ARC endpoint reachable: HTTP {response.status_code}")
           PY
       - name: Credentialed ARC processing drill
-        if: ${{ secrets.SUGAR_ARC_API_KEY != '' }}
+        if: env.ARC_API_KEY != ''
         env:
-          SUGAR_LLM_API_KEY: ${{ secrets.SUGAR_ARC_API_KEY }}
+          SUGAR_LLM_API_KEY: ${{ env.ARC_API_KEY }}
         run: |
           python - <<'PY'
           import os
@@ -166,7 +168,7 @@ jobs:
           print(f"ARC processing drill: 8/8 sequential requests succeeded in {elapsed:.1f}s")
           PY
       - name: Note missing ARC CI credential
-        if: ${{ secrets.SUGAR_ARC_API_KEY == '' }}
+        if: env.ARC_API_KEY == ''
         run: echo "ARC endpoint is reachable, but SUGAR_ARC_API_KEY is not configured as a repository Actions secret; authenticated processing must be checked with a user's private ARC key."
 
   macos-app:
