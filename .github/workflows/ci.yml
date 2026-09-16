@@ -124,8 +124,54 @@ jobs:
           SUGAR_LIVE_WEIBO: "1"
         run: python -m pytest -q -s tests/test_weibo_live.py tests/test_weibo_qualification_live.py tests/test_weibo_seed_harvest_live.py
 
+  arc-live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      - name: Verify ARC endpoint is reachable
+        run: |
+          python - <<'PY'
+          import requests
+          url = "https://llm-api.arc.vt.edu/api/v1/models"
+          response = requests.get(url, timeout=30)
+          if response.status_code >= 500:
+              raise SystemExit(f"ARC LLM service returned {response.status_code}")
+          print(f"ARC endpoint reachable: HTTP {response.status_code}")
+          PY
+      - name: Credentialed ARC processing drill
+        if: ${{ secrets.SUGAR_ARC_API_KEY != '' }}
+        env:
+          SUGAR_LLM_API_KEY: ${{ secrets.SUGAR_ARC_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          import time
+          from sugar_core.llm import LLMConfig, cached_chat, create_client
+          config = LLMConfig(provider="arc", model="gpt-oss-120b", api_key=os.environ["SUGAR_LLM_API_KEY"])
+          client = create_client(config)
+          started = time.monotonic()
+          outputs = []
+          for i in range(8):
+              outputs.append(cached_chat(client, config, None, f"ci-{i}", "Return only the word OK.", f"Request {i}: return OK.", max_tokens=16))
+          elapsed = time.monotonic() - started
+          if len(outputs) != 8 or any(not text.strip() for text in outputs):
+              raise SystemExit("ARC processing drill returned an incomplete response set")
+          print(f"ARC processing drill: 8/8 sequential requests succeeded in {elapsed:.1f}s")
+          PY
+      - name: Note missing ARC CI credential
+        if: ${{ secrets.SUGAR_ARC_API_KEY == '' }}
+        run: echo "ARC endpoint is reachable, but SUGAR_ARC_API_KEY is not configured as a repository Actions secret; authenticated processing must be checked with a user's private ARC key."
+
   macos-app:
     runs-on: macos-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -157,9 +203,42 @@ jobs:
           JSON
           SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge analysis --config /tmp/sugar-analysis.json
           test -s /tmp/sugar-smoke-report.pdf
+      - name: Packaged live collection and processing incident drill
+        run: |
+          rm -rf /tmp/sugar-live && mkdir -p /tmp/sugar-live
+          cat > /tmp/sugar-live/search.json <<'JSON'
+          {"sources":["bluesky","bilibili"],"terms":["artificial intelligence","人工智能"],"translate_posts":false,"infer_locations":false,"max_posts_per_query":20,"max_pages_per_query":1,"output_directory":"/tmp/sugar-live"}
+          JSON
+          BRIDGE="SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge"
+          "$BRIDGE" search --config /tmp/sugar-live/search.json
+          CSV_FILE="$(ls -t /tmp/sugar-live/social_search_posts_*.csv | head -1)"
+          test -s "$CSV_FILE"
+          CSV_FILE="$CSV_FILE" python - <<'PY'
+          import csv, os
+          path = os.environ["CSV_FILE"]
+          with open(path, "r", encoding="utf-8-sig", newline="") as stream:
+              rows = list(csv.DictReader(stream))
+          if len(rows) < 5:
+              raise SystemExit(f"Live packaged Mac collection returned only {len(rows)} records")
+          platforms = sorted({row.get("platform", "") for row in rows})
+          print(f"Live packaged Mac collection: {len(rows)} records from {platforms}")
+          PY
+          cat > /tmp/sugar-live/analysis.json <<JSON
+          {"source_file":"$CSV_FILE","output_stem":"/tmp/sugar-live/live-report","output_format":"pdf"}
+          JSON
+          "$BRIDGE" analysis --config /tmp/sugar-live/analysis.json
+          test -s /tmp/sugar-live/live-report.pdf
       - name: Verify bundle signature
         run: codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
-      - name: Package classroom DMG
+      - name: Create reliable classroom app archive
+        run: |
+          rm -f "SUGAR-macOS/.build-native/SUGAR-macOS-${RUNNER_ARCH}.zip"
+          ditto -c -k --sequesterRsrc --keepParent \
+            SUGAR-macOS/.build-native/SUGAR.app \
+            "SUGAR-macOS/.build-native/SUGAR-macOS-${RUNNER_ARCH}.zip"
+          test -s "SUGAR-macOS/.build-native/SUGAR-macOS-${RUNNER_ARCH}.zip"
+      - name: Package classroom DMG (best effort)
+        continue-on-error: true
         env:
           SUGAR_SKIP_APP_BUILD: "1"
         run: ./SUGAR-macOS/scripts/package_dmg.sh
@@ -167,7 +246,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SUGAR-macOS-${{ runner.arch }}
-          path: SUGAR-macOS/.build-native/SUGAR-*-unsigned.dmg
+          path: |
+            SUGAR-macOS/.build-native/SUGAR-macOS-*.zip
+            SUGAR-macOS/.build-native/SUGAR-*-unsigned.dmg
           if-no-files-found: error
           retention-days: 14
 
@@ -197,12 +278,14 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: .\SUGAR-Windows\dist\SUGAR.exe --smoke-test
-      - name: Embedded backend diagnostics through GUI
+      - name: Single-file live collection and processing incident drill
         shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          SUGAR_INCIDENT_DRILL: "1"
         run: |
-          $env:QT_QPA_PLATFORM = "offscreen"
           $proc = Start-Process -FilePath .\SUGAR-Windows\dist\SUGAR.exe -ArgumentList '--smoke-test' -PassThru -Wait
-          if ($proc.ExitCode -ne 0) { throw "Single-file GUI smoke test failed" }
+          if ($proc.ExitCode -ne 0) { throw "Single-file live incident drill failed" }
       - name: Verify embedded bridge is present in one-file package
         shell: pwsh
         run: |
