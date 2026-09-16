@@ -127,6 +127,12 @@ def run_search(
         try:
             rows = collect_registered_source(source, request)
         except Exception as exc:
+            # Preserve the long-standing fail-fast semantics for a one-source
+            # request (including credential/preflight errors). Graceful
+            # degradation applies only when there is another selected source
+            # that can still produce useful evidence.
+            if len(sources) == 1:
+                raise
             failure = _source_failure(exc)
             source_failures[source] = failure
             _notify(
