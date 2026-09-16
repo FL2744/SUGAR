@@ -8,7 +8,7 @@ SUGAR is a cross-platform public-source research system for collecting social-me
 
 Current classroom-preview package version: **1.3.0rc1**.
 
-> **Desktop users do not need to install Python.** The packaged macOS application and Windows portable bundle include the SUGAR backend. Python 3.11–3.13 is required only for CLI/development use.
+> **Desktop users do not need to install Python.** The packaged macOS application and single-file Windows `SUGAR.exe` include the SUGAR backend. Python 3.11–3.13 is required only for CLI/development use.
 
 For the September 2026 classroom usability preview, start with [`docs/classroom-preview.md`](docs/classroom-preview.md).
 
@@ -27,7 +27,7 @@ SUGAR deliberately distinguishes **presence, activity, reach, engagement, outcom
 | Surface | Purpose |
 | --- | --- |
 | `SUGAR-macOS/` | Native SwiftUI application for macOS 13+; bundled backend and classroom samples |
-| `SUGAR-Windows/` | Portable PySide6 research workbench; bundled backend |
+| `SUGAR-Windows/` | Single-file PySide6 research workbench; bundled backend worker |
 | `sugar` | General keyword collection, harvest, overlap, mapping, and reporting CLI |
 | `sugar-import` | Known public item/URL import through registered platform adapters |
 | `sugar-project` | Persistent project-workspace management |
@@ -49,9 +49,9 @@ See [`SUGAR-macOS/README.md`](SUGAR-macOS/README.md) for compatibility, packagin
 
 ### Windows
 
-The Windows workbench packages `SUGAR.exe` plus a separate `sugar-bridge.exe` child process. **Ordinary Windows users do not need a separate Python installation.** Extract the complete `SUGAR-Windows-x64.zip` bundle and keep `SUGAR.exe` and `sugar-bridge.exe` together.
+The Windows classroom build is a **single downloadable `SUGAR.exe`**. Ordinary users do not need Python, do not extract a ZIP, and do not manage a separate backend executable. The frozen backend worker is embedded inside `SUGAR.exe` and is extracted privately at runtime so collection/analysis can remain cancellable without complicating installation.
 
-The bundle also includes `build-info.json` (version, Git commit, build time, architecture, bridge protocol) and classroom sample files. Development/CI bundles are unsigned and may trigger SmartScreen; production distribution should use normal Authenticode signing rather than weakening endpoint protections.
+Development/CI builds are unsigned and may trigger SmartScreen; production distribution should use normal Authenticode signing rather than weakening endpoint protections. Use the canonical GitHub artifact/release location rather than copied binaries whose source revision cannot be established.
 
 See [`SUGAR-Windows/README.md`](SUGAR-Windows/README.md).
 
@@ -203,6 +203,6 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-CI runs the Python suite on Ubuntu, macOS, and Windows with Python 3.11–3.13 and separately builds/smoke-tests the packaged macOS and Windows applications. Classroom CI publishes validated macOS and Windows artifacts from the same Git source revision so testers can identify exactly which build they used.
+CI runs the Python suite on Ubuntu, macOS, and Windows with Python 3.11–3.13 and separately builds/smoke-tests the packaged macOS and Windows applications. Classroom CI publishes validated macOS and single-executable Windows artifacts from the same Git source revision so testers can identify exactly which build they used.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), and [`CHANGELOG.md`](CHANGELOG.md).
