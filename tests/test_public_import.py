@@ -79,6 +79,7 @@ def test_public_import_normalizes_weibo_url_before_collection(monkeypatch, tmp_p
             platform=source,
             native_id=item,
             canonical_url=public_url,
+            query="",
             original_text="Weibo public source text",
         )
 
