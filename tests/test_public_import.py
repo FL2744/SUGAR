@@ -67,3 +67,29 @@ def test_public_import_deduplicates_repeated_input_before_collection(monkeypatch
         }
     )
     assert calls == ["https://www.douyin.com/video/1"]
+
+
+def test_public_import_normalizes_weibo_url_before_collection(monkeypatch, tmp_path: Path):
+    calls = []
+    public_url = "https://m.weibo.cn/status/5320265912291527"
+
+    def fake_fetch(source, item, request):
+        calls.append((source, item))
+        return PostRecord(
+            platform=source,
+            native_id=item,
+            canonical_url=public_url,
+            original_text="Weibo public source text",
+        )
+
+    monkeypatch.setattr("sugar_core.public_import.fetch_registered_item", fake_fetch)
+    outputs = run_public_import(
+        {
+            "source": "weibo",
+            "items": [public_url],
+            "output_directory": str(tmp_path),
+        }
+    )
+
+    assert calls == [("weibo", "5320265912291527")]
+    assert Path(outputs[0]).is_file()
