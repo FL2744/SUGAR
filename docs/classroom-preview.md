@@ -26,20 +26,35 @@ Start with the bundled sample files from the Welcome page:
 
 This path requires no X token, ARC key, or other service credential. If it fails, report it as an application/packaging problem rather than a source-access problem.
 
-### 3. Try a small live collection
+### 3. Run the known-good live sanity check
 
-Start with **Bilibili** when you want a credential-free keyword-search exercise. Keep the first run small: one query, about 10 records, one page. AI translation and location inference are optional and are off by default; leave them off if you do not have an approved LLM/ARC key.
+For the most repeatable public-network check, use this public Weibo post that SUGAR's live CI exercises:
+
+`https://m.weibo.cn/status/5320265912291527`
+
+- **macOS:** use **Public URL Import → Weibo**.
+- **Windows:** use **Weibo Research → Post Investigation**.
+
+The current live test retrieves the seed post and public comments. Weibo's repost and author-timeline surfaces may require an authorized logged-in session; SUGAR reports those surfaces independently instead of turning restricted access into observed zeroes.
+
+A successful seed/comment retrieval proves that the packaged application can reach a live source, normalize real public records, and write outputs without relying on keyword-search availability.
+
+### 4. Try a small keyword search
+
+**Bilibili** is useful as a credential-free keyword-search exercise, but keyword yield is provider/query dependent. A bounded CI probe has returned both real records and valid zero-result responses at different times, so do not treat a zero-result query by itself as proof that SUGAR is broken or that no relevant activity exists.
+
+Keep the first keyword run small: one broad query, about 10 records, one page. AI translation and location inference are optional; leave them off if you do not have an approved LLM/ARC key.
 
 Other useful classroom paths:
 
-- **Weibo:** known public post/URL retrieval is a better reliability test than assuming anonymous keyword search will always be available.
+- **Weibo keyword search:** anonymous search availability can vary; the fixed public-post workflow above is the better sanity check.
 - **WeChat Official Accounts, Douyin, and known Zhihu items:** use **Public URL Import** rather than treating them as generic keyword-search services.
 - **X:** requires an API bearer token.
 - **Zhihu keyword search:** requires approved Open Platform access; known public URL import is separate.
 
 Source capabilities are intentionally different. A platform may support keyword search, known-public-URL import, comments, or authenticated access without supporting every other mode.
 
-### 4. Understand partial collection
+### 5. Understand partial collection
 
 A provider can block or throttle a request even when SUGAR itself is healthy. In a **multi-source** search, SUGAR now preserves results from sources that succeed and explicitly reports any source that was unavailable. The output metadata records `partial_collection`, `successful_sources`, and `source_failures`.
 
@@ -51,11 +66,11 @@ For example, a run can legitimately finish as:
 
 Do not reinterpret a 403, 429, login/verification gate, or other access failure as evidence of zero activity on the platform.
 
-### 5. Find your outputs
+### 6. Find your outputs
 
 After an operation finishes, open at least one generated output directly from the Activity & Outputs area. Also try revealing it in Finder/Explorer. Note whether it is obvious where files were written and what each output means.
 
-### 6. Report feedback
+### 7. Report feedback
 
 Use the GitHub **Usability feedback** issue form. Strong reports describe:
 
@@ -76,10 +91,11 @@ Please report confusing behavior even when you eventually solve it yourself. Tho
 3. Create a map from the sample spreadsheet.
 4. Create a short analysis report from the same spreadsheet.
 5. Find and reopen the generated files.
-6. Identify which sources can be used without credentials.
-7. Run one small real collection or public-URL import.
-8. If using multiple sources, notice whether a failed source is clearly distinguished from successful sources.
-9. Submit at least one usability observation or confirm that the workflow was clear.
+6. Run the fixed public Weibo sanity check.
+7. Identify which other sources can be used without credentials.
+8. Run one small keyword search or another public-URL import.
+9. If using multiple sources, notice whether a failed source is clearly distinguished from successful sources.
+10. Submit at least one usability observation or confirm that the workflow was clear.
 
 ## Research and access rules
 
