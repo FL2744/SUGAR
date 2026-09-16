@@ -20,11 +20,18 @@ ARCH="$(uname -m)"
 "$BUILD/backend-venv/bin/python" "$HERE/scripts/check_compatibility.py" \
   "$BUILD/backend/sugar-bridge" --archive --arch "$ARCH"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Resources/Samples"
 cp "$HERE/.build/release/SUGARMac" "$APP/Contents/MacOS/SUGAR"
 cp "$BUILD/backend/sugar-bridge" "$APP/Contents/Resources/sugar-bridge"
 cp "$HERE/Resources/Info.plist" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+
+# Bundle a credential-free classroom path so a new user can immediately inspect
+# representative SUGAR outputs and run map/report workflows without an API key.
+cp "$ROOT/examples/example-spreadsheet.xlsx" "$APP/Contents/Resources/Samples/example-spreadsheet.xlsx"
+cp "$ROOT/examples/example-map.html" "$APP/Contents/Resources/Samples/example-map.html"
+cp "$ROOT/examples/example-analysis.pdf" "$APP/Contents/Resources/Samples/example-analysis.pdf"
+cp "$ROOT/docs/classroom-preview.md" "$APP/Contents/Resources/Samples/classroom-preview.md"
 
 if [[ -f "$ROOT/sugar-logo.png" ]]; then
   ICONSET="$BUILD/SUGAR.iconset"; rm -rf "$ICONSET"; mkdir -p "$ICONSET"
