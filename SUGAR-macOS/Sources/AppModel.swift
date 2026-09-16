@@ -12,6 +12,11 @@ final class AppModel: ObservableObject {
     @Published var arcKey = KeychainStore.read(LLMProvider.arc.keychainAccount)
     @Published var customLLMKey = KeychainStore.read(LLMProvider.custom.keychainAccount)
     @Published private(set) var legacyLLMKey = KeychainStore.read("llmAPIKey")
+    @Published var blueskyIdentifier = KeychainStore.read("blueskyIdentifier")
+    @Published var blueskyPassword = KeychainStore.read("blueskyPassword")
+    @Published var mastodonToken = KeychainStore.read("mastodonToken")
+    @Published var weiboCookie = KeychainStore.read("weiboCookie")
+    @Published var zhihuAccessSecret = KeychainStore.read("zhihuAccessSecret")
     private var previousKeyAssigned = false
     private var rawBackendLog = ""
 
@@ -25,9 +30,6 @@ final class AppModel: ObservableObject {
         legacyLLMKey = ""
         previousKeyAssigned = true
     }
-    @Published var blueskyIdentifier = KeychainStore.read("blueskyIdentifier")
-    @Published var blueskyPassword = KeychainStore.read("blueskyPassword")
-    @Published var mastodonToken = KeychainStore.read("mastodonToken")
 
     @discardableResult
     func saveCredentials() -> Bool {
@@ -39,6 +41,8 @@ final class AppModel: ObservableObject {
             ("blueskyIdentifier", blueskyIdentifier),
             ("blueskyPassword", blueskyPassword),
             ("mastodonToken", mastodonToken),
+            ("weiboCookie", weiboCookie),
+            ("zhihuAccessSecret", zhihuAccessSecret),
         ]
         for (account, value) in entries {
             let status = KeychainStore.write(value, key: account)
@@ -80,16 +84,21 @@ final class AppModel: ObservableObject {
             return
         }
         let selectedKey = provider?.apiKey(openAI: openAIKey, arc: arcKey, custom: customLLMKey) ?? ""
-        let needsLLM = (config["translate_posts"] as? Bool ?? true)
-            || (config["infer_locations"] as? Bool ?? true)
+        let needsLLM = (config["translate_posts"] as? Bool ?? false)
+            || (config["infer_locations"] as? Bool ?? false)
             || !(config["translate_term_languages"] as? [String] ?? []).isEmpty
         if command == "search", needsLLM, selectedKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            log = "Enter the \(provider!.title) API key in Settings before running this search."
+            log = "Enter the \(provider!.title) API key in Settings before running AI enrichment. You can also turn translation/location inference off and collect without an LLM key."
             return
         }
         let secrets = BackendSecrets(
-            xToken: xToken, llmKey: command == "search" ? selectedKey : "", blueskyIdentifier: blueskyIdentifier,
-            blueskyPassword: blueskyPassword, mastodonToken: mastodonToken
+            xToken: xToken,
+            llmKey: command == "search" ? selectedKey : "",
+            blueskyIdentifier: blueskyIdentifier,
+            blueskyPassword: blueskyPassword,
+            mastodonToken: mastodonToken,
+            weiboCookie: weiboCookie,
+            zhihuAccessSecret: zhihuAccessSecret
         )
         isRunning = true
         outputs = []
@@ -137,6 +146,8 @@ final class AppModel: ObservableObject {
         environment["SUGAR_BLUESKY_IDENTIFIER"] = secrets.blueskyIdentifier
         environment["SUGAR_BLUESKY_APP_PASSWORD"] = secrets.blueskyPassword
         environment["SUGAR_MASTODON_TOKEN"] = secrets.mastodonToken
+        environment["SUGAR_WEIBO_COOKIE"] = secrets.weiboCookie
+        environment["SUGAR_ZHIHU_ACCESS_SECRET"] = secrets.zhihuAccessSecret
         process.environment = environment
         do {
             return try await BackendRunner.run(process, onOutput: onOutput)
@@ -149,8 +160,14 @@ final class AppModel: ObservableObject {
     private func preflight(command: String, config: [String: Any]) -> String? {
         if command == "search" {
             let sources = (config["sources"] as? [String]) ?? []
+            if sources.isEmpty {
+                return "Choose at least one keyword-search source. WeChat and Douyin use the separate Public URL Import screen."
+            }
             if sources.contains("x") && xToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "Cannot start search: X is selected, but no X bearer token is saved. Open Settings, enter the token, and try again."
+                return "Cannot start search: X is selected, but no X bearer token is saved. Open Settings, enter the token, or choose a source that supports public access."
+            }
+            if sources.contains("zhihu") && zhihuAccessSecret.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Zhihu keyword search requires an approved Zhihu Open Platform Access Secret. You can still import a known public Zhihu URL without this credential."
             }
             if let output = config["output_directory"] as? String, !output.isEmpty {
                 let path = (output as NSString).expandingTildeInPath
@@ -164,6 +181,12 @@ final class AppModel: ObservableObject {
                 if !FileManager.default.isWritableFile(atPath: path) {
                     return "Cannot use the selected output folder because it is not writable: \(path)"
                 }
+            }
+        } else if command == "import-public" {
+            let source = (config["source"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let items = config["items"] as? [String] ?? []
+            if source.isEmpty || items.isEmpty {
+                return "Choose a platform and enter at least one public URL to import."
             }
         } else if let source = config["source_file"] as? String,
                   !FileManager.default.isReadableFile(atPath: source) {
@@ -181,7 +204,18 @@ final class AppModel: ObservableObject {
     nonisolated static func appDiagnostics() -> String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         let os = ProcessInfo.processInfo.operatingSystemVersionString
-        return "SUGAR \(version) • \(os) • app \(compiledArchitecture())"
+        return "SUGAR \(version) • \(buildIdentifier()) • \(os) • app \(compiledArchitecture())"
+    }
+
+    nonisolated static func buildIdentifier() -> String {
+        guard let url = Bundle.main.resourceURL?.appendingPathComponent("build-info.json"),
+              let data = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return "build unknown"
+        }
+        let commit = (json["git_commit"] as? String ?? "unknown")
+        let short = commit == "unknown" ? commit : String(commit.prefix(10))
+        return "build \(short)"
     }
 
     nonisolated static func compiledArchitecture() -> String {
@@ -245,6 +279,9 @@ final class AppModel: ObservableObject {
                 let source = (json["source"] as? String ?? "source").capitalized
                 let count = json["records"] as? Int ?? 0
                 lines.append("\(source): \(count) records collected")
+            case "importing_public_item":
+                let source = (json["source"] as? String ?? "source").capitalized
+                lines.append(progressLine("Importing \(source) public item", json: json))
             case "enriching":
                 let count = json["records"] as? Int ?? 0
                 lines.append("Enriching \(count) records…")
@@ -300,8 +337,31 @@ final class AppModel: ObservableObject {
         return paths
     }
 
+    func open(_ path: String) {
+        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+    }
+
     func reveal(_ path: String) {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+    }
+
+    func samplePath(_ name: String) -> String? {
+        guard let root = Bundle.main.resourceURL?.appendingPathComponent("Samples") else { return nil }
+        let path = root.appendingPathComponent(name)
+        return FileManager.default.fileExists(atPath: path.path) ? path.path : nil
+    }
+
+    func openSample(_ name: String) {
+        guard let path = samplePath(name) else {
+            log = "Bundled sample not found: \(name)"
+            return
+        }
+        open(path)
+    }
+
+    func openFeedback() {
+        guard let url = URL(string: "https://github.com/FL2744/SUGAR/issues/new?template=usability_feedback.yml") else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 
@@ -311,6 +371,8 @@ struct BackendSecrets: Sendable {
     let blueskyIdentifier: String
     let blueskyPassword: String
     let mastodonToken: String
+    let weiboCookie: String
+    let zhihuAccessSecret: String
 }
 
 enum KeychainStore {
