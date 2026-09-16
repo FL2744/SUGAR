@@ -39,7 +39,7 @@ if [[ "${SUGAR_SKIP_APP_BUILD:-0}" == "1" ]]; then
     sudo rm -rf /Library/Developer/CoreSimulator/Volumes/* 2>/dev/null || true
 
     available_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
-    if [[ "$available_kb" =~ '^[0-9]+$' ]] && (( available_kb < 6291456 )); then
+    if (( available_kb < 6291456 )); then
       # Xcode is no longer required at this point; hdiutil/codesign are macOS
       # system tools. Remove hosted Xcode only as a last-resort space recovery.
       sudo rm -rf /Applications/Xcode*.app 2>/dev/null || true
