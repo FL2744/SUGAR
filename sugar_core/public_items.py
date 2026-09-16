@@ -4,18 +4,20 @@ import hashlib
 import re
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
 from .models import PostRecord
 
-USER_AGENT = "SUGAR/1.2 (+public-source research; Virginia Tech Diplomacy Lab)"
+USER_AGENT = "SUGAR/1.3 (+public-source research; Virginia Tech Diplomacy Lab)"
 REQUEST_TIMEOUT_SECONDS = 20
+MAX_REDIRECTS = 5
+REDIRECT_CODES = {301, 302, 303, 307, 308}
 
 PLATFORM_HOSTS: dict[str, set[str]] = {
-    "wechat": {"mp.weixin.qq.com", "weixin.qq.com"},
+    "wechat": {"mp.weixin.qq.com"},
     "zhihu": {"www.zhihu.com", "zhihu.com", "zhuanlan.zhihu.com"},
     "douyin": {
         "www.douyin.com",
@@ -49,6 +51,38 @@ def _validate_url(platform: str, raw_url: str) -> str:
         allowed = ", ".join(sorted(PLATFORM_HOSTS[platform]))
         raise ValueError(f"URL host {parsed.hostname!r} is not an allowed {platform} public host ({allowed}).")
     return value
+
+
+def _request_public_page(
+    platform: str,
+    url: str,
+    client: requests.Session,
+) -> requests.Response:
+    current = _validate_url(platform, url)
+    headers = {"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"}
+    for redirect_index in range(MAX_REDIRECTS + 1):
+        response = client.get(
+            current,
+            headers=headers,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+            allow_redirects=False,
+        )
+        if response.status_code not in REDIRECT_CODES:
+            return response
+        if redirect_index >= MAX_REDIRECTS:
+            raise RuntimeError(f"{platform} public URL exceeded the {MAX_REDIRECTS}-redirect safety limit.")
+        location = str(response.headers.get("Location", "") or "").strip()
+        if not location:
+            raise RuntimeError(f"{platform} returned a redirect without a Location header.")
+        next_url = urljoin(current, location)
+        try:
+            current = _validate_url(platform, next_url)
+        except ValueError as exc:
+            next_host = urlparse(next_url).hostname or "unknown"
+            raise RuntimeError(
+                f"{platform} public URL attempted to redirect to an unexpected host ({next_host}); refusing the redirect."
+            ) from exc
+    raise RuntimeError(f"{platform} redirect handling terminated unexpectedly.")
 
 
 def _meta(soup: BeautifulSoup, *keys: tuple[str, str]) -> str:
@@ -149,19 +183,14 @@ def _published_from_html(platform: str, soup: BeautifulSoup, html: str) -> str:
 def _extract_public_page(platform: str, raw_url: str, *, session: requests.Session | None = None) -> PostRecord:
     url = _validate_url(platform, raw_url)
     client = session or requests.Session()
-    response = client.get(
-        url,
-        headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"},
-        timeout=REQUEST_TIMEOUT_SECONDS,
-        allow_redirects=True,
-    )
+    response = _request_public_page(platform, url, client)
     if response.status_code >= 400:
         raise RuntimeError(f"{platform} returned HTTP {response.status_code} for this public URL.")
     final_url = str(response.url or url)
     final_host = urlparse(final_url).hostname or ""
     if not _allowed_host(platform, final_host):
         raise RuntimeError(
-            f"{platform} public URL redirected to an unexpected host ({final_host or 'unknown'}); refusing to follow it as evidence."
+            f"{platform} returned content from an unexpected host ({final_host or 'unknown'}); refusing it as evidence."
         )
     content_type = response.headers.get("Content-Type", "")
     if content_type and "html" not in content_type.casefold():
