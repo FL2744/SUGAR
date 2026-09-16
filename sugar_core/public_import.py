@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from .collector_registry import CollectorRequest, fetch_registered_item, get_collector
 from .storage import save_records
+from .weibo_investigation import parse_weibo_seed
 from .workspace_runtime import choose_output_directory, register_workspace_outputs, workspace_from_config
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
@@ -27,6 +28,13 @@ def _clean_items(values: list[Any]) -> list[str]:
             result.append(value)
             seen.add(value)
     return result
+
+
+def _collector_item(source: str, item: str) -> str:
+    """Translate user-facing public URLs into the native identity expected by a collector."""
+    if source == "weibo":
+        return parse_weibo_seed(item)
+    return item
 
 
 def run_public_import(
@@ -56,7 +64,7 @@ def run_public_import(
     _notify(progress, "starting", operation="import-public", source=source, total=len(items))
     for index, item in enumerate(items, start=1):
         _notify(progress, "importing_public_item", source=source, current=index, total=len(items), item=item)
-        record = fetch_registered_item(source, item, request)
+        record = fetch_registered_item(source, _collector_item(source, item), request)
         if not record.query:
             record.query = item
         record.add_query_match(item)
