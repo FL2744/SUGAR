@@ -209,25 +209,27 @@ jobs:
           JSON
           SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge analysis --config /tmp/sugar-analysis.json
           test -s /tmp/sugar-smoke-report.pdf
-      - name: Packaged live collection and processing incident drill
+      - name: Packaged known-public-item and processing drill
         run: |
           rm -rf /tmp/sugar-live && mkdir -p /tmp/sugar-live
-          cat > /tmp/sugar-live/search.json <<'JSON'
-          {"sources":["bluesky","bilibili"],"terms":["artificial intelligence","人工智能"],"translate_posts":false,"infer_locations":false,"max_posts_per_query":20,"max_pages_per_query":1,"output_directory":"/tmp/sugar-live"}
+          cat > /tmp/sugar-live/import.json <<'JSON'
+          {"platform":"weibo","urls":["https://m.weibo.cn/status/5320265912291527"],"output_directory":"/tmp/sugar-live"}
           JSON
           BRIDGE="SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge"
-          "$BRIDGE" search --config /tmp/sugar-live/search.json
-          CSV_FILE="$(ls -t /tmp/sugar-live/social_search_posts_*.csv | head -1)"
+          "$BRIDGE" import-public --config /tmp/sugar-live/import.json
+          CSV_FILE="$(ls -t /tmp/sugar-live/public_import_*.csv | head -1)"
           test -s "$CSV_FILE"
           CSV_FILE="$CSV_FILE" python - <<'PY'
           import csv, os
           path = os.environ["CSV_FILE"]
           with open(path, "r", encoding="utf-8-sig", newline="") as stream:
               rows = list(csv.DictReader(stream))
-          if len(rows) < 5:
-              raise SystemExit(f"Live packaged Mac collection returned only {len(rows)} records")
+          if not rows:
+              raise SystemExit("Known-public Weibo import returned no records")
           platforms = sorted({row.get("platform", "") for row in rows})
-          print(f"Live packaged Mac collection: {len(rows)} records from {platforms}")
+          if platforms != ["weibo"]:
+              raise SystemExit(f"Unexpected platform set from known-public import: {platforms}")
+          print(f"Packaged Mac known-public import: {len(rows)} records from {platforms}")
           PY
           cat > /tmp/sugar-live/analysis.json <<JSON
           {"source_file":"$CSV_FILE","output_stem":"/tmp/sugar-live/live-report","output_format":"pdf"}
