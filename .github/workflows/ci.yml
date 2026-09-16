@@ -213,11 +213,11 @@ jobs:
         run: |
           rm -rf /tmp/sugar-live && mkdir -p /tmp/sugar-live
           cat > /tmp/sugar-live/import.json <<'JSON'
-          {"platform":"weibo","urls":["https://m.weibo.cn/status/5320265912291527"],"output_directory":"/tmp/sugar-live"}
+          {"source":"weibo","items":["https://m.weibo.cn/status/5320265912291527"],"output_directory":"/tmp/sugar-live"}
           JSON
           BRIDGE="SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge"
           "$BRIDGE" import-public --config /tmp/sugar-live/import.json
-          CSV_FILE="$(ls -t /tmp/sugar-live/public_import_*.csv | head -1)"
+          CSV_FILE="$(ls -t /tmp/sugar-live/weibo_public_import_*.csv | head -1)"
           test -s "$CSV_FILE"
           CSV_FILE="$CSV_FILE" python - <<'PY'
           import csv, os
