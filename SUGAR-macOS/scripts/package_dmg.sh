@@ -6,7 +6,13 @@ BUILD="$HERE/.build-native"
 APP="$BUILD/SUGAR.app"
 VERSION="$(awk -F'"' '/^version = / {print $2; exit}' "$ROOT/pyproject.toml")"
 DMG="$BUILD/SUGAR-$VERSION-unsigned.dmg"
-"$HERE/scripts/build_app.sh"
+if [[ "${SUGAR_SKIP_APP_BUILD:-0}" != "1" ]]; then
+  "$HERE/scripts/build_app.sh"
+fi
+if [[ ! -d "$APP" ]]; then
+  echo "Packaged app not found at $APP" >&2
+  exit 1
+fi
 STAGE="$BUILD/dmg-stage"; rm -rf "$STAGE"; mkdir -p "$STAGE"
 ditto "$APP" "$STAGE/SUGAR.app"
 ln -sfn /Applications "$STAGE/Applications"
