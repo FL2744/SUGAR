@@ -2,21 +2,21 @@
 
 SUGAR for Windows is the desktop research workbench for the SUGAR Diplomacy Lab workflow. It is a thin PySide6 application over the same `sugar_core` research logic and JSON bridge used by the rest of the project; collection, evidence rules, State assessment logic, and analytic intelligence are not reimplemented in the GUI.
 
-## Classroom users: download the complete bundle
+## Classroom users: download one file
 
-The portable classroom build is `SUGAR-Windows-x64.zip`. Extract the **entire ZIP** and run `SUGAR.exe` from the extracted `SUGAR` folder.
+The classroom Windows build is a single downloadable file:
 
-**You do not need to install Python to use the packaged Windows application.** The ZIP already contains the frozen Python backend as `sugar-bridge.exe`. Keep `SUGAR.exe` and `sugar-bridge.exe` together; copying only `SUGAR.exe` produces an incomplete installation.
+```text
+SUGAR.exe
+```
 
-The bundle also contains:
+Download it and run it. **You do not need to install Python, extract a ZIP, clone GitHub, or keep support files beside the executable.**
 
-- `build-info.json` — version, Git commit, build time, architecture, and bridge protocol for identifying the exact build;
-- `Samples/example-spreadsheet.xlsx` — credential-free sample data;
-- `Samples/example-map.html` — sample research map;
-- `Samples/example-analysis.pdf` — sample report;
-- `Samples/classroom-preview.md` — classroom testing guide.
+The executable contains the frozen SUGAR backend worker and classroom resources internally. Long-running collection and analysis still run in a separate cancellable child process, but that implementation detail is packaged inside `SUGAR.exe` rather than exposed to the user as a second executable.
 
-Python 3.11–3.13 is required only when running SUGAR from source or using the CLI.
+Windows SmartScreen may warn about unsigned classroom builds downloaded from the internet. Do not disable SmartScreen or endpoint protection as a workaround; verify that the file came from the project’s canonical GitHub build/release location.
+
+Python 3.11–3.13 is required only when running SUGAR from source or using the developer CLI.
 
 ## What the application exposes
 
@@ -44,7 +44,7 @@ The generated State workflow is a research product for the Diplomacy Lab project
 
 ## Credentials
 
-Secrets entered in the Windows Settings page are held in memory for the app session and passed only to the backend child process through its environment. They are not written into desktop settings or JSON config files by the GUI.
+Secrets entered in the Windows Settings page are held in memory for the app session and passed only to the bundled backend child process through its environment. They are not written into desktop settings or JSON config files by the GUI.
 
 Supported backend environment-variable fallbacks include:
 
@@ -76,7 +76,7 @@ $env:QT_QPA_PLATFORM = "offscreen"
 python .\SUGAR-Windows\app.py --smoke-test
 ```
 
-## Build the portable Windows bundle
+## Build the single Windows executable
 
 ```powershell
 python -m pip install -e ".[windows]"
@@ -86,23 +86,21 @@ python -m pip install -e ".[windows]"
 The script creates:
 
 ```text
-SUGAR-Windows\dist\SUGAR\SUGAR.exe
-SUGAR-Windows\dist\SUGAR\sugar-bridge.exe
-SUGAR-Windows\dist\SUGAR\build-info.json
-SUGAR-Windows\dist\SUGAR\Samples\...
-SUGAR-Windows\dist\SUGAR-Windows-x64.zip
+SUGAR-Windows\dist\SUGAR.exe
 ```
 
-`SUGAR.exe` is the windowed PySide6 application. `sugar-bridge.exe` is the bundled console backend used as a child process. Keeping them separate gives the UI real cancellation and keeps backend failures from freezing the event loop.
+Internally the build is two-stage: PyInstaller first freezes the command bridge, then embeds that worker plus required resources inside the final one-file GUI executable. At runtime the GUI starts the embedded worker through `QProcess`, preserving real cancellation and keeping backend failures from freezing the event loop while ordinary users still manage only one file.
 
 ## Windows security / distribution note
 
-Development and CI builds are unsigned. Windows SmartScreen may therefore warn when a portable build is downloaded from the internet. A public production release should be Authenticode-signed with an organization-controlled code-signing certificate and the signed artifacts should be distributed through an approved release process. Do not weaken SmartScreen or endpoint protections as a workaround.
+Development and CI builds are unsigned. Windows SmartScreen may therefore warn when a build is downloaded from the internet. A public production release should be Authenticode-signed with an organization-controlled code-signing certificate and the signed artifact should be distributed through an approved release process.
+
+The project repository still needs a formal license/distribution decision before presenting a classroom build as a general public software release.
 
 ## Troubleshooting
 
 Use **Settings → Run backend diagnostics** first. The Home page reports the backend version, architecture, runtime type, bridge protocol, and current collector capabilities.
 
-If the packaged UI reports that the backend cannot start, verify `sugar-bridge.exe` is next to `SUGAR.exe`. If someone distributed only `SUGAR.exe`, download/extract the full current ZIP instead. Developers can override the bridge path with `SUGAR_BRIDGE` for debugging.
+If the packaged UI reports that the backend cannot start, re-download the current `SUGAR.exe` from the canonical GitHub build/release location. Developers can override the worker path with `SUGAR_BRIDGE` for debugging.
 
-For support, use **Copy log** in the Activity & Outputs panel and include the `build-info.json` version/Git commit in the issue. Check the log before posting it and remove any sensitive data.
+For support, use **Copy log** in the Activity & Outputs panel and include the SUGAR version/build shown by diagnostics. Check the log before posting it and remove any sensitive data.
