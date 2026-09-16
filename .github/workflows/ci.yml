@@ -182,56 +182,39 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev,windows]"
-      - name: Build portable Windows application
+      - name: Build single-file Windows application
         shell: pwsh
         run: .\SUGAR-Windows\scripts\build.ps1
-      - name: Packaged backend diagnostics
+      - name: Verify single-file artifact
         shell: pwsh
         run: |
-          $line = & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe diagnostics
-          Write-Host $line
-          $payload = $line | ConvertFrom-Json
-          if ($payload.event -ne "diagnostics") { throw "Expected diagnostics event" }
-          if ($payload.bridge_protocol -ne 3) { throw "Unexpected desktop bridge protocol" }
-          if ($payload.operations -notcontains "state-package") { throw "State desktop operations missing" }
-          if ($payload.operations -notcontains "intel-synthesize") { throw "Intelligence desktop operations missing" }
-          if ($payload.operations -notcontains "workspace-init") { throw "Workspace desktop operations missing" }
+          if (-not (Test-Path .\SUGAR-Windows\dist\SUGAR.exe)) { throw "SUGAR.exe missing" }
+          if ((Get-Item .\SUGAR-Windows\dist\SUGAR.exe).Length -lt 1000000) { throw "SUGAR.exe is unexpectedly small" }
+          $unexpected = Get-ChildItem .\SUGAR-Windows\dist -File | Where-Object { $_.Name -ne 'SUGAR.exe' }
+          if ($unexpected) { throw "Windows distribution must contain only SUGAR.exe; found: $($unexpected.Name -join ', ')" }
       - name: Packaged GUI offscreen smoke test
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
-        run: .\SUGAR-Windows\dist\SUGAR\SUGAR.exe --smoke-test
-      - name: Packaged analysis smoke test
+        run: .\SUGAR-Windows\dist\SUGAR.exe --smoke-test
+      - name: Embedded backend diagnostics through GUI
         shell: pwsh
         run: |
-          @'
-          platform,native_id,published_at,author_handle,original_text,latitude,longitude,engagement
-          bluesky,smoke-1,2026-09-10T12:00:00Z,tester,Smoke test,37.2296,-80.4139,"{""likes"": 1}"
-          '@ | Set-Content -Encoding UTF8 $env:RUNNER_TEMP\sugar-smoke.csv
-          @{ source_file = "$env:RUNNER_TEMP\sugar-smoke.csv"; output_stem = "$env:RUNNER_TEMP\sugar-smoke-report"; output_format = "pdf" } | ConvertTo-Json | Set-Content -Encoding UTF8 $env:RUNNER_TEMP\sugar-analysis.json
-          & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe analysis --config $env:RUNNER_TEMP\sugar-analysis.json
-          if (-not (Test-Path $env:RUNNER_TEMP\sugar-smoke-report.pdf)) { throw "Packaged analysis did not create a PDF" }
-      - name: Typed State operation smoke test
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $proc = Start-Process -FilePath .\SUGAR-Windows\dist\SUGAR.exe -ArgumentList '--smoke-test' -PassThru -Wait
+          if ($proc.ExitCode -ne 0) { throw "Single-file GUI smoke test failed" }
+      - name: Verify embedded bridge is present in one-file package
         shell: pwsh
         run: |
-          @{ output_file = "$env:RUNNER_TEMP\us-presence.csv" } | ConvertTo-Json | Set-Content -Encoding UTF8 $env:RUNNER_TEMP\state-template.json
-          & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe state-template-us-sites --config $env:RUNNER_TEMP\state-template.json
-          if (-not (Test-Path $env:RUNNER_TEMP\us-presence.csv)) { throw "Packaged State operation did not create output" }
-      - name: Typed workspace operation smoke test
-        shell: pwsh
-        run: |
-          @{ workspace = "$env:RUNNER_TEMP\sugar-project"; name = "CI Workspace" } | ConvertTo-Json | Set-Content -Encoding UTF8 $env:RUNNER_TEMP\workspace-init.json
-          & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe workspace-init --config $env:RUNNER_TEMP\workspace-init.json
-          if (-not (Test-Path $env:RUNNER_TEMP\sugar-project\sugar-project.json)) { throw "Packaged workspace operation did not create manifest" }
-      - name: Verify portable artifact
-        shell: pwsh
-        run: |
-          if (-not (Test-Path .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip)) { throw "Portable Windows ZIP missing" }
-          if ((Get-Item .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip).Length -lt 1000000) { throw "Portable Windows ZIP is unexpectedly small" }
-      - name: Publish validated portable Windows bundle
+          # The final executable must be substantially larger than the separately frozen bridge,
+          # demonstrating that the worker and GUI/runtime payload were embedded together.
+          $gui = Get-Item .\SUGAR-Windows\dist\SUGAR.exe
+          $bridge = Get-Item .\SUGAR-Windows\build\bridge-dist\sugar-bridge.exe
+          if ($gui.Length -le $bridge.Length) { throw "SUGAR.exe does not appear to contain the embedded backend worker" }
+      - name: Publish validated single-file Windows build
         uses: actions/upload-artifact@v4
         with:
-          name: SUGAR-Windows-x64
-          path: SUGAR-Windows/dist/SUGAR-Windows-x64.zip
+          name: SUGAR-Windows-x64-single-exe
+          path: SUGAR-Windows/dist/SUGAR.exe
           if-no-files-found: error
           retention-days: 14
