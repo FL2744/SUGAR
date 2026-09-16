@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -33,6 +34,12 @@ class BackendRunner(QObject):
         self._config_path: Path | None = None
         self._active_command = ""
 
+        # CI can request a real execution check of the backend embedded inside
+        # the one-file Windows application. This is intentionally opt-in so
+        # ordinary launches do not pay the extra startup cost.
+        if os.environ.get("SUGAR_VERIFY_EMBEDDED_BACKEND", "").strip() == "1":
+            self._verify_embedded_backend()
+
     @property
     def is_running(self) -> bool:
         return self.process.state() != QProcess.NotRunning
@@ -59,6 +66,36 @@ class BackendRunner(QObject):
 
         bridge = BackendRunner._repo_root() / "sugar_bridge.py"
         return sys.executable, [str(bridge)]
+
+    @classmethod
+    def _verify_embedded_backend(cls) -> None:
+        if not getattr(sys, "frozen", False):
+            return
+        program, prefix = cls._bridge_location()
+        completed = subprocess.run(
+            [program, *prefix, "diagnostics"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+            check=False,
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(
+                "Embedded SUGAR backend diagnostics failed: "
+                + (completed.stderr.strip() or completed.stdout.strip() or f"exit {completed.returncode}")
+            )
+        lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+        if not lines:
+            raise RuntimeError("Embedded SUGAR backend diagnostics returned no output.")
+        try:
+            payload = json.loads(lines[-1])
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Embedded SUGAR backend diagnostics returned invalid JSON.") from exc
+        if payload.get("event") != "diagnostics" or int(payload.get("bridge_protocol", -1)) != 3:
+            raise RuntimeError("Embedded SUGAR backend diagnostics returned an unexpected protocol response.")
 
     def diagnostics(self) -> None:
         self.run("diagnostics", {}, {})
