@@ -114,7 +114,16 @@ final class AppModel: ObservableObject {
                     }
                 }.value
                 outputs = Self.outputPaths(from: rawBackendLog)
-                log += result == 0 ? "\nOperation completed.\n" : "\nOperation failed (exit code \(result)).\n"
+                let failures = Self.sourceFailures(from: rawBackendLog)
+                if result == 0 {
+                    if failures.isEmpty {
+                        log += "\nOperation completed.\n"
+                    } else {
+                        log += "\nOperation completed with partial collection. Unavailable sources: \(failures.joined(separator: ", ")). Results from successful sources were preserved.\n"
+                    }
+                } else {
+                    log += "\nOperation failed (exit code \(result)).\n"
+                }
             } catch {
                 log += "\n\(error.localizedDescription)"
             }
@@ -279,6 +288,10 @@ final class AppModel: ObservableObject {
                 let source = (json["source"] as? String ?? "source").capitalized
                 let count = json["records"] as? Int ?? 0
                 lines.append("\(source): \(count) records collected")
+            case "source_failed":
+                let source = (json["source"] as? String ?? "source").capitalized
+                let message = json["message"] as? String ?? "The source did not allow this request."
+                lines.append("\(source) unavailable; continuing other selected sources. \(message)")
             case "importing_public_item":
                 let source = (json["source"] as? String ?? "source").capitalized
                 lines.append(progressLine("Importing \(source) public item", json: json))
@@ -304,7 +317,12 @@ final class AppModel: ObservableObject {
             case "saving":
                 lines.append("Saving results…")
             case "saved":
-                lines.append("Results saved.")
+                let failed = json["source_failures"] as? [String] ?? []
+                if failed.isEmpty {
+                    lines.append("Results saved.")
+                } else {
+                    lines.append("Results saved with partial coverage. Unavailable sources: \(failed.map { $0.capitalized }.joined(separator: ", ")).")
+                }
             case "mapping":
                 lines.append("Creating map…")
             case "analyzing":
@@ -335,6 +353,22 @@ final class AppModel: ObservableObject {
             paths.append(contentsOf: json["outputs"] as? [String] ?? [])
         }
         return paths
+    }
+
+    nonisolated static func sourceFailures(from log: String) -> [String] {
+        var failures: [String] = []
+        var seen: Set<String> = []
+        for line in log.split(separator: "\n") {
+            guard let data = line.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  json["event"] as? String == "source_failed",
+                  let rawSource = json["source"] as? String else { continue }
+            let source = rawSource.capitalized
+            if seen.insert(source).inserted {
+                failures.append(source)
+            }
+        }
+        return failures
     }
 
     func open(_ path: String) {
