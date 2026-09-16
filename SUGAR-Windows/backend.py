@@ -48,6 +48,11 @@ class BackendRunner(QObject):
             return override, []
 
         app_dir = Path(sys.executable).resolve().parent
+        bundle_dir = Path(getattr(sys, "_MEIPASS", app_dir))
+        embedded = bundle_dir / "sugar-bridge.exe"
+        if embedded.is_file():
+            return str(embedded), []
+
         packaged = app_dir / "sugar-bridge.exe"
         if packaged.is_file():
             return str(packaged), []
@@ -91,6 +96,7 @@ class BackendRunner(QObject):
             "bluesky_app_password": "SUGAR_BLUESKY_APP_PASSWORD",
             "mastodon_token": "SUGAR_MASTODON_TOKEN",
             "weibo_cookie": "SUGAR_WEIBO_COOKIE",
+            "zhihu_access_secret": "SUGAR_ZHIHU_ACCESS_SECRET",
         }
         for key, env_name in secret_mapping.items():
             value = str(secrets.get(key) or "")
@@ -149,7 +155,7 @@ class BackendRunner(QObject):
     def _process_error(self, error: QProcess.ProcessError) -> None:
         if error == QProcess.FailedToStart:
             self.error.emit(
-                "The SUGAR backend could not start. Reinstall the Windows package or set SUGAR_BRIDGE to a valid bridge executable."
+                "The SUGAR backend could not start. Re-download the current Windows SUGAR.exe or set SUGAR_BRIDGE to a valid bridge executable for development debugging."
             )
 
     def _process_finished(self, exit_code: int, _status: QProcess.ExitStatus) -> None:
