@@ -12,7 +12,7 @@ from .models import PostRecord
 
 ZHIHU_SEARCH_URL = "https://developer.zhihu.com/api/v1/content/zhihu_search"
 REQUEST_TIMEOUT_SECONDS = 30
-USER_AGENT = "SUGAR/1.2 (+public-source research; Virginia Tech Diplomacy Lab)"
+USER_AGENT = "SUGAR/1.3 (+public-source research; Virginia Tech Diplomacy Lab)"
 
 
 def _value(mapping: dict[str, Any], *names: str, default: Any = None) -> Any:
@@ -139,14 +139,16 @@ def collect_zhihu_official(
     client = session or requests.Session()
     results: list[PostRecord] = []
     seen: set[str] = set()
-    count = max(1, min(int(max_posts_per_query or 10), 10))
+    count = max(1, int(max_posts_per_query or 10))
     for raw_term in search_terms:
         term = str(raw_term or "").strip()
         if not term:
             continue
+        # The current official example documents Query as the search parameter.
+        # Limit locally instead of inventing an undocumented remote Count parameter.
         response = client.get(
             ZHIHU_SEARCH_URL,
-            params={"Query": term, "Count": count},
+            params={"Query": term},
             headers={
                 "Authorization": f"Bearer {secret}",
                 "X-Request-Timestamp": str(int(time.time())),
