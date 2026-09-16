@@ -34,6 +34,11 @@ def _notify(progress: ProgressCallback | None, event: str, **values: Any) -> Non
         progress(event, values)
 
 
+def _source_failure(exc: Exception) -> dict[str, str]:
+    message = " ".join(str(exc).split())[:500] or type(exc).__name__
+    return {"exception": type(exc).__name__, "message": message}
+
+
 def _llm_config(config: dict[str, Any], secrets: dict[str, str]) -> LLMConfig:
     raw = config.get("llm") or {}
     provider = str(raw.get("provider", "openai"))
@@ -115,11 +120,35 @@ def run_search(
     )
 
     records = []
+    source_failures: dict[str, dict[str, str]] = {}
+    successful_sources: list[str] = []
     for source in sources:
         _notify(progress, "collecting", source=source)
-        rows = collect_registered_source(source, request)
+        try:
+            rows = collect_registered_source(source, request)
+        except Exception as exc:
+            failure = _source_failure(exc)
+            source_failures[source] = failure
+            _notify(
+                progress,
+                "source_failed",
+                source=source,
+                exception=failure["exception"],
+                message=failure["message"],
+            )
+            continue
+        successful_sources.append(source)
         records.extend(rows)
         _notify(progress, "collected", source=source, records=len(rows))
+
+    if not successful_sources:
+        summary = "; ".join(
+            f"{source}: {failure['message']}" for source, failure in source_failures.items()
+        ) or "no collector completed"
+        raise RuntimeError(f"All selected sources failed. {summary}")
+    if not records:
+        failed = f" Failed sources: {', '.join(source_failures)}." if source_failures else ""
+        raise ValueError(f"No records were collected from the sources that completed.{failed}")
 
     _notify(progress, "enriching", records=len(records), translate=translate, infer_locations=infer)
     records = enrich_records(
@@ -134,6 +163,9 @@ def run_search(
 
     metadata = {
         "sources": sources,
+        "successful_sources": successful_sources,
+        "source_failures": source_failures,
+        "partial_collection": bool(source_failures),
         "terms": terms,
         "since": config.get("since") or None,
         "until": config.get("until") or None,
@@ -142,11 +174,11 @@ def run_search(
         "llm_model": llm.model if (translate or infer) else None,
         "workspace_project_id": workspace.manifest.project_id if workspace is not None else None,
     }
-    _notify(progress, "saving", records=len(records), output=str(csv_path))
+    _notify(progress, "saving", records=len(records), output=str(csv_path), partial_collection=bool(source_failures))
     save_records(records, csv_path, metadata=metadata)
     outputs = [str(csv_path), str(csv_path.with_suffix(".xlsx")), str(csv_path.with_suffix(".metadata.json"))]
     register_workspace_outputs(workspace, outputs, operation="search", kind="raw_collection")
-    _notify(progress, "saved", outputs=outputs)
+    _notify(progress, "saved", outputs=outputs, source_failures=list(source_failures))
     return outputs
 
 
