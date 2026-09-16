@@ -6,7 +6,7 @@ on:
   pull_request:
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -172,7 +172,11 @@ jobs:
         run: echo "ARC endpoint is reachable, but SUGAR_ARC_API_KEY is not configured as a repository Actions secret; authenticated processing must be checked with a user's private ARC key."
 
   macos-app:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, macos-26-intel]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
@@ -239,18 +243,11 @@ jobs:
             SUGAR-macOS/.build-native/SUGAR.app \
             "SUGAR-macOS/.build-native/SUGAR-macOS-${RUNNER_ARCH}.zip"
           test -s "SUGAR-macOS/.build-native/SUGAR-macOS-${RUNNER_ARCH}.zip"
-      - name: Package classroom DMG (best effort)
-        continue-on-error: true
-        env:
-          SUGAR_SKIP_APP_BUILD: "1"
-        run: ./SUGAR-macOS/scripts/package_dmg.sh
       - name: Publish validated macOS classroom bundle
         uses: actions/upload-artifact@v4
         with:
           name: SUGAR-macOS-${{ runner.arch }}
-          path: |
-            SUGAR-macOS/.build-native/SUGAR-macOS-*.zip
-            SUGAR-macOS/.build-native/SUGAR-*-unsigned.dmg
+          path: SUGAR-macOS/.build-native/SUGAR-macOS-*.zip
           if-no-files-found: error
           retention-days: 14
 
