@@ -70,12 +70,45 @@ def test_capabilities_advertise_partial_platform_surfaces():
     assert caps["x"]["keyword_search"] is True
     assert caps["x"]["comments"] is False
 
+    assert caps["wechat"]["known_item"] is True
+    assert caps["wechat"]["keyword_search"] is False
+    assert caps["wechat"]["comments"] is False
+
+    assert caps["zhihu"]["keyword_search"] is True
+    assert caps["zhihu"]["known_item"] is True
+    assert caps["zhihu"]["authenticated_search"] is True
+    assert caps["zhihu"]["anonymous_search"] is False
+
+    assert caps["douyin"]["known_item"] is True
+    assert caps["douyin"]["keyword_search"] is False
+    assert caps["douyin"]["comments"] is False
+
 
 def test_required_credentials_are_validated_before_collection():
     request = CollectorRequest(search_terms=["test"], secrets={})
 
     with pytest.raises(ValueError, match="x bearer token"):
         collect_registered_source("x", request)
+
+
+def test_zhihu_search_requires_secret_but_known_item_does_not(monkeypatch):
+    with pytest.raises(ValueError, match="Access Secret"):
+        collect_registered_source("zhihu", CollectorRequest(search_terms=["test"], secrets={}))
+
+    monkeypatch.setattr(
+        collector_registry,
+        "fetch_zhihu_public_item",
+        lambda url: _record("zhihu", "answer-1", "answer"),
+    )
+    row = fetch_registered_item("zhihu", "https://www.zhihu.com/question/1/answer/1")
+    assert row.platform == "zhihu"
+    assert row.thread_root_key == "zhihu:answer-1"
+
+
+def test_wechat_and_douyin_do_not_masquerade_as_keyword_search():
+    for source in ("wechat", "douyin"):
+        with pytest.raises(ValueError, match="does not currently support keyword search"):
+            collect_registered_source(source, CollectorRequest(search_terms=["test"]))
 
 
 def test_bilibili_search_records_get_thread_roots(monkeypatch):

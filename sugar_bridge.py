@@ -17,6 +17,7 @@ for stream in (sys.stdout, sys.stderr):
 import sugar_core
 from sugar_core.collector_registry import collector_capabilities
 from sugar_core.desktop_ops import DESKTOP_ANALYTIC_OPERATIONS, run_desktop_analytic_operation
+from sugar_core.public_import import run_public_import
 from sugar_core.service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from sugar_core.weibo_qualification import run_weibo_qualification
@@ -33,6 +34,7 @@ WORKSPACE_OPERATIONS = {"workspace-init", "workspace-status", "workspace-registe
 BASE_OPERATIONS = {
     "search",
     "harvest",
+    "import-public",
     "weibo-investigate",
     "weibo-seed-harvest",
     "weibo-qualify",
@@ -64,6 +66,7 @@ def secrets_from_environment() -> dict[str, str]:
         "bluesky_app_password": os.environ.get("SUGAR_BLUESKY_APP_PASSWORD", ""),
         "mastodon_token": os.environ.get("SUGAR_MASTODON_TOKEN", ""),
         "weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", ""),
+        "zhihu_access_secret": os.environ.get("SUGAR_ZHIHU_ACCESS_SECRET", ""),
     }
 
 
@@ -181,6 +184,8 @@ def main(argv=None) -> int:
         elif args.command == "harvest":
             emit("starting", operation="harvest")
             outputs = run_harvest(config, secrets, progress=progress_event)
+        elif args.command == "import-public":
+            outputs = run_public_import(config, secrets, progress=progress_event)
         elif args.command == "weibo-investigate":
             outputs = _run_weibo_investigation(config, secrets)
         elif args.command == "weibo-seed-harvest":

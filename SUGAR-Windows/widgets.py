@@ -180,13 +180,13 @@ class OutputChip(QPushButton):
     def __init__(self, path: str, parent: QWidget | None = None) -> None:
         super().__init__(Path(path).name, parent)
         self.path = path
-        self.setToolTip(path)
-        self.clicked.connect(self.open_parent)
+        self.setToolTip(f"Open {path}")
+        self.clicked.connect(self.open_output)
         self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
 
-    def open_parent(self) -> None:
+    def open_output(self) -> None:
         path = Path(self.path)
-        target = path if path.is_dir() else path.parent
+        target = path if path.exists() else path.parent
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
 
 

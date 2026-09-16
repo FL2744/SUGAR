@@ -44,6 +44,52 @@ def _chat(client, model: str, system: str, user: str, max_tokens: int = 4000) ->
     return (response.choices[0].message.content or "").strip()
 
 
+def _positive_seconds(value: Any) -> float | None:
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds >= 0 else None
+
+
+def _rate_limit_hint(exc: Exception) -> float | None:
+    """Return a server-provided retry delay for a 429 response when available.
+
+    Virginia Tech ARC returns ``retry_after_s`` in the JSON error body for
+    throttled embedding workloads and may use the same convention for other
+    OpenAI-compatible endpoints. The OpenAI SDK does not expose that field as a
+    standard Retry-After header, so inspect both body shapes and headers.
+    """
+    response = getattr(exc, "response", None)
+    status = getattr(exc, "status_code", None)
+    if status is None and response is not None:
+        status = getattr(response, "status_code", None)
+    if status != 429 and "ratelimit" not in type(exc).__name__.casefold():
+        return None
+
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        candidates = [body]
+        nested = body.get("error")
+        if isinstance(nested, dict):
+            candidates.insert(0, nested)
+        for candidate in candidates:
+            for key in ("retry_after_s", "retry_after", "retryAfter"):
+                hinted = _positive_seconds(candidate.get(key))
+                if hinted is not None:
+                    return hinted
+
+    headers = getattr(response, "headers", None)
+    if headers is not None:
+        try:
+            hinted = _positive_seconds(headers.get("retry-after") or headers.get("Retry-After"))
+        except Exception:
+            hinted = None
+        if hinted is not None:
+            return hinted
+    return 1.0
+
+
 def cached_chat(
     client,
     config: LLMConfig,
@@ -52,7 +98,8 @@ def cached_chat(
     system: str,
     user: str,
     max_tokens: int = 4000,
-    retries: int = 3,
+    retries: int = 6,
+    max_retry_wait_seconds: float = 120.0,
 ) -> str:
     key = stable_hash("llm", task, config.provider, config.model, system, user)
     if cache:
@@ -69,7 +116,9 @@ def cached_chat(
         except Exception as exc:
             last_error = exc
             if attempt + 1 < retries:
-                time.sleep(2 ** attempt)
+                hint = _rate_limit_hint(exc)
+                wait = hint if hint is not None else float(2 ** attempt)
+                time.sleep(min(max(0.0, wait), max(0.0, max_retry_wait_seconds)))
     raise RuntimeError(f"LLM request failed after {retries} attempts: {last_error}")
 
 

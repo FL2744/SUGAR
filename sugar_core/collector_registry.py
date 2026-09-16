@@ -17,7 +17,9 @@ from .collectors import (
 )
 from .models import PostRecord
 from .paged_collectors import collect_bilibili_page_range, collect_weibo_page_range
+from .public_items import fetch_douyin_public_item, fetch_wechat_article, fetch_zhihu_public_item
 from .weibo import collect_weibo_comments, collect_weibo_public, fetch_weibo_status
+from .zhihu import collect_zhihu_official
 
 
 @dataclass(frozen=True)
@@ -224,6 +226,27 @@ def _weibo_comments(native_id: str, request: CollectorRequest) -> list[PostRecor
     return _mark_weibo_access(rows, cookie)
 
 
+def _fetch_wechat(url: str, request: CollectorRequest) -> PostRecord:
+    return _set_thread_root(fetch_wechat_article(url))
+
+
+def _collect_zhihu(request: CollectorRequest) -> list[PostRecord]:
+    rows = collect_zhihu_official(
+        search_terms=request.search_terms,
+        access_secret=request.secrets.get("zhihu_access_secret", ""),
+        max_posts_per_query=request.max_posts_per_query,
+    )
+    return [_set_thread_root(row) for row in rows]
+
+
+def _fetch_zhihu(url: str, request: CollectorRequest) -> PostRecord:
+    return _set_thread_root(fetch_zhihu_public_item(url))
+
+
+def _fetch_douyin(url: str, request: CollectorRequest) -> PostRecord:
+    return _set_thread_root(fetch_douyin_public_item(url))
+
+
 COLLECTORS: dict[str, CollectorSpec] = {
     "x": CollectorSpec(
         name="x",
@@ -284,6 +307,40 @@ COLLECTORS: dict[str, CollectorSpec] = {
         description=(
             "Fail-closed Weibo mobile-web search/status/comments. Public status and basic comment "
             "surfaces are anonymous; search availability can vary and may use a legitimate supplied session."
+        ),
+    ),
+    "wechat": CollectorSpec(
+        name="wechat",
+        known_item=_fetch_wechat,
+        capabilities=CollectorCapabilities(
+            known_item=True,
+        ),
+        description=(
+            "Known public WeChat Official Account article URL import. SUGAR does not claim general WeChat keyword search."
+        ),
+    ),
+    "zhihu": CollectorSpec(
+        name="zhihu",
+        search=_collect_zhihu,
+        known_item=_fetch_zhihu,
+        capabilities=CollectorCapabilities(
+            keyword_search=True,
+            known_item=True,
+            authenticated_search=True,
+            anonymous_search=False,
+        ),
+        description=(
+            "Zhihu Open Platform keyword search when an Access Secret is supplied, plus known public Zhihu URL import."
+        ),
+    ),
+    "douyin": CollectorSpec(
+        name="douyin",
+        known_item=_fetch_douyin,
+        capabilities=CollectorCapabilities(
+            known_item=True,
+        ),
+        description=(
+            "Known public Douyin video/share URL import. Keyword video search is not advertised without approved official video.search access."
         ),
     ),
 }

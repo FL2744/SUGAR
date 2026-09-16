@@ -1,6 +1,6 @@
 import Foundation
 
-// Model catalogs checked against official provider documentation on 2026-09-10.
+// Model catalogs checked against official provider documentation on 2026-09-16.
 enum LLMProvider: String, CaseIterable, Identifiable {
     case openAI = "openai", arc, custom
     var id: String { rawValue }
@@ -14,7 +14,7 @@ enum LLMProvider: String, CaseIterable, Identifiable {
     var models: [String] {
         switch self {
         case .openAI: ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-6-astra"]
-        case .arc: ["gpt-oss-120b", "DeepSeek-V4-Flash", "GLM-5.3", "Kimi-K3"]
+        case .arc: ["gpt-oss-120b", "DeepSeek-V4.1-Flash", "GLM-5.3", "Kimi-K3"]
         case .custom: []
         }
     }
