@@ -15,11 +15,9 @@ if [[ ! -d "$APP" ]]; then
   exit 1
 fi
 
-# CI builds the frozen backend in a temporary virtual environment and leaves
-# several large PyInstaller/Swift intermediate trees behind. Once SUGAR.app has
-# passed its packaged smoke tests those intermediates are no longer needed to
-# create the DMG, and retaining them can exhaust the hosted runner's disk while
-# hdiutil duplicates/compresses the application. Keep the finished app itself.
+# Once SUGAR.app has passed its packaged smoke tests, build intermediates are
+# disposable. Clear them before imaging so hosted runners retain enough free
+# disk for hdiutil's temporary compression work.
 if [[ "${SUGAR_SKIP_APP_BUILD:-0}" == "1" ]]; then
   rm -rf \
     "$BUILD/backend-venv" \
@@ -28,10 +26,19 @@ if [[ "${SUGAR_SKIP_APP_BUILD:-0}" == "1" ]]; then
     "$HERE/.build"
 fi
 
-STAGE="$BUILD/dmg-stage"
-rm -rf "$STAGE"
-mkdir -p "$STAGE"
-ditto "$APP" "$STAGE/SUGAR.app"
-ln -sfn /Applications "$STAGE/Applications"
-hdiutil create -volname SUGAR -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+# Package the already validated application bundle directly. The previous
+# staging step made a second full copy of SUGAR.app before hdiutil made its own
+# image copy, which could exhaust GitHub's hosted macOS runner. A classroom
+# preview does not need a decorative /Applications symlink inside the image.
+rm -f "$DMG"
+hdiutil create \
+  -volname SUGAR \
+  -srcfolder "$APP" \
+  -ov \
+  -format UDZO \
+  "$DMG"
+
+# Verify the disk image wrapper itself. The contained application has already
+# passed architecture, bundled-backend, analysis, sample, and codesign checks.
+hdiutil verify "$DMG"
 echo "$DMG"
