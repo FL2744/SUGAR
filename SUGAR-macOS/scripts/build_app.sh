@@ -33,6 +33,21 @@ cp "$ROOT/examples/example-map.html" "$APP/Contents/Resources/Samples/example-ma
 cp "$ROOT/examples/example-analysis.pdf" "$APP/Contents/Resources/Samples/example-analysis.pdf"
 cp "$ROOT/docs/classroom-preview.md" "$APP/Contents/Resources/Samples/classroom-preview.md"
 
+GIT_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+BUILT_AT_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+cat > "$APP/Contents/Resources/build-info.json" <<EOF
+{
+  "product": "SUGAR",
+  "version": "$VERSION",
+  "git_commit": "$GIT_COMMIT",
+  "built_at_utc": "$BUILT_AT_UTC",
+  "architecture": "$ARCH",
+  "bridge_protocol": 3,
+  "runtime": "bundled",
+  "ordinary_users_need_python": false
+}
+EOF
+
 if [[ -f "$ROOT/sugar-logo.png" ]]; then
   ICONSET="$BUILD/SUGAR.iconset"; rm -rf "$ICONSET"; mkdir -p "$ICONSET"
   for spec in '16 16' '16 32' '32 32' '32 64' '128 128' '128 256' '256 256' '256 512' '512 512' '512 1024'; do
@@ -58,7 +73,7 @@ for arch in ${(s: :)APP_ARCHS}; do
   fi
 done
 
-echo "SUGAR $VERSION architecture check: app=$APP_ARCHS backend=$BACKEND_ARCHS"
+echo "SUGAR $VERSION ($GIT_COMMIT) architecture check: app=$APP_ARCHS backend=$BACKEND_ARCHS"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 echo "$APP"
