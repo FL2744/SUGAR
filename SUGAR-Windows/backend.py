@@ -182,7 +182,7 @@ class BackendRunner(QObject):
             self.event.emit({"event": "backend_output", "message": line})
             return
         if not isinstance(payload, dict):
-            self.event.emit({"event": "backend_output", "message": line)
+            self.event.emit({"event": "backend_output", "message": line})
             return
         self.event.emit(payload)
         if payload.get("event") == "complete":
