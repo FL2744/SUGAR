@@ -63,7 +63,7 @@ def test_zhihu_official_search_maps_structured_results_and_auth_headers():
 
     url, kwargs = session.calls[0]
     assert url == ZHIHU_SEARCH_URL
-    assert kwargs["params"] == {"Query": "RAG", "Count": 8}
+    assert kwargs["params"] == {"Query": "RAG"}
     assert kwargs["headers"]["Authorization"] == "Bearer secret-value"
     assert kwargs["headers"]["X-Request-Timestamp"].isdigit()
     assert kwargs["allow_redirects"] is False
