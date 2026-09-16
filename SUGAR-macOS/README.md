@@ -16,14 +16,25 @@ The classroom build opens on a **Welcome** screen rather than dropping a new use
 
 AI translation/location inference are off by default in the classroom search screen so users can perform supported public collection without first obtaining an LLM key. Source-specific credentials remain explicit rather than being silently substituted.
 
+For the classroom preview, CI publishes an architecture-specific **`.app.zip`** containing the already validated `SUGAR.app`. Apple Silicon and Intel Macs receive separate artifacts. Extract the ZIP and open `SUGAR.app`; ordinary classroom users do not need Python or Terminal.
+
 ## Build an unsigned test release
+
+Build the app locally with:
 
 ```bash
 ./scripts/build_app.sh
+```
+
+Outputs are written under `.build-native/`. For local convenience, a developer can also create an unsigned DMG with:
+
+```bash
 ./scripts/package_dmg.sh
 ```
 
-Outputs are written under `.build-native/`. CI packages the already-validated app into a DMG and publishes it as an architecture-specific build artifact. The unsigned/ad-hoc-signed classroom DMG is intended for controlled testing; Gatekeeper may warn when the app is downloaded elsewhere.
+The classroom CI path intentionally publishes the tested `.app.zip` directly instead of making DMG creation a release gate. This avoids allowing a disk-image wrapper or hosted-runner disk-space problem to invalidate an app bundle that already passed architecture, backend, live-collection, analysis, and code-sign verification.
+
+The classroom build is ad-hoc signed rather than a notarized public release. Gatekeeper may warn when the app is downloaded elsewhere; use only a build distributed by the project team and do not disable macOS security protections globally.
 
 ## Create a signed and notarized public release
 
@@ -52,7 +63,7 @@ PYTHON=/path/to/python3.12 ./scripts/build_app.sh
 
 The macOS-specific constraint keeps NumPy at a compatible build, and packaging inspects every Mach-O binary inside the frozen backend plus the Swift executable. The build rejects deployment targets newer than 13.0 or a missing host architecture. It always rebuilds the backend so an incompatible cached runtime cannot silently be reused.
 
-Build on Apple Silicon for arm64, or on an Intel Mac with Intel Python for x86_64. These are separate builds, not a universal app. Before broad release, test launch, Keychain settings, keyword search, public URL import, map creation, and Word/PDF analysis on an actual macOS 13 installation of the corresponding architecture.
+Build on Apple Silicon for arm64, or on an Intel Mac with Intel Python for x86_64. These are separate builds, not a universal app. Classroom CI independently builds and exercises both architectures. Before broad release, also test launch, Keychain settings, keyword search, public URL import, map creation, and Word/PDF analysis on an actual macOS 13 installation of the corresponding architecture.
 
 ## Build identity
 
@@ -70,6 +81,8 @@ The Welcome and Settings screens show the short build revision in diagnostics. U
 ## Live Activity log
 
 Activity streams the backend's stdout/stderr as complete lines while a job runs, follows new messages automatically, reports completion/failure, and renders common backend events as researcher-readable progress. Generated output buttons open the file directly; a Finder button remains available for locating it on disk.
+
+For multi-source collection, a single provider failure no longer erases successful work from the other selected sources. The Activity area reports the unavailable source, continues the remaining collectors, and labels a successful degraded run as **partial collection**. The saved metadata preserves the exact successful and failed source list.
 
 Run the process-streaming regression check from this directory:
 
