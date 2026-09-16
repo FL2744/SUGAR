@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "stabilize/**", "fix/**"]
+    branches: [main, "stabilize/**", "fix/**", "feat/**"]
   pull_request:
 
 concurrency:
@@ -138,6 +138,12 @@ jobs:
         run: |
           lipo -archs SUGAR-macOS/.build-native/SUGAR.app/Contents/MacOS/SUGAR
           lipo -archs SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
+      - name: Verify bundled classroom samples
+        run: |
+          test -s SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/Samples/example-spreadsheet.xlsx
+          test -s SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/Samples/example-map.html
+          test -s SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/Samples/example-analysis.pdf
+          test -s SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/Samples/classroom-preview.md
       - name: Backend diagnostics smoke test
         run: SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge diagnostics
       - name: Packaged analysis smoke test
@@ -153,6 +159,17 @@ jobs:
           test -s /tmp/sugar-smoke-report.pdf
       - name: Verify bundle signature
         run: codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
+      - name: Package classroom DMG
+        env:
+          SUGAR_SKIP_APP_BUILD: "1"
+        run: ./SUGAR-macOS/scripts/package_dmg.sh
+      - name: Publish validated macOS classroom bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: SUGAR-macOS-${{ runner.arch }}
+          path: SUGAR-macOS/.build-native/SUGAR-*-unsigned.dmg
+          if-no-files-found: error
+          retention-days: 14
 
   windows-app:
     runs-on: windows-latest
