@@ -164,9 +164,9 @@ The State workflow is a research methodology and product for the Diplomacy Lab p
 
 ## Repository architecture
 
-The supported implementation lives in `sugar_core/`. The original `SUGAR.py` and `sugar_analysis.py` are retained for historical compatibility/reference; new engineering work should not extend those monoliths.
+The supported implementation lives in `sugar_core/`. Historical pre-package monoliths have been removed from the working tree; Git history remains available if project archaeology is ever needed.
 
-See [`docs/architecture.md`](docs/architecture.md) for module boundaries, frontend/core dependency rules, bridge architecture, test expectations, and legacy-code policy.
+See [`docs/architecture.md`](docs/architecture.md) for module boundaries, frontend/core dependency rules, bridge architecture, and test expectations.
 
 ## Documentation
 

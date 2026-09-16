@@ -74,11 +74,9 @@ High-volume collection is checkpointed and resumable. It must not become a mecha
 - `SUGAR-macOS/` — native macOS client.
 - `SUGAR-Windows/` — native Windows research workbench.
 
-## Legacy code
+## Repository history
 
-`SUGAR.py` and `sugar_analysis.py` are retained for historical compatibility and reference. They are not the target for new features. New work belongs in `sugar_core` and should be exposed through stable services/typed bridge operations when a desktop surface needs it.
-
-No new platform collector should be added as another branch in the historical monolith.
+The pre-package monolithic scripts have been removed from the working tree. Their history remains available in Git, but they are not a compatibility surface and should not be restored for new feature work. New capabilities belong in `sugar_core` and should be exposed through stable services or typed bridge operations when a desktop surface needs them.
 
 ## Dependency direction
 
