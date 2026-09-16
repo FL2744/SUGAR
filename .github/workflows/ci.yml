@@ -238,16 +238,17 @@ jobs:
         run: codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
       - name: Create reliable classroom app archive
         run: |
-          rm -f "SUGAR-macOS/.build-native/SUGAR-macOS-${RUNNER_ARCH}.zip"
+          mkdir -p SUGAR-macOS/dist
+          rm -f "SUGAR-macOS/dist/SUGAR-macOS-${RUNNER_ARCH}.zip"
           ditto -c -k --sequesterRsrc --keepParent \
             SUGAR-macOS/.build-native/SUGAR.app \
-            "SUGAR-macOS/.build-native/SUGAR-macOS-${RUNNER_ARCH}.zip"
-          test -s "SUGAR-macOS/.build-native/SUGAR-macOS-${RUNNER_ARCH}.zip"
+            "SUGAR-macOS/dist/SUGAR-macOS-${RUNNER_ARCH}.zip"
+          test -s "SUGAR-macOS/dist/SUGAR-macOS-${RUNNER_ARCH}.zip"
       - name: Publish validated macOS classroom bundle
         uses: actions/upload-artifact@v4
         with:
           name: SUGAR-macOS-${{ runner.arch }}
-          path: SUGAR-macOS/.build-native/SUGAR-macOS-*.zip
+          path: SUGAR-macOS/dist/SUGAR-macOS-*.zip
           if-no-files-found: error
           retention-days: 14
 
