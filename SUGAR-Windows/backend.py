@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import os
 import subprocess
@@ -69,35 +70,130 @@ class BackendRunner(QObject):
         bridge = BackendRunner._repo_root() / "sugar_bridge.py"
         return sys.executable, [str(bridge)]
 
+    @staticmethod
+    def _json_events(stdout: str) -> list[dict[str, Any]]:
+        events: list[dict[str, Any]] = []
+        for line in stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                events.append(payload)
+        return events
+
+    @classmethod
+    def _run_embedded_command(
+        cls,
+        program: str,
+        prefix: list[str],
+        command: str,
+        *,
+        config: dict[str, Any] | None = None,
+        workdir: Path | None = None,
+        timeout: int = 180,
+    ) -> tuple[subprocess.CompletedProcess[str], list[dict[str, Any]]]:
+        args = [program, *prefix, command]
+        config_path: Path | None = None
+        if config is not None:
+            directory = workdir or Path(tempfile.mkdtemp(prefix="sugar-embedded-"))
+            directory.mkdir(parents=True, exist_ok=True)
+            config_path = directory / f"{command}-config.json"
+            config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+            args.extend(["--config", str(config_path)])
+        completed = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        events = cls._json_events(completed.stdout)
+        if completed.returncode != 0:
+            detail = completed.stderr.strip() or completed.stdout.strip() or f"exit {completed.returncode}"
+            raise RuntimeError(f"Embedded SUGAR backend {command} failed: {detail}")
+        error = next((event for event in reversed(events) if event.get("event") == "error"), None)
+        if error:
+            raise RuntimeError(f"Embedded SUGAR backend {command} failed: {error.get('message', 'unknown error')}")
+        return completed, events
+
     @classmethod
     def _verify_embedded_backend(cls) -> None:
         if not getattr(sys, "frozen", False):
             return
         program, prefix = cls._bridge_location()
-        completed = subprocess.run(
-            [program, *prefix, "diagnostics"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=120,
-            check=False,
-            env={**os.environ, "PYTHONUTF8": "1"},
-        )
-        if completed.returncode != 0:
-            raise RuntimeError(
-                "Embedded SUGAR backend diagnostics failed: "
-                + (completed.stderr.strip() or completed.stdout.strip() or f"exit {completed.returncode}")
-            )
-        lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
-        if not lines:
+        _, events = cls._run_embedded_command(program, prefix, "diagnostics", timeout=120)
+        if not events:
             raise RuntimeError("Embedded SUGAR backend diagnostics returned no output.")
-        try:
-            payload = json.loads(lines[-1])
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("Embedded SUGAR backend diagnostics returned invalid JSON.") from exc
+        payload = events[-1]
         if payload.get("event") != "diagnostics" or int(payload.get("bridge_protocol", -1)) != 3:
             raise RuntimeError("Embedded SUGAR backend diagnostics returned an unexpected protocol response.")
+
+        if os.environ.get("SUGAR_INCIDENT_DRILL", "").strip() != "1":
+            return
+
+        # Pre-demo certification: make the exact embedded worker perform a real,
+        # anonymous network collection and then process the collected artifact.
+        # Keep the volume bounded so CI validates rate-limit behaviour without
+        # generating abusive traffic or depending on private API credentials.
+        with tempfile.TemporaryDirectory(prefix="sugar-incident-") as temp:
+            root = Path(temp)
+            search_config = {
+                "sources": ["bluesky", "bilibili"],
+                "terms": ["artificial intelligence", "人工智能"],
+                "translate_posts": False,
+                "infer_locations": False,
+                "max_posts_per_query": 20,
+                "max_pages_per_query": 1,
+                "output_directory": str(root),
+            }
+            _, search_events = cls._run_embedded_command(
+                program,
+                prefix,
+                "search",
+                config=search_config,
+                workdir=root,
+                timeout=240,
+            )
+            complete = next(
+                (event for event in reversed(search_events) if event.get("event") == "complete"),
+                None,
+            )
+            outputs = [Path(value) for value in (complete or {}).get("outputs", [])]
+            csv_path = next((path for path in outputs if path.suffix.casefold() == ".csv"), None)
+            if csv_path is None or not csv_path.is_file():
+                raise RuntimeError("Incident drill produced no normalized CSV output.")
+            with csv_path.open("r", encoding="utf-8-sig", newline="") as stream:
+                rows = list(csv.DictReader(stream))
+            if len(rows) < 5:
+                raise RuntimeError(f"Incident drill collected only {len(rows)} records; expected at least 5 live records.")
+            observed_sources = {str(row.get("platform") or "").casefold() for row in rows}
+            if not observed_sources.intersection({"bluesky", "bilibili"}):
+                raise RuntimeError("Incident drill did not preserve a live source platform in normalized output.")
+
+            report_stem = root / "incident-live-report"
+            analysis_config = {
+                "source_file": str(csv_path),
+                "output_stem": str(report_stem),
+                "output_format": "pdf",
+            }
+            cls._run_embedded_command(
+                program,
+                prefix,
+                "analysis",
+                config=analysis_config,
+                workdir=root,
+                timeout=240,
+            )
+            report = report_stem.with_suffix(".pdf")
+            if not report.is_file() or report.stat().st_size < 1000:
+                raise RuntimeError("Incident drill failed to produce a usable PDF report from live collection data.")
 
     def diagnostics(self) -> None:
         self.run("diagnostics", {}, {})
