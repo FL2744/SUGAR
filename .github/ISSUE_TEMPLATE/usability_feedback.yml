@@ -1,0 +1,112 @@
+name: Usability feedback
+description: Tell us where SUGAR was confusing, slow, surprising, or difficult to use.
+title: "[UX] "
+labels: ["usability"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing SUGAR. We are especially interested in places where you had to ask someone what to do next. Please do not paste API keys, cookies, passwords, or other credentials.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS - Apple Silicon
+        - macOS - Intel
+        - Windows 11
+        - Windows 10
+        - CLI / Python
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: "Example: macOS 15.6 or Windows 11 24H2"
+    validations:
+      required: true
+
+  - type: input
+    id: sugar-version
+    attributes:
+      label: SUGAR version / build
+      description: Use the version shown in the app or diagnostics if available.
+      placeholder: "Example: 1.2.0 classroom preview"
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where did you get stuck or confused?
+      options:
+        - Download / installation
+        - First launch
+        - Choosing a source
+        - Credentials / settings
+        - Search / collection
+        - Public URL import
+        - Project workspace
+        - Human review
+        - Map
+        - Analysis / report
+        - State workflow
+        - Intelligence workflow
+        - Finding outputs
+        - Reporting feedback / support
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What were you trying to do?
+      description: Describe the task in ordinary language.
+      placeholder: "I wanted to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened?
+      description: Include the exact error text when relevant, but remove any credentials or private data.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: confusion
+    attributes:
+      label: What was confusing or unnecessarily difficult?
+      description: Even if you eventually figured it out, tell us what made you hesitate.
+
+  - type: textarea
+    id: support-log
+    attributes:
+      label: Support log (optional)
+      description: Paste the app's support/activity log only after checking that it contains no credentials or sensitive material.
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else you would change?
+      description: Small quality-of-life suggestions are useful too.
+
+  - type: checkboxes
+    id: secret-check
+    attributes:
+      label: Safety check
+      options:
+        - label: I checked that this report does not contain API keys, passwords, session cookies, or other credentials.
+          required: true
