@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sugar-osint"
-version = "1.2.0"
+version = "1.3.0rc1"
 description = "SUGAR: repeatable public-source collection, evidence management, spatial analysis, and research workflows"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -41,6 +41,7 @@ rtl = ["arabic-reshaper>=3,<4", "python-bidi>=0.6,<1"]
 
 [project.scripts]
 sugar = "sugar_core.cli:main"
+sugar-import = "sugar_core.public_import:main"
 sugar-project = "sugar_core.workspace_cli:main"
 sugar-state = "sugar_core.state_cli:main"
 sugar-intel = "sugar_core.state_intel_cli:main"
