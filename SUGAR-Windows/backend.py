@@ -34,10 +34,12 @@ class BackendRunner(QObject):
         self._config_path: Path | None = None
         self._active_command = ""
 
-        # CI can request a real execution check of the backend embedded inside
-        # the one-file Windows application. This is intentionally opt-in so
-        # ordinary launches do not pay the extra startup cost.
-        if os.environ.get("SUGAR_VERIFY_EMBEDDED_BACKEND", "").strip() == "1":
+        # Packaged smoke tests execute the backend embedded inside the one-file
+        # Windows application. Ordinary launches do not pay this startup cost.
+        if (
+            os.environ.get("SUGAR_VERIFY_EMBEDDED_BACKEND", "").strip() == "1"
+            or "--smoke-test" in sys.argv
+        ):
             self._verify_embedded_backend()
 
     @property
@@ -180,7 +182,7 @@ class BackendRunner(QObject):
             self.event.emit({"event": "backend_output", "message": line})
             return
         if not isinstance(payload, dict):
-            self.event.emit({"event": "backend_output", "message": line})
+            self.event.emit({"event": "backend_output", "message": line)
             return
         self.event.emit(payload)
         if payload.get("event") == "complete":
