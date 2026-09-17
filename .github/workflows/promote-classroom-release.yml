@@ -1,0 +1,27 @@
+name: Promote classroom release
+
+on:
+  push:
+    branches:
+      - release/classroom-v1.2.0
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_ID: 390846596
+    steps:
+      - name: Promote prerelease to latest stable release
+        run: |
+          gh api --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -F prerelease=false \
+            -f make_latest=true \
+            -f name='SUGAR v1.2.0 Classroom Release'
+
+          latest="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name')"
+          test "$latest" = "v1.2.0-classroom.1"
