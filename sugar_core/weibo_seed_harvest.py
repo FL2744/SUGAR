@@ -12,7 +12,7 @@ from typing import Any, Callable, Iterable
 
 from .models import PostRecord, merge_record
 from .storage import save_records
-from .utils import utc_iso
+from .utils import safe_artifact_stem, utc_iso
 from .weibo_investigation import WeiboInvestigation, investigate_weibo_seed, parse_weibo_seed
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
@@ -78,7 +78,7 @@ class SeedHarvestConfig:
         if self.base_backoff_seconds < 0 or self.max_inline_wait_seconds < 0 or self.inter_seed_delay_seconds < 0:
             raise ValueError("seed-harvest delays cannot be negative.")
         object.__setattr__(self, "seeds", seeds)
-        object.__setattr__(self, "name", _clean(self.name).replace(" ", "_") or "weibo_seed_harvest")
+        object.__setattr__(self, "name", safe_artifact_stem(self.name, "weibo_seed_harvest"))
 
     @property
     def plan_signature(self) -> str:
@@ -388,11 +388,12 @@ def run_weibo_seed_harvest(
 ) -> list[str]:
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint = out_dir / f"{config.name}.seedharvest.sqlite3"
-    manifest_path = out_dir / f"{config.name}.seedharvest.json"
-    status_path = out_dir / f"{config.name}.seeds.csv"
-    records_path = out_dir / f"{config.name}.csv"
-    jsonl_path = out_dir / f"{config.name}.jsonl"
+    name = safe_artifact_stem(config.name, "weibo_seed_harvest")
+    checkpoint = out_dir / f"{name}.seedharvest.sqlite3"
+    manifest_path = out_dir / f"{name}.seedharvest.json"
+    status_path = out_dir / f"{name}.seeds.csv"
+    records_path = out_dir / f"{name}.csv"
+    jsonl_path = out_dir / f"{name}.jsonl"
     access_mode = "session" if cookie else "anonymous"
 
     with SeedHarvestStore(checkpoint) as store:

@@ -13,7 +13,7 @@ import requests
 
 from .models import PostRecord, merge_record
 from .storage import save_records
-from .utils import normalize_whitespace, utc_iso
+from .utils import normalize_whitespace, safe_artifact_stem, utc_iso
 from .weibo import (
     WEIBO_MOBILE_BASE_URL,
     WEIBO_SEARCH_ENDPOINT,
@@ -548,6 +548,7 @@ def save_weibo_investigation(
 ) -> list[str]:
     out = Path(output_directory).expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
+    name = safe_artifact_stem(name, "weibo_investigation")
     stem = out / name
     csv_path = stem.with_suffix(".csv")
     save_records(

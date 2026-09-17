@@ -19,7 +19,7 @@ from .state_synthesis import (
     render_synthesis_markdown,
 )
 from .state_tradecraft import build_tradecraft_audit
-from .utils import JsonCache, utc_iso
+from .utils import JsonCache, safe_artifact_stem, utc_iso
 
 AGENTIC_ORCHESTRATION_VERSION = "1.4"
 
@@ -400,7 +400,7 @@ def save_iterative_agentic_synthesis(
 ) -> list[str]:
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = "_".join(_clean(name).split()) or "analytic_intelligence"
+    stem = safe_artifact_stem(name, "analytic_intelligence")
     payload = run_iterative_agentic_synthesis(
         observations,
         assessments,

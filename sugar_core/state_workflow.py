@@ -18,7 +18,7 @@ from .state_schema import (
     USPresenceSite,
     USServiceSourceAttribution,
 )
-from .utils import safe_cell, utc_iso
+from .utils import safe_artifact_stem, safe_cell, utc_iso
 
 DOMAIN_TO_US_SERVICES = {
     "higher_education": {"educationusa", "study_in_the_us", "higher_education"},
@@ -1128,7 +1128,7 @@ def save_state_package(
     sites = list(us_sites)
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = "_".join(_clean(name).split()) or "state_research"
+    stem = safe_artifact_stem(name, "state_research")
 
     if sites:
         apply_us_overlaps(observations, assessments, sites)

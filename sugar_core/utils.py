@@ -15,6 +15,23 @@ def normalize_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", str(text or "")).strip()
 
 
+def safe_artifact_stem(value: Any, default: str = "artifact", *, max_length: int = 96) -> str:
+    """Return a portable, single-component stem for generated artifact names."""
+
+    raw = normalize_whitespace(str(value or ""))
+    if not raw:
+        raw = normalize_whitespace(default)
+    if any(char in raw for char in ("/", "\\", ":")) or any(ord(char) < 32 for char in raw):
+        raise ValueError("artifact name must be a single file name, not a path")
+    stem = re.sub(r'[<>:"|?*]', "_", raw)
+    stem = re.sub(r"[^\w.-]+", "_", stem, flags=re.UNICODE).strip(" ._")
+    stem = re.sub(r"_+", "_", stem)
+    if not stem or stem in {".", ".."}:
+        stem = normalize_whitespace(default)
+    stem = stem[:max_length].rstrip(" ._")
+    return stem or "artifact"
+
+
 def safe_cell(value: Any, formula_safe: bool = True) -> Any:
     if value is None:
         return ""

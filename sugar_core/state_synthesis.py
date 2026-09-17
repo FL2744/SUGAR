@@ -10,7 +10,7 @@ from .llm import LLMConfig, cached_chat, create_client, parse_json_object
 from .observations import ResearchObservation
 from .state_intelligence import build_intelligence_packet
 from .state_schema import StateAssessment
-from .utils import JsonCache, stable_hash, utc_iso
+from .utils import JsonCache, safe_artifact_stem, stable_hash, utc_iso
 
 SYNTHESIS_VERSION = "1.0"
 LIKELIHOODS = {
@@ -629,7 +629,7 @@ def save_agentic_synthesis(
 ) -> list[str]:
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = "_".join(_clean(name).split()) or "analytic_intelligence"
+    stem = safe_artifact_stem(name, "analytic_intelligence")
     payload = run_agentic_synthesis(
         observations,
         assessments,

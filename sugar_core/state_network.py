@@ -7,6 +7,7 @@ from typing import Any, Iterable
 
 from .observations import ResearchObservation
 from .state_schema import StateAssessment, USPresenceSite, stable_state_id
+from .utils import safe_artifact_stem
 
 
 def _clean(value: Any) -> str:
@@ -154,7 +155,7 @@ def save_state_network(
     nodes, edges = build_state_network(observations, assessments, us_sites, verified_only=verified_only)
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = "_".join(_clean(name).split()) or "state_network"
+    stem = safe_artifact_stem(name, "state_network")
     nodes_path = out_dir / f"{stem}.nodes.csv"
     edges_path = out_dir / f"{stem}.edges.csv"
     json_path = out_dir / f"{stem}.network.json"

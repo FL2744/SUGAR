@@ -15,7 +15,7 @@ import requests
 from .collector_registry import CollectorRequest, collect_registered_source, get_collector
 from .models import PostRecord, merge_record
 from .storage import save_records
-from .utils import atomic_path, atomic_write_text, utc_iso
+from .utils import atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
 
 DEFAULT_TIME_SHARD_SOURCES = frozenset({"x", "bluesky"})
 NUMBERED_PAGE_SOURCES = frozenset({"bilibili", "weibo"})
@@ -554,7 +554,7 @@ def run_harvest(
 
     out_dir = Path(config.get("output_directory") or raw.get("output_directory") or Path.cwd()).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    name = _clean(raw.get("name") or config.get("name") or "sugar_harvest").replace(" ", "_")
+    name = safe_artifact_stem(raw.get("name") or config.get("name"), "sugar_harvest")
     output_csv = out_dir / f"{name}.csv"
     checkpoint = out_dir / f"{name}.harvest.sqlite3"
     manifest_path = out_dir / f"{name}.harvest.json"

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .utils import stable_hash, utc_iso
+from .utils import safe_artifact_stem, stable_hash, utc_iso
 
 
 def _clean(value: Any) -> str:
@@ -169,7 +169,7 @@ def save_hypothesis_matrix(
 ) -> list[str]:
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = "_".join(_clean(name).split()) or "analytic_intelligence"
+    stem = safe_artifact_stem(name, "analytic_intelligence")
     payload = build_hypothesis_matrix(synthesis)
     json_path = out_dir / f"{stem}.hypotheses.json"
     csv_path = out_dir / f"{stem}.hypotheses.csv"

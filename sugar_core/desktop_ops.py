@@ -35,6 +35,7 @@ from .state_workflow import (
     save_state_assessments,
     write_us_presence_template,
 )
+from .utils import safe_artifact_stem
 from .workspace import SugarWorkspace
 from .workspace_runtime import (
     latest_workspace_artifact_path,
@@ -224,7 +225,7 @@ def _run_state_package(
     source_conflicts_path = _optional_input_path(config, "source_conflicts", workspace)
     entities_path = _optional_input_path(config, "entities", workspace)
     previous_path = _optional_input_path(config, "previous_assessments", workspace)
-    name = str(config.get("name") or "state_research").strip() or "state_research"
+    name = safe_artifact_stem(config.get("name"), "state_research")
     title = str(config.get("title") or "PRC Cultural Influence Network Research Update").strip()
     current_start = str(config.get("current_start") or "2024-01-01").strip()
     stale_days = int(config.get("stale_days", 90))
@@ -249,7 +250,7 @@ def _run_state_package(
         workspace,
     )
     registry = load_entity_registry(entities_path) if entities_path else None
-    stem = "_".join(name.split())
+    stem = safe_artifact_stem(name, "state_research")
 
     _notify(progress, "state_package_stage", stage="assessed_snapshot")
     assessed_snapshot = out_dir / f"{stem}.assessed.jsonl"

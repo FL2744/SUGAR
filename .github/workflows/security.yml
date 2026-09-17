@@ -46,9 +46,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
+      - name: Check GitHub dependency graph availability
+        id: dependency-graph
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          status="$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.security_and_analysis.dependency_graph.status // "unknown"')"
+          echo "status=${status}" >> "${GITHUB_OUTPUT}"
+          echo "GitHub dependency graph status: ${status}"
+      - name: Run dependency review
+        if: steps.dependency-graph.outputs.status == 'enabled'
+        uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
+      - name: Explain unavailable dependency review
+        if: steps.dependency-graph.outputs.status != 'enabled'
+        run: |
+          echo "::warning title=Dependency review unavailable::Enable the repository dependency graph in Settings > Security analysis to activate GitHub dependency review. pip-audit remains enforced by the quality gate."

@@ -11,7 +11,7 @@ from .state_entities import EntityRegistry
 from .state_freshness import build_freshness_report
 from .state_schema import StateAssessment, USPresenceSite
 from .state_workflow import build_review_queue
-from .utils import utc_iso
+from .utils import safe_artifact_stem, utc_iso
 
 
 def _clean(value: Any) -> str:
@@ -206,7 +206,7 @@ def save_gap_report(
     payload = build_gap_report(observations, assessments, entities=entities, us_sites=us_sites, **kwargs)
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = "_".join(str(name or "state_research").split())
+    stem = safe_artifact_stem(name, "state_research")
     json_path = out_dir / f"{stem}.gaps.json"
     csv_path = out_dir / f"{stem}.gaps.csv"
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")

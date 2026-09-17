@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ntpath
 import re
 from pathlib import Path
 from typing import Any, Mapping
@@ -120,6 +121,20 @@ def redacted_path(path: str | Path) -> str:
     """Represent a path without exposing a user's home directory in diagnostics."""
 
     value = str(path)
+    # ``Path`` follows the host OS.  Diagnostics can contain a Windows path
+    # even when they are produced by a Linux worker (for example, a bundle
+    # manifest or a cross-platform test fixture), so recognize and normalize
+    # Windows absolute paths before asking ``Path`` to resolve them.
+    if re.match(r"^(?:[A-Za-z]:[\\/]|\\\\)", value):
+        normalized = ntpath.normpath(value)
+        windows_home = ntpath.normpath(str(Path.home()) if re.match(r"^[A-Za-z]:[\\/]", str(Path.home())) else "")
+        if windows_home:
+            try:
+                if ntpath.commonpath([normalized, windows_home]) == windows_home:
+                    return ntpath.relpath(normalized, windows_home)
+            except ValueError:
+                pass
+        return normalized
     try:
         return str(Path(value).resolve().relative_to(Path.home().resolve()))
     except (ValueError, OSError):

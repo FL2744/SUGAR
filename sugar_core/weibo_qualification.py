@@ -12,7 +12,7 @@ from typing import Any, Callable, Iterable
 
 from .harvest import run_harvest
 from .models import PostRecord
-from .utils import utc_iso
+from .utils import safe_artifact_stem, utc_iso
 from .weibo_investigation import WeiboInvestigation, investigate_weibo_seed, save_weibo_investigation
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
@@ -622,7 +622,7 @@ def run_weibo_qualification(
     raw = config.get("qualification") or {}
     out_dir = Path(config.get("output_directory") or raw.get("output_directory") or ".").expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    name = str(raw.get("name") or config.get("name") or "weibo_qualification").strip().replace(" ", "_")
+    name = safe_artifact_stem(raw.get("name") or config.get("name"), "weibo_qualification")
     terms = [str(value).strip() for value in (config.get("terms") or raw.get("terms") or []) if str(value).strip()]
     if not terms:
         raise ValueError("Weibo qualification requires at least one keyword/query term.")

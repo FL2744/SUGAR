@@ -19,7 +19,7 @@ from .spatial import (
     save_spatial_summary,
 )
 from .storage import save_records
-from .utils import JsonCache
+from .utils import JsonCache, safe_artifact_stem
 from .workspace_runtime import (
     choose_output_directory,
     register_workspace_outputs,
@@ -179,7 +179,7 @@ def _harvest_access_modes(config: dict[str, Any], secrets: dict[str, str]) -> di
 def _harvest_access_marker(config: dict[str, Any]) -> Path:
     raw = config.get("harvest") or {}
     out_dir = Path(config.get("output_directory") or raw.get("output_directory") or Path.cwd()).expanduser().resolve()
-    name = "_".join(str(raw.get("name") or config.get("name") or "sugar_harvest").split())
+    name = safe_artifact_stem(raw.get("name") or config.get("name"), "sugar_harvest")
     return out_dir / f"{name}.harvest.access.json"
 
 
@@ -221,7 +221,7 @@ def run_harvest(
     outputs = _run_harvest(effective, secrets, progress=progress)
     raw = effective.get("harvest") or {}
     out_dir = Path(effective["output_directory"]).expanduser().resolve()
-    name = "_".join(str(raw.get("name") or effective.get("name") or "sugar_harvest").split())
+    name = safe_artifact_stem(raw.get("name") or effective.get("name"), "sugar_harvest")
     manifest = out_dir / f"{name}.harvest.json"
     if manifest.is_file():
         payload = json.loads(manifest.read_text(encoding="utf-8"))

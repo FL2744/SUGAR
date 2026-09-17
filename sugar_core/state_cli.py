@@ -34,6 +34,7 @@ from .state_workflow import (
     save_state_assessments,
     write_us_presence_template,
 )
+from .utils import safe_artifact_stem
 from .workspace_runtime import (
     choose_output_directory,
     optional_workspace,
@@ -456,7 +457,7 @@ def _run(argv=None) -> int:
         )
         observations, assessments, sites = _loaded_state_inputs(args)
         registry = load_entity_registry(args.entities) if args.entities else None
-        stem = "_".join(args.name.split())
+        stem = safe_artifact_stem(args.name, "state_research")
         assessed_snapshot = out_dir / f"{stem}.assessed.jsonl"
         assessed_output = save_state_assessments(assessments, assessed_snapshot)
         outputs.append(assessed_output)

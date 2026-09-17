@@ -25,7 +25,7 @@ from .state_workflow import (
     load_us_presence_sites,
     save_state_package,
 )
-from .utils import safe_cell
+from .utils import safe_artifact_stem, safe_cell
 
 _CONFLICT_SECTION_START = "<!-- SUGAR_SOURCE_CONFLICTS_START -->"
 _CONFLICT_SECTION_END = "<!-- SUGAR_SOURCE_CONFLICTS_END -->"
@@ -36,7 +36,7 @@ def _clean(value: Any) -> str:
 
 
 def _stem(name: str) -> str:
-    return "_".join(_clean(name).split()) or "state_research"
+    return safe_artifact_stem(name, "state_research")
 
 
 def _normalize_conflicts(

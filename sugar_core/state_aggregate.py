@@ -8,7 +8,7 @@ from typing import Any, Iterable
 
 from .observations import ResearchObservation
 from .state_schema import StateAssessment
-from .utils import utc_iso
+from .utils import safe_artifact_stem, utc_iso
 
 
 def _sorted_counts(values: Iterable[str]) -> list[dict[str, Any]]:
@@ -115,7 +115,7 @@ def save_state_rollups(
     payload = build_state_rollups(observations, assessments)
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = "_".join(str(name or "state_research").split())
+    stem = safe_artifact_stem(name, "state_research")
     json_path = out_dir / f"{stem}.rollups.json"
     country_path = out_dir / f"{stem}.countries.csv"
     place_path = out_dir / f"{stem}.places.csv"
