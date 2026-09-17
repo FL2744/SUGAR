@@ -32,9 +32,11 @@ reporting-period-a/
 |   `-- search-plan.json
 |-- evidence/
 |   |-- records.jsonl
-|   `-- observations.jsonl
+|   |-- observations.jsonl
+|   `-- lineage.json
 |-- review/
-|   `-- state-assessments.jsonl       # when supplied
+|   |-- state-assessments.jsonl       # when supplied
+|   `-- source-conflicts.json         # when supplied
 |-- provenance/
 |   `-- ...                            # import/collection manifests
 `-- outputs/
@@ -42,6 +44,8 @@ reporting-period-a/
 ```
 
 `manifest.json` records the SUGAR version, schema versions, requirement ID, counts, relative paths, byte sizes, and SHA-256 for every packaged artifact. Relative paths let the directory move without rewriting links.
+
+When State assessments are supplied, `evidence/lineage.json` indexes each analytic claim and sponsor-support finding, preserving supporting evidence IDs and exact contradiction links from an optional `--source-conflicts` file. The same index resolves source references to canonical records when possible and records collection/import context.
 
 Canonical source records and research observations are always emitted as JSONL even if the original input was CSV or XLSX. This keeps the evidentiary core machine-readable without proprietary serialization.
 
@@ -60,3 +64,7 @@ sugar verify-handoff ./handoffs/reporting-period-a
 ```
 
 Verification checks every manifest-listed relative path, byte length, and SHA-256. A missing, modified, or path-escaping artifact fails verification. The ZIP is a transport convenience; the manifest inside the unpacked directory is the integrity contract.
+
+Verification also checks lineage semantics: referenced observations, canonical record keys, support-chain entries, and contradicting source-claim IDs must resolve inside the packaged lineage index.
+
+The semantic lineage validator also verifies assessment/observation consistency, rejects unresolved evidence and cross-observation record leakage, checks embedded record identities against the canonical record index, validates source-conflict membership, and confirms declared lineage counts. This means recomputing a checksum after corrupting lineage references does not make a handoff valid.

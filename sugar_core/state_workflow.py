@@ -11,8 +11,15 @@ from typing import Any, Iterable
 import pandas as pd
 
 from .collection_coverage import load_collection_coverage
+from .lineage import (
+    build_lineage_index,
+    load_dataset_metadata,
+    save_lineage_index,
+    validate_lineage_index,
+)
 from .observation_storage import load_observations
 from .observations import ResearchObservation
+from .source_conflicts import SourceConflict
 from .state_schema import (
     StateAssessment,
     USOverlapAssessment,
@@ -1077,6 +1084,8 @@ def save_state_package(
     previous_assessments: Iterable[StateAssessment] | None = None,
     title: str = "State-Supported Public Engagement Research Update",
     collection_coverage: dict[str, Any] | None = None,
+    source_conflicts: Iterable[SourceConflict] = (),
+    dataset_provenance: dict[str, Any] | None = None,
 ) -> list[str]:
     observations = list(observations)
     assessments = list(assessments)
@@ -1096,6 +1105,7 @@ def save_state_package(
     brief_path = out_dir / f"{stem}.brief.md"
     geojson_path = out_dir / f"{stem}.map.geojson"
     snapshot_path = out_dir / f"{stem}.snapshot.json"
+    lineage_path = out_dir / f"{stem}.lineage.json"
 
     save_state_assessments(assessments, jsonl_path)
     frame = _assessment_frame(assessments)
@@ -1106,7 +1116,6 @@ def save_state_package(
         pd.DataFrame([asdict(site) for site in sites]).to_excel(writer, index=False, sheet_name="us_presence")
 
     audit = audit_state_records(observations, assessments)
-    audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     pd.DataFrame(build_review_queue(observations, assessments)).to_csv(queue_path, index=False, encoding="utf-8-sig")
     brief_path.write_text(
         render_state_bluf(observations, assessments, title=title, collection_coverage=collection_coverage),
@@ -1128,11 +1137,26 @@ def save_state_package(
         snapshot["change_detection"] = compare_state_snapshots(previous_assessments, assessments)
     if collection_coverage is not None:
         snapshot["collection_coverage"] = collection_coverage
+    lineage = build_lineage_index(
+        observations,
+        assessments,
+        source_conflicts=source_conflicts,
+        dataset_provenance=dataset_provenance,
+    )
+    lineage_validation = validate_lineage_index(lineage)
+    save_lineage_index(lineage, lineage_path)
+    audit["lineage"] = lineage_validation
+    audit_path.write_text(
+        json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    snapshot["lineage_file"] = lineage_path.name
+    snapshot["lineage_status"] = lineage_validation["status"]
     snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
     return [
         str(jsonl_path), str(csv_path), str(xlsx_path), str(audit_path), str(queue_path),
-        str(brief_path), str(geojson_path), str(snapshot_path),
+        str(brief_path), str(geojson_path), str(snapshot_path), str(lineage_path),
     ]
 
 
@@ -1151,6 +1175,7 @@ def package_from_files(
     sites = load_us_presence_sites(us_sites_file) if us_sites_file else []
     previous = load_state_assessments(previous_assessments_file) if previous_assessments_file else None
     collection_coverage = load_collection_coverage(observations_file)
+    dataset_provenance = load_dataset_metadata(observations_file)
     return save_state_package(
         observations,
         assessments,
@@ -1160,4 +1185,5 @@ def package_from_files(
         previous_assessments=previous,
         title=title,
         collection_coverage=collection_coverage,
+        dataset_provenance=dataset_provenance,
     )

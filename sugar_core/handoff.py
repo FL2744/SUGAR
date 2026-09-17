@@ -14,6 +14,15 @@ from typing import Any, Iterable
 
 from . import __version__
 from .collection_coverage import load_collection_coverage
+from .lineage import (
+    LINEAGE_SCHEMA_VERSION,
+    build_lineage_index,
+    load_dataset_metadata,
+    load_lineage_index,
+    provenance_document,
+    save_lineage_index,
+    validate_lineage_index,
+)
 from .models import SCHEMA_VERSION as POST_SCHEMA_VERSION, PostRecord
 from .observation_storage import load_observations
 from .observations import OBSERVATION_SCHEMA_VERSION, ResearchObservation
@@ -26,6 +35,8 @@ from .research_requirements import (
     load_search_plan,
 )
 from .triage_io import load_post_records
+from .source_conflicts import load_source_conflicts
+from .state_workflow import load_state_assessments
 
 HANDOFF_SCHEMA_VERSION = "1.0"
 LIMITATIONS_SCHEMA_VERSION = "1.0"
@@ -236,6 +247,7 @@ def build_handoff_bundle(
     *,
     name: str = "sugar-handoff",
     assessments_file: str | Path | None = None,
+    source_conflicts_file: str | Path | None = None,
     limitations_file: str | Path | None = None,
     analytic_outputs: Iterable[str | Path] = (),
     provenance_files: Iterable[str | Path] = (),
@@ -247,6 +259,8 @@ def build_handoff_bundle(
         raise ValueError("Research requirement and search plan IDs do not match.")
     records = load_post_records(records_file)
     observations = load_observations(observations_file)
+    assessments = load_state_assessments(assessments_file) if assessments_file else []
+    source_conflicts = load_source_conflicts(source_conflicts_file) if source_conflicts_file else []
     if not records:
         raise ValueError("Handoff bundle requires at least one canonical source record.")
     if not observations:
@@ -276,26 +290,56 @@ def build_handoff_bundle(
         _write_json(plan_path, plan.export_dict())
         records_path = evidence / "records.jsonl"
         observations_path = evidence / "observations.jsonl"
+        lineage_path = evidence / "lineage.json"
         _write_jsonl(records_path, (_record_payload(record) for record in records))
         _write_jsonl(observations_path, (observation.export_dict() for observation in observations))
+
+        records_source = Path(records_file).expanduser().resolve()
+        auto_provenance: list[Path] = []
+        for candidate in (
+            Path(f"{records_source.with_suffix('')}.import.json"),
+            records_source.with_suffix(".metadata.json"),
+            records_source.with_suffix(".coverage.json"),
+        ):
+            if candidate.is_file():
+                auto_provenance.append(candidate)
+        provenance_sources: list[Path] = []
+        seen_provenance: set[Path] = set()
+        for source in [*auto_provenance, *(Path(value).expanduser().resolve() for value in provenance_files)]:
+            if source in seen_provenance:
+                continue
+            seen_provenance.add(source)
+            provenance_sources.append(source)
+        lineage = build_lineage_index(
+            observations,
+            assessments,
+            records=records,
+            source_conflicts=source_conflicts,
+            dataset_provenance=load_dataset_metadata(records_source),
+            provenance_documents=[provenance_document(source) for source in provenance_sources],
+        )
+        save_lineage_index(lineage, lineage_path)
 
         artifacts = [
             _artifact(staging_root, requirement_path, "research_requirement"),
             _artifact(staging_root, plan_path, "search_plan"),
             _artifact(staging_root, records_path, "normalized_records"),
             _artifact(staging_root, observations_path, "research_observations"),
+            _artifact(staging_root, lineage_path, "evidence_lineage"),
         ]
 
         if assessments_file:
             copied = _copy_named(assessments_file, review, preferred_name="state-assessments" + Path(assessments_file).suffix)
             artifacts.append(_artifact(staging_root, copied, "human_review_state"))
+        if source_conflicts_file:
+            copied = _copy_named(source_conflicts_file, review, preferred_name="source-conflicts.json")
+            artifacts.append(_artifact(staging_root, copied, "source_conflicts"))
 
         limitations_path = staging_root / "limitations.json"
         if limitations_file:
             supplied = json.loads(Path(limitations_file).expanduser().resolve().read_text(encoding="utf-8"))
             _write_json(limitations_path, supplied)
         else:
-            records_source = Path(records_file).expanduser().resolve()
             collection_coverage = load_collection_coverage(records_source)
             _write_json(
                 limitations_path,
@@ -309,20 +353,7 @@ def build_handoff_bundle(
             )
         artifacts.append(_artifact(staging_root, limitations_path, "coverage_and_limitations"))
 
-        auto_provenance: list[Path] = []
-        records_source = Path(records_file).expanduser().resolve()
-        for candidate in (
-            Path(f"{records_source.with_suffix('')}.import.json"),
-            records_source.with_suffix(".metadata.json"),
-            records_source.with_suffix(".coverage.json"),
-        ):
-            if candidate.is_file():
-                auto_provenance.append(candidate)
-        seen_provenance: set[Path] = set()
-        for source in [*auto_provenance, *(Path(value).expanduser().resolve() for value in provenance_files)]:
-            if source in seen_provenance:
-                continue
-            seen_provenance.add(source)
+        for source in provenance_sources:
             copied = _copy_named(source, provenance)
             artifacts.append(_artifact(staging_root, copied, "provenance"))
 
@@ -342,10 +373,12 @@ def build_handoff_bundle(
                 "research_requirement": REQUIREMENT_SCHEMA_VERSION,
                 "search_plan": SEARCH_PLAN_SCHEMA_VERSION,
                 "limitations": LIMITATIONS_SCHEMA_VERSION,
+                "lineage": LINEAGE_SCHEMA_VERSION,
             },
             "counts": {
                 "records": len(records),
                 "observations": len(observations),
+                "findings": len(lineage["findings"]),
                 "analytic_outputs": sum(item.role == "analytic_output" for item in artifacts),
                 "provenance_files": sum(item.role == "provenance" for item in artifacts),
             },
@@ -390,6 +423,7 @@ def verify_handoff_bundle(bundle_directory: str | Path) -> dict[str, Any]:
     if manifest.get("handoff_schema_version") != HANDOFF_SCHEMA_VERSION:
         raise ValueError(f"Unsupported handoff schema: {manifest.get('handoff_schema_version')!r}")
     findings: list[dict[str, Any]] = []
+    lineage_path: Path | None = None
     for artifact in manifest.get("artifacts") or []:
         relative = Path(str(artifact.get("path") or ""))
         if relative.is_absolute() or ".." in relative.parts:
@@ -418,9 +452,28 @@ def verify_handoff_bundle(bundle_directory: str | Path) -> dict[str, Any]:
             "sha256_match": actual_hash == expected_hash,
             "bytes_match": actual_bytes == expected_bytes,
         })
+        if artifact.get("role") == "evidence_lineage" and status == "ok":
+            lineage_path = path
+
+    semantic_findings: list[dict[str, Any]] = []
+    if lineage_path is not None:
+        validation = validate_lineage_index(load_lineage_index(lineage_path))
+        semantic_findings.append({
+            "code": "lineage_index",
+            "status": "ok" if validation["status"] == "pass" else "fail",
+            "schema_version": validation.get("schema_version"),
+            "counts": validation.get("counts") or {},
+            "issues": validation.get("issues") or [],
+        })
+    else:
+        semantic_findings.append({"code": "missing_evidence_lineage", "status": "fail"})
+
+    file_ok = bool(findings) and all(item["status"] == "ok" for item in findings)
+    semantic_ok = bool(semantic_findings) and all(item["status"] == "ok" for item in semantic_findings)
     return {
-        "status": "pass" if findings and all(item["status"] == "ok" for item in findings) else "fail",
+        "status": "pass" if file_ok and semantic_ok else "fail",
         "bundle": str(root),
         "artifacts": len(findings),
         "findings": findings,
+        "semantic_lineage": semantic_findings,
     }

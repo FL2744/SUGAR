@@ -12,7 +12,9 @@ HANDOFF_ROLE_KINDS = {
     "search_plan": "search_plan",
     "normalized_records": "evidence",
     "research_observations": "observations",
+    "evidence_lineage": "lineage",
     "human_review_state": "state_assessments",
+    "source_conflicts": "source_conflicts",
     "coverage_and_limitations": "limitations",
     "provenance": "provenance",
     "analytic_output": "analytic_output",
@@ -88,6 +90,8 @@ def classify_workspace_output(path: str | Path, *, operation: str = "") -> str:
         return "harvest"
     if suffix == ".html" and "map" in name:
         return "map"
+    if name.endswith(".lineage.json") or operation in {"lineage", "verify-lineage"}:
+        return "lineage"
     if suffix in {".pdf", ".docx"}:
         return "report"
     if "observation" in name or operation == "triage":

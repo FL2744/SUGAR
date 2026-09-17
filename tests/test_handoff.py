@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -14,6 +15,9 @@ from sugar_core.research_requirements import (
 )
 from sugar_core.storage import save_records
 from sugar_core.state_workflow import blank_state_assessments, save_state_package
+from sugar_core.source_conflicts import SourceClaim, SourceConflict, save_source_conflicts
+from sugar_core.state_schema import AnalyticClaim, StateAssessment
+from sugar_core.state_workflow import save_state_assessments
 
 
 def _inputs(tmp_path: Path):
@@ -72,7 +76,11 @@ def test_handoff_bundle_is_portable_self_describing_and_hash_verified(tmp_path: 
     assert manifest["counts"]["analytic_outputs"] == 1
     assert (root / "evidence" / "records.jsonl").is_file()
     assert (root / "evidence" / "observations.jsonl").is_file()
-    assert verify_handoff_bundle(root)["status"] == "pass"
+    assert (root / "evidence" / "lineage.json").is_file()
+    assert manifest["schemas"]["lineage"] == "1.0"
+    verification = verify_handoff_bundle(root)
+    assert verification["status"] == "pass"
+    assert all(item["status"] == "ok" for item in verification["semantic_lineage"])
 
     limitations = json.loads((root / "limitations.json").read_text(encoding="utf-8"))
     assert limitations["source_coverage"]["example"]["status"] == "success"
@@ -98,6 +106,61 @@ def test_handoff_verifier_detects_tampering(tmp_path: Path):
     verified = verify_handoff_bundle(result.directory)
     assert verified["status"] == "fail"
     assert any(item["path"] == "evidence/records.jsonl" and item["status"] == "mismatch" for item in verified["findings"])
+
+
+def test_handoff_verifier_rejects_semantically_broken_lineage_even_when_hash_is_updated(tmp_path: Path):
+    requirement_file, plan_file, records_file, observations_file, _ = _inputs(tmp_path)
+    from sugar_core.observation_storage import load_observations
+
+    observation = load_observations(observations_file)[0]
+    claim = AnalyticClaim(
+        statement="The source documents the program.",
+        evidence_refs=["https://example.test/1"],
+    )
+    assessments_file = Path(
+        save_state_assessments(
+            [StateAssessment(observation_id=observation.observation_id, claims=[claim])],
+            tmp_path / "assessments.jsonl",
+        )
+    )
+    result = build_handoff_bundle(
+        requirement_file,
+        plan_file,
+        records_file,
+        observations_file,
+        tmp_path / "handoffs",
+        name="case-semantic-lineage",
+        assessments_file=assessments_file,
+        create_zip=False,
+    )
+    root = Path(result.directory)
+    lineage_path = root / "evidence" / "lineage.json"
+    lineage = json.loads(lineage_path.read_text(encoding="utf-8"))
+    lineage["findings"][0]["observation_id"] = "obs_missing"
+    lineage_path.write_text(
+        json.dumps(lineage, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    artifact = next(
+        item for item in manifest["artifacts"] if item["role"] == "evidence_lineage"
+    )
+    artifact["sha256"] = hashlib.sha256(lineage_path.read_bytes()).hexdigest()
+    artifact["bytes"] = lineage_path.stat().st_size
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    verified = verify_handoff_bundle(root)
+    assert verified["status"] == "fail"
+    semantic = verified["semantic_lineage"][0]
+    assert semantic["status"] == "fail"
+    codes = {item["code"] for item in semantic["issues"]}
+    assert "finding_observation_missing" in codes
+    assert "finding_assessment_observation_mismatch" in codes
 
 
 def test_handoff_verifier_rejects_manifest_path_escape(tmp_path: Path):
@@ -151,8 +214,55 @@ def test_existing_state_package_outputs_can_be_carried_without_reimplementation(
     manifest = json.loads(Path(result.manifest).read_text(encoding="utf-8"))
     roles = [artifact["role"] for artifact in manifest["artifacts"]]
     assert "human_review_state" in roles
+    assert "evidence_lineage" in roles
     assert roles.count("analytic_output") == 2
     assert verify_handoff_bundle(result.directory)["status"] == "pass"
+
+
+def test_handoff_lineage_preserves_support_and_exact_contradiction_links(tmp_path: Path):
+    requirement_file, plan_file, records_file, observations_file, _ = _inputs(tmp_path)
+    source_url = "https://example.test/1"
+    contrary_url = "https://example.test/contrary"
+    from sugar_core.observation_storage import load_observations
+
+    observation = load_observations(observations_file)[0]
+    claim = AnalyticClaim(
+        statement="The documented service uses model A.",
+        claim_type="descriptive_fact",
+        evidence_refs=[source_url],
+    )
+    assessment = StateAssessment(observation_id=observation.observation_id, claims=[claim])
+    assessments_file = Path(save_state_assessments([assessment], tmp_path / "assessments.jsonl"))
+    supported = SourceClaim(statement="The service uses model A.", source_url=source_url)
+    contrary = SourceClaim(statement="The service uses model B.", source_url=contrary_url)
+    conflicts_file = Path(save_source_conflicts([
+        SourceConflict(topic="Service model", claims=[supported, contrary])
+    ], tmp_path / "source-conflicts.json"))
+
+    result = build_handoff_bundle(
+        requirement_file,
+        plan_file,
+        records_file,
+        observations_file,
+        tmp_path / "handoffs",
+        name="lineage-conflict",
+        assessments_file=assessments_file,
+        source_conflicts_file=conflicts_file,
+        create_zip=False,
+    )
+    root = Path(result.directory)
+    lineage = json.loads((root / "evidence" / "lineage.json").read_text(encoding="utf-8"))
+    finding = next(item for item in lineage["findings"] if item["finding_id"] == claim.claim_id)
+    assert finding["supporting_evidence_ids"] == [source_url]
+    assert finding["contradicting_evidence_ids"] == [contrary.claim_id]
+    assert finding["supporting_evidence"][0]["source_record_keys"] == ["example:1"]
+    manifest = json.loads(Path(result.manifest).read_text(encoding="utf-8"))
+    roles = {artifact["role"] for artifact in manifest["artifacts"]}
+    assert "source_conflicts" in roles
+    assert "evidence_lineage" in roles
+    verification = verify_handoff_bundle(root)
+    assert verification["status"] == "pass"
+    assert all(item["status"] == "ok" for item in verification["semantic_lineage"])
 
 
 def test_handoff_uses_collection_coverage_to_distinguish_unavailable_from_zero(tmp_path: Path):

@@ -22,6 +22,10 @@ For integration-first research, the core can also ingest external CSV/JSONL data
 
 Completed or intermediate research can be exported with `sugar handoff` as a portable directory/ZIP containing canonical evidence, requirement/search-plan context, coverage limitations, review state, provenance, and existing analytic outputs. `sugar verify-handoff` verifies every manifest-listed artifact by SHA-256 and byte length.
 
+State packages and portable handoffs also emit explicit evidence-lineage indexes so analytic claims can be traced through observation/evidence identities to canonical source records and collection/import context where available. Structured contradictory sources remain separate from supporting evidence rather than being flattened into one citation list.
+
+Use `sugar lineage ...` to build a standalone lineage index and `sugar verify-lineage ...` to run semantic integrity checks without creating a full handoff.
+
 SUGAR deliberately distinguishes **presence, activity, reach, engagement, outcomes, and causal influence**. It does not manufacture a universal influence score or treat collection density as influence.
 
 ## Entry points
@@ -204,6 +208,7 @@ For the State/Diplomacy Lab delivery target, the versioned product contract live
 - [`docs/research-requirements.md`](docs/research-requirements.md) ? research requirements and bounded adaptive search planning
 - [`docs/handoff-bundles.md`](docs/handoff-bundles.md) ? portable evidence-package handoff and integrity verification
 - [`docs/collection-coverage.md`](docs/collection-coverage.md) ? collection success/failure/availability and absence semantics
+- [`docs/evidence-lineage.md`](docs/evidence-lineage.md) — claim/evidence/record provenance and contradiction linkage
 - [`docs/high-volume-harvest.md`](docs/high-volume-harvest.md) — durable large-scale collection
 - [`docs/bilibili-public.md`](docs/bilibili-public.md) — Bilibili public collector
 - [`docs/weibo-public.md`](docs/weibo-public.md) — Weibo public collector

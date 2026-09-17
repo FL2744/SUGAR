@@ -134,6 +134,7 @@ def test_handoff_registration_indexes_each_portable_component(tmp_path: Path):
     (bundle / "context" / "search-plan.json").write_text("{}", encoding="utf-8")
     (bundle / "evidence" / "records.jsonl").write_text("{}\n", encoding="utf-8")
     (bundle / "evidence" / "observations.jsonl").write_text("{}\n", encoding="utf-8")
+    (bundle / "evidence" / "lineage.json").write_text("{}", encoding="utf-8")
     (bundle / "review" / "state-assessments.jsonl").write_text("{}\n", encoding="utf-8")
     (bundle / "limitations.json").write_text("{}", encoding="utf-8")
     (bundle / "outputs" / "brief.md").write_text("# Brief\n", encoding="utf-8")
@@ -145,6 +146,7 @@ def test_handoff_registration_indexes_each_portable_component(tmp_path: Path):
             {"role": "search_plan", "path": "context/search-plan.json"},
             {"role": "normalized_records", "path": "evidence/records.jsonl"},
             {"role": "research_observations", "path": "evidence/observations.jsonl"},
+            {"role": "evidence_lineage", "path": "evidence/lineage.json"},
             {"role": "human_review_state", "path": "review/state-assessments.jsonl"},
             {"role": "coverage_and_limitations", "path": "limitations.json"},
             {"role": "analytic_output", "path": "outputs/brief.md"},
@@ -163,6 +165,7 @@ def test_handoff_registration_indexes_each_portable_component(tmp_path: Path):
         "search_plan",
         "evidence",
         "observations",
+        "lineage",
         "state_assessments",
         "limitations",
         "analytic_output",
@@ -172,3 +175,4 @@ def test_handoff_registration_indexes_each_portable_component(tmp_path: Path):
     catalog_kinds = {item["kind"] for item in catalog["artifacts"]}
     assert "limitations" in catalog_kinds
     assert "evidence" in catalog_kinds
+    assert "lineage" in catalog_kinds

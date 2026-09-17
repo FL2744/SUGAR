@@ -49,6 +49,8 @@ High-volume collection is checkpointed and resumable. It must not become a mecha
 
 `collection_coverage.py` keeps collection availability separate from corpus content. Bounded searches persist per-source success, zero-result, partial, unavailable, and failed states before downstream analysis. Adaptive plan execution pauses branches when all requested surfaces are inaccessible instead of interpreting an empty corpus as absence.
 
+`lineage.py` materializes the analytic provenance graph. State findings retain their exact supporting evidence identities; structured source conflicts contribute contradiction IDs only when they match one of those supporting references. Where canonical records are available, lineage resolves evidence back to record identity and collection/import fields while preserving the original record as the source of truth.
+
 ### Evidence layer
 
 `observations.py` and `observation_storage.py` convert normalized source material into `ResearchObservation`, which is the source-grounded evidence layer. This layer should remain independent from sponsor-specific analytical judgments.
