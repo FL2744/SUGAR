@@ -28,3 +28,12 @@ def test_bundled_bridge_exposes_windows_cli_wrappers():
     for wrapper in ("sugar.cmd", "sugar-project.cmd", "sugar-state.cmd", "sugar-intel.cmd"):
         assert wrapper in build
     assert "CLASSROOM-QUICK-START.md" in build
+
+def test_windows_ui_uses_deterministic_light_palette() -> None:
+    source = Path("SUGAR-Windows/app.py").read_text(encoding="utf-8")
+    assert "def apply_light_palette(" in source
+    assert "QPalette.ColorRole.WindowText" not in source  # roles are intentionally aliased locally
+    assert 'role.WindowText: "#172033"' in source
+    assert 'role.Window: "#f5f7fb"' in source
+    assert "QDialog, QMessageBox { background: #ffffff; color: #172033; }" in source
+    assert "apply_light_palette(app)" in source
