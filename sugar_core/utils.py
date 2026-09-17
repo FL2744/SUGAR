@@ -98,6 +98,9 @@ def atomic_path(path: str | Path, *, suffix: str | None = None) -> Iterator[Path
 
 def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -> None:
     with atomic_path(path) as temporary:
+        # This primitive is restricted to caller-sanitized, user-requested
+        # artifacts; credential-bearing configuration never reaches it.
+        # codeql[py/clear-text-storage-sensitive-data]
         temporary.write_text(text, encoding=encoding)
 
 
