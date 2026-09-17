@@ -193,6 +193,19 @@ def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
 
 
 def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in {"cli", "project", "state", "intel"}:
+        mode = argv.pop(0)
+        if mode == "cli":
+            from sugar_core.cli import main as command_main
+        elif mode == "project":
+            from sugar_core.workspace_cli import main as command_main
+        elif mode == "state":
+            from sugar_core.state_cli import main as command_main
+        else:
+            from sugar_core.state_intel_cli import main as command_main
+        return int(command_main(argv) or 0)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=sorted(ALL_OPERATIONS))
     parser.add_argument("--config")
