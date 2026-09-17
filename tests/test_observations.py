@@ -65,6 +65,21 @@ def test_observation_id_is_stable_for_same_evidence():
     assert first.observation_id == second.observation_id
 
 
+def test_observation_csv_and_xlsx_preserve_numeric_looking_ids(tmp_path):
+    observation = ResearchObservation(
+        observation_type="event",
+        observation_id="000123",
+        summary="Numeric-looking identifiers remain text.",
+        evidence=[EvidenceReference(url="https://example.org/000123")],
+    )
+    target = tmp_path / "observations.csv"
+    save_observations([observation], target)
+
+    for path in (target, target.with_suffix(".xlsx")):
+        restored = load_observations(path)[0]
+        assert restored.observation_id == "000123"
+
+
 def test_human_verification_requires_reviewer_and_can_be_reopened():
     observation = ResearchObservation(
         observation_type="event",

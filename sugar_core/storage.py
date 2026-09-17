@@ -58,6 +58,18 @@ PREFERRED_COLUMNS = [
     "is_retweet",
 ]
 
+_IDENTIFIER_COLUMNS = {
+    "platform",
+    "native_id",
+    "record_key",
+    "parent_record_key",
+    "thread_root_key",
+    "conversation_id",
+    "tweet_id",
+    "post_url",
+    "x_url",
+}
+
 
 def records_to_frame(records: Iterable[PostRecord]) -> pd.DataFrame:
     df = pd.DataFrame([r.export_dict() for r in records])
@@ -122,8 +134,9 @@ def load_results(path: str | Path) -> pd.DataFrame:
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(path)
+    dtype = {column: str for column in _IDENTIFIER_COLUMNS}
     if path.suffix.lower() == ".xlsx":
-        return pd.read_excel(path, sheet_name="posts")
+        return pd.read_excel(path, sheet_name="posts", dtype=dtype)
     if path.suffix.lower() == ".csv":
-        return pd.read_csv(path)
+        return pd.read_csv(path, dtype=dtype)
     raise ValueError("Results file must be CSV or XLSX.")

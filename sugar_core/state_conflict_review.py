@@ -186,7 +186,7 @@ def apply_source_conflict_review_workbook(
         raise FileNotFoundError(path)
 
     try:
-        frame = pd.read_excel(path, sheet_name="source_conflicts")
+        frame = pd.read_excel(path, sheet_name="source_conflicts", dtype={"conflict_id": str})
     except ValueError as exc:
         raise ValueError("Review workbook is missing the source_conflicts sheet.") from exc
 

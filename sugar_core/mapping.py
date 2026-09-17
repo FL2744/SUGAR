@@ -10,6 +10,17 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
+_IDENTIFIER_COLUMNS = {
+    "observation_id",
+    "native_id",
+    "record_key",
+    "reference_id",
+    "site_id",
+    "primary_source_url",
+    "source_url",
+    "url",
+}
+
 OBSERVATION_COLORS = {
     "institution": "#2563eb",
     "program": "#16a34a",
@@ -154,15 +165,16 @@ def load_map_frame(path: str | Path) -> pd.DataFrame:
     if not path.is_file():
         raise FileNotFoundError(path)
     suffix = path.suffix.casefold()
+    dtype = {column: str for column in _IDENTIFIER_COLUMNS}
     if suffix == ".csv":
-        return pd.read_csv(path)
+        return pd.read_csv(path, dtype=dtype)
     if suffix == ".xlsx":
         with pd.ExcelFile(path) as workbook:
             for preferred in ("observations", "posts"):
                 if preferred in workbook.sheet_names:
-                    return workbook.parse(preferred)
+                    return workbook.parse(preferred, dtype=dtype)
             if workbook.sheet_names:
-                return workbook.parse(workbook.sheet_names[0])
+                return workbook.parse(workbook.sheet_names[0], dtype=dtype)
             raise ValueError("Workbook contains no readable sheets.")
     raise ValueError("Map source must be CSV or XLSX.")
 

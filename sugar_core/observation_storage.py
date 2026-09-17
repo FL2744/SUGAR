@@ -74,6 +74,7 @@ _LONG_TEXT_COLUMNS = {
     "evidence",
     "provenance",
 }
+_IDENTIFIER_COLUMNS = {"observation_id", "source_record_keys", "primary_source_url"}
 
 
 def observations_to_frame(observations: Iterable[ResearchObservation]) -> pd.DataFrame:
@@ -176,9 +177,9 @@ def load_observation_frame(path: str | Path) -> pd.DataFrame:
         raise FileNotFoundError(path)
     suffix = path.suffix.lower()
     if suffix == ".csv":
-        return pd.read_csv(path)
+        return pd.read_csv(path, dtype={column: str for column in _IDENTIFIER_COLUMNS})
     if suffix == ".xlsx":
-        return pd.read_excel(path, sheet_name="observations")
+        return pd.read_excel(path, sheet_name="observations", dtype={column: str for column in _IDENTIFIER_COLUMNS})
     if suffix in {".jsonl", ".ndjson"}:
         return _load_jsonl_frame(path)
     raise ValueError("Observation dataset must be CSV, XLSX, JSONL, or NDJSON.")

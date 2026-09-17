@@ -252,8 +252,9 @@ def apply_review_workbook(
     path = Path(workbook_file)
     if not path.is_file():
         raise FileNotFoundError(path)
-    assessment_frame = pd.read_excel(path, sheet_name="assessments")
-    claim_frame = pd.read_excel(path, sheet_name="claims")
+    dtype = {"assessment_id": str, "observation_id": str, "claim_id": str}
+    assessment_frame = pd.read_excel(path, sheet_name="assessments", dtype=dtype)
+    claim_frame = pd.read_excel(path, sheet_name="claims", dtype=dtype)
     by_id = {row.assessment_id: row for row in assessments}
 
     for raw in assessment_frame.to_dict(orient="records"):

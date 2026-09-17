@@ -102,10 +102,11 @@ def load_us_presence_sites(path: str | Path) -> list[USPresenceSite]:
     source = Path(path)
     if not source.is_file():
         raise FileNotFoundError(source)
+    dtype = {"site_id": str}
     if source.suffix.lower() == ".csv":
-        frame = pd.read_csv(source)
+        frame = pd.read_csv(source, dtype=dtype)
     elif source.suffix.lower() == ".xlsx":
-        frame = pd.read_excel(source)
+        frame = pd.read_excel(source, dtype=dtype)
     else:
         raise ValueError("U.S. presence site input must be CSV or XLSX.")
     sites: list[USPresenceSite] = []

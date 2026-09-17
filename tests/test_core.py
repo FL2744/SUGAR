@@ -5,7 +5,7 @@ import pandas as pd
 from sugar_core.collectors import normalize_engagement
 from sugar_core.models import PostRecord, merge_record
 from sugar_core.reporting import _prepare
-from sugar_core.storage import records_to_frame
+from sugar_core.storage import load_results, records_to_frame, save_records
 from sugar_core.utils import in_inclusive_date_range, safe_cell
 
 
@@ -47,6 +47,21 @@ def test_export_has_stable_and_legacy_fields():
     assert frame.loc[0, "native_id"] == "abc"
     assert frame.loc[0, "tweet_id"] == "abc"
     assert json.loads(frame.loc[0, "query_matches"]) == ["q"]
+
+
+def test_csv_and_xlsx_loaders_preserve_numeric_looking_native_ids(tmp_path):
+    record = PostRecord(
+        platform="x",
+        native_id="000123",
+        canonical_url="https://example.test/p/000123",
+        query="q",
+    )
+    save_records([record], tmp_path / "posts.csv")
+
+    for path in (tmp_path / "posts.csv", tmp_path / "posts.xlsx"):
+        loaded = load_results(path)
+        assert loaded.loc[0, "native_id"] == "000123"
+        assert isinstance(loaded.loc[0, "native_id"], str)
 
 
 def test_analysis_counts_legacy_mastodon_metrics():
