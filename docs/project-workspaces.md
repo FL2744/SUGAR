@@ -117,6 +117,8 @@ sugar-state map data/observations/social_search_posts_20260914_120000_observatio
 
 The resulting artifacts are registered with an operation name, so desktop and automation flows can discover the latest observations, State assessment snapshot, maps, or intelligence product instead of requiring the user to select every file again.
 
+Workspace discovery skips a newer registered artifact if its file has gone missing and falls back to the most recent existing artifact of that kind. Weibo investigation and qualification products are registered as `raw_collection` artifacts, matching their canonical `data/raw` workspace destination rather than falling through to an uncategorized export.
+
 Desktop State/intelligence operations use the same contract. For example, `state-map` can receive only a workspace when that workspace already has registered `observations` and `state_assessments` artifacts.
 
 ## Python API
