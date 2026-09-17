@@ -115,11 +115,12 @@ def _sanitize_alternative(raw: dict[str, Any], allowed: set[str]) -> dict[str, A
         return None
     supporting = _valid_refs(raw.get("supporting_refs") or [], allowed)
     contradicting = _valid_refs(raw.get("contradicting_refs") or [], allowed)
+    consistency = _clean(raw.get("consistency")).casefold()
     return {
         "hypothesis": hypothesis,
         "supporting_refs": supporting,
         "contradicting_refs": contradicting,
-        "consistency": _clean(raw.get("consistency")).casefold() if _clean(raw.get("consistency")) in {"low", "mixed", "moderate", "high"} else "mixed",
+        "consistency": consistency if consistency in {"low", "mixed", "moderate", "high"} else "mixed",
         "discriminators": [_clean(x) for x in raw.get("discriminators") or [] if _clean(x)][:12],
         "collection_needed": [_clean(x) for x in raw.get("collection_needed") or [] if _clean(x)][:12],
     }
