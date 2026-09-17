@@ -1,0 +1,3 @@
+[allowlist]
+description = "Reviewed false positive in the original release-readiness prose commit."
+commits = ["8fd6260d930cddb13212ee77a27dac7205168c4c"]
