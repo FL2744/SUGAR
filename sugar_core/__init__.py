@@ -18,6 +18,15 @@ from .harvest import (
     build_harvest_tasks,
     rate_limit_wait_seconds,
 )
+from .lineage import (
+    LINEAGE_SCHEMA_VERSION,
+    build_lineage_index,
+    load_dataset_metadata,
+    load_lineage_index,
+    provenance_document,
+    save_lineage_index,
+    validate_lineage_index,
+)
 from .models import COLLECTOR_VERSION, SCHEMA_VERSION, PostRecord
 from .observation_storage import load_observations, observations_to_frame, save_observations
 from .observations import (
@@ -98,6 +107,13 @@ __all__ = [
     "HarvestTask",
     "build_harvest_tasks",
     "rate_limit_wait_seconds",
+    "LINEAGE_SCHEMA_VERSION",
+    "build_lineage_index",
+    "save_lineage_index",
+    "load_lineage_index",
+    "validate_lineage_index",
+    "load_dataset_metadata",
+    "provenance_document",
     "ResearchObservation",
     "ObservationLocation",
     "EvidenceReference",

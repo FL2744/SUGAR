@@ -43,6 +43,11 @@ def test_triage_dataset_carries_collection_coverage_into_observation_metadata(mo
     source = tmp_path / "records.csv"
     source.write_text("placeholder", encoding="utf-8")
     source.with_suffix(".coverage.json").write_text(json.dumps(_coverage()), encoding="utf-8")
+    source.with_suffix(".metadata.json").write_text(json.dumps({
+        "operation": "external_import",
+        "source_system": "partner-system",
+        "source_sha256": "b" * 64,
+    }), encoding="utf-8")
     record = _record()
     observation = observation_from_post(record)
     captured: dict = {}
@@ -61,6 +66,8 @@ def test_triage_dataset_carries_collection_coverage_into_observation_metadata(mo
     )
 
     assert captured["source_coverage"]["sources"]["bilibili"]["status"] == "unavailable"
+    assert captured["source_dataset_provenance"]["source_system"] == "partner-system"
+    assert captured["source_dataset_provenance"]["source_sha256"] == "b" * 64
 
 
 def test_state_package_surfaces_collection_limitations_from_observation_metadata(tmp_path: Path):
@@ -71,9 +78,12 @@ def test_state_package_surfaces_collection_limitations_from_observation_metadata
     outputs = package_from_files(observations_file, tmp_path / "state", name="coverage_case")
     brief_path = next(Path(path) for path in outputs if path.endswith(".brief.md"))
     snapshot_path = next(Path(path) for path in outputs if path.endswith(".snapshot.json"))
+    lineage_path = next(Path(path) for path in outputs if path.endswith(".lineage.json"))
     brief = brief_path.read_text(encoding="utf-8")
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    lineage = json.loads(lineage_path.read_text(encoding="utf-8"))
 
     assert "bilibili=unavailable (0 records)" in brief
     assert "must not be interpreted as evidence of no activity" in brief
     assert snapshot["collection_coverage"]["overall_status"] == "partial"
+    assert lineage["dataset_provenance"]["source_coverage"]["overall_status"] == "partial"

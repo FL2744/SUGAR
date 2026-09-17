@@ -202,6 +202,19 @@ def test_state_package_persists_provisional_conflict_across_analyst_surfaces(tmp
     assert snapshot["audit_status"] == "conditional"
     assert snapshot["source_conflicts"]["provisional_treatment"] == 1
     assert snapshot["source_conflict_ids"] == [conflict.conflict_id]
+    assert snapshot["lineage_status"] == "pass"
+
+    lineage = json.loads((tmp_path / "case.lineage.json").read_text(encoding="utf-8"))
+    overlap_finding = next(
+        item
+        for item in lineage["findings"]
+        if item["finding_type"] == "us_public_diplomacy_overlap"
+    )
+    contrary_claim = next(
+        claim for claim in conflict.claims if claim.claim_id != conflict.preferred_claim_id
+    )
+    assert conflict.conflict_id in overlap_finding["source_conflict_ids"]
+    assert contrary_claim.claim_id in overlap_finding["contradicting_evidence_ids"]
 
     queue = pd.read_csv(tmp_path / "case.review_queue.csv")
     assert int(queue.loc[0, "source_conflict_count"]) == 1

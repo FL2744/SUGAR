@@ -9,6 +9,14 @@ from pathlib import Path
 from . import __version__
 from .importers import import_external_dataset, parse_field_mappings
 from .handoff import build_handoff_bundle, verify_handoff_bundle
+from .lineage import (
+    build_lineage_index,
+    load_dataset_metadata,
+    load_lineage_index,
+    provenance_document,
+    save_lineage_index,
+    validate_lineage_index,
+)
 from .llm import ARC_BASE_URL, LLMConfig
 from .plan_execution import execute_search_plan
 from .plan_feedback import apply_triage_feedback, evidence_excerpts_for_branch
@@ -24,6 +32,8 @@ from .research_requirements import (
 )
 from .search_planner import expand_branch_from_evidence, expand_initial_plan_with_llm
 from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
+from .source_conflicts import load_source_conflicts
+from .state_workflow import load_state_assessments
 from .triage import DEFAULT_PROJECT_CONTEXT
 from .triage_io import load_post_records, triage_dataset
 from .weibo_investigation import investigate_weibo_seed, save_weibo_investigation
@@ -250,6 +260,7 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.add_argument("--output", required=True, help="Parent directory for the portable handoff.")
     handoff.add_argument("--name", default="sugar-handoff")
     handoff.add_argument("--assessments")
+    handoff.add_argument("--source-conflicts")
     handoff.add_argument("--limitations")
     handoff.add_argument("--include-output", action="append", default=[])
     handoff.add_argument("--provenance", action="append", default=[])
@@ -258,6 +269,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     verify_handoff = sub.add_parser("verify-handoff", help="Verify all files in a SUGAR handoff against manifest hashes and sizes.")
     verify_handoff.add_argument("bundle_directory")
+
+    lineage = sub.add_parser(
+        "lineage",
+        help="Build a standalone claim/evidence lineage index from research artifacts.",
+    )
+    lineage.add_argument("observations_file")
+    lineage.add_argument("--assessments")
+    lineage.add_argument("--records")
+    lineage.add_argument("--source-conflicts")
+    lineage.add_argument("--provenance", action="append", default=[])
+    lineage.add_argument("--output")
+    _workspace_arg(lineage)
+
+    verify_lineage = sub.add_parser(
+        "verify-lineage",
+        help="Validate semantic claim/evidence lineage integrity.",
+    )
+    verify_lineage.add_argument("lineage_file")
 
     harvest = sub.add_parser(
         "harvest",
@@ -661,6 +690,7 @@ def main(argv=None) -> int:
             args.output,
             name=args.name,
             assessments_file=args.assessments,
+            source_conflicts_file=args.source_conflicts,
             limitations_file=args.limitations,
             analytic_outputs=args.include_output,
             provenance_files=args.provenance,
@@ -678,6 +708,56 @@ def main(argv=None) -> int:
 
     if args.command == "verify-handoff":
         result = verify_handoff_bundle(args.bundle_directory)
+        print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0 if result["status"] == "pass" else 2
+
+    if args.command == "lineage":
+        workspace = optional_workspace(args.workspace)
+        observations_path = Path(args.observations_file).expanduser().resolve()
+        observations = load_observations(observations_path)
+        assessments = load_state_assessments(args.assessments) if args.assessments else []
+        records = load_post_records(args.records) if args.records else []
+        conflicts = load_source_conflicts(args.source_conflicts) if args.source_conflicts else []
+        provenance_paths = [Path(value).expanduser().resolve() for value in args.provenance]
+        provenance_source = (
+            Path(args.records).expanduser().resolve()
+            if args.records
+            else observations_path
+        )
+        lineage = build_lineage_index(
+            observations,
+            assessments,
+            records=records,
+            source_conflicts=conflicts,
+            dataset_provenance=load_dataset_metadata(provenance_source),
+            provenance_documents=[
+                provenance_document(path)
+                for path in provenance_paths
+            ],
+        )
+        target = (
+            Path(args.output).expanduser().resolve()
+            if args.output
+            else (
+                workspace.path_for("state") / "evidence.lineage.json"
+                if workspace is not None
+                else observations_path.with_name(
+                    f"{observations_path.stem}.lineage.json"
+                )
+            )
+        )
+        output = save_lineage_index(lineage, target)
+        register_workspace_outputs(
+            workspace,
+            [output],
+            operation="lineage",
+            kind="lineage",
+        )
+        print(output)
+        return 0
+
+    if args.command == "verify-lineage":
+        result = validate_lineage_index(load_lineage_index(args.lineage_file))
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if result["status"] == "pass" else 2
 

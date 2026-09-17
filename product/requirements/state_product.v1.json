@@ -146,7 +146,7 @@
       "priority": "P0",
       "category": "evidence",
       "title": "End-to-end provenance",
-      "status": "partially_met",
+      "status": "met",
       "requirement": "Every State-facing finding must be traceable from analytic claim to source evidence and the collection/import context that produced it.",
       "acceptance": [
         "A finding can enumerate supporting and contradicting evidence IDs.",

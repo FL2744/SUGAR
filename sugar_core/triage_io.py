@@ -153,6 +153,11 @@ def triage_dataset(
         "triage_model": llm.model,
         "triage_project_context": project_context,
     }
+    source_metadata_path = source_file.with_suffix(".metadata.json")
+    if source_metadata_path.is_file():
+        source_metadata = json.loads(source_metadata_path.read_text(encoding="utf-8"))
+        if isinstance(source_metadata, dict):
+            metadata["source_dataset_provenance"] = source_metadata
     source_coverage = load_collection_coverage(source_file)
     if source_coverage is not None:
         metadata["source_coverage"] = source_coverage

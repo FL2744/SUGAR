@@ -192,13 +192,21 @@ def test_package_emits_state_outputs_and_verified_geojson(tmp_path: Path):
         name="example_host_country",
         us_sites=[us_site()],
     )
-    assert len(outputs) == 8
+    assert len(outputs) == 9
     for output in outputs:
         assert Path(output).is_file()
     audit = json.loads((tmp_path / "example_host_country.audit.json").read_text(encoding="utf-8"))
     assert audit["status"] == "pass"
+    assert audit["lineage"]["status"] == "pass"
     geojson = json.loads((tmp_path / "example_host_country.map.geojson").read_text(encoding="utf-8"))
     assert {feature["properties"]["layer"] for feature in geojson["features"]} == {"sponsor_observation", "us_presence"}
+    lineage = json.loads((tmp_path / "example_host_country.lineage.json").read_text(encoding="utf-8"))
+    claim = assessment.claims[0]
+    finding = next(item for item in lineage["findings"] if item["finding_id"] == claim.claim_id)
+    assert finding["supporting_evidence_ids"] == [SOURCE]
+    snapshot = json.loads((tmp_path / "example_host_country.snapshot.json").read_text(encoding="utf-8"))
+    assert snapshot["lineage_file"] == "example_host_country.lineage.json"
+    assert snapshot["lineage_status"] == "pass"
 
 
 def test_snapshot_diff_calls_out_policy_relevant_changes():
