@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "deleted-public-post",
+      "kind": "deleted",
+      "record": {
+        "platform": "x",
+        "native_id": "deleted-001",
+        "canonical_url": "https://x.example/status/deleted-001",
+        "query": "education",
+        "query_matches": ["education"],
+        "source_url": "https://api.x.example/2/posts/search",
+        "collected_at": "2026-09-10T10:00:00Z",
+        "published_at": "2026-09-09T12:00:00Z",
+        "raw_stats": {"availability": "deleted", "http_status": 404},
+        "original_text": ""
+      },
+      "expect": {"record_key": "x:deleted-001", "availability": "deleted", "text_empty": true}
+    },
+    {
+      "case_id": "edited-public-post",
+      "kind": "edited",
+      "before": {
+        "platform": "bluesky",
+        "native_id": "edited-002",
+        "canonical_url": "https://bsky.example/profile/example/post/edited-002",
+        "query": "students",
+        "query_matches": ["students"],
+        "collected_at": "2026-09-10T11:00:00Z",
+        "published_at": "2026-09-09T13:00:00Z",
+        "original_text": "Draft event announcement",
+        "engagement": {"likes": 2}
+      },
+      "after": {
+        "platform": "bluesky",
+        "native_id": "edited-002",
+        "canonical_url": "https://bsky.example/profile/example/post/edited-002",
+        "query": "students",
+        "query_matches": ["students", "education"],
+        "collected_at": "2026-09-10T12:00:00Z",
+        "published_at": "2026-09-09T13:00:00Z",
+        "original_text": "Updated event announcement",
+        "engagement": {"likes": 4}
+      },
+      "expect": {"same_record_key": true, "text_changed": true, "latest_likes": 4}
+    },
+    {
+      "case_id": "reposted-public-post",
+      "kind": "reposted",
+      "record": {
+        "platform": "mastodon",
+        "native_id": "repost-003",
+        "canonical_url": "https://social.example/@account/123",
+        "query": "culture",
+        "query_matches": ["culture"],
+        "collected_at": "2026-09-10T13:00:00Z",
+        "published_at": "2026-09-09T14:00:00Z",
+        "is_repost": true,
+        "raw_stats": {"reblog_id": "origin-003", "reblogged": true}
+      },
+      "expect": {"is_repost": true, "origin_id": "origin-003"}
+    },
+    {
+      "case_id": "contradictory-observation",
+      "kind": "contradictory",
+      "observation": {
+        "observation_type": "event",
+        "summary": "A public event has conflicting descriptions across sources.",
+        "evidence": [
+          {
+            "url": "https://official.example/events/004",
+            "title": "Official event listing",
+            "source_type": "official",
+            "published_at": "2026-09-08",
+            "collected_at": "2026-09-10T14:00:00Z"
+          },
+          {
+            "url": "https://operator.example/events/004",
+            "title": "Operator event listing",
+            "source_type": "operator",
+            "published_at": "2026-09-09",
+            "collected_at": "2026-09-10T14:01:00Z",
+            "note": "Contradicts the official listing on venue and delivery mode."
+          }
+        ],
+        "provenance": [
+          {
+            "source_url": "https://official.example/events/004",
+            "history": [],
+            "conflict_history": []
+          }
+        ]
+      },
+      "expect": {"final_state": "needs_followup", "conflict_event": "reopened_for_followup"}
+    },
+    {
+      "case_id": "archived-source",
+      "kind": "archived-source",
+      "evidence": {
+        "url": "https://source.example/events/005",
+        "archived_url": "https://web.archive.org/web/20260910150000/https://source.example/events/005",
+        "title": "Archived event page",
+        "source_type": "web_archive",
+        "collected_at": "2026-09-10T15:00:00Z",
+        "note": "Live page returned 410; archive capture retained for review."
+      },
+      "expect": {"archive_host": "web.archive.org", "source_type": "web_archive"}
+    }
+  ]
+}

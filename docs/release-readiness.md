@@ -27,8 +27,9 @@ decision remains; `[ ]` means work remains.
 6. `[x]` Provenance: records and derived observations preserve identity, URLs, timestamps, method,
    query matches, collector/access mode, raw/normalized metrics, confidence, evidence, review, AI,
    and round-trip provenance fields.
-7. `[~]` Evidence: grounded evidence and unknown/uncertain review semantics exist; a larger fixture
-   corpus of deleted/edited/reposted/contradictory/archived-source cases remains.
+7. `[~]` Evidence: grounded evidence and unknown/uncertain review semantics exist, and a checked-in
+   adversarial corpus now covers deleted/edited/reposted/contradictory/archived-source cases; larger
+   source-specific fixtures and expert review remain.
 8. `[~]` Scientific semantics: deterministic State, overlap, freshness, network, longitudinal,
    conflict, and review tests exist, including a checked-in cross-module golden fixture; expert
    sign-off remains.
