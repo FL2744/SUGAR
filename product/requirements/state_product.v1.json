@@ -1,0 +1,339 @@
+{
+  "schema_version": "1.0",
+  "product": "SUGAR State delivery profile",
+  "status": "proposed",
+  "updated": "2026-09-17",
+  "north_star": "A portable, auditable research-orchestration and evidence workbench that can operate standalone and can ingest from or hand off to Department systems without requiring Virginia Tech infrastructure.",
+  "deployment_assumptions": [
+    "Virginia Tech ARC is a development/classroom convenience, not an end-product dependency.",
+    "Department users may already have enterprise media analytics, generative-AI, data catalog, and approved collection capabilities.",
+    "No undocumented Northstar, StateChat, OpenNet, or other Department API is assumed to exist.",
+    "Integration must therefore be adapter-based and support file interchange even when direct APIs are unavailable.",
+    "The product must remain useful when one or more external collectors or LLM services are unavailable."
+  ],
+  "public_basis": [
+    {
+      "source": "Department of State Artificial Intelligence",
+      "url": "https://www.state.gov/artificial-intelligence",
+      "supports": "Northstar exists as a Department digital/news/social-media analytics capability."
+    },
+    {
+      "source": "Department of State AI Inventory 2024",
+      "url": "https://2021-2025.state.gov/department-of-state-ai-inventory-2024/",
+      "supports": "StateChat is an enterprise generative-AI capability and the Department has multiple existing AI/media-analysis workflows."
+    },
+    {
+      "source": "INR Open Source Intelligence Strategy",
+      "url": "https://2021-2025.state.gov/open-source-intelligence-strategy/",
+      "supports": "INR seeks requirements-driven OSINT, use of Department/IC data catalogs, collaboration, citation tracking, responsible governance, and reduced redundancy."
+    },
+    {
+      "source": "20 FAM 101.3 Definitions",
+      "url": "https://fam.state.gov/FAM/20FAM/20FAM010103.html",
+      "supports": "The Enterprise Data Catalog is a central OpenNet repository for discovery and access to shareable Department data assets."
+    },
+    {
+      "source": "1 FAM 040",
+      "url": "https://fam.state.gov/fam/01fam/01fam0040.html",
+      "supports": "Department enterprise data management emphasizes discoverable, accessible, interoperable, securely shared data."
+    }
+  ],
+  "requirements": [
+    {
+      "id": "STATE-P0-001",
+      "priority": "P0",
+      "category": "deployment",
+      "title": "No Virginia Tech runtime dependency",
+      "status": "partially_met",
+      "requirement": "The delivered State profile must not require Virginia Tech ARC, Virginia Tech credentials, ARC OnDemand, or any Virginia Tech-only service for normal operation.",
+      "acceptance": [
+        "A clean Windows or macOS installation can launch and perform non-LLM workflows without Virginia Tech credentials.",
+        "LLM-backed workflows can use a non-VT provider or a documented custom provider interface.",
+        "ARC-specific guidance is presented as a classroom/development option rather than the product default for State delivery."
+      ],
+      "verification": "packaging and end-to-end deployment test"
+    },
+    {
+      "id": "STATE-P0-002",
+      "priority": "P0",
+      "category": "architecture",
+      "title": "Complement existing Department systems",
+      "status": "partially_met",
+      "requirement": "SUGAR must be able to complement existing Department collection, analytics, and AI systems rather than require SUGAR to replace them.",
+      "acceptance": [
+        "Collection, model inference, evidence management, and reporting remain separable layers.",
+        "An external dataset can enter the evidence pipeline without being recollected by a SUGAR platform collector.",
+        "A SUGAR evidence package can be exported without requiring the recipient to run the SUGAR desktop application."
+      ],
+      "verification": "architecture review and external-data integration test"
+    },
+    {
+      "id": "STATE-P0-003",
+      "priority": "P0",
+      "category": "integration",
+      "title": "Canonical inbound data interface",
+      "status": "not_met",
+      "requirement": "SUGAR must provide a documented inbound adapter for externally collected public-source records with explicit schema validation and provenance preservation.",
+      "acceptance": [
+        "Import at minimum JSONL and CSV into a documented canonical record shape.",
+        "Reject or quarantine records missing required source identity/provenance fields instead of silently inventing them.",
+        "Preserve supplied native IDs, URLs, timestamps, source names, query/collection context, and original text where available.",
+        "Record importer name/version and import time in provenance metadata."
+      ],
+      "verification": "fixture-based import tests"
+    },
+    {
+      "id": "STATE-P0-004",
+      "priority": "P0",
+      "category": "integration",
+      "title": "Portable outbound evidence package",
+      "status": "partially_met",
+      "requirement": "A completed research run must export an application-independent evidence package suitable for handoff, review, or downstream ingestion.",
+      "acceptance": [
+        "Package includes a machine-readable manifest, normalized evidence, analytic outputs, provenance, limitations, and human-review state.",
+        "Core tabular data is exportable in CSV and/or JSONL without proprietary serialization.",
+        "Package documents schema versions and software version.",
+        "A reviewer can inspect the package without access to Virginia Tech infrastructure."
+      ],
+      "verification": "round-trip export inspection test"
+    },
+    {
+      "id": "STATE-P0-005",
+      "priority": "P0",
+      "category": "ai",
+      "title": "Provider-neutral AI boundary",
+      "status": "partially_met",
+      "requirement": "LLM-assisted features must depend on a provider interface rather than Virginia Tech ARC or a single commercial model.",
+      "acceptance": [
+        "OpenAI, a custom OpenAI-compatible endpoint, and no-LLM operation are supported deployment paths.",
+        "Provider/model identity is recorded with AI-generated artifacts.",
+        "Failure of the configured model service does not corrupt evidence or convert missing AI output into a factual finding.",
+        "No StateChat API or other internal Department API is assumed until an interface is actually provided."
+      ],
+      "verification": "provider-selection, failure-mode, and no-LLM tests"
+    },
+    {
+      "id": "STATE-P0-006",
+      "priority": "P0",
+      "category": "research_workflow",
+      "title": "Research-question-first workflow",
+      "status": "not_met",
+      "requirement": "The primary State workflow must begin from a research requirement rather than requiring the user to design a keyword matrix manually.",
+      "acceptance": [
+        "User can specify question, geography, timeframe, target audience, languages, known entities, and collection constraints.",
+        "SUGAR can generate an inspectable initial search plan from that requirement.",
+        "The original requirement is stored with the project and all downstream runs."
+      ],
+      "verification": "workflow and persistence tests"
+    },
+    {
+      "id": "STATE-P0-007",
+      "priority": "P0",
+      "category": "research_workflow",
+      "title": "Auditable adaptive search planning",
+      "status": "not_met",
+      "requirement": "Search expansion, retirement, and pivot decisions must be inspectable and tied to evidence rather than hidden inside an unconstrained agent loop.",
+      "acceptance": [
+        "Each generated query records parent concept/query, rationale, origin, and status.",
+        "Branch continuation or retirement records measurable reasons such as relevance yield, novelty, duplication, source diversity, or coverage gain.",
+        "Discovered concepts cannot drift arbitrarily away from the original research requirement without explicit evidence and bounded-hop rules.",
+        "The analyst can pause, edit, exclude, or approve search branches."
+      ],
+      "verification": "deterministic planner fixtures and audit-log review"
+    },
+    {
+      "id": "STATE-P0-008",
+      "priority": "P0",
+      "category": "evidence",
+      "title": "End-to-end provenance",
+      "status": "partially_met",
+      "requirement": "Every State-facing finding must be traceable from analytic claim to source evidence and the collection/import context that produced it.",
+      "acceptance": [
+        "A finding can enumerate supporting and contradicting evidence IDs.",
+        "Evidence retains source URL/native identity, publication/collection time where available, and collection/import provenance.",
+        "Generated summaries never replace the stored original evidence.",
+        "Exports preserve the claim-to-evidence linkage."
+      ],
+      "verification": "evidence-lineage tests and manual package audit"
+    },
+    {
+      "id": "STATE-P0-009",
+      "priority": "P0",
+      "category": "evidence",
+      "title": "Coverage and limitation reporting",
+      "status": "partially_met",
+      "requirement": "SUGAR must distinguish observed absence from collection failure and explicitly report important coverage gaps.",
+      "acceptance": [
+        "Reports distinguish unavailable, failed, partial, and successful collection surfaces.",
+        "Coverage can be summarized by source, language, geography, timeframe, and research concept when those dimensions are available.",
+        "No access failure is represented as zero activity.",
+        "State-facing briefs include material collection limitations by default."
+      ],
+      "verification": "collector failure fixtures and report tests"
+    },
+    {
+      "id": "STATE-P0-010",
+      "priority": "P0",
+      "category": "governance",
+      "title": "Human review and AI labeling",
+      "status": "partially_met",
+      "requirement": "Observed facts, calculations, AI classifications/inferences, and human analytic judgments must remain distinguishable throughout the workflow.",
+      "acceptance": [
+        "AI cannot self-verify evidence or silently promote a hypothesis into a verified finding.",
+        "High-consequence claims require explicit supporting evidence and human review state.",
+        "AI provider/model and relevant prompt/workflow version are recorded for reproducibility.",
+        "State-facing output clearly labels uncertainty and review state."
+      ],
+      "verification": "schema, adversarial, and review-round-trip tests"
+    },
+    {
+      "id": "STATE-P0-011",
+      "priority": "P0",
+      "category": "privacy_security",
+      "title": "Public/authorized access and data minimization",
+      "status": "partially_met",
+      "requirement": "SUGAR must operate within public or explicitly authorized access boundaries and minimize unnecessary personal data collection.",
+      "acceptance": [
+        "Collectors fail closed at unsupported authentication, anti-bot, or access-control boundaries.",
+        "Secrets are not written into portable project manifests or ordinary logs.",
+        "The default State workflow is ecosystem/audience oriented and does not create person dossiers unrelated to the research requirement.",
+        "Imported datasets retain handling/usage metadata when supplied."
+      ],
+      "verification": "security tests and data-handling review"
+    },
+    {
+      "id": "STATE-P0-012",
+      "priority": "P0",
+      "category": "reproducibility",
+      "title": "Portable reproducible projects",
+      "status": "partially_met",
+      "requirement": "A project must remain inspectable, moveable, and rerunnable across machines without hidden local state being required for its evidentiary record.",
+      "acceptance": [
+        "Research requirement, query/search plan, evidence, assessments, limitations, and outputs are registered in the workspace.",
+        "Portable paths are relative to the project root unless explicitly marked external.",
+        "Missing artifacts remain visible as missing rather than being silently removed.",
+        "A project records software/schema versions needed to interpret its outputs."
+      ],
+      "verification": "workspace portability and migration tests"
+    },
+    {
+      "id": "STATE-P0-013",
+      "priority": "P0",
+      "category": "usability",
+      "title": "Non-developer installation",
+      "status": "partially_met",
+      "requirement": "Ordinary State-profile users should not need Python, Git, an IDE, or manual package installation to launch the desktop product.",
+      "acceptance": [
+        "Windows and macOS packaged builds include their required runtime components.",
+        "First-run diagnostics identify missing optional credentials/services without crashing.",
+        "Core project inspection and import/export remain available without configuring an LLM."
+      ],
+      "verification": "clean-machine packaging smoke tests"
+    },
+    {
+      "id": "STATE-P1-001",
+      "priority": "P1",
+      "category": "maintainability",
+      "title": "Documented extension interfaces",
+      "status": "partially_met",
+      "requirement": "A maintainer should be able to add a collector, external-data importer, model provider, or exporter without modifying unrelated platform-specific UI logic.",
+      "acceptance": [
+        "Collector interface is documented and registry based.",
+        "Inbound importer interface is documented once implemented.",
+        "Model-provider boundary is documented.",
+        "At least one small example extension exists for each public extension point."
+      ],
+      "verification": "documentation review and example-plugin tests"
+    },
+    {
+      "id": "STATE-P1-002",
+      "priority": "P1",
+      "category": "monitoring",
+      "title": "Saved monitoring and change detection",
+      "status": "partially_met",
+      "requirement": "Users should be able to rerun a saved requirement and distinguish meaningful change from ordinary corpus churn.",
+      "acceptance": [
+        "Saved requirement and collection constraints can be rerun.",
+        "Comparison reports identify new/declining actors, narratives, source coverage, and material evidence changes where supportable.",
+        "A changed collector/access state is reported separately from a substantive change in the information environment."
+      ],
+      "verification": "snapshot comparison fixtures"
+    },
+    {
+      "id": "STATE-P1-003",
+      "priority": "P1",
+      "category": "reporting",
+      "title": "Concise evidence brief",
+      "status": "partially_met",
+      "requirement": "The default State-facing output should be a short evidence brief with drill-down rather than a long opaque generated report.",
+      "acceptance": [
+        "Brief contains a short BLUF, key findings, confidence/review state, what changed when applicable, and collection limitations.",
+        "Each substantive finding links or references supporting evidence IDs.",
+        "Methodology details are available without dominating the first page."
+      ],
+      "verification": "golden-file report tests and human review"
+    },
+    {
+      "id": "STATE-P1-004",
+      "priority": "P1",
+      "category": "accessibility",
+      "title": "Accessible desktop and report surfaces",
+      "status": "not_met",
+      "requirement": "The delivery profile should be designed toward Section 508-compatible interaction and readable exported products.",
+      "acceptance": [
+        "Core desktop workflow is keyboard operable.",
+        "Text and controls remain readable in supported appearance modes and scaling settings.",
+        "Information is not encoded only by color.",
+        "Generated reports use structured headings and machine-readable text rather than image-only output."
+      ],
+      "verification": "accessibility checklist and UI regression testing"
+    },
+    {
+      "id": "STATE-P1-005",
+      "priority": "P1",
+      "category": "automation",
+      "title": "Scriptable non-GUI workflow",
+      "status": "met",
+      "requirement": "Core collection, workspace, State, and analytic workflows must remain callable through stable CLI or typed service operations for automation and integration.",
+      "acceptance": [
+        "Packaged/core releases expose documented CLI entry points.",
+        "Desktop clients call shared core operations rather than owning separate analytic implementations.",
+        "Automation does not require screen-driving the desktop UI."
+      ],
+      "verification": "CLI smoke tests and architecture tests"
+    },
+    {
+      "id": "STATE-P1-006",
+      "priority": "P1",
+      "category": "handoff",
+      "title": "Maintainer handoff package",
+      "status": "not_met",
+      "requirement": "The final repository must let a technically competent maintainer understand deployment, extension points, schemas, tests, and known limitations without relying on the original student team.",
+      "acceptance": [
+        "Architecture, product contract, collector interface, data schemas, release process, and security boundaries are indexed from repository documentation.",
+        "A fresh maintainer can run tests and build a supported package from documented steps.",
+        "Known unsupported/internal integrations are explicitly named instead of implied.",
+        "Release artifacts include version and license information."
+      ],
+      "verification": "cold handoff rehearsal"
+    }
+  ],
+  "public_state_systems_to_treat_as_context_not_dependencies": [
+    {
+      "name": "Northstar",
+      "role": "Department digital/news/social-media analytics platform",
+      "integration_posture": "possible upstream or downstream peer; do not assume an API"
+    },
+    {
+      "name": "StateChat",
+      "role": "Department enterprise generative-AI chatbot",
+      "integration_posture": "possible approved AI peer; do not assume an API"
+    },
+    {
+      "name": "Enterprise Data Catalog",
+      "role": "Department data discovery/access catalog on OpenNet",
+      "integration_posture": "export strong metadata and portable artifacts; do not assume catalog write access"
+    }
+  ]
+}
+
