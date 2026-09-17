@@ -474,6 +474,15 @@ def evaluate_qualification(
 
     if reproducibility.get("replicates", 0) >= 2:
         minimum("replicate_minimum_jaccard", reproducibility.get("minimum_jaccard"), thresholds.minimum_replicate_jaccard, severity="advisory")
+    else:
+        checks.append(QualificationCheck(
+            "replicate_minimum_jaccard",
+            None,
+            thresholds.minimum_replicate_jaccard,
+            False,
+            "advisory",
+            "At least two independent fresh replicates are required to assess reproducibility.",
+        ))
 
     audit_labels = int(audit.get("labeled", 0) or 0)
     provenance_labels = int(audit.get("provenance_labeled", 0) or 0)
@@ -579,6 +588,7 @@ def run_weibo_qualification(
         _notify(progress, "qualification_replicate_complete", replicate=replicate, unique_records=metrics["unique_records"], completion=metrics["task_completion_rate"])
 
     investigations: list[dict[str, Any]] = []
+    investigation_outputs: list[str] = []
     investigation_dir = out_dir / f"{name}.investigations"
     investigation_dir.mkdir(parents=True, exist_ok=True)
     cookie = secrets.get("weibo_cookie", "")
@@ -596,7 +606,7 @@ def run_weibo_qualification(
                 cookie=cookie,
             )
             seed_name = f"seed_{index}_{result.seed.native_id or index}"
-            save_weibo_investigation(result, investigation_dir, name=seed_name)
+            investigation_outputs.extend(save_weibo_investigation(result, investigation_dir, name=seed_name))
             summary = _investigation_summary(seed, result)
         except Exception as exc:
             summary = _investigation_summary(seed, None, exc)
@@ -627,9 +637,14 @@ def run_weibo_qualification(
 
     json_path = out_dir / f"{name}.qualification.json"
     md_path = out_dir / f"{name}.qualification.md"
-    json_path.write_text(json.dumps(asdict(result), ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     md_path.write_text(_markdown_report(result), encoding="utf-8")
-    outputs = [str(json_path.resolve()), str(md_path.resolve()), str(audit_sample_path.resolve()), *[str(path.resolve()) for path in replicate_checkpoints]]
+    outputs = [
+        str(json_path.resolve()),
+        str(md_path.resolve()),
+        str(audit_sample_path.resolve()),
+        *[str(path.resolve()) for path in replicate_checkpoints],
+        *[str(Path(path).resolve()) for path in investigation_outputs],
+    ]
     result.outputs = outputs
     json_path.write_text(json.dumps(asdict(result), ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     _notify(progress, "qualification_complete", status=status, outputs=outputs)

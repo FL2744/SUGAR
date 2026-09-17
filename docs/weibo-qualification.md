@@ -4,6 +4,8 @@
 
 It combines fresh collection replicates, checkpoint metrics, real-post validation, and a human relevance/provenance audit. A resumed checkpoint is not counted as a reproducibility replicate.
 
+At least two independent fresh replicates are required to assess reproducibility. If only one replicate is configured, the reproducibility check remains unassessed and the overall result cannot exceed `CONDITIONAL`, even if the required automated checks pass.
+
 Default project checks include unique record count, task completion/failure, access-limited tasks, query coverage, identity/provenance/timestamp/text coverage, duplicate pressure, real seed/comment retrieval, fresh-run Jaccard overlap, and human audit labels.
 
 ## Inputs
@@ -28,7 +30,7 @@ sugar weibo-qualify \
 
 For qualification, `--target` is a minimum unique-record acceptance floor. It does **not** stop collection early: the complete bounded query/page plan is run so later queries are not silently excluded from coverage measurement.
 
-Outputs include independent SQLite harvest checkpoints, real-post investigation outputs, a JSON qualification result, a Markdown report, and a deterministic human-audit CSV.
+Outputs include independent SQLite harvest checkpoints, real-post investigation outputs, a JSON qualification result, a Markdown report, and a deterministic human-audit CSV. The CLI and workspace artifact registry surface all of these generated outputs.
 
 Fill `human_relevant` and `human_provenance_ok` in the audit CSV, then rerun with `--audit-file` to include the human review in the acceptance result.
 

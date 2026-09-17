@@ -6,6 +6,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Changed
 
+- Weibo qualification now treats fewer than two fresh replicates as an unassessed reproducibility advisory rather than silently skipping the gate, and real-post investigation artifacts are included in the returned/registered qualification outputs;
 - hardened the evidence-constrained synthesis and LLM boundary with deterministic tests for retry/cache behavior, prompt-injection boundaries, JSON parsing, agent failure handling, integrator evidence allowlisting, orchestration, and persisted synthesis artifacts;
 - alternative-hypothesis consistency labels are now normalized case-insensitively instead of silently downgrading valid mixed-case labels to `mixed`;
 - deterministic collection reports now have parity between DOCX and PDF outputs for engagement, recurring vocabulary, geographic caveats, and descriptive context, with PDF text safely escaped for ordinary special characters;
