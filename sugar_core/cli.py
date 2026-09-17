@@ -8,6 +8,7 @@ from pathlib import Path
 
 from . import __version__
 from .importers import import_external_dataset, parse_field_mappings
+from .handoff import build_handoff_bundle, verify_handoff_bundle
 from .llm import ARC_BASE_URL, LLMConfig
 from .plan_execution import execute_search_plan
 from .plan_feedback import apply_triage_feedback, evidence_excerpts_for_branch
@@ -231,6 +232,26 @@ def build_parser() -> argparse.ArgumentParser:
     expand_plan.add_argument("--max-ai-queries", type=int, default=8)
     expand_plan.add_argument("--max-evidence", type=int, default=24)
     _workspace_arg(expand_plan)
+
+    handoff = sub.add_parser(
+        "handoff",
+        help="Build a portable, hash-verified research handoff directory/ZIP independent of SUGAR runtime infrastructure.",
+    )
+    handoff.add_argument("requirement_file")
+    handoff.add_argument("plan_file")
+    handoff.add_argument("records_file")
+    handoff.add_argument("observations_file")
+    handoff.add_argument("--output", required=True, help="Parent directory for the portable handoff.")
+    handoff.add_argument("--name", default="sugar-handoff")
+    handoff.add_argument("--assessments")
+    handoff.add_argument("--limitations")
+    handoff.add_argument("--include-output", action="append", default=[])
+    handoff.add_argument("--provenance", action="append", default=[])
+    handoff.add_argument("--no-zip", action="store_true")
+    _workspace_arg(handoff)
+
+    verify_handoff = sub.add_parser("verify-handoff", help="Verify all files in a SUGAR handoff against manifest hashes and sizes.")
+    verify_handoff.add_argument("bundle_directory")
 
     harvest = sub.add_parser(
         "harvest",
@@ -623,6 +644,39 @@ def main(argv=None) -> int:
             )
         print(output)
         return 0
+
+    if args.command == "handoff":
+        workspace = optional_workspace(args.workspace)
+        result = build_handoff_bundle(
+            args.requirement_file,
+            args.plan_file,
+            args.records_file,
+            args.observations_file,
+            args.output,
+            name=args.name,
+            assessments_file=args.assessments,
+            limitations_file=args.limitations,
+            analytic_outputs=args.include_output,
+            provenance_files=args.provenance,
+            create_zip=not args.no_zip,
+        )
+        if workspace is not None:
+            registered = [result.manifest]
+            if result.archive:
+                registered.append(result.archive)
+            register_workspace_outputs(workspace, registered, operation="handoff", kind="export")
+        print(json.dumps({
+            "directory": result.directory,
+            "manifest": result.manifest,
+            "archive": result.archive,
+            "artifacts": result.artifacts,
+        }, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "verify-handoff":
+        result = verify_handoff_bundle(args.bundle_directory)
+        print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0 if result["status"] == "pass" else 2
 
     if args.command == "map":
         outputs = run_map({"source_file": args.source_file, "output_file": args.output, "workspace": args.workspace})

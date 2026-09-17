@@ -20,6 +20,8 @@ The core currently supports collection/workflows for **X, Bluesky, Mastodon, Bil
 
 For integration-first research, the core can also ingest external CSV/JSONL datasets into the same canonical evidence model and persist a research requirement plus an auditable adaptive search plan. Model-assisted query expansion is optional; collection, imported evidence, plan state, and human review remain usable without it.
 
+Completed or intermediate research can be exported with `sugar handoff` as a portable directory/ZIP containing canonical evidence, requirement/search-plan context, coverage limitations, review state, provenance, and existing analytic outputs. `sugar verify-handoff` verifies every manifest-listed artifact by SHA-256 and byte length.
+
 SUGAR deliberately distinguishes **presence, activity, reach, engagement, outcomes, and causal influence**. It does not manufacture a universal influence score or treat collection density as influence.
 
 ## Entry points
@@ -197,6 +199,7 @@ For the State/Diplomacy Lab delivery target, the versioned product contract live
 - [`docs/collector-interface.md`](docs/collector-interface.md) — collector capabilities and normalization contract
 - [`docs/importer-interface.md`](docs/importer-interface.md) ? external-data normalization and provenance contract
 - [`docs/research-requirements.md`](docs/research-requirements.md) ? research requirements and bounded adaptive search planning
+- [`docs/handoff-bundles.md`](docs/handoff-bundles.md) ? portable evidence-package handoff and integrity verification
 - [`docs/high-volume-harvest.md`](docs/high-volume-harvest.md) — durable large-scale collection
 - [`docs/bilibili-public.md`](docs/bilibili-public.md) — Bilibili public collector
 - [`docs/weibo-public.md`](docs/weibo-public.md) — Weibo public collector
