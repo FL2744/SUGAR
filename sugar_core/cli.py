@@ -146,6 +146,11 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--x-languages", default="")
     search.add_argument("--mastodon-url", default="https://mastodon.social")
     search.add_argument("--include-reposts", action="store_true")
+    search.add_argument(
+        "--continue-on-source-error",
+        action="store_true",
+        help="Preserve successful sources and record failed/unavailable sources instead of aborting the whole search.",
+    )
     _workspace_arg(search)
 
     import_p = sub.add_parser(
@@ -897,6 +902,7 @@ def main(argv=None) -> int:
         "x_search_mode": args.x_mode,
         "post_languages": _csv(args.x_languages),
         "mastodon_url": args.mastodon_url,
+        "continue_on_source_error": args.continue_on_source_error,
         "llm": {"provider": args.provider, "model": args.model, "base_url": args.base_url},
     }
     print("\n".join(run_search(config, secrets)))

@@ -105,6 +105,8 @@ All collectors normalize into the shared `PostRecord` model. SUGAR preserves sta
 
 One content object can match multiple queries; deduplication retains every matching query rather than discarding discovery provenance.
 
+Bounded searches also emit a collection-coverage sidecar that distinguishes successful zero-result searches from partial, unavailable, and failed source access. Adaptive plan execution preserves successful sources, pauses branches when every requested surface is inaccessible, and carries these limitations through triage, State briefs, and portable handoff bundles.
+
 External Department/partner exports can enter the same pipeline with `sugar import`. CSV and JSONL inputs are normalized into `PostRecord`, invalid identities are quarantined or rejected explicitly, and an import manifest records source-system name, SHA-256, field mapping, and accepted/rejected counts. See [`docs/importer-interface.md`](docs/importer-interface.md).
 
 ### High-volume harvesting
@@ -200,6 +202,7 @@ For the State/Diplomacy Lab delivery target, the versioned product contract live
 - [`docs/importer-interface.md`](docs/importer-interface.md) ? external-data normalization and provenance contract
 - [`docs/research-requirements.md`](docs/research-requirements.md) ? research requirements and bounded adaptive search planning
 - [`docs/handoff-bundles.md`](docs/handoff-bundles.md) ? portable evidence-package handoff and integrity verification
+- [`docs/collection-coverage.md`](docs/collection-coverage.md) ? collection success/failure/availability and absence semantics
 - [`docs/high-volume-harvest.md`](docs/high-volume-harvest.md) — durable large-scale collection
 - [`docs/bilibili-public.md`](docs/bilibili-public.md) — Bilibili public collector
 - [`docs/weibo-public.md`](docs/weibo-public.md) — Weibo public collector

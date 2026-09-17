@@ -1,4 +1,4 @@
-﻿# Portable research handoff bundles
+# Portable research handoff bundles
 
 SUGAR handoff bundles are application-independent interchange artifacts for moving a research run between teams, machines, or downstream systems without requiring Virginia Tech infrastructure or a running SUGAR installation to inspect the evidence.
 
@@ -47,7 +47,7 @@ Canonical source records and research observations are always emitted as JSONL e
 
 ## Coverage and limitations
 
-When the analyst does not supply a dedicated limitations JSON file, SUGAR generates one from the stored requirement, search plan, records, and observations. It reports corpus counts by platform/language/geography where available, observed time bounds, branch status counts, and preferred sources with no observed records.
+When the analyst does not supply a dedicated limitations JSON file, SUGAR generates one from the stored requirement, search plan, records, and observations. When a collection-coverage sidecar or embedded coverage metadata is available, those source outcomes are incorporated directly instead of inferring access from record counts. It reports corpus counts by platform/language/geography where available, observed time bounds, branch status counts, and preferred sources with no observed records.
 
 The generated limitations explicitly state that a source with no records is not evidence of zero real-world activity. It may be unrun, unavailable, filtered, or outside the effective collection plan.
 

@@ -8,6 +8,7 @@ from typing import Any, Iterable
 import pandas as pd
 from openpyxl import load_workbook
 
+from .collection_coverage import load_collection_coverage
 from .observation_storage import load_observations
 from .observations import ResearchObservation
 from .source_conflicts import (
@@ -415,6 +416,7 @@ def save_state_package_with_conflicts(
     previous_assessments: Iterable[StateAssessment] | None = None,
     title: str = "State-Supported Public Engagement Research Update",
     source_conflicts: Iterable[SourceConflict | dict[str, Any]] = (),
+    collection_coverage: dict[str, Any] | None = None,
 ) -> list[str]:
     observations = list(observations)
     assessments = list(assessments)
@@ -428,6 +430,7 @@ def save_state_package_with_conflicts(
         us_sites=sites,
         previous_assessments=previous_assessments,
         title=title,
+        collection_coverage=collection_coverage,
     )
     outputs.extend(
         augment_state_package_with_conflicts(
@@ -465,6 +468,7 @@ def package_from_files_with_conflicts(
         else None
     )
     conflicts = load_source_conflicts(source_conflicts_file) if source_conflicts_file else []
+    collection_coverage = load_collection_coverage(observations_file)
     return save_state_package_with_conflicts(
         observations,
         assessments,
@@ -474,4 +478,5 @@ def package_from_files_with_conflicts(
         previous_assessments=previous,
         title=title,
         source_conflicts=conflicts,
+        collection_coverage=collection_coverage,
     )
