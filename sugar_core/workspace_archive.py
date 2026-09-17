@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from . import __version__
-from .utils import atomic_path
+from .utils import atomic_path, runtime_metadata
 from .workspace import MANIFEST_FILENAME, SugarWorkspace
 
 ARCHIVE_SCHEMA_VERSION = "1"
@@ -22,6 +22,7 @@ def _archive_metadata(workspace: SugarWorkspace, files: list[str]) -> dict[str, 
     return {
         "archive_schema_version": ARCHIVE_SCHEMA_VERSION,
         "sugar_version": __version__,
+        "runtime": runtime_metadata(),
         "project_id": workspace.manifest.project_id,
         "workspace_schema_version": workspace.manifest.schema_version,
         "file_count": len(files),

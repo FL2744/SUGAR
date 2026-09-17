@@ -22,6 +22,8 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - release-tooling locks now require a fixed setuptools line (83+).
 - collector quotas now count unique stable records per query, merge repeated-page payloads without
   consuming the quota, enforce local date bounds, and bound repeated X/Bluesky pagination tokens.
+- generated reproducibility metadata and workspace archives now record the Python/runtime dependency
+  versions used to produce them.
 
 ### Research integrity
 

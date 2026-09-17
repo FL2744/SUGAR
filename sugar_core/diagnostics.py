@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.metadata
 import importlib.util
 import json
 import os
@@ -10,33 +9,19 @@ import platform
 import sys
 import zipfile
 from datetime import datetime, timezone
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any, Mapping
 
 from .collector_registry import collector_capabilities
 from .errors import error_payload, redacted_path
-from .utils import atomic_path, atomic_write_text
+from .utils import atomic_path, atomic_write_text, runtime_dependency_versions
 from .workspace import SugarWorkspace
 
 DIAGNOSTICS_SCHEMA_VERSION = 1
 DIAGNOSTIC_HISTORY_FILENAME = "diagnostics.jsonl"
 MAX_DIAGNOSTIC_HISTORY = 20
 MAX_DIAGNOSTIC_HISTORY_BYTES = 128 * 1024
-
-RUNTIME_PACKAGES = (
-    "beautifulsoup4",
-    "certifi",
-    "folium",
-    "geopy",
-    "langdetect",
-    "matplotlib",
-    "openai",
-    "openpyxl",
-    "pandas",
-    "python-docx",
-    "reportlab",
-    "requests",
-)
 
 OPTIONAL_FEATURES = {
     "pyinstaller": "PyInstaller",
@@ -60,13 +45,7 @@ def _utc_now_iso() -> str:
 
 
 def _package_versions() -> dict[str, str]:
-    versions: dict[str, str] = {}
-    for package in RUNTIME_PACKAGES:
-        try:
-            versions[package] = importlib.metadata.version(package)
-        except importlib.metadata.PackageNotFoundError:
-            versions[package] = "not-installed"
-    return versions
+    return runtime_dependency_versions()
 
 
 def _optional_features() -> dict[str, bool]:
@@ -175,8 +154,8 @@ def build_report(workspace: str | Path | None = None) -> dict[str, Any]:
 
 def _package_version() -> str:
     try:
-        return importlib.metadata.version("sugar-osint")
-    except importlib.metadata.PackageNotFoundError:
+        return importlib_metadata.version("sugar-osint")
+    except importlib_metadata.PackageNotFoundError:
         from . import __version__
 
         return __version__

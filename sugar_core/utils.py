@@ -3,12 +3,30 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
 import re
 import tempfile
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any, Iterator
+
+RUNTIME_PACKAGES = (
+    "beautifulsoup4",
+    "certifi",
+    "chardet",
+    "folium",
+    "geopy",
+    "langdetect",
+    "matplotlib",
+    "openai",
+    "openpyxl",
+    "pandas",
+    "python-docx",
+    "reportlab",
+    "requests",
+)
 
 
 def normalize_whitespace(text: str) -> str:
@@ -70,6 +88,30 @@ def in_inclusive_date_range(value: str, since: str | None, until: str | None) ->
 def stable_hash(*parts: Any) -> str:
     payload = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def runtime_dependency_versions() -> dict[str, str]:
+    """Return the declared runtime dependency versions available in this process."""
+
+    versions: dict[str, str] = {}
+    for package in RUNTIME_PACKAGES:
+        try:
+            versions[package] = importlib_metadata.version(package)
+        except importlib_metadata.PackageNotFoundError:
+            versions[package] = "not-installed"
+    return versions
+
+
+def runtime_metadata() -> dict[str, Any]:
+    """Return non-secret runtime facts used to reproduce generated artifacts."""
+
+    return {
+        "python_version": platform.python_version(),
+        "python_implementation": platform.python_implementation(),
+        "operating_system": platform.system() or "unknown",
+        "architecture": platform.machine() or "unknown",
+        "dependencies": runtime_dependency_versions(),
+    }
 
 
 @contextmanager

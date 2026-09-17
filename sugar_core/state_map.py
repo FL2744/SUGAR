@@ -20,7 +20,7 @@ from .state_proximity import (
     proximity_note,
 )
 from .state_schema import StateAssessment, USPresenceSite
-from .utils import atomic_path, atomic_write_text
+from .utils import atomic_path, atomic_write_text, runtime_metadata
 
 _PRECISION_LABELS = {
     "exact": "Exact/native coordinates",
@@ -444,6 +444,7 @@ def create_state_map(
         json.dumps(
             {
                 "sugar_version": __version__,
+                "runtime": runtime_metadata(),
                 "verified_only": verified_only,
                 "location_resolution_enabled": resolve_missing_locations,
                 "minimum_location_confidence": minimum_location_confidence,

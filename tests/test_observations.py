@@ -178,6 +178,7 @@ def test_observation_storage_round_trip(tmp_path):
     metadata = json.loads(target.with_suffix(".metadata.json").read_text(encoding="utf-8"))
     assert metadata["dataset_type"] == "research_observations"
     assert metadata["sugar_version"] == __version__
+    assert metadata["runtime"]["dependencies"]["requests"]
     assert metadata["project"] == "test"
 
 

@@ -10,9 +10,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
+from . import __version__
 from .models import PostRecord, merge_record
 from .storage import save_records
-from .utils import atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
+from .utils import atomic_path, atomic_write_text, runtime_metadata, safe_artifact_stem, utc_iso
 from .weibo_investigation import WeiboInvestigation, investigate_weibo_seed, parse_weibo_seed
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
@@ -485,6 +486,8 @@ def run_weibo_seed_harvest(
         counts = store.counts()
         manifest = {
             "generated_at": utc_iso(),
+            "sugar_version": __version__,
+            "runtime": runtime_metadata(),
             "operation": "weibo_seed_harvest",
             "plan_signature": config.plan_signature,
             "access_mode": access_mode,

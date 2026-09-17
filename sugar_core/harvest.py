@@ -16,7 +16,7 @@ from . import __version__
 from .collector_registry import CollectorRequest, collect_registered_source, get_collector
 from .models import PostRecord, merge_record
 from .storage import save_records
-from .utils import atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
+from .utils import atomic_path, atomic_write_text, runtime_metadata, safe_artifact_stem, utc_iso
 
 DEFAULT_TIME_SHARD_SOURCES = frozenset({"x", "bluesky"})
 NUMBERED_PAGE_SOURCES = frozenset({"bilibili", "weibo"})
@@ -744,6 +744,7 @@ def run_harvest(
         manifest = {
             "generated_at": utc_iso(),
             "sugar_version": __version__,
+            "runtime": runtime_metadata(),
             "operation": "harvest",
             "sources": list(harvest_config.sources),
             "terms": list(harvest_config.terms),

@@ -7,7 +7,7 @@ from sugar_core.collectors import normalize_engagement
 from sugar_core.models import PostRecord, merge_record
 from sugar_core.reporting import _prepare
 from sugar_core.storage import load_results, records_to_frame, save_records
-from sugar_core.utils import in_inclusive_date_range, safe_cell
+from sugar_core.utils import in_inclusive_date_range, runtime_metadata, safe_cell
 
 
 def test_mastodon_engagement_normalization():
@@ -65,11 +65,26 @@ def test_csv_and_xlsx_loaders_preserve_numeric_looking_native_ids(tmp_path):
     save_records([record], tmp_path / "posts.csv")
     metadata = json.loads((tmp_path / "posts.metadata.json").read_text(encoding="utf-8"))
     assert metadata["sugar_version"] == __version__
+    assert metadata["runtime"]["python_version"]
+    assert metadata["runtime"]["dependencies"]["requests"]
 
     for path in (tmp_path / "posts.csv", tmp_path / "posts.xlsx"):
         loaded = load_results(path)
         assert loaded.loc[0, "native_id"] == "000123"
         assert isinstance(loaded.loc[0, "native_id"], str)
+
+
+def test_runtime_metadata_is_non_secret_and_structured():
+    metadata = runtime_metadata()
+    assert set(metadata) == {
+        "python_version",
+        "python_implementation",
+        "operating_system",
+        "architecture",
+        "dependencies",
+    }
+    assert metadata["dependencies"]["requests"]
+    assert all("key" not in key.casefold() and "token" not in key.casefold() for key in metadata["dependencies"])
 
 
 def test_analysis_counts_legacy_mastodon_metrics():

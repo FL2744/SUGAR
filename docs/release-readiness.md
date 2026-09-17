@@ -18,8 +18,9 @@ decision remains; `[ ]` means work remains.
    plaintext research-artifact writes; security-owner review or an approved default-setup policy is
    still required. Branch protection and required-review settings remain repository-admin work.
 4. `[~]` Dependencies: supported Python bounds and declared ranges are explicit, universal newest and
-   Python 3.11 lowest-direct hash-pinned runtime locks are checked in, and CI exercises both tracks;
-   a formally approved update policy remains to be selected.
+   Python 3.11 lowest-direct hash-pinned runtime locks are checked in, CI exercises both tracks, and
+   generated reproducibility metadata records the runtime/dependency versions; a formally approved
+   update policy remains to be selected.
 5. `[~]` Collectors: capability/access matrix, malformed-payload guards, pagination/duplicate
    coverage, and bounded live separation are present; full per-platform adversarial and authorized
    live qualification still needs execution.

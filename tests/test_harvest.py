@@ -328,6 +328,7 @@ def test_full_harvest_scales_to_five_thousand_and_resumes_without_recollection(
         assert sum(1 for _ in stream) == 5000
     manifest = json.loads((tmp_path / "scale5000.harvest.json").read_text(encoding="utf-8"))
     assert manifest["sugar_version"] == __version__
+    assert manifest["runtime"]["dependencies"]["requests"]
     assert manifest["unique_records"] == 5000
     assert manifest["task_counts"] == {"completed": 20}
 

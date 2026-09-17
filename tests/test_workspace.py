@@ -221,6 +221,9 @@ def test_workspace_archive_round_trips_project_files_and_external_references(tmp
     workspace.register_artifact("reference", external_path)
 
     archive_path = create_workspace_archive(workspace, tmp_path / "portable.sugar.zip")
+    with zipfile.ZipFile(archive_path) as archive:
+        metadata = json.loads(archive.read("archive-metadata.json").decode("utf-8"))
+    assert metadata["runtime"]["dependencies"]["requests"]
     restored = restore_workspace_archive(archive_path, tmp_path / "restored")
 
     assert restored.manifest.project_id == workspace.manifest.project_id

@@ -88,6 +88,12 @@ the workspace and artifact metadata are operational metadata, so they may differ
 case summary, findings, audit decisions, map counts, density conservation, and source/conflict
 identities are the semantic outputs to compare.
 
+Generated CSV/XLSX sidecars, harvest manifests, state snapshots, map metadata, and workspace
+archives include a `runtime` object with the Python implementation, operating system, architecture,
+and versions of SUGAR's declared runtime dependencies. Use those recorded versions when
+investigating a mismatch; a missing optional package is recorded as `not-installed`. The runtime
+record contains no credentials or source content.
+
 Live collectors can change because platforms change content, pagination, availability, rate limits,
 authentication requirements, and response fields. A live run must therefore preserve its raw
 checkpoint/JSONL inputs, collection window, query or seed plan, access mode, collector version,

@@ -19,7 +19,7 @@ from .state_schema import (
     USPresenceSite,
     USServiceSourceAttribution,
 )
-from .utils import atomic_path, atomic_write_text, safe_artifact_stem, safe_cell, utc_iso
+from .utils import atomic_path, atomic_write_text, runtime_metadata, safe_artifact_stem, safe_cell, utc_iso
 
 DOMAIN_TO_US_SERVICES = {
     "higher_education": {"educationusa", "study_in_the_us", "higher_education"},
@@ -1175,6 +1175,7 @@ def save_state_package(
     snapshot: dict[str, Any] = {
         "generated_at": utc_iso(),
         "sugar_version": __version__,
+        "runtime": runtime_metadata(),
         "name": stem,
         "observations": len(observations),
         "assessments": len(assessments),

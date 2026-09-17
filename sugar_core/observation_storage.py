@@ -11,7 +11,7 @@ from openpyxl.utils import get_column_letter
 
 from . import __version__
 from .observations import OBSERVATION_SCHEMA_VERSION, ResearchObservation
-from .utils import atomic_path, atomic_write_text, safe_cell, utc_iso
+from .utils import atomic_path, atomic_write_text, runtime_metadata, safe_cell, utc_iso
 
 PREFERRED_OBSERVATION_COLUMNS = [
     "observation_id",
@@ -143,6 +143,7 @@ def save_observations(
     payload = {
         "generated_at": utc_iso(),
         "sugar_version": __version__,
+        "runtime": runtime_metadata(),
         "records": len(frame),
         "dataset_type": "research_observations",
         "observation_schema_version": OBSERVATION_SCHEMA_VERSION,
