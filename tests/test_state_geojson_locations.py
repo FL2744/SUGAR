@@ -8,7 +8,7 @@ def _verified_multi_site_observation() -> ResearchObservation:
         observation_type="event",
         title="Two-venue activity",
         summary="One activity was reported at two universities.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         # Deliberately different legacy summary point. Structured locations must supersede it.
         latitude=42.8746,
@@ -18,7 +18,7 @@ def _verified_multi_site_observation() -> ResearchObservation:
         locations=[
             ObservationLocation(
                 label="University A",
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Bishkek",
                 latitude=42.85035,
                 longitude=74.58509,
@@ -30,7 +30,7 @@ def _verified_multi_site_observation() -> ResearchObservation:
             ),
             ObservationLocation(
                 label="University B campus unresolved",
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Bishkek",
                 latitude=42.88,
                 longitude=74.61,
@@ -59,7 +59,7 @@ def test_geojson_emits_two_venue_features_for_one_multi_site_observation():
     assessment = _verified_assessment(observation)
 
     payload = state_geojson([observation], [assessment])
-    features = [row for row in payload["features"] if row["properties"]["layer"] == "prc_observation"]
+    features = [row for row in payload["features"] if row["properties"]["layer"] == "sponsor_observation"]
 
     assert len(features) == 2
     assert {row["properties"]["observation_id"] for row in features} == {observation.observation_id}
@@ -76,7 +76,7 @@ def test_geojson_skips_unresolved_structured_location_without_falling_back_to_su
     observation = _verified_multi_site_observation()
     unresolved = ObservationLocation(
         label="Unresolved third campus",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         precision="site",
         source_ref="https://example.org/source",
@@ -85,7 +85,7 @@ def test_geojson_skips_unresolved_structured_location_without_falling_back_to_su
     assessment = _verified_assessment(observation)
 
     payload = state_geojson([observation], [assessment])
-    features = [row for row in payload["features"] if row["properties"]["layer"] == "prc_observation"]
+    features = [row for row in payload["features"] if row["properties"]["layer"] == "sponsor_observation"]
 
     assert len(features) == 2
     assert {row["properties"]["activity_location_count"] for row in features} == {3}
@@ -98,7 +98,7 @@ def test_geojson_keeps_virtual_us_service_nonspatial():
     virtual = USPresenceSite(
         name="Virtual advising",
         network="educationusa",
-        country="Kyrgyzstan",
+        country="example_host_country",
         delivery_mode="virtual",
         coverage_scope="country",
         latitude=42.87,

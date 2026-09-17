@@ -11,13 +11,13 @@ def _multi_site_observation() -> ResearchObservation:
         observation_type="event",
         title="Two-venue activity",
         summary="One activity was reported at two locations.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         evidence=[EvidenceReference(url="https://example.org/activity")],
         locations=[
             ObservationLocation(
                 label="Venue A",
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Bishkek",
                 latitude=42.85,
                 longitude=74.58,
@@ -29,7 +29,7 @@ def _multi_site_observation() -> ResearchObservation:
             ),
             ObservationLocation(
                 label="Venue B campus unresolved",
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Bishkek",
                 latitude=42.8746,
                 longitude=74.5698,
@@ -49,8 +49,8 @@ def test_observation_location_requires_complete_coordinates():
 
 
 def test_observation_location_ids_are_stable_and_deduplicated():
-    first = ObservationLocation(label="Venue", city="Bishkek", country="Kyrgyzstan", latitude=42.85, longitude=74.58)
-    second = ObservationLocation(label="Venue", city="Bishkek", country="Kyrgyzstan", latitude=42.85, longitude=74.58)
+    first = ObservationLocation(label="Venue", city="Bishkek", country="example_host_country", latitude=42.85, longitude=74.58)
+    second = ObservationLocation(label="Venue", city="Bishkek", country="example_host_country", latitude=42.85, longitude=74.58)
     observation = ResearchObservation(
         observation_type="event",
         summary="Duplicate location inputs.",

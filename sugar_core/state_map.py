@@ -96,7 +96,7 @@ def _popup(
         f"Location precision: {_safe(_location_summary(location))}<br>"
         f"Location basis: {_safe(location.basis)}; source: {_safe(location.source)}"
         f"{source_ref}{location_query}{provider}{multi}<br>"
-        f"PRC support: {_safe(assessment.prc_support.level)}<br>"
+        f"sponsor support: {_safe(assessment.sponsor_support.level)}<br>"
         f"Observed level: {_safe(assessment.observability_level)}<br>"
         f"Audiences: {_safe(', '.join(assessment.strategic_audiences))}<br>"
         f"Domains: {_safe(', '.join(assessment.program_domains))}<br>"
@@ -276,7 +276,7 @@ def create_state_map(
             continue
         label = _PRECISION_LABELS.get(precision, precision)
         group = folium.FeatureGroup(
-            name=f"{'Verified ' if verified_only else ''}PRC activity locations — {label}",
+            name=f"{'Verified ' if verified_only else ''}sponsor-linked activity locations — {label}",
             show=precision in {"exact", "site", "locality", "city"},
         )
         cluster = MarkerCluster(name=f"{label} markers").add_to(group)

@@ -71,12 +71,12 @@ Three outlets repeating one press release are not necessarily three independent 
 SUGAR flags combinations that deserve explicit analyst attention. Current examples include:
 
 - a human-verified State assessment built over an unverified underlying observation;
-- confirmed PRC support resting on only one evidence identity;
+- confirmed sponsor support resting on only one evidence identity;
 - support/coordination/influence claims with weak corroboration;
 - `causal_influence_evidence` without a human-verified influence claim;
 - high reach/engagement without outcome evidence;
 - an `anti_us` tag without a verified narrative claim;
-- China-Russia/third-party coordination tagging without a verified coordination claim;
+- cross-state/third-party coordination tagging without a verified coordination claim;
 - a material U.S.-overlap result whose stored fields do not expose the basis.
 
 These are **tensions, not automatic errors**. Their purpose is to stop convenient coding combinations from disappearing into polished prose without scrutiny.
@@ -85,7 +85,7 @@ These are **tensions, not automatic errors**. Their purpose is to stop convenien
 
 The audit also tracks unresolved analytical obligations:
 
-- possible/probable PRC-support assessments still pending review;
+- possible/probable sponsor-support assessments still pending review;
 - high/urgent-priority assessments not yet verified;
 - unresolved geographic attribution;
 - high-consequence support/coordination/influence claims still unverified.

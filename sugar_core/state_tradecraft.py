@@ -122,10 +122,10 @@ def analytic_tensions(
                 "The State assessment is human-verified while the underlying ResearchObservation is not.",
                 "Reconcile the underlying observation verification state before briefing.",
             ))
-        if assessment.prc_support.level == "confirmed" and source["evidence_identities"] <= 1:
+        if assessment.sponsor_support.level == "confirmed" and source["evidence_identities"] <= 1:
             result.append(_tension(
                 "high", "confirmed_support_single_evidence_identity", observation, assessment,
-                "Confirmed PRC support rests on one auditable evidence identity in this observation.",
+                "Confirmed sponsor support rests on one auditable evidence identity in this observation.",
                 "Seek independent corroboration or document why a single authoritative source is sufficient.",
             ))
         if high_consequence and source["adequacy"] in {"single_evidence_identity", "no_auditable_evidence_identity"}:
@@ -163,7 +163,7 @@ def analytic_tensions(
                 "The anti-U.S. tag is present without a human-verified narrative claim in the assessment.",
                 "Verify explicit source language/context before elevating the label into synthesis.",
             ))
-        if any(tag in assessment.narrative_tags for tag in ("china_russia_coordination", "third_party_coordination")) and not any(
+        if any(tag in assessment.narrative_tags for tag in ("cross_state_coordination", "third_party_coordination")) and not any(
             claim.claim_type == "coordination" and claim.review_state == "human_verified"
             for claim in assessment.claims
         ):
@@ -238,7 +238,7 @@ def build_tradecraft_audit(
         "high_severity_tensions": [row for row in tensions if row["severity"] == "high"],
         "epistemic_debt": {
             "possible_or_probable_support_pending": sum(
-                a.prc_support.level in {"possible", "probable"} and a.review_state != "rejected"
+                a.sponsor_support.level in {"possible", "probable"} and a.review_state != "rejected"
                 for a in assessments
             ),
             "high_priority_not_verified": sum(

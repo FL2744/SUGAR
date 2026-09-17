@@ -55,7 +55,7 @@ def test_bilibili_page_adapter_starts_at_checkpointed_page(monkeypatch):
 
     rows = collect_bilibili_page_range(
         CollectorRequest(
-            search_terms=["孔子学院"],
+            search_terms=["文化交流"],
             max_posts_per_query=20,
             max_pages_per_query=1,
             config={
@@ -69,7 +69,7 @@ def test_bilibili_page_adapter_starts_at_checkpointed_page(monkeypatch):
 
     assert [row.native_id for row in rows] == ["BV6PAGE"]
     assert session.calls[0]["params"]["page"] == 6
-    assert session.calls[0]["params"]["keyword"] == "孔子学院"
+    assert session.calls[0]["params"]["keyword"] == "文化交流"
 
 
 def test_weibo_page_adapter_starts_at_checkpointed_page(monkeypatch):
@@ -81,7 +81,7 @@ def test_weibo_page_adapter_starts_at_checkpointed_page(monkeypatch):
         "attitudes_count": 2,
         "comments_count": 1,
         "reposts_count": 0,
-        "user": {"id": "42", "screen_name": "Example account", "location": "北京"},
+        "user": {"id": "42", "screen_name": "Example account", "location": "首都"},
     }
     session = QueueSession(
         [FakeResponse({"ok": 1, "data": {"cards": [{"card_type": 9, "mblog": status}]}})]
@@ -90,7 +90,7 @@ def test_weibo_page_adapter_starts_at_checkpointed_page(monkeypatch):
 
     rows = collect_weibo_page_range(
         CollectorRequest(
-            search_terms=["鲁班工坊"],
+            search_terms=["技术培训"],
             max_posts_per_query=20,
             max_pages_per_query=1,
             config={
@@ -103,4 +103,4 @@ def test_weibo_page_adapter_starts_at_checkpointed_page(monkeypatch):
 
     assert [row.native_id for row in rows] == ["11001"]
     assert session.calls[0]["params"]["page"] == 11
-    assert "鲁班工坊" in session.calls[0]["params"]["containerid"]
+    assert "技术培训" in session.calls[0]["params"]["containerid"]

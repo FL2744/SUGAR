@@ -51,11 +51,11 @@ def _real_shaped_seed():
         "id": "5320265912291527",
         "bid": "REALKAITEST",
         "created_at": "Mon Jul 13 09:08:00 +0800 2026",
-        "text": "#鞋吧FRESH# ANTA KAI 3 欧文KAI3「凯风」配色，以中国传统沙燕风筝为灵感，并融入日月双翼和雷鸟等欧文部落元素，巧妙的将东西方文化相融合 #2026欧文中国行##MoveLikeKai#",
+        "text": "#鞋吧FRESH# ANTA KAI 3 欧文KAI3「凯风」配色，以国际传统沙燕风筝为灵感，并融入日月双翼和雷鸟等欧文部落元素，巧妙的将东西方文化相融合 #2026欧文国际行##MoveLikeKai#",
         "attitudes_count": 124,
         "comments_count": 49,
         "reposts_count": 26,
-        "user": {"id": "889900", "screen_name": "鞋吧Sneakersbar", "location": "北京"},
+        "user": {"id": "889900", "screen_name": "鞋吧Sneakersbar", "location": "首都"},
     }
 
 
@@ -90,7 +90,7 @@ def _timeline(mid, text, likes, comments, reposts):
         "attitudes_count": likes,
         "comments_count": comments,
         "reposts_count": reposts,
-        "user": {"id": "889900", "screen_name": "鞋吧Sneakersbar", "location": "北京"},
+        "user": {"id": "889900", "screen_name": "鞋吧Sneakersbar", "location": "首都"},
     }
 
 
@@ -109,7 +109,7 @@ def test_real_shaped_seed_expands_comments_reposts_and_author_context(tmp_path: 
         _comment("c3", "JessieWang87", "广东", "哇哦，好看", 6),
     ]
     reposts = [
-        _repost("r1", "传播者甲", "上海", "中国风筝元素很好看 #MoveLikeKai#", 4),
+        _repost("r1", "传播者甲", "上海", "国际风筝元素很好看 #MoveLikeKai#", 4),
         _repost("r2", "传播者乙", "广东", "转发微博 @鞋吧Sneakersbar", 1),
     ]
     timeline = [

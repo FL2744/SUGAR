@@ -25,7 +25,7 @@ def _packet():
         title="Verified program",
         summary="A verified public program record.",
         observed_at="2026-08-01T12:00:00Z",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         evidence=[EvidenceReference(url="https://example.org/source", source_type="official_host_source")],
         verification_state="human_verified",
@@ -222,7 +222,7 @@ def test_integrator_sanitizes_refs_priorities_and_uncited_findings(monkeypatch):
     ("country", "observation_id", "expected"),
     [
         ("", "obs-1", "micro case obs-1"),
-        ("Kyrgyzstan", "", "country assessment: Kyrgyzstan"),
+        ("example_host_country", "", "country assessment: example_host_country"),
         ("", "", "global comparative assessment"),
     ],
 )
@@ -273,7 +273,7 @@ def test_run_agentic_synthesis_standard_red_teams_and_revises(monkeypatch):
     monkeypatch.setattr("sugar_core.state_synthesis._call_integrator", fake_integrator)
 
     result = run_agentic_synthesis(
-        [], [], llm=LLMConfig(provider="arc", model="test"), country="Kyrgyzstan", depth="standard"
+        [], [], llm=LLMConfig(provider="arc", model="test"), country="example_host_country", depth="standard"
     )
 
     assert len(result["agents"]) == 5
@@ -329,7 +329,7 @@ def test_save_agentic_synthesis_writes_manifest_and_agent_stream(monkeypatch, tm
     payload = {
         "generated_at": "2026-09-17T00:00:00Z",
         "synthesis_version": "1.0",
-        "scope": {"country": "Kyrgyzstan"},
+        "scope": {"country": "example_host_country"},
         "depth": "standard",
         "agents": [{"agent": "a"}, {"agent": "b"}],
         "red_team": {"agent": "red_team"},

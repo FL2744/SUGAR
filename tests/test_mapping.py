@@ -28,8 +28,8 @@ def _observation_frame() -> pd.DataFrame:
                 "summary": "A public workshop for university students.",
                 "observed_at": now,
                 "activity_status": "active",
-                "location_label": "Bishkek, Kyrgyzstan",
-                "country": "Kyrgyzstan",
+                "location_label": "Bishkek, example_host_country",
+                "country": "example_host_country",
                 "city": "Bishkek",
                 "latitude": 42.8746,
                 "longitude": 74.5698,
@@ -43,7 +43,7 @@ def _observation_frame() -> pd.DataFrame:
                 "us_overlap": '["American Space nearby"]',
                 "overlap_note": "Same city as an American Space.",
                 "verification_state": "human_verified",
-                "triage_labels": '["prc_public_diplomacy"]',
+                "triage_labels": '["sponsor_public_diplomacy"]',
                 "ai_confidence": 0.91,
                 "primary_source_url": "https://example.test/source",
             },
@@ -53,8 +53,8 @@ def _observation_frame() -> pd.DataFrame:
                 "title": "Institution record",
                 "summary": "Needs additional verification.",
                 "observed_at": now,
-                "location_label": "Osh, Kyrgyzstan",
-                "country": "Kyrgyzstan",
+                "location_label": "Osh, example_host_country",
+                "country": "example_host_country",
                 "city": "Osh",
                 "latitude": 40.5139,
                 "longitude": 72.8161,
@@ -68,7 +68,7 @@ def _observation_frame() -> pd.DataFrame:
                 "observation_type": "event",
                 "title": "No coordinates",
                 "summary": "Should count as unmapped.",
-                "country": "Kyrgyzstan",
+                "country": "example_host_country",
                 "latitude": None,
                 "longitude": None,
                 "verification_state": "unreviewed",
@@ -200,7 +200,7 @@ def test_create_map_supports_raw_source_records_and_platform_semantics(tmp_path:
                 "published_at": now,
                 "author_name": "Example account",
                 "translated_text": "Public post",
-                "inferred_location": "Beijing, China",
+                "inferred_location": "capital city, sponsoring state",
                 "location_confidence": 0.8,
                 "latitude": 39.9042,
                 "longitude": 116.4074,
@@ -230,13 +230,13 @@ def test_map_option_parser_preserves_custom_heat_windows():
     options = _map_options(
         {
             "map": {
-                "title": "American Spaces / PRC Activity",
+                "title": "American Spaces / sponsoring state Activity",
                 "heat_windows": [30, 180],
                 "default_heat_window": 180,
             }
         }
     )
-    assert options.title == "American Spaces / PRC Activity"
+    assert options.title == "American Spaces / sponsoring state Activity"
     assert options.heat_windows == (30, 180)
     assert options.default_heat_window == 180
 
@@ -252,7 +252,7 @@ def test_run_map_accepts_observation_xlsx_and_custom_title(tmp_path: Path):
             "source_file": str(source),
             "output_file": str(output),
             "map": {
-                "title": "American Spaces / PRC Activity",
+                "title": "American Spaces / sponsoring state Activity",
                 "heat_windows": [30, 180],
                 "default_heat_window": 180,
             },
@@ -262,7 +262,7 @@ def test_run_map_accepts_observation_xlsx_and_custom_title(tmp_path: Path):
     assert outputs == [str(output.resolve())]
     assert output.exists()
     text = output.read_text(encoding="utf-8")
-    assert "American Spaces / PRC Activity" in text
+    assert "American Spaces / sponsoring state Activity" in text
 
 
 def test_run_map_supports_generic_reference_layers(tmp_path: Path):
@@ -276,7 +276,7 @@ def test_run_map_supports_generic_reference_layers(tmp_path: Path):
                 "name": "American Space Bishkek",
                 "category": "American Space",
                 "city": "Bishkek",
-                "country": "Kyrgyzstan",
+                "country": "example_host_country",
                 "latitude": 42.87,
                 "longitude": 74.60,
                 "url": "https://example.test/american-space",

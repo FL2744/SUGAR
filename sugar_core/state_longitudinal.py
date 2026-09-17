@@ -162,7 +162,7 @@ def compare_intelligence_packets(
     }
     distribution_fields = (
         "countries", "observation_types", "program_domains", "strategic_audiences",
-        "narrative_tags", "delivery_modes", "prc_support", "source_types_all_records",
+        "narrative_tags", "delivery_modes", "sponsor_support", "source_types_all_records",
     )
     distribution_deltas = {
         field: _distribution_delta(old_macro.get(field) or [], new_macro.get(field) or [])

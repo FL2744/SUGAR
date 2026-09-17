@@ -10,7 +10,7 @@ A visual map can make two nearby markers look meaningfully related even when the
 
 This supports questions such as:
 
-- Which PRC-linked observations are physically near an American Space or EducationUSA location?
+- Which sponsor-linked observations are physically near an American Space or EducationUSA location?
 - How many observations fall within 5 km, 25 km, 100 km, or 250 km of a reference network?
 - What is the nearest reference point to each observation?
 - Is the nearest point in the same city or country?
@@ -100,7 +100,7 @@ A useful workflow is:
 4. Compare program type, audience, date, institution, narrative, and verified reach.
 5. Record true strategic overlap separately in `us_overlap` only when the evidence supports it.
 
-For example, a Confucius Institute program 2 km from an American Space is a valid **geographic proximity** finding. It becomes a stronger overlap finding only if evidence shows shared audiences, similar programming, temporal competition, deliberate targeting, participant crossover, or another substantive relationship.
+For example, a language-and-culture centers program 2 km from an American Space is a valid **geographic proximity** finding. It becomes a stronger overlap finding only if evidence shows shared audiences, similar programming, temporal competition, deliberate targeting, participant crossover, or another substantive relationship.
 
 ## Reproducibility and limits
 

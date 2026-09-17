@@ -167,7 +167,7 @@ def build_gap_report(
                 site.name,
                 site.country,
                 site.city,
-                "No human-verified same-city PRC-network observation is present in the current corpus. This is a comparison/collection gap, not proof of no PRC activity.",
+                "No human-verified same-city sponsoring state-network observation is present in the current corpus. This is a comparison/collection gap, not proof of no sponsor-linked activity.",
                 "Check current local-language and institution/program sources around this U.S. public-diplomacy location.",
             )
 

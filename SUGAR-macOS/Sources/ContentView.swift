@@ -381,7 +381,7 @@ private struct LanguageOption: Identifiable {
     // Match the named language choices in the Python backend.
     static let postLanguages: [LanguageOption] = [
         .init(name: "Arabic", value: "ar"),
-        .init(name: "Chinese", value: "zh"),
+        .init(name: "sponsoring-state", value: "zh"),
         .init(name: "English", value: "en"),
         .init(name: "French", value: "fr"),
         .init(name: "German", value: "de"),
@@ -400,8 +400,8 @@ private struct LanguageOption: Identifiable {
         postLanguages.filter { $0.value != "zh" }.map {
             LanguageOption(name: $0.name, value: $0.name)
         } + [
-            .init(name: "Simplified Chinese", value: "Simplified Chinese"),
-            .init(name: "Traditional Chinese", value: "Traditional Chinese"),
+            .init(name: "Simplified sponsoring-state", value: "Simplified sponsoring-state"),
+            .init(name: "Traditional sponsoring-state", value: "Traditional sponsoring-state"),
         ]
     ).sorted { $0.name < $1.name }
 }

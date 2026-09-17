@@ -15,7 +15,7 @@ from sugar_core.state_workflow import save_state_assessments
 
 
 STATE_URL = "https://educationusa.state.gov/node/421"
-OPERATOR_URL = "https://kyrgyzstan.americancouncils.org/edusa"
+OPERATOR_URL = "https://example_host_country.americancouncils.org/edusa"
 
 
 def _inputs(tmp_path: Path) -> tuple[Path, Path, Path, SourceConflict]:
@@ -23,7 +23,7 @@ def _inputs(tmp_path: Path) -> tuple[Path, Path, Path, SourceConflict]:
         observation_type="program",
         title="Education advising context",
         summary="Conflict review interface regression.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         evidence=[EvidenceReference(url=STATE_URL, source_type="official_usg_source")],
     )
@@ -43,7 +43,7 @@ def _inputs(tmp_path: Path) -> tuple[Path, Path, Path, SourceConflict]:
     )
 
     state_claim = SourceClaim(
-        statement="EducationUSA Kyrgyzstan is fully online beginning April 1, 2026.",
+        statement="EducationUSA example_host_country is fully online beginning April 1, 2026.",
         source_url=STATE_URL,
         publisher="U.S. Department of State EducationUSA",
         authority_type="official_authority",
@@ -51,13 +51,13 @@ def _inputs(tmp_path: Path) -> tuple[Path, Path, Path, SourceConflict]:
         effective_date="2026-04-01",
     )
     operator_claim = SourceClaim(
-        statement="EducationUSA Kyrgyzstan provides in-person advising in Bishkek.",
+        statement="EducationUSA example_host_country provides in-person advising in Bishkek.",
         source_url=OPERATOR_URL,
-        publisher="American Councils Kyrgyzstan",
+        publisher="American Councils example_host_country",
         authority_type="official_operator",
     )
     conflict = SourceConflict(
-        topic="EducationUSA Kyrgyzstan service topology",
+        topic="EducationUSA example_host_country service topology",
         conflict_type="service_topology",
         status="provisional_treatment",
         claims=[state_claim, operator_claim],

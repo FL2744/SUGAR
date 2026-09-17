@@ -26,7 +26,7 @@ def observation() -> ResearchObservation:
         observation_type="program",
         title="University advising activity",
         summary="Public reporting describes a university-facing activity.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.8746,
         longitude=74.5698,
@@ -37,7 +37,7 @@ def physical_space() -> USPresenceSite:
     return USPresenceSite(
         name="American Space Bishkek",
         network="american_space",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.88,
         longitude=74.60,
@@ -51,11 +51,11 @@ def physical_space() -> USPresenceSite:
 
 def virtual_educationusa() -> USPresenceSite:
     return USPresenceSite(
-        name="EducationUSA Kyrgyzstan",
+        name="EducationUSA example_host_country",
         network="educationusa",
-        country="Kyrgyzstan",
+        country="example_host_country",
         service_tags=["educationusa", "study_in_the_us", "higher_education"],
-        source_url="https://educationusa.example/kyrgyzstan",
+        source_url="https://educationusa.example/example_host_country",
         delivery_mode="virtual",
         coverage_scope="country",
     )
@@ -81,7 +81,7 @@ def test_service_sources_separate_program_matches_from_audience_matches():
     overlap = assessment.us_overlap
     sources = {source.name: source for source in overlap.service_sources}
 
-    assert set(sources) == {"American Space Bishkek", "EducationUSA Kyrgyzstan"}
+    assert set(sources) == {"American Space Bishkek", "EducationUSA example_host_country"}
     assert overlap.service_overlap == ["educationusa", "higher_education", "study_in_the_us"]
 
     american_space = sources["American Space Bishkek"]
@@ -89,12 +89,12 @@ def test_service_sources_separate_program_matches_from_audience_matches():
     assert american_space.audience_service_matches == ["english_language"]
     assert "english_language" not in overlap.service_overlap
 
-    educationusa = sources["EducationUSA Kyrgyzstan"]
+    educationusa = sources["EducationUSA example_host_country"]
     assert educationusa.program_service_matches == ["educationusa", "higher_education", "study_in_the_us"]
     assert educationusa.audience_service_matches == ["educationusa"]
     assert educationusa.delivery_mode == "virtual"
     assert educationusa.coverage_scope == "country"
-    assert educationusa.source_url == "https://educationusa.example/kyrgyzstan"
+    assert educationusa.source_url == "https://educationusa.example/example_host_country"
 
 
 def test_service_source_attribution_round_trips_through_state_jsonl(tmp_path):
@@ -126,11 +126,11 @@ def test_geojson_carries_structured_service_source_attribution():
     obs, assessment = assessed_overlap()
     geojson = state_geojson([obs], [assessment], verified_only=False)
     observation_feature = next(
-        feature for feature in geojson["features"] if feature["properties"]["layer"] == "prc_observation"
+        feature for feature in geojson["features"] if feature["properties"]["layer"] == "sponsor_observation"
     )
 
     sources = observation_feature["properties"]["us_service_sources"]
-    assert {source["name"] for source in sources} == {"American Space Bishkek", "EducationUSA Kyrgyzstan"}
+    assert {source["name"] for source in sources} == {"American Space Bishkek", "EducationUSA example_host_country"}
     assert next(source for source in sources if source["name"] == "American Space Bishkek")[
         "program_service_matches"
     ] == []
@@ -139,7 +139,7 @@ def test_geojson_carries_structured_service_source_attribution():
 def test_snapshot_change_detection_marks_service_provenance_as_us_overlap():
     source = USServiceSourceAttribution(
         site_id="us_service_1",
-        name="EducationUSA Kyrgyzstan",
+        name="EducationUSA example_host_country",
         network="educationusa",
         delivery_mode="virtual",
         coverage_scope="country",
@@ -162,7 +162,7 @@ def test_snapshot_change_detection_marks_service_provenance_as_us_overlap():
             service_sources=[
                 USServiceSourceAttribution(
                     site_id="us_service_1",
-                    name="EducationUSA Kyrgyzstan",
+                    name="EducationUSA example_host_country",
                     network="educationusa",
                     delivery_mode="virtual",
                     coverage_scope="country",
@@ -185,7 +185,7 @@ def test_program_source_matches_cannot_exceed_direct_service_overlap():
             service_sources=[
                 USServiceSourceAttribution(
                     site_id="us_service_1",
-                    name="EducationUSA Kyrgyzstan",
+                    name="EducationUSA example_host_country",
                     network="educationusa",
                     delivery_mode="virtual",
                     coverage_scope="country",
@@ -199,7 +199,7 @@ def test_service_source_attribution_requires_a_real_contribution():
     with pytest.raises(ValueError, match="requires a program or audience service match"):
         USServiceSourceAttribution(
             site_id="us_service_1",
-            name="EducationUSA Kyrgyzstan",
+            name="EducationUSA example_host_country",
             network="educationusa",
             delivery_mode="virtual",
             coverage_scope="country",

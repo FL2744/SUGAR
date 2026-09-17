@@ -4,7 +4,7 @@
 
 **System for User-Generated Content Gathering, Analysis, and Representation**
 
-SUGAR is a cross-platform public-source research system for collecting social-media material, preserving provenance, organizing evidence, conducting spatial and structured analysis, and producing reviewable research products. It is developed for Virginia Tech Diplomacy Lab work on public diplomacy and PRC-supported cultural/public-engagement networks, while the core remains platform-neutral.
+SUGAR is a cross-platform public-source research system for collecting social-media material, preserving provenance, organizing evidence, conducting spatial and structured analysis, and producing reviewable research products. The public engine is target-neutral; project-specific targets, query plans, and case data belong in non-public project configuration.
 
 Current package version: **1.2.0**.
 
@@ -75,11 +75,11 @@ SUGAR 1.2 adds persistent project workspaces. A workspace keeps a portable `suga
 ```bash
 sugar-project init ./team4 \
   --name "Diplomacy Lab Team 4" \
-  --description "PRC public-diplomacy research"
+  --description "public-diplomacy research"
 
 sugar-project status ./team4
 sugar-project path ./team4 observations
-sugar-project register ./team4 observations data/observations/kyrgyzstan.xlsx
+sugar-project register ./team4 observations data/observations/example host country.xlsx
 ```
 
 Research files remain ordinary CSV/XLSX/JSONL/GeoJSON/HTML/Word/PDF files rather than being hidden inside the project database. Secrets are never stored in the workspace manifest or registry by SUGAR.
@@ -121,7 +121,7 @@ The `sugar-state` suite keeps source-grounded `ResearchObservation` evidence sep
 
 - monitored-entity/alias registries and reproducible query plans;
 - strategic-audience, program-domain, and narrative coding;
-- explicit PRC-support basis/evidence;
+- explicit sponsor-support basis/evidence;
 - guarded AI triage followed by human review;
 - American Spaces/EducationUSA/U.S. public-diplomacy overlap;
 - evidence-integrity auditing;
@@ -154,7 +154,7 @@ See [`docs/research-map.md`](docs/research-map.md) and [`docs/spatial-overlap.md
 
 LLM enrichment and triage are optional. Source text is treated as untrusted data and separated from model instructions. SUGAR does not infer a country from language alone and does not infer private/street-level locations.
 
-For State-specific analysis, AI cannot self-verify evidence, confirm PRC support, invent acceptable evidence references, or establish causal influence. High-consequence claims remain subject to explicit evidence and human review.
+For State-specific analysis, AI cannot self-verify evidence, confirm sponsor support, invent acceptable evidence references, or establish causal influence. High-consequence claims remain subject to explicit evidence and human review.
 
 Supported LLM configuration includes OpenAI-compatible providers and Virginia Tech ARC. Credentials are supplied at runtime; they must not be committed to the repository or inserted into project manifests.
 

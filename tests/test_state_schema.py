@@ -11,21 +11,21 @@ from sugar_core.state_schema import (
 )
 
 
-def test_confirmed_prc_support_requires_evidence_and_human_review():
+def test_confirmed_sponsor_support_requires_evidence_and_human_review():
     with pytest.raises(ValueError, match="explicit evidence"):
         SupportAssessment(level="confirmed", review_state="human_verified", reviewer="analyst")
 
     with pytest.raises(ValueError, match="human verification"):
         SupportAssessment(
             level="confirmed",
-            bases=["official_prc_source"],
+            bases=["official_sponsor_source"],
             evidence_refs=["https://example.org/source"],
             review_state="ai_triaged",
         )
 
     support = SupportAssessment(
         level="confirmed",
-        bases=["official_prc_source"],
+        bases=["official_sponsor_source"],
         evidence_refs=["https://example.org/source"],
         review_state="human_verified",
         reviewer="analyst",

@@ -47,7 +47,7 @@ def build_state_network(
             "observation_id": observation.observation_id,
             "assessment_id": assessment.assessment_id,
             "verification_state": assessment.review_state,
-            "prc_support": assessment.prc_support.level,
+            "sponsor_support": assessment.sponsor_support.level,
             "country": observation.country,
             "city": observation.city,
             "evidence_refs": json.dumps(sorted(set(evidence_refs)), ensure_ascii=False),
@@ -73,7 +73,7 @@ def build_state_network(
             latitude=observation.latitude,
             longitude=observation.longitude,
             verification_state=assessment.review_state,
-            prc_support=assessment.prc_support.level,
+            sponsor_support=assessment.sponsor_support.level,
             primary_source_url=observation.primary_source_url,
         )
 

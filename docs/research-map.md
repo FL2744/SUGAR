@@ -39,7 +39,7 @@ Reference CSV/XLSX files require `latitude` and `longitude`. They can additional
 - `summary`, `description`, `note`, or `notes`
 - `url`, `source_url`, `primary_source_url`, or `website`
 
-Reference records receive their own cluster, legend entry, popup style, source link, and map-bounds contribution. They are **not** mixed into PRC activity heat density merely because they appear on the same map.
+Reference records receive their own cluster, legend entry, popup style, source link, and map-bounds contribution. They are **not** mixed into sponsor-linked activity heat density merely because they appear on the same map.
 
 When an observation has schema 1.1 `spatial_matches`, the map can also render its nearest computed reference relationship even when the reference dataset is not separately loaded for display. Loading the corresponding reference layer remains preferable because it provides richer reference popups and context.
 
@@ -104,7 +104,7 @@ Generated maps include:
   "source_file": "observations.xlsx",
   "output_file": "research_map.html",
   "map": {
-    "title": "American Spaces / PRC Activity",
+    "title": "American Spaces / sponsoring state Activity",
     "subtitle": "Public-source activity and overlap",
     "heat_windows": [30, 90, 180, 365],
     "default_heat_window": 90,

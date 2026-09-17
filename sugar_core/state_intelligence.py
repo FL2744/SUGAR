@@ -121,7 +121,7 @@ def _reach(assessment: StateAssessment) -> dict[str, int | None]:
 def _case_priority(observation: ResearchObservation, assessment: StateAssessment) -> tuple[int, int, int, int]:
     priority = {"urgent": 4, "high": 3, "normal": 2, "low": 1}.get(assessment.analytic_priority, 2)
     support = {"confirmed": 4, "probable": 3, "possible": 2, "unsupported": 1, "not_assessed": 0}.get(
-        assessment.prc_support.level, 0
+        assessment.sponsor_support.level, 0
     )
     return priority, support, int(assessment.us_overlap.material), len(observation.evidence) + len(observation.source_record_keys)
 
@@ -153,9 +153,9 @@ def build_case_profile(
         uncertainty.append("observation_not_human_verified")
     if assessment.review_state != "human_verified":
         uncertainty.append("assessment_not_human_verified")
-    if assessment.prc_support.level in {"possible", "probable"}:
-        uncertainty.append("prc_support_not_confirmed")
-    if assessment.prc_support.level == "confirmed" and len(assessment.prc_support.evidence_refs) < 2:
+    if assessment.sponsor_support.level in {"possible", "probable"}:
+        uncertainty.append("sponsor_support_not_confirmed")
+    if assessment.sponsor_support.level == "confirmed" and len(assessment.sponsor_support.evidence_refs) < 2:
         uncertainty.append("confirmed_support_single_evidence_identity")
     if assessment.observability_level in {"reach_observed", "engagement_observed"}:
         uncertainty.append("reach_or_engagement_is_not_outcome_evidence")
@@ -187,7 +187,7 @@ def build_case_profile(
         "narrative_tags": assessment.narrative_tags,
         "delivery_modes": assessment.delivery_modes,
         "policy_relevance": assessment.policy_relevance,
-        "prc_support": asdict(assessment.prc_support),
+        "sponsor_support": asdict(assessment.sponsor_support),
         "observability_level": assessment.observability_level,
         "reach": _reach(assessment),
         "us_overlap": asdict(assessment.us_overlap),
@@ -493,10 +493,10 @@ def _collection_questions(
     verified_pairs: list[tuple[ResearchObservation, StateAssessment]],
 ) -> list[dict[str, Any]]:
     result = []
-    unresolved_support = [a for a in assessments if a.prc_support.level in {"possible", "probable"} and a.review_state != "rejected"]
+    unresolved_support = [a for a in assessments if a.sponsor_support.level in {"possible", "probable"} and a.review_state != "rejected"]
     if unresolved_support:
         result.append({
-            "question": "Which probable/possible PRC-support relationships can be confirmed or rejected with independent primary or credible host-source evidence?",
+            "question": "Which probable/possible sponsor-support relationships can be confirmed or rejected with independent primary or credible host-source evidence?",
             "priority": "high", "affected_assessment_ids": [x.assessment_id for x in unresolved_support[:50]],
         })
     unresolved_location = [x for x in observations if not x.country or x.location_basis == "unknown"]
@@ -508,7 +508,7 @@ def _collection_questions(
         })
     weak_high_consequence = [
         obs.observation_id for obs, assessment in verified_pairs
-        if evidence_profile(obs)["distinct_evidence_identities"] <= 1 and assessment.prc_support.level in {"probable", "confirmed"}
+        if evidence_profile(obs)["distinct_evidence_identities"] <= 1 and assessment.sponsor_support.level in {"probable", "confirmed"}
     ]
     if weak_high_consequence:
         result.append({
@@ -544,7 +544,7 @@ def build_intelligence_packet(
     domains = Counter(x for _, a in verified_pairs for x in a.program_domains)
     audiences = Counter(x for _, a in verified_pairs for x in a.strategic_audiences)
     narratives = Counter(x for _, a in verified_pairs for x in a.narrative_tags)
-    support = Counter(a.prc_support.level for _, a in verified_pairs)
+    support = Counter(a.sponsor_support.level for _, a in verified_pairs)
     types = Counter(obs.observation_type for obs, _ in verified_pairs)
     delivery = Counter(x for _, a in verified_pairs for x in a.delivery_modes)
     source_types = Counter(_clean(item.source_type).casefold() or "unspecified" for obs, _ in pairs for item in obs.evidence)
@@ -557,7 +557,7 @@ def build_intelligence_packet(
         "intelligence_version": ANALYTIC_INTELLIGENCE_VERSION, "generated_at": utc_iso(),
         "scope": {"country": country, "observation_id": observation_id, "mode": "micro" if observation_id else "country" if country else "global"},
         "guardrails": [
-            "This describes the research corpus, not the full universe of PRC public-diplomacy activity.",
+            "This describes the research corpus, not the full universe of sponsoring state public-diplomacy activity.",
             "Counts and time movement are not coverage-adjusted unless explicitly stated.",
             "Presence, activity, reach, engagement, outcomes, and causal influence are separate concepts.",
             "Cross-country quantitative comparisons require corpus-comparability review.",
@@ -573,7 +573,7 @@ def build_intelligence_packet(
         "macro_structure": {
             "countries": _distribution(countries), "cities": _distribution(cities), "observation_types": _distribution(types),
             "program_domains": _distribution(domains), "strategic_audiences": _distribution(audiences),
-            "narrative_tags": _distribution(narratives), "delivery_modes": _distribution(delivery), "prc_support": _distribution(support),
+            "narrative_tags": _distribution(narratives), "delivery_modes": _distribution(delivery), "sponsor_support": _distribution(support),
             "source_types_all_records": _distribution(source_types),
             "audience_concentration_hhi": _hhi(audiences), "domain_concentration_hhi": _hhi(domains),
             "narrative_concentration_hhi": _hhi(narratives), "audience_diversity_entropy": _entropy(audiences),

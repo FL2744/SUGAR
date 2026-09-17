@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 ENTITY_TYPES = {
-    "prc_government",
-    "prc_diplomatic_mission",
+    "sponsor_government",
+    "sponsor_diplomatic_mission",
     "institution",
     "program",
     "host_institution",
@@ -238,10 +238,10 @@ def write_entity_template(path: str | Path) -> str:
                 country="Example Country",
                 city="Example City",
                 official_urls=["https://example.org/official"],
-                languages=["English", "Chinese", "Local language"],
+                languages=["English", "Spanish", "Local language"],
                 query_terms=["Example program name"],
                 priority="high",
-                notes="Replace this row with verified entities and aliases; aliases are discovery aids, not proof of PRC support.",
+                notes="Replace this row with verified entities and aliases; aliases are discovery aids, not proof of sponsor support.",
             )
         ]
     )

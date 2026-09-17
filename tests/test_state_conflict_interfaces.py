@@ -15,7 +15,7 @@ from sugar_core.state_workflow import save_state_assessments
 
 
 STATE_URL = "https://educationusa.state.gov/node/421"
-OPERATOR_URL = "https://kyrgyzstan.americancouncils.org/edusa"
+OPERATOR_URL = "https://example_host_country.americancouncils.org/edusa"
 
 
 def _inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -24,7 +24,7 @@ def _inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
         title="Education advising context",
         summary="A public-source record uses the current State EducationUSA directory.",
         observed_at="2026-09-14",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         evidence=[
             EvidenceReference(
@@ -50,7 +50,7 @@ def _inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
     )
 
     state_claim = SourceClaim(
-        statement="EducationUSA Kyrgyzstan is fully online beginning April 1, 2026.",
+        statement="EducationUSA example_host_country is fully online beginning April 1, 2026.",
         source_url=STATE_URL,
         publisher="U.S. Department of State EducationUSA",
         authority_type="official_authority",
@@ -58,14 +58,14 @@ def _inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
         effective_date="2026-04-01",
     )
     operator_claim = SourceClaim(
-        statement="EducationUSA Kyrgyzstan provides in-person advising in Bishkek.",
+        statement="EducationUSA example_host_country provides in-person advising in Bishkek.",
         source_url=OPERATOR_URL,
-        publisher="American Councils Kyrgyzstan",
+        publisher="American Councils example_host_country",
         authority_type="official_operator",
         freshness="unknown",
     )
     conflict = SourceConflict(
-        topic="EducationUSA Kyrgyzstan service topology",
+        topic="EducationUSA example_host_country service topology",
         conflict_type="service_topology",
         status="provisional_treatment",
         claims=[state_claim, operator_claim],
@@ -136,4 +136,4 @@ def test_desktop_state_package_carries_explicit_source_conflicts(tmp_path):
 
     brief = (out_dir / "desktop_case.brief.md").read_text(encoding="utf-8")
     assert "## Source Conflicts" in brief
-    assert "EducationUSA Kyrgyzstan service topology" in brief
+    assert "EducationUSA example_host_country service topology" in brief

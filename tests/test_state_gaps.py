@@ -10,7 +10,7 @@ def test_gap_report_never_treats_missing_observation_as_no_activity():
         title="Known current program",
         summary="Known current program",
         observed_at="2026-06-01T12:00:00Z",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         evidence=[EvidenceReference(url="https://example.org/source", collected_at="2026-09-01T12:00:00Z")],
         verification_state="human_verified",
@@ -26,7 +26,7 @@ def test_gap_report_never_treats_missing_observation_as_no_activity():
             MonitoredEntity(
                 canonical_name="Unobserved Priority Institution",
                 aliases=["UPI"],
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Osh",
                 priority="high",
             )
@@ -35,7 +35,7 @@ def test_gap_report_never_treats_missing_observation_as_no_activity():
     site = USPresenceSite(
         name="American Space Osh",
         network="american_space",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Osh",
     )
     report = build_gap_report([observation], [assessment], entities=registry, us_sites=[site])

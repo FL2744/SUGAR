@@ -87,7 +87,7 @@ def test_bilibili_search_records_get_thread_roots(monkeypatch):
 
     rows = collect_registered_source(
         "bilibili",
-        CollectorRequest(search_terms=["Confucius Institute"]),
+        CollectorRequest(search_terms=["language-and-culture centers"]),
     )
 
     assert rows[0].thread_root_key == "bilibili:BV123"

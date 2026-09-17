@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(
 def test_live_public_weibo_seed_and_context_smoke():
     # Public post independently observed in September 2026:
     # https://m.weibo.cn/status/5320265912291527
-    # The text discusses ANTA KAI 3's blending of Chinese kite imagery and other cultural motifs.
+    # Stable public seed used only to detect changes in the platform's public response surface.
     result = investigate_weibo_seed(
         "https://m.weibo.cn/status/5320265912291527",
         max_comments=5,

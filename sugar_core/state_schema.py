@@ -41,7 +41,7 @@ PROGRAM_DOMAINS = {
 }
 
 # This mapping is intentionally program/domain-based, not audience-based. It is used to keep
-# direct service overlap distinct from audience overlap. A Chinese-language program aimed at
+# direct service overlap distinct from audience overlap. A foreign-language program aimed at
 # students, for example, must not become an "english_language" service overlap merely because
 # U.S. student programming may include English instruction.
 _PROGRAM_DOMAIN_SERVICE_TAGS = {
@@ -66,13 +66,13 @@ NARRATIVE_TAGS = {
     "development_modernization",
     "culture_civilization",
     "economic_opportunity",
-    "china_model",
-    "china_us_comparison",
+    "sponsor_model",
+    "sponsor_us_comparison",
     "anti_us",
     "multipolarity",
     "global_south_solidarity",
     "shared_future",
-    "china_russia_coordination",
+    "cross_state_coordination",
     "third_party_coordination",
     "local_partnership",
     "commercial_branding",
@@ -88,7 +88,7 @@ SUPPORT_LEVELS = {
 }
 
 SUPPORT_BASES = {
-    "official_prc_source",
+    "official_sponsor_source",
     "official_host_source",
     "funding",
     "personnel",
@@ -439,9 +439,9 @@ class SupportAssessment:
         self.review_state = _choice(self.review_state, REVIEW_STATES, "review_state", "unreviewed")
         self.reviewer = _clean(self.reviewer)
         if self.level in {"probable", "confirmed"} and not self.evidence_refs:
-            raise ValueError(f"{self.level} PRC-support assessments require explicit evidence references.")
+            raise ValueError(f"{self.level} sponsor-support assessments require explicit evidence references.")
         if self.level == "confirmed" and self.review_state != "human_verified":
-            raise ValueError("Confirmed PRC support requires human verification.")
+            raise ValueError("Confirmed sponsor support requires human verification.")
         if self.review_state in {"human_verified", "rejected"} and not self.reviewer:
             raise ValueError(f"{self.review_state} support assessments require a reviewer.")
 
@@ -641,7 +641,7 @@ class StateAssessment:
     partner_entities: list[str] = field(default_factory=list)
     delivery_modes: list[str] = field(default_factory=list)
     policy_relevance: list[str] = field(default_factory=list)
-    prc_support: SupportAssessment = field(default_factory=SupportAssessment)
+    sponsor_support: SupportAssessment = field(default_factory=SupportAssessment)
     observability_level: str = "not_assessed"
     reach: ReachMetrics = field(default_factory=ReachMetrics)
     us_overlap: USOverlapAssessment = field(default_factory=USOverlapAssessment)
@@ -673,8 +673,8 @@ class StateAssessment:
         self.partner_entities = _clean_list(self.partner_entities)
         self.delivery_modes = _clean_list(self.delivery_modes)
         self.policy_relevance = _clean_list(self.policy_relevance)
-        if isinstance(self.prc_support, dict):
-            self.prc_support = SupportAssessment(**self.prc_support)
+        if isinstance(self.sponsor_support, dict):
+            self.sponsor_support = SupportAssessment(**self.sponsor_support)
         if isinstance(self.reach, dict):
             self.reach = ReachMetrics(**self.reach)
         if isinstance(self.us_overlap, dict):
@@ -700,7 +700,7 @@ class StateAssessment:
     def brief_eligible(self) -> bool:
         if self.review_state != "human_verified":
             return False
-        if self.prc_support.level == "confirmed" and self.prc_support.review_state != "human_verified":
+        if self.sponsor_support.level == "confirmed" and self.sponsor_support.review_state != "human_verified":
             return False
         return all(claim.review_state == "human_verified" for claim in self.claims if claim.claim_type in {"support_relationship", "coordination", "influence"})
 

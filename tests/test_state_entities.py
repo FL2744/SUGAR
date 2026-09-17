@@ -18,7 +18,7 @@ def test_registry_resolves_aliases_without_implying_support():
     registry = EntityRegistry([entity])
     assert registry.resolve("EI").entity_id == entity.entity_id
     assert registry.resolve("示例学院").canonical_name == "Example Institute"
-    assert not hasattr(entity, "prc_support")
+    assert not hasattr(entity, "sponsor_support")
     assert [row["query"] for row in registry.query_plan()] == ["Example Institute", "EI", "示例学院", "Example Institute robotics"]
 
 
@@ -36,7 +36,7 @@ def test_registry_roundtrip_and_query_plan(tmp_path: Path):
                 canonical_name="Monitored Program",
                 entity_type="program",
                 aliases=["MP"],
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Bishkek",
                 official_urls=["https://example.org/official"],
                 priority="urgent",

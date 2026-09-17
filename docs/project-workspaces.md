@@ -52,7 +52,7 @@ The intent of each directory is stable:
 Create a workspace:
 
 ```bash
-sugar-project init ./team4 --name "Diplomacy Lab Team 4" --description "PRC public-diplomacy research"
+sugar-project init ./research --name "Public Diplomacy Research" --description "public-diplomacy research"
 ```
 
 Inspect it:
@@ -71,8 +71,8 @@ sugar-project path ./team4 observations
 Register an output manually when needed:
 
 ```bash
-sugar-project register ./team4 observations data/observations/kyrgyzstan.xlsx \
-  --label "Kyrgyzstan reviewed observations" \
+sugar-project register ./team4 observations data/observations/example host country.xlsx \
+  --label "example host country reviewed observations" \
   --metadata '{"operation":"triage","review_round":1}'
 ```
 
@@ -129,7 +129,7 @@ from sugar_core import SugarWorkspace
 workspace = SugarWorkspace.create(
     "team4",
     name="Diplomacy Lab Team 4",
-    description="PRC public-diplomacy research",
+    description="public-diplomacy research",
 )
 
 raw_dir = workspace.path_for("raw")

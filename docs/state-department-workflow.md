@@ -1,6 +1,6 @@
 # State Department research workflow
 
-This workflow turns SUGAR collection output into an auditable, updateable research product for the Diplomacy Lab project on PRC-supported global cultural/public-engagement networks and their overlap with U.S. public diplomacy.
+This workflow turns SUGAR collection output into an auditable, updateable research product for the Diplomacy Lab project on sponsor-supported global cultural/public-engagement networks and their overlap with U.S. public diplomacy.
 
 It is a research methodology, not a Department of State certification, security authorization, intelligence product, or automated determination of influence.
 
@@ -8,7 +8,7 @@ It is a research methodology, not a Department of State certification, security 
 
 `ResearchObservation` remains the source-normalized evidence layer. It answers: what did the source actually show, where/when did it occur, and what source proves it?
 
-`StateAssessment` is a sidecar analytic layer. It answers sponsor-specific questions: what audience/program/narrative is relevant, what evidence supports PRC involvement, how much observable reach or engagement exists, where does it overlap American Spaces/EducationUSA/U.S. public diplomacy, and what still requires human verification?
+`StateAssessment` is a sidecar analytic layer. It answers sponsor-specific questions: what audience/program/narrative is relevant, what evidence supports sponsoring state involvement, how much observable reach or engagement exists, where does it overlap American Spaces/EducationUSA/U.S. public diplomacy, and what still requires human verification?
 
 Keeping these layers separate prevents a later analytic judgment from silently rewriting raw source evidence.
 
@@ -37,13 +37,13 @@ The controlled taxonomy includes higher education, English language, entrepreneu
 
 ### Narratives
 
-Narrative tags include education opportunity, technology/innovation, development/modernization, culture/civilization, economic opportunity, China model, China-U.S. comparison, anti-U.S., multipolarity, Global South solidarity, shared future, China-Russia coordination, third-party coordination, local partnership, commercial branding, and `other`.
+Narrative tags include education opportunity, technology/innovation, development/modernization, culture/civilization, economic opportunity, sponsoring state model, sponsoring state-U.S. comparison, anti-U.S., multipolarity, Global South solidarity, shared future, cross-state coordination, third-party coordination, local partnership, commercial branding, and `other`.
 
-`anti_us`, `china_russia_coordination`, and `third_party_coordination` are high-consequence labels. They should not enter a State-facing brief without a source-backed, human-verified claim.
+`anti_us`, `cross_state_coordination`, and `third_party_coordination` are high-consequence labels. They should not enter a State-facing brief without a source-backed, human-verified claim.
 
-## PRC-support methodology
+## sponsor-support methodology
 
-PRC support is not inferred from Chinese identity, Chinese language, Chinese culture, commercial Chinese ownership, geographic origin, or PRC-friendly messaging alone.
+sponsor support is not inferred from sponsoring-state identity, sponsoring-state language, sponsoring-state culture, commercial sponsoring-state ownership, geographic origin, or sponsoring state-friendly messaging alone.
 
 The support assessment records both a level and basis:
 
@@ -53,9 +53,9 @@ The support assessment records both a level and basis:
 - `probable`
 - `confirmed`
 
-Possible bases include official PRC or host-government sources, funding, personnel, governance, branding, co-sponsorship, facility/material support, program delivery, or credible secondary reporting.
+Possible bases include official sponsoring state or host-government sources, funding, personnel, governance, branding, co-sponsorship, facility/material support, program delivery, or credible secondary reporting.
 
-`probable` and `confirmed` support require explicit evidence references. `confirmed` also requires a named human reviewer and `human_verified` support state. AI triage can never confirm PRC support.
+`probable` and `confirmed` support require explicit evidence references. `confirmed` also requires a named human reviewer and `human_verified` support state. AI triage can never confirm sponsor support.
 
 ## Claim-level evidence
 
@@ -91,7 +91,7 @@ Generate a reproducible watch plan:
 sugar-state query-plan entities.csv --output query_plan.csv
 ```
 
-Aliases improve discovery and entity resolution; they do **not** transfer or prove a PRC-support assessment.
+Aliases improve discovery and entity resolution; they do **not** transfer or prove a sponsor-support assessment.
 
 ### 3. Create or AI-triage State assessments
 
@@ -174,7 +174,7 @@ The complete command produces:
 - human review-priority CSV
 - analyst review workbook
 - verified-only BLUF Markdown
-- verified-only PRC-observation + U.S.-presence GeoJSON
+- verified-only sponsoring state-observation + U.S.-presence GeoJSON
 - typed evidence-backed network nodes/edges and JSON
 - country/city rollup JSON/CSV
 - evidence-freshness report
@@ -193,7 +193,7 @@ sugar-state freshness observations.xlsx state.reviewed.jsonl \
 
 Historical evidence remains valid background; it is not deleted merely because it predates the current monitoring window.
 
-Snapshot comparison uses stable observation IDs and reports additions, removals, and changes to PRC support, review state, observability, U.S. overlap, audiences, program domains, narratives, and claims.
+Snapshot comparison uses stable observation IDs and reports additions, removals, and changes to sponsor support, review state, observability, U.S. overlap, audiences, program domains, narratives, and claims.
 
 ## Network output
 

@@ -413,7 +413,7 @@ def save_state_package_with_conflicts(
     name: str = "state_research",
     us_sites: Iterable[USPresenceSite] = (),
     previous_assessments: Iterable[StateAssessment] | None = None,
-    title: str = "PRC Cultural Influence Network Research Update",
+    title: str = "State-Supported Public Engagement Research Update",
     source_conflicts: Iterable[SourceConflict | dict[str, Any]] = (),
 ) -> list[str]:
     observations = list(observations)
@@ -450,7 +450,7 @@ def package_from_files_with_conflicts(
     previous_assessments_file: str | Path | None = None,
     source_conflicts_file: str | Path | None = None,
     name: str = "state_research",
-    title: str = "PRC Cultural Influence Network Research Update",
+    title: str = "State-Supported Public Engagement Research Update",
 ) -> list[str]:
     observations = load_observations(observations_file)
     assessments = (

@@ -225,7 +225,7 @@ def _run_state_package(
     entities_path = _optional_input_path(config, "entities", workspace)
     previous_path = _optional_input_path(config, "previous_assessments", workspace)
     name = str(config.get("name") or "state_research").strip() or "state_research"
-    title = str(config.get("title") or "PRC Cultural Influence Network Research Update").strip()
+    title = str(config.get("title") or "State-Supported Public Engagement Research Update").strip()
     current_start = str(config.get("current_start") or "2024-01-01").strip()
     stale_days = int(config.get("stale_days", 90))
 

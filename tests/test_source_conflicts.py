@@ -16,7 +16,7 @@ from sugar_core.source_conflicts import (
 
 
 STATE_URL = "https://educationusa.state.gov/node/421"
-OPERATOR_URL = "https://kyrgyzstan.americancouncils.org/edusa"
+OPERATOR_URL = "https://example_host_country.americancouncils.org/edusa"
 
 
 def claims() -> tuple[SourceClaim, SourceClaim]:
@@ -33,7 +33,7 @@ def claims() -> tuple[SourceClaim, SourceClaim]:
     operator = SourceClaim(
         statement="The service includes in-person advising at a Bishkek library.",
         source_url=OPERATOR_URL,
-        publisher="American Councils Kyrgyzstan",
+        publisher="American Councils example_host_country",
         authority_type="official_operator",
         authority_scope="Implementing-partner program description",
         freshness="unknown",
@@ -45,7 +45,7 @@ def claims() -> tuple[SourceClaim, SourceClaim]:
 def provisional_conflict() -> SourceConflict:
     state, operator = claims()
     return SourceConflict(
-        topic="EducationUSA Kyrgyzstan service topology",
+        topic="EducationUSA example_host_country service topology",
         conflict_type="service_topology",
         status="provisional_treatment",
         claims=[state, operator],

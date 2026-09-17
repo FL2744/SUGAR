@@ -16,7 +16,7 @@ def _spatial_observation() -> ResearchObservation:
         title="Technology workshop",
         summary="Public workshop activity.",
         city="Bishkek",
-        country="Kyrgyzstan",
+        country="example_host_country",
         latitude=42.8746,
         longitude=74.5698,
         location_basis="source_stated",
