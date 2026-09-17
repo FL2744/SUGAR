@@ -347,35 +347,40 @@ class SugarWorkspace:
 
     def _initialize_database(self) -> None:
         self.internal_path.mkdir(parents=True, exist_ok=True)
-        with closing(self._connect()) as connection:
-            current_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
-            if current_version > DATABASE_SCHEMA_VERSION:
-                raise ValueError(
-                    f"Unsupported workspace database schema {current_version}; "
-                    f"maximum supported version is {DATABASE_SCHEMA_VERSION}."
+        try:
+            with closing(self._connect()) as connection:
+                current_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+                if current_version > DATABASE_SCHEMA_VERSION:
+                    raise ValueError(
+                        f"Unsupported workspace database schema {current_version}; "
+                        f"maximum supported version is {DATABASE_SCHEMA_VERSION}."
+                    )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS artifacts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        kind TEXT NOT NULL,
+                        path TEXT NOT NULL,
+                        label TEXT NOT NULL DEFAULT '',
+                        registered_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        metadata_json TEXT NOT NULL DEFAULT '{}',
+                        external INTEGER NOT NULL DEFAULT 0,
+                        UNIQUE(kind, path)
+                    )
+                    """
                 )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS artifacts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    kind TEXT NOT NULL,
-                    path TEXT NOT NULL,
-                    label TEXT NOT NULL DEFAULT '',
-                    registered_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    metadata_json TEXT NOT NULL DEFAULT '{}',
-                    external INTEGER NOT NULL DEFAULT 0,
-                    UNIQUE(kind, path)
-                )
-                """
-            )
-            columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(artifacts)").fetchall()}
-            if "external" not in columns:
-                connection.execute("ALTER TABLE artifacts ADD COLUMN external INTEGER NOT NULL DEFAULT 0")
-            connection.execute("CREATE INDEX IF NOT EXISTS idx_artifacts_kind_id ON artifacts(kind, id DESC)")
-            if current_version < DATABASE_SCHEMA_VERSION:
-                connection.execute(f"PRAGMA user_version = {DATABASE_SCHEMA_VERSION}")
-            connection.commit()
+                columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(artifacts)").fetchall()}
+                if "external" not in columns:
+                    connection.execute("ALTER TABLE artifacts ADD COLUMN external INTEGER NOT NULL DEFAULT 0")
+                connection.execute("CREATE INDEX IF NOT EXISTS idx_artifacts_kind_id ON artifacts(kind, id DESC)")
+                if current_version < DATABASE_SCHEMA_VERSION:
+                    connection.execute(f"PRAGMA user_version = {DATABASE_SCHEMA_VERSION}")
+                connection.commit()
+        except sqlite3.DatabaseError as exc:
+            raise ValueError(
+                "Workspace database is corrupt or unreadable. Restore a project archive or recover the database backup."
+            ) from exc
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path, timeout=30)

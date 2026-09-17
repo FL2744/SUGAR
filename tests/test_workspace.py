@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import zipfile
 from pathlib import Path
 
@@ -150,6 +151,57 @@ def test_workspace_rejects_missing_required_layout_key(tmp_path: Path) -> None:
     workspace.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(ValueError, match="missing required layout keys"):
+        SugarWorkspace.open(workspace.root)
+
+
+def test_workspace_migrates_legacy_artifact_registry(tmp_path: Path) -> None:
+    root = tmp_path / "legacy-project"
+    root.mkdir()
+    (root / MANIFEST_FILENAME).write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "project_id": "legacy-project",
+                "name": "Legacy Project",
+                "description": "Legacy fixture",
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+                "layout": DEFAULT_LAYOUT,
+            }
+        ),
+        encoding="utf-8",
+    )
+    internal = root / ".sugar"
+    internal.mkdir()
+    with sqlite3.connect(internal / "workspace.sqlite3") as connection:
+        connection.execute(
+            """
+            CREATE TABLE artifacts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT NOT NULL,
+                path TEXT NOT NULL,
+                label TEXT NOT NULL DEFAULT '',
+                registered_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                UNIQUE(kind, path)
+            )
+            """
+        )
+
+    workspace = SugarWorkspace.open(root)
+    assert workspace.status()["database_schema_version"] == 1
+    fixture = workspace.path_for("references") / "legacy.txt"
+    fixture.write_text("legacy", encoding="utf-8")
+    artifact = workspace.register_artifact("reference", fixture)
+    assert artifact.external is False
+
+
+def test_workspace_reports_corrupted_database_as_actionable_error(tmp_path: Path) -> None:
+    workspace = SugarWorkspace.create(tmp_path / "corrupted", name="Corrupted")
+    workspace.database_path.write_bytes(b"not a sqlite database")
+
+    with pytest.raises(ValueError, match="corrupt or unreadable"):
         SugarWorkspace.open(workspace.root)
 
 
