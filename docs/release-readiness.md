@@ -12,9 +12,11 @@ decision remains; `[ ]` means work remains.
 2. `[~]` Releases: tagged wheel/sdist, exact version/changelog validation, checksums, and SBOM
    automation are present; Windows Authenticode and macOS signing/notarization identities are not
    configured.
-3. `[x]` CI quality: Ruff, formatting, focused mypy, coverage, pip-audit, package installation,
-   deterministic stress smoke, CodeQL, Gitleaks, Dependabot, and dependency review are configured.
-   Branch protection and required-review settings remain repository-admin work.
+3. `[~]` CI quality: Ruff, formatting, focused mypy, coverage, pip-audit, package installation,
+   deterministic stress smoke, custom CodeQL, Gitleaks, Dependabot, and dependency review are
+   configured. GitHub default CodeQL currently reports two clear-text-storage findings on deliberate
+   plaintext research-artifact writes; security-owner review or an approved default-setup policy is
+   still required. Branch protection and required-review settings remain repository-admin work.
 4. `[~]` Dependencies: supported Python bounds and declared ranges are explicit, universal newest and
    Python 3.11 lowest-direct hash-pinned runtime locks are checked in, and CI exercises both tracks;
    a formally approved update policy remains to be selected.
