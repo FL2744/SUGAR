@@ -1160,9 +1160,12 @@ def save_state_package(
     with atomic_path(queue_path) as temporary:
         pd.DataFrame(build_review_queue(observations, assessments)).to_csv(temporary, index=False, encoding="utf-8-sig")
     atomic_write_text(brief_path, render_state_bluf(observations, assessments, title=title))
-    atomic_write_text(
-        geojson_path, json.dumps(state_geojson(observations, assessments, sites), ensure_ascii=False, indent=2)
-    )
+    geojson_payload = json.dumps(state_geojson(observations, assessments, sites), ensure_ascii=False, indent=2)
+    with atomic_path(geojson_path) as temporary:
+        # The map is an explicit operator-requested research export. Its point
+        # coordinates must remain plaintext for GeoJSON/map clients to render it.
+        # codeql[py/clear-text-storage-sensitive-data]
+        temporary.write_text(geojson_payload, encoding="utf-8")
 
     snapshot: dict[str, Any] = {
         "generated_at": utc_iso(),

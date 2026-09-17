@@ -34,6 +34,11 @@ LLM prompts and responses are cached only in process memory and are not written 
 The on-disk cache is reserved for public geocoder provider metadata. Explicit output files remain
 research data and must be protected by the operator's approved storage controls.
 
+GeoJSON map exports intentionally contain plaintext point coordinates so standard map clients can
+render them. Treat those files as potentially sensitive research products, share them only through
+approved channels, and use the verified-only/default filtering or a redacted downstream copy when
+the audience does not need precise locations.
+
 ## Product disclaimers
 
 SUGAR is a research tool. Density, engagement, reach, proximity, or platform presence do not by
