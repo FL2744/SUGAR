@@ -1164,7 +1164,7 @@ def save_state_package(
     with atomic_path(geojson_path) as temporary:
         # The map is an explicit operator-requested research export. Its point
         # coordinates must remain plaintext for GeoJSON/map clients to render it.
-        # codeql[py/clear-text-storage-sensitive-data]
+        # lgtm[py/clear-text-storage-sensitive-data]
         temporary.write_text(geojson_payload, encoding="utf-8")
 
     snapshot: dict[str, Any] = {
