@@ -72,7 +72,7 @@
       "priority": "P0",
       "category": "integration",
       "title": "Canonical inbound data interface",
-      "status": "not_met",
+      "status": "met",
       "requirement": "SUGAR must provide a documented inbound adapter for externally collected public-source records with explicit schema validation and provenance preservation.",
       "acceptance": [
         "Import at minimum JSONL and CSV into a documented canonical record shape.",
@@ -117,7 +117,7 @@
       "priority": "P0",
       "category": "research_workflow",
       "title": "Research-question-first workflow",
-      "status": "not_met",
+      "status": "partially_met",
       "requirement": "The primary State workflow must begin from a research requirement rather than requiring the user to design a keyword matrix manually.",
       "acceptance": [
         "User can specify question, geography, timeframe, target audience, languages, known entities, and collection constraints.",
@@ -131,7 +131,7 @@
       "priority": "P0",
       "category": "research_workflow",
       "title": "Auditable adaptive search planning",
-      "status": "not_met",
+      "status": "partially_met",
       "requirement": "Search expansion, retirement, and pivot decisions must be inspectable and tied to evidence rather than hidden inside an unconstrained agent loop.",
       "acceptance": [
         "Each generated query records parent concept/query, rationale, origin, and status.",
@@ -336,4 +336,3 @@
     }
   ]
 }
-

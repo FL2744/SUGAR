@@ -498,7 +498,7 @@ def observation_from_post(record: PostRecord, *, summary: str | None = None) -> 
         location_confidence=record.location_confidence if record.inferred_location else None,
         actors=[record.author_name or record.author_handle] if (record.author_name or record.author_handle) else [],
         evidence=[evidence],
-        source_record_keys=[f"{record.platform}:{record.native_id}"],
+        source_record_keys=[record.record_key],
     )
 
 

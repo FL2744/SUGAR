@@ -18,6 +18,8 @@ SUGAR provides one shared Python research core with native macOS and Windows cli
 
 The core currently supports collection/workflows for **X, Bluesky, Mastodon, Bilibili, and Weibo**, including resumable high-volume harvesting, source provenance, thread relationships, AI-assisted triage, research observations, project workspaces, mapping, State-specific assessment/review, networks, rollups, freshness/change detection, and analytic-intelligence workflows.
 
+For integration-first research, the core can also ingest external CSV/JSONL datasets into the same canonical evidence model and persist a research requirement plus an auditable adaptive search plan. Model-assisted query expansion is optional; collection, imported evidence, plan state, and human review remain usable without it.
+
 SUGAR deliberately distinguishes **presence, activity, reach, engagement, outcomes, and causal influence**. It does not manufacture a universal influence score or treat collection density as influence.
 
 ## Entry points
@@ -26,7 +28,7 @@ SUGAR deliberately distinguishes **presence, activity, reach, engagement, outcom
 | --- | --- |
 | `SUGAR-macOS/` | Native SwiftUI application for macOS 13+ |
 | `SUGAR-Windows/` | Native PySide6 research workbench for Windows |
-| `sugar` | General collection, harvest, triage, overlap, mapping, and reporting CLI |
+| `sugar` | Requirements/planning, external import, collection/harvest, triage, overlap, mapping, and reporting CLI |
 | `sugar-project` | Persistent project-workspace management |
 | `sugar-state` | State/Diplomacy Lab evidence-to-brief workflow |
 | `sugar-intel` | Structured analytic-intelligence workflow |
@@ -100,6 +102,8 @@ All collectors normalize into the shared `PostRecord` model. SUGAR preserves sta
 
 One content object can match multiple queries; deduplication retains every matching query rather than discarding discovery provenance.
 
+External Department/partner exports can enter the same pipeline with `sugar import`. CSV and JSONL inputs are normalized into `PostRecord`, invalid identities are quarantined or rejected explicitly, and an import manifest records source-system name, SHA-256, field mapping, and accepted/rejected counts. See [`docs/importer-interface.md`](docs/importer-interface.md).
+
 ### High-volume harvesting
 
 `harvest` is the durable collection path for thousands or tens of thousands of records. It decomposes work into deterministic tasks, checkpoints completed work to SQLite, resumes without recollection, records rate-limit/defer events, and separates raw collection from later AI processing.
@@ -127,6 +131,7 @@ The `sugar-state` suite keeps source-grounded `ResearchObservation` evidence sep
 - evidence-integrity auditing;
 - verified-only maps, networks, BLUFs, and country/city rollups;
 - collection freshness, change detection, and research-gap prioritization.
+- research-question-first planning with bounded model-assisted query expansion, evidence-grounded pivots, and branch stopping rules.
 
 Example:
 
@@ -140,7 +145,7 @@ sugar-state package observations.xlsx \
   --name quarterly_update
 ```
 
-See [`docs/state-department-workflow.md`](docs/state-department-workflow.md) and [`docs/state-analytic-intelligence.md`](docs/state-analytic-intelligence.md).
+See [`docs/research-requirements.md`](docs/research-requirements.md), [`docs/state-department-workflow.md`](docs/state-department-workflow.md), and [`docs/state-analytic-intelligence.md`](docs/state-analytic-intelligence.md).
 
 ## Mapping and spatial analysis
 
@@ -156,7 +161,7 @@ LLM enrichment and triage are optional. Source text is treated as untrusted data
 
 For State-specific analysis, AI cannot self-verify evidence, confirm sponsor support, invent acceptable evidence references, or establish causal influence. High-consequence claims remain subject to explicit evidence and human review.
 
-Supported LLM configuration includes OpenAI-compatible providers and Virginia Tech ARC. Credentials are supplied at runtime; they must not be committed to the repository or inserted into project manifests.
+Supported LLM configuration includes OpenAI, custom OpenAI-compatible endpoints, and Virginia Tech ARC as a development/classroom option. Credentials are supplied at runtime; they must not be committed to the repository or inserted into project manifests. Core import, evidence, project, and deterministic planning operations do not require an LLM.
 
 ## Virginia Tech ARC quick start
 
@@ -189,6 +194,8 @@ For the State/Diplomacy Lab delivery target, the versioned product contract live
 - [`docs/architecture.md`](docs/architecture.md) — current system architecture and engineering rules
 - [`docs/project-workspaces.md`](docs/project-workspaces.md) — persistent project-workspace contract
 - [`docs/collector-interface.md`](docs/collector-interface.md) — collector capabilities and normalization contract
+- [`docs/importer-interface.md`](docs/importer-interface.md) ? external-data normalization and provenance contract
+- [`docs/research-requirements.md`](docs/research-requirements.md) ? research requirements and bounded adaptive search planning
 - [`docs/high-volume-harvest.md`](docs/high-volume-harvest.md) — durable large-scale collection
 - [`docs/bilibili-public.md`](docs/bilibili-public.md) — Bilibili public collector
 - [`docs/weibo-public.md`](docs/weibo-public.md) — Weibo public collector

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .llm import LLMConfig
-from .models import PostRecord
+from .models import SCHEMA_VERSION, PostRecord
 from .observation_storage import save_observations
 from .storage import load_results
 from .triage import DEFAULT_PROJECT_CONTEXT, ProgressCallback, triage_posts
@@ -85,12 +85,15 @@ def post_record_from_mapping(row: Mapping[str, Any]) -> PostRecord:
         query=query,
         query_matches=query_matches,
         content_type=str(_first(row, "content_type", default="post")),
+        parent_record_key=str(_first(row, "parent_record_key")),
+        thread_root_key=str(_first(row, "thread_root_key")),
+        conversation_id=str(_first(row, "conversation_id")),
         source_mode=str(_first(row, "source_mode", default="api")),
         source_host=str(_first(row, "source_host")),
         source_url=str(_first(row, "source_url")),
         collected_at=str(_first(row, "collected_at")),
         collector_version=str(_first(row, "collector_version", default="sugar-core-1.1")),
-        schema_version=str(_first(row, "schema_version", default="1.1")),
+        schema_version=str(_first(row, "schema_version", default=SCHEMA_VERSION)),
         published_at=str(_first(row, "published_at", "date_iso", "date_raw")),
         author_handle=str(_first(row, "author_handle", "username")),
         author_name=str(_first(row, "author_name", "display_name")),
