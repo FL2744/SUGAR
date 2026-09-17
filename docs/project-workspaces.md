@@ -173,6 +173,11 @@ archives, unsupported archive versions, and invalid workspace schemas fail close
 overwrites an existing destination. After restoring, run `sugar-project status NEW_PROJECT --json` and
 re-run the documented pipeline from the portable inputs to verify analytical reproducibility.
 
+When SUGAR opens a legacy SQLite artifact registry that needs a schema migration, it first creates
+an atomic pre-migration copy under `.sugar/migration-backups/`. The backup is retained for recovery
+and is reported by `sugar-project status`; if backup creation fails, migration stops before changing
+the database.
+
 ## Schema evolution
 
 There are two versioned contracts:

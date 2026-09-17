@@ -192,6 +192,11 @@ def test_workspace_migrates_legacy_artifact_registry(tmp_path: Path) -> None:
 
     workspace = SugarWorkspace.open(root)
     assert workspace.status()["database_schema_version"] == 1
+    backups = sorted((internal / "migration-backups").glob("*.sqlite3"))
+    assert len(backups) == 1
+    with closing(sqlite3.connect(backups[0])) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(artifacts)").fetchall()}
+    assert "external" not in columns
     fixture = workspace.path_for("references") / "legacy.txt"
     fixture.write_text("legacy", encoding="utf-8")
     artifact = workspace.register_artifact("reference", fixture)

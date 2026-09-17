@@ -9,13 +9,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from .utils import atomic_write_text
+from .utils import atomic_path, atomic_write_text
 
 WORKSPACE_SCHEMA_VERSION = "1.0"
 DATABASE_SCHEMA_VERSION = 1
 MANIFEST_FILENAME = "sugar-project.json"
 INTERNAL_DIRECTORY = ".sugar"
 DATABASE_FILENAME = "workspace.sqlite3"
+DATABASE_BACKUP_DIRECTORY = "migration-backups"
 
 DEFAULT_LAYOUT: dict[str, str] = {
     "raw": "data/raw",
@@ -80,6 +81,10 @@ class SugarWorkspace:
     @property
     def database_path(self) -> Path:
         return self.internal_path / DATABASE_FILENAME
+
+    @property
+    def database_backup_directory(self) -> Path:
+        return self.internal_path / DATABASE_BACKUP_DIRECTORY
 
     @classmethod
     def create(
@@ -267,6 +272,7 @@ class SugarWorkspace:
             "root": str(self.root),
             "manifest": str(self.manifest_path),
             "database": str(self.database_path),
+            "database_backups": [str(path) for path in sorted(self.database_backup_directory.glob("*.sqlite3"))],
             "layout": {key: str(self.path_for(key)) for key in sorted(self.manifest.layout)},
             "artifact_count": len(artifacts),
             "artifact_counts": dict(sorted(counts.items())),
@@ -355,6 +361,19 @@ class SugarWorkspace:
                         f"Unsupported workspace database schema {current_version}; "
                         f"maximum supported version is {DATABASE_SCHEMA_VERSION}."
                     )
+                table_names = {
+                    str(row[0])
+                    for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+                }
+                existing_columns = (
+                    {str(row[1]) for row in connection.execute("PRAGMA table_info(artifacts)").fetchall()}
+                    if "artifacts" in table_names
+                    else set()
+                )
+                if "artifacts" in table_names and (
+                    current_version < DATABASE_SCHEMA_VERSION or "external" not in existing_columns
+                ):
+                    self._create_migration_backup(connection, current_version)
                 connection.execute(
                     """
                     CREATE TABLE IF NOT EXISTS artifacts (
@@ -381,6 +400,22 @@ class SugarWorkspace:
             raise ValueError(
                 "Workspace database is corrupt or unreadable. Restore a project archive or recover the database backup."
             ) from exc
+
+    def _create_migration_backup(self, connection: sqlite3.Connection, current_version: int) -> Path:
+        """Preserve the pre-migration database once before changing its schema."""
+
+        self.database_backup_directory.mkdir(parents=True, exist_ok=True)
+        backup_path = self.database_backup_directory / f"workspace-v{current_version}-pre-migration.sqlite3"
+        if backup_path.exists():
+            return backup_path
+        try:
+            with atomic_path(backup_path, suffix=".sqlite3") as temporary:
+                with closing(sqlite3.connect(temporary)) as destination:
+                    connection.backup(destination)
+                    destination.commit()
+        except (OSError, sqlite3.DatabaseError) as exc:
+            raise ValueError(f"Could not create workspace migration backup at {backup_path}.") from exc
+        return backup_path
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path, timeout=30)
