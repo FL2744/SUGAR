@@ -186,6 +186,7 @@ See [`docs/architecture.md`](docs/architecture.md) for module boundaries, fronte
 - [`docs/stress-testing.md`](docs/stress-testing.md) — offline scale probes and stress-test plan
 - [`docs/legal-and-data-handling.md`](docs/legal-and-data-handling.md) — public/authorized access definitions and data-handling boundaries
 - [`docs/release-readiness.md`](docs/release-readiness.md) — tracked hardening ledger and candidate gate
+- [`docs/reproducibility.md`](docs/reproducibility.md) — clean-install verification, offline demo, dependency tracks, and artifact checks
 - [`docs/bilibili-public.md`](docs/bilibili-public.md) — Bilibili public collector
 - [`docs/weibo-public.md`](docs/weibo-public.md) — Weibo public collector
 - [`docs/weibo-investigation.md`](docs/weibo-investigation.md) — known-post investigation workflow
