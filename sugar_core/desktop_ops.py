@@ -310,9 +310,17 @@ def _run_state_package(
     if metadata_path.is_file():
         outputs.append(str(metadata_path.resolve()))
 
+    lineage_outputs = [value for value in outputs if str(value).endswith(".lineage.json")]
     _register(workspace, [assessed_output], operation="state-package", kind="state_assessments")
     _register(workspace, [map_output, metadata_path], operation="state-package", kind="map")
-    other = [value for value in outputs if str(Path(value).resolve()) not in {str(Path(assessed_output).resolve()), str(Path(map_output).resolve()), str(metadata_path.resolve())}]
+    _register(workspace, lineage_outputs, operation="state-package", kind="lineage")
+    excluded = {
+        str(Path(assessed_output).resolve()),
+        str(Path(map_output).resolve()),
+        str(metadata_path.resolve()),
+        *(str(Path(value).resolve()) for value in lineage_outputs),
+    }
+    other = [value for value in outputs if str(Path(value).resolve()) not in excluded]
     _register(workspace, other, operation="state-package", kind="state")
     return list(dict.fromkeys(str(Path(value).resolve()) for value in outputs))
 

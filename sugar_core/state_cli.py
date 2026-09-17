@@ -424,9 +424,17 @@ def main(argv=None) -> int:
         )
         outputs.append(map_output)
         outputs.append(str(map_path.with_suffix(map_path.suffix + ".metadata.json")))
+        lineage_outputs = [value for value in outputs if str(value).endswith(".lineage.json")]
         register_workspace_outputs(workspace, [assessed_output], operation="state-package", kind="state_assessments")
         register_workspace_outputs(workspace, [map_output, str(map_path.with_suffix(map_path.suffix + ".metadata.json"))], operation="state-package", kind="map")
-        other_outputs = [value for value in outputs if value not in {assessed_output, map_output, str(map_path.with_suffix(map_path.suffix + ".metadata.json"))}]
+        register_workspace_outputs(workspace, lineage_outputs, operation="state-package", kind="lineage")
+        excluded_outputs = {
+            assessed_output,
+            map_output,
+            str(map_path.with_suffix(map_path.suffix + ".metadata.json")),
+            *lineage_outputs,
+        }
+        other_outputs = [value for value in outputs if value not in excluded_outputs]
         register_workspace_outputs(workspace, other_outputs, operation="state-package", kind="state")
         print("\n".join(dict.fromkeys(outputs)))
         return 0
