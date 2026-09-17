@@ -56,6 +56,55 @@ def test_collectors_fail_with_a_clear_error_for_non_object_payload(collector, kw
         )
 
 
+@pytest.mark.parametrize(
+    ("collector", "kwargs", "payload", "message"),
+    [
+        (collect_x, {"bearer_token": "token"}, {"data": {}, "meta": {}}, "X search returned an unexpected data shape"),
+        (collect_x, {"bearer_token": "token"}, {"data": [], "meta": []}, "X search returned an unexpected meta shape"),
+        (collect_bluesky, {}, {"posts": {}}, "Bluesky search returned an unexpected posts shape"),
+        (
+            collect_mastodon,
+            {"instance_url": "https://example.social"},
+            {"statuses": {}},
+            "Mastodon search returned an unexpected statuses shape",
+        ),
+    ],
+)
+def test_collectors_reject_malformed_list_shapes(collector, kwargs, payload, message):
+    with pytest.raises(RuntimeError, match=message):
+        collector(search_terms=["test"], session=FakeSession([FakeResponse(payload)]), **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("collector", "kwargs", "payload"),
+    [
+        (collect_x, {"bearer_token": "token"}, {"data": [{}], "meta": {}}),
+        (collect_bluesky, {}, {"posts": [{}]}),
+        (collect_mastodon, {"instance_url": "https://example.social"}, {"statuses": [{}]}),
+    ],
+)
+def test_collectors_skip_items_without_stable_native_ids(collector, kwargs, payload):
+    assert collector(search_terms=["test"], session=FakeSession([FakeResponse(payload)]), **kwargs) == []
+
+
+@pytest.mark.parametrize("status_code", [401, 403, 404, 429, 500])
+@pytest.mark.parametrize(
+    ("collector", "kwargs"),
+    [
+        (collect_x, {"bearer_token": "token"}),
+        (collect_bluesky, {}),
+        (collect_mastodon, {"instance_url": "https://example.social"}),
+    ],
+)
+def test_collectors_fail_closed_for_http_access_and_server_errors(collector, kwargs, status_code):
+    with pytest.raises(RuntimeError):
+        collector(
+            search_terms=["test"],
+            session=FakeSession([FakeResponse({}, status_code=status_code)]),
+            **kwargs,
+        )
+
+
 def test_x_duplicate_across_queries_preserves_both_queries():
     payload = {
         "data": [

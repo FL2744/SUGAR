@@ -173,9 +173,16 @@ def collect_x(
             users = {
                 str(user.get("id", "")): user for user in (includes.get("users", []) or []) if isinstance(user, dict)
             }
-            page_items = payload.get("data", []) or []
+            page_items = payload.get("data", [])
+            if page_items is None:
+                page_items = []
             if not isinstance(page_items, list):
                 raise RuntimeError("X search returned an unexpected data shape.")
+            meta = payload.get("meta", {})
+            if meta is None:
+                meta = {}
+            if not isinstance(meta, dict):
+                raise RuntimeError("X search returned an unexpected meta shape.")
             for item in page_items:
                 if not isinstance(item, dict):
                     continue
@@ -191,6 +198,8 @@ def collect_x(
                     "",
                 )
                 handle = str(author.get("username", ""))
+                if not native_id:
+                    continue
                 raw = dict(item.get("public_metrics") or {})
                 raw["conversation_id"] = conversation_id
                 if replied_to:
@@ -229,7 +238,7 @@ def collect_x(
                 collected += 1
                 if collected >= max_posts_per_query:
                     break
-            next_token = payload.get("meta", {}).get("next_token")
+            next_token = meta.get("next_token")
             if not next_token or collected >= max_posts_per_query:
                 break
     return list(records.values())
@@ -275,13 +284,20 @@ def collect_bluesky(
             response = session.get(endpoint, params=params, headers=headers, timeout=60)
             response.raise_for_status()
             payload = _object_payload(response.json(), "Bluesky search")
-            for item in payload.get("posts", []) or []:
+            posts = payload.get("posts", [])
+            if posts is None:
+                posts = []
+            if not isinstance(posts, list):
+                raise RuntimeError("Bluesky search returned an unexpected posts shape.")
+            for item in posts:
                 if not isinstance(item, dict):
                     continue
                 author = item.get("author") if isinstance(item.get("author"), dict) else {}
                 record = item.get("record") if isinstance(item.get("record"), dict) else {}
                 uri = str(item.get("uri", ""))
                 native_id = _at_uri_rkey(uri)
+                if not native_id:
+                    continue
                 handle = str(author.get("handle", ""))
                 reply = record.get("reply") if isinstance(record.get("reply"), dict) else {}
                 parent_ref = reply.get("parent") if isinstance(reply.get("parent"), dict) else {}
@@ -372,7 +388,9 @@ def collect_mastodon(
             response = session.get(endpoint, params=params, headers=headers, timeout=60)
             response.raise_for_status()
             payload = _object_payload(response.json(), "Mastodon search")
-            statuses = payload.get("statuses", []) or []
+            statuses = payload.get("statuses", [])
+            if statuses is None:
+                statuses = []
             if not isinstance(statuses, list):
                 raise RuntimeError("Mastodon search returned an unexpected statuses shape.")
             for status in statuses:
@@ -394,6 +412,8 @@ def collect_mastodon(
                     "in_reply_to_id": parent_id,
                 }
                 native_id = str(content.get("id", status.get("id", "")))
+                if not native_id:
+                    continue
                 # Mastodon search results expose the direct parent but not necessarily the thread root.
                 root_key = "" if parent_id else _platform_key("mastodon", native_id)
                 conversation_id = "" if parent_id else native_id
