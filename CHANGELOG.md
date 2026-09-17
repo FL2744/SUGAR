@@ -16,6 +16,10 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - missing State-map coordinates can optionally be resolved from explicit site/city/region evidence through a cached public geocoder;
 - geocoder feature metadata and bounding boxes are preserved so site queries that resolve only to a city/region are automatically downgraded rather than presented with false precision;
 - country-only observations are not placed at artificial national centroids, and broad/low-confidence locations are excluded from activity-density rendering.
+- new records stamp the current package version in collector provenance and source User-Agent identifiers;
+- boundary validation now rejects non-finite analytic coordinates/confidence values, normalizes malformed
+  imported metrics safely, and adds a deterministic seeded JSON/import fuzz corpus;
+- release-tooling locks now require a fixed setuptools line (83+).
 
 ### Research integrity
 
