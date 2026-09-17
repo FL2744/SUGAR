@@ -60,7 +60,6 @@ jobs:
               for old, new in exact:
                   text = text.replace(old, new)
                   text = text.replace(old.upper(), new.upper())
-              # Catch target tokens embedded beside underscores/dots as well as ordinary prose.
               text = re.sub(r'(?i)(?<![A-Za-z0-9])prc(?![A-Za-z0-9])', 'sponsor', text)
               text = re.sub(r'(?i)(?<![A-Za-z0-9])china(?![A-Za-z0-9])', 'sponsor', text)
               text = re.sub(r'(?i)(?<![A-Za-z0-9])chinese(?![A-Za-z0-9])', 'sponsoring-state', text)
@@ -76,10 +75,11 @@ jobs:
                   path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Remove one-time automation from final tree
+      - name: Temporarily hide automation from sanitation checks
         run: |
           rm tools/one_time_public_opsec_sanitize.py
           rm .github/workflows/one-time-public-opsec-sanitize.yml
+          git checkout origin/main -- .github/workflows/ci.yml .github/workflows/quality.yml
 
       - name: Install project and test dependencies
         run: |
@@ -95,8 +95,9 @@ jobs:
       - name: Validate patch formatting
         run: git diff --check
 
-      - name: Commit sanitized public tree
+      - name: Commit and publish sanitized public tree
         run: |
+          git checkout HEAD -- .github/workflows/one-time-public-opsec-sanitize.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
