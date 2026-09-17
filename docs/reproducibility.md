@@ -71,6 +71,15 @@ sugar diagnostics --json
 
 Diagnostics report versions, capabilities, and credential-presence booleans. They must never be
 used as a substitute for recording the exact input files or for publishing private research data.
+For support handoff, write the same redacted payload plus handling instructions as an atomic ZIP:
+
+```bash
+sugar diagnostics --bundle ./diagnostics.zip
+```
+
+Review the bundle before sharing it. It contains no workspace research files and is not a backup or
+portable project archive; use the workspace archive workflow below when the project data itself must
+be transferred.
 
 ## Determinism and live data
 
