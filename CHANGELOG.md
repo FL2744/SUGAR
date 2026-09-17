@@ -21,7 +21,8 @@ _No unreleased changes recorded after 1.2.6._
 ### Release engineering
 
 - desktop CI now retains a validated macOS application archive as well as the Windows portable bundle;
-- tagged releases build and publish Windows x64, macOS Apple Silicon, macOS Intel, and Python distribution artifacts from the same reviewed commit;
+- tagged releases build and publish Windows x64, macOS Apple Silicon, and Python distribution artifacts from the same reviewed commit;
+- Intel Mac desktop builds are no longer a supported distribution target, leaving one unambiguous macOS download for current classroom users;
 - package, backend, README, and desktop release versioning are re-synchronized at 1.2.6 after the interim classroom snapshot tags.
 
 ### Changed

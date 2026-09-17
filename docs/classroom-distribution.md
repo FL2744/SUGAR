@@ -1,10 +1,9 @@
 # Classroom desktop distribution
 
-The classroom build is distributed through GitHub Releases as three validated ZIP archives:
+The classroom build is distributed through GitHub Releases as two validated ZIP archives:
 
 - `SUGAR-Windows-x64.zip` for Windows 10/11 x64
-- `SUGAR-macOS-Apple-Silicon.zip` for Apple Silicon Macs
-- `SUGAR-macOS-Intel.zip` for Intel Macs
+- `SUGAR-macOS.zip` for Mac
 
 Students should use the latest GitHub Release rather than downloading source-code archives from the repository tag page.
 

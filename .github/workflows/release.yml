@@ -84,39 +84,12 @@ jobs:
           test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
           SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge diagnostics
           codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
-          ditto -c -k --sequesterRsrc --keepParent SUGAR-macOS/.build-native/SUGAR.app SUGAR-macOS-Apple-Silicon.zip
-          test -s SUGAR-macOS-Apple-Silicon.zip
+          ditto -c -k --sequesterRsrc --keepParent SUGAR-macOS/.build-native/SUGAR.app SUGAR-macOS.zip
+          test -s SUGAR-macOS.zip
       - uses: actions/upload-artifact@v7
         with:
           name: release-macos-apple-silicon
-          path: SUGAR-macOS-Apple-Silicon.zip
-          if-no-files-found: error
-
-  macos-intel:
-    needs: validate-release
-    runs-on: macos-15-intel
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-          cache: pip
-      - name: Build macOS Intel application
-        run: ./SUGAR-macOS/scripts/build_app.sh
-      - name: Validate and archive Intel app
-        run: |
-          test "$(uname -m)" = "x86_64"
-          test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/MacOS/SUGAR
-          test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
-          SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge diagnostics
-          codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
-          ditto -c -k --sequesterRsrc --keepParent SUGAR-macOS/.build-native/SUGAR.app SUGAR-macOS-Intel.zip
-          test -s SUGAR-macOS-Intel.zip
-      - uses: actions/upload-artifact@v7
-        with:
-          name: release-macos-intel
-          path: SUGAR-macOS-Intel.zip
+          path: SUGAR-macOS.zip
           if-no-files-found: error
 
   python-distributions:
@@ -140,7 +113,7 @@ jobs:
           if-no-files-found: error
 
   publish-release:
-    needs: [windows-x64, macos-apple-silicon, macos-intel, python-distributions]
+    needs: [windows-x64, macos-apple-silicon, python-distributions]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -153,8 +126,7 @@ jobs:
       - name: Verify release payload and checksums
         run: |
           test -s release-assets/SUGAR-Windows-x64.zip
-          test -s release-assets/SUGAR-macOS-Apple-Silicon.zip
-          test -s release-assets/SUGAR-macOS-Intel.zip
+          test -s release-assets/SUGAR-macOS.zip
           ls release-assets/*.whl >/dev/null
           ls release-assets/*.tar.gz >/dev/null
           (cd release-assets && sha256sum * > SHA256SUMS)
@@ -166,10 +138,9 @@ jobs:
 
           **Choose the file for your system:**
           - Windows 10/11 x64: `SUGAR-Windows-x64.zip`
-          - Apple Silicon Mac: `SUGAR-macOS-Apple-Silicon.zip`
-          - Intel Mac: `SUGAR-macOS-Intel.zip`
+          - Mac: `SUGAR-macOS.zip`
 
-          macOS builds target macOS 13 or newer and are ad-hoc signed classroom/community builds rather than Apple-notarized distribution builds. The Python wheel/source archive are included for CLI and development use.
+          macOS desktop releases support Apple Silicon and target macOS 13 or newer. They are ad-hoc signed classroom/community builds rather than Apple-notarized distribution builds. Intel Macs are not a supported desktop target. The Python wheel/source archive is included for CLI and development use.
 
           See `CHANGELOG.md` in the repository for release-specific fixes and methodology notes.
           EOF

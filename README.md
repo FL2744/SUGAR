@@ -38,7 +38,7 @@ Both desktop applications call the same `sugar_core` implementation. Collection 
 
 ### macOS
 
-The packaged macOS application requires **macOS 13 Ventura or newer**. Development/test builds may not be publicly notarized; only override Gatekeeper warnings for builds obtained from a trusted project source. Credentials entered through the native app are stored using macOS Keychain where supported.
+The packaged macOS application supports **Apple Silicon Macs running macOS 13 Ventura or newer**. Intel Macs are not a supported desktop target. Development/test builds may not be publicly notarized; only override Gatekeeper warnings for builds obtained from a trusted project source. Credentials entered through the native app are stored using macOS Keychain where supported.
 
 See [`SUGAR-macOS/README.md`](SUGAR-macOS/README.md) for build, packaging, compatibility, signing, and troubleshooting details.
 

@@ -112,7 +112,7 @@ Historical docs should be clearly labeled historical rather than left looking cu
 
 Only tag a commit after required CI/review is complete. A release tag should point to the exact reviewed commit used for packaged artifacts.
 
-Pushing a `v*` tag invokes the cross-platform release workflow. The workflow first verifies that the base tag version matches `sugar_core.__version__`, then builds and validates Windows x64, macOS Apple Silicon, macOS Intel, and Python distribution artifacts from that same tagged commit. The release is published only after every platform job succeeds, and includes a `SHA256SUMS` manifest for the uploaded payload.
+Pushing a `v*` tag invokes the cross-platform release workflow. The workflow first verifies that the base tag version matches `sugar_core.__version__`, then builds and validates Windows x64, macOS Apple Silicon, and Python distribution artifacts from that same tagged commit. Intel Mac desktop builds are not a supported distribution target. The release is published only after every platform job succeeds, and includes a `SHA256SUMS` manifest for the uploaded payload.
 
 SUGAR is licensed under the Apache License, Version 2.0. Before publication, verify that:
 

@@ -47,7 +47,7 @@ jobs:
         run: python -m pytest -q -s tests/test_weibo_live.py tests/test_weibo_qualification_live.py tests/test_weibo_seed_harvest_live.py
 
   macos-app:
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -85,19 +85,14 @@ jobs:
           codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
       - name: Archive validated macOS bundle
         run: |
-          case "$(uname -m)" in
-            arm64) archive="SUGAR-macOS-Apple-Silicon.zip" ;;
-            x86_64) archive="SUGAR-macOS-Intel.zip" ;;
-            *) echo "Unsupported macOS runner architecture: $(uname -m)" >&2; exit 1 ;;
-          esac
-          ditto -c -k --sequesterRsrc --keepParent SUGAR-macOS/.build-native/SUGAR.app "$archive"
-          test -s "$archive"
-          echo "SUGAR_MAC_ARCHIVE=$archive" >> "$GITHUB_ENV"
+          test "$(uname -m)" = "arm64"
+          ditto -c -k --sequesterRsrc --keepParent SUGAR-macOS/.build-native/SUGAR.app SUGAR-macOS.zip
+          test -s SUGAR-macOS.zip
       - name: Publish validated macOS bundle
         uses: actions/upload-artifact@v7
         with:
-          name: SUGAR-macOS-${{ runner.arch }}
-          path: ${{ env.SUGAR_MAC_ARCHIVE }}
+          name: SUGAR-macOS
+          path: SUGAR-macOS.zip
           if-no-files-found: error
           retention-days: 14
 

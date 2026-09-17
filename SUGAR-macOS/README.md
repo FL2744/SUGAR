@@ -67,10 +67,10 @@ An earlier distributed backend contained Python 3.14 and supporting libraries
 with a macOS 26.0 minimum, plus NumPy libraries with a 14.0 minimum, despite the
 app's 13.0 Info.plist. Rebuild the backend; editing the plist cannot fix this.
 
-Build on Apple Silicon for arm64, or on an Intel Mac with Intel Python for
-x86_64. These are separate builds, not a universal app. Before release, test
+The supported packaged desktop target is Apple Silicon (`arm64`). Intel Mac
+desktop builds are not distributed or supported. Before release, test
 launch, Keychain settings, search, map creation, and Word/PDF analysis on an
-actual macOS 13 installation of the corresponding architecture. The binary
+actual supported arm64 macOS 13 installation. The binary
 check verifies declared requirements, not all runtime behavior.
 
 ## Live Activity log
