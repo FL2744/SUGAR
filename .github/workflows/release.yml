@@ -23,8 +23,11 @@ jobs:
         run: python -m build --sdist --wheel
       - name: Generate checksums and SBOM
         run: |
+          cyclonedx-py requirements requirements/runtime.txt --output-format json --output-file dist/SUGAR-sbom.json
           sha256sum dist/* > dist/SHA256SUMS
-          cyclonedx-py environment --output-format json --output-file dist/SUGAR-sbom.json
+      - name: Verify generated checksums
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS
       - name: Publish tagged release
         uses: softprops/action-gh-release@v2
         with:
