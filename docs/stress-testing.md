@@ -174,8 +174,9 @@ these measurements are qualification inputs, not universal performance guarantee
    embedding every popup in one HTML document.
 5. Extend single-writer/checkpoint locking and crash-recovery tests for concurrent or interrupted
    harvest processes; legacy workspace migrations now create atomic pre-migration backups.
-6. Add property-based or fuzz-style tests for bridge JSON, collector payload normalization, import
-   schemas, and source-conflict adjudication.
+6. Done in the offline boundary suite: seeded JSON/config, collector metric, import-schema, source-
+   conflict, state-assessment, entity-registry, and non-finite numeric cases are exercised without
+   network access. Keep extending the corpus when new input boundaries are introduced.
 7. Extend memory, timeout, and cancellation budgets from the offline stress runner to workspace,
    state, and desktop operations before attempting multi-user or unattended runs.
 
