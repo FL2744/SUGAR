@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, "stabilize/**", "fix/**"]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -109,6 +110,7 @@ jobs:
           retention-days: 14
 
   weibo-live-smoke:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
