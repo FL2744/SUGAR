@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - release/classroom-v1.2.0
+    paths-ignore:
+      - ".github/workflows/**"
 
 permissions:
   contents: write
@@ -98,8 +100,8 @@ jobs:
     needs: [windows-x64, macos-apple-silicon, macos-intel]
     env:
       GH_TOKEN: ${{ github.token }}
-      TAG: v1.2.0-classroom.1
-      TARGET_SHA: 62db7aeec29c1ec0dcd6959974929424218cc238
+      TAG: v1.2.1-classroom.1
+      TARGET_SHA: ${{ github.sha }}
     steps:
       - uses: actions/download-artifact@v7
         with:
@@ -115,9 +117,22 @@ jobs:
       - name: Write release notes
         run: |
           cat > RELEASE_NOTES.md <<'EOF'
-          # SUGAR v1.2.0 Classroom Preview
+          # SUGAR v1.2.1 Classroom Release
 
-          Desktop builds prepared for classroom use on September 17, 2026.
+          Classroom hotfix prepared for September 17, 2026.
+
+          ## ARC quick setup
+
+          SUGAR now includes an in-app Virginia Tech ARC setup path. ARC's shared hosted-model API is available to Virginia Tech students, faculty, and staff with a personal API key from `llm.arc.vt.edu`; no separate ARC HPC account is required for the shared API.
+
+          1. Open **Settings** in SUGAR.
+          2. Use **Get ARC API Key** and sign in with Virginia Tech credentials.
+          3. Create a personal API key under **User profile → Settings → Account → API keys**.
+          4. Paste the key into SUGAR.
+          5. Use **Test ARC Connection**.
+          6. Select **Virginia Tech ARC** as the LLM provider for AI-assisted workflows.
+
+          Bundled ARC model choices were refreshed against current ARC documentation: `gpt-oss-120b`, `DeepSeek-V4.1-Flash`, `GLM-5.3`, and `Kimi-K3`.
 
           ## Download the right file
 
@@ -127,23 +142,18 @@ jobs:
 
           ## Windows
 
-          Download the ZIP, extract the entire folder, then launch `SUGAR.exe` from the extracted SUGAR folder. The portable build includes its packaged backend; a separate Python install is not required for this release.
+          Download the ZIP, extract the entire folder, then launch `SUGAR.exe`. Python is bundled and does not need to be installed separately.
 
           ## macOS
 
-          Download the ZIP for your processor, unzip it, and open `SUGAR.app`. These classroom builds are ad-hoc signed rather than Apple-notarized, so macOS may require the normal first-launch override: Control-click/right-click the app and choose **Open**, or use **System Settings → Privacy & Security → Open Anyway** if Gatekeeper blocks the first launch.
+          Download the ZIP for your processor, unzip it, and open `SUGAR.app`. These classroom builds are ad-hoc signed rather than Apple-notarized, so the first launch may require Control-click/right-click → **Open** or **System Settings → Privacy & Security → Open Anyway**.
 
           The current macOS build target is macOS 13 or newer.
-
-          ## Notes
-
-          This is a classroom preview of SUGAR 1.2.0 built from the sanitized public tree. It includes the generic research/collection engine and platform adapters while excluding project-specific case material.
           EOF
-      - name: Publish GitHub prerelease
+      - name: Publish GitHub release
         run: |
           gh release create "$TAG" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$TARGET_SHA" \
-            --title "SUGAR v1.2.0 Classroom Preview" \
-            --notes-file RELEASE_NOTES.md \
-            --prerelease
+            --title "SUGAR v1.2.1 Classroom Release" \
+            --notes-file RELEASE_NOTES.md
