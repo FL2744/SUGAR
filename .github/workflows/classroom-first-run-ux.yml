@@ -1,0 +1,124 @@
+name: Classroom first-run Windows hotfix
+
+on:
+  push:
+    branches:
+      - feat/classroom-first-run-ux
+    paths:
+      - "tools/apply_classroom_first_run_ux.py"
+      - ".github/workflows/classroom-first-run-ux.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-build-release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v1.2.2-classroom.1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/classroom-first-run-ux
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Apply first-run UX patch
+        run: python tools/apply_classroom_first_run_ux.py
+
+      - name: Install development and Windows dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,windows]"
+
+      - name: Validate source and regression suite
+        shell: pwsh
+        run: |
+          python -m py_compile SUGAR-Windows/app.py sugar_bridge.py
+          python -m pytest
+          git diff --check
+
+      - name: Commit tested UX patch to branch
+        shell: pwsh
+        run: |
+          git config user.name "Alejandro Grenier"
+          git config user.email "53024346+Jandro22@users.noreply.github.com"
+          git add SUGAR-Windows/app.py SUGAR-Windows/scripts/build.ps1 sugar_bridge.py docs/classroom-quick-start.md tests/test_windows_classroom_ux.py
+          git commit -m "Improve classroom first-run UX and expose Windows CLI"
+          git push origin HEAD:feat/classroom-first-run-ux
+
+      - name: Build portable Windows application
+        shell: pwsh
+        run: .\SUGAR-Windows\scripts\build.ps1
+
+      - name: Validate GUI and Windows CLI
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          .\SUGAR-Windows\dist\SUGAR\SUGAR.exe --smoke-test
+          $diag = & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe diagnostics
+          Write-Host $diag
+          if ($LASTEXITCODE -ne 0) { throw "Backend diagnostics failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar.cmd --help failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar-project.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar-project.cmd --help failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar-state.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar-state.cmd --help failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar-intel.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar-intel.cmd --help failed" }
+          $zip = Get-Item .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip
+          if ($zip.Length -lt 1000000) { throw "Windows ZIP is unexpectedly small" }
+          if ($zip.Length -gt 160000000) { throw "Windows ZIP size regressed above 160 MB" }
+          Write-Host "Windows ZIP bytes: $($zip.Length)"
+
+      - name: Prepare release payload
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          Copy-Item .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip .\release-assets\SUGAR-Windows-x64.zip
+          gh release download v1.2.1-classroom.2 --repo $env:GITHUB_REPOSITORY --pattern "SUGAR-macOS-*" --dir release-assets
+          Get-ChildItem release-assets | Format-Table Name,Length
+
+      - name: Publish classroom release
+        shell: pwsh
+        run: |
+          $target = git rev-parse HEAD
+          @"
+          # SUGAR v1.2.2 Classroom Release — First-Run UX
+
+          Windows classroom usability hotfix for September 17, 2026. macOS binaries are unchanged from the validated v1.2.1 classroom release.
+
+          ## What changed on Windows
+
+          - Fixed the light-theme/sidebar rendering conflict visible on Windows dark-mode systems.
+          - Added a first-run **Getting Started** walkthrough and a permanent **Help → Getting Started** entry.
+          - Added a **Start here** card on Home with the recommended classroom path.
+          - Virginia Tech ARC is now the default LLM provider for new installations.
+          - Bilibili and Weibo are the default Quick Search sources; X/Bluesky/Mastodon are secondary optional adapters.
+          - Settings now makes clear that source credentials are optional for the basic public Bilibili/Weibo workflow.
+          - Replaced developer jargon such as **Audit & Diff** with clearer **Audit & Changes / Compare assessment versions** wording.
+          - Added `CLASSROOM-QUICK-START.md` inside the portable bundle.
+          - Added bundled Windows command wrappers: `sugar.cmd`, `sugar-project.cmd`, `sugar-state.cmd`, and `sugar-intel.cmd`. They use the existing packaged backend and do not require a separate Python installation.
+
+          ## Downloads
+
+          - **Windows 10/11 x64:** `SUGAR-Windows-x64.zip`
+          - **Mac Apple Silicon:** `SUGAR-macOS-Apple-Silicon.zip`
+          - **Mac Intel:** `SUGAR-macOS-Intel.zip`
+
+          The Windows package remains deliberately portable/self-contained, so it includes the Python runtime, Qt GUI runtime, and scientific/reporting dependencies. That is the main reason the ZIP is substantially larger than the source code itself.
+          "@ | Set-Content -Encoding UTF8 RELEASE_NOTES.md
+
+          gh release create $env:TAG release-assets/* `
+            --repo $env:GITHUB_REPOSITORY `
+            --target $target `
+            --title "SUGAR v1.2.2 Classroom Release — First-Run UX" `
+            --notes-file RELEASE_NOTES.md
