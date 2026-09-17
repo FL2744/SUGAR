@@ -75,7 +75,7 @@ final class AppModel: ObservableObject {
         }
         let llm = config["llm"] as? [String: String] ?? [:]
         let provider = LLMProvider(rawValue: llm["provider"] ?? "openai")
-        guard command != "search" || provider != nil else {
+        guard !["search", "llm-check"].contains(command) || provider != nil else {
             log = "Choose a valid LLM provider."
             return
         }
@@ -87,8 +87,13 @@ final class AppModel: ObservableObject {
             log = "Enter the \(provider!.title) API key in Settings before running this search."
             return
         }
+        if command == "llm-check", selectedKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            log = "Enter your ARC API key in Settings before testing the ARC connection."
+            return
+        }
+        let usesLLMKey = command == "search" || command == "llm-check"
         let secrets = BackendSecrets(
-            xToken: xToken, llmKey: command == "search" ? selectedKey : "", blueskyIdentifier: blueskyIdentifier,
+            xToken: xToken, llmKey: usesLLMKey ? selectedKey : "", blueskyIdentifier: blueskyIdentifier,
             blueskyPassword: blueskyPassword, mastodonToken: mastodonToken
         )
         isRunning = true
@@ -229,6 +234,11 @@ final class AppModel: ObservableObject {
                 let python = json["python"] as? String ?? "unknown"
                 let runtime = json["runtime"] as? String ?? "unknown"
                 lines.append("Backend \(version) • \(architecture) • Python \(python) • \(runtime)")
+            case "llm_connection":
+                let provider = json["provider"] as? String ?? "LLM"
+                let model = json["model"] as? String ?? "model"
+                let available = json["selected_model_available"] as? Bool ?? true
+                lines.append(available ? "Connected to \(provider == "arc" ? "Virginia Tech ARC" : provider) • \(model) available" : "Connected to \(provider) • \(model) not listed")
             case "starting":
                 if let operation = json["operation"] as? String {
                     lines.append("Preparing \(operation)…")

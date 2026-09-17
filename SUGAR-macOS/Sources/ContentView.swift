@@ -314,6 +314,28 @@ struct SettingsView: View {
                 .gridColumnAlignment(.leading)
                 .frame(maxWidth: .infinity)
 
+                GroupBox("Virginia Tech ARC quick setup") {
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("ARC's shared hosted-model API is available to Virginia Tech students, faculty, and staff without a separate ARC HPC account. Your personal API key stays in SUGAR's Keychain storage.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Link("1. Get ARC API Key", destination: URL(string: "https://llm.arc.vt.edu")!)
+                    Text("2. In ARC: User profile → Settings → Account → API keys. Create a personal key and paste it into the ARC API key field above.")
+                        .font(.callout)
+                    Text("3. Test the connection below. Then choose Virginia Tech ARC as the LLM provider in Search; gpt-oss-120b is the default classroom model.")
+                        .font(.callout)
+                    Button("3. Test ARC Connection") {
+                        model.run(command: "llm-check", config: [
+                            "llm": LLMProvider.arc.configuration(model: "gpt-oss-120b", customBaseURL: "")
+                        ])
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.arcKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isRunning)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(4)
+            }
+
                 if !model.legacyLLMKey.isEmpty {
                     HStack {
                         Text("A key from the previous shared field is saved. Choose which provider it belongs to.")
@@ -381,7 +403,7 @@ private struct LanguageOption: Identifiable {
     // Match the named language choices in the Python backend.
     static let postLanguages: [LanguageOption] = [
         .init(name: "Arabic", value: "ar"),
-        .init(name: "sponsoring-state", value: "zh"),
+        .init(name: "Chinese", value: "zh"),
         .init(name: "English", value: "en"),
         .init(name: "French", value: "fr"),
         .init(name: "German", value: "de"),
@@ -400,8 +422,8 @@ private struct LanguageOption: Identifiable {
         postLanguages.filter { $0.value != "zh" }.map {
             LanguageOption(name: $0.name, value: $0.name)
         } + [
-            .init(name: "Simplified sponsoring-state", value: "Simplified sponsoring-state"),
-            .init(name: "Traditional sponsoring-state", value: "Traditional sponsoring-state"),
+            .init(name: "Simplified Chinese", value: "Simplified Chinese"),
+            .init(name: "Traditional Chinese", value: "Traditional Chinese"),
         ]
     ).sorted { $0.name < $1.name }
 }

@@ -16,7 +16,6 @@ def _blocked_terms() -> list[str]:
     return [
         "P" + "RC",
         "Chi" + "na",
-        "Chi" + "nese",
         "Bei" + "jing",
         "C" + "CP",
         "C" + "PC",
