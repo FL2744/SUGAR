@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 import zipfile
 from pathlib import Path
 
@@ -173,7 +174,7 @@ def test_workspace_migrates_legacy_artifact_registry(tmp_path: Path) -> None:
     )
     internal = root / ".sugar"
     internal.mkdir()
-    with sqlite3.connect(internal / "workspace.sqlite3") as connection:
+    with closing(sqlite3.connect(internal / "workspace.sqlite3")) as connection:
         connection.execute(
             """
             CREATE TABLE artifacts (
