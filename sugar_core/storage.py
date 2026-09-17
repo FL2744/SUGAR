@@ -38,9 +38,10 @@ def records_to_frame(records: Iterable[PostRecord]) -> pd.DataFrame:
 
 def save_records(records: Iterable[PostRecord], output_file: str | Path, *, metadata: dict | None = None) -> pd.DataFrame:
     records = list(records)
-    if not records:
-        raise ValueError("No records were collected.")
-    df = records_to_frame(records)
+    # An empty bounded search is a valid research result, not an application crash.
+    # Preserve the query metadata and produce inspectable empty outputs so users can
+    # distinguish "no matching records" from collector/runtime failure.
+    df = records_to_frame(records) if records else pd.DataFrame(columns=PREFERRED_COLUMNS)
     output_file = Path(output_file)
     csv_path = output_file if output_file.suffix.lower() == ".csv" else output_file.with_suffix(".csv")
     xlsx_path = csv_path.with_suffix(".xlsx")

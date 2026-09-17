@@ -266,7 +266,21 @@ def create_state_map(
     else:
         center = [20.0, 0.0]
     zoom_start = 10 if len(coordinates) == 1 else 2
-    map_obj = folium.Map(location=center, zoom_start=zoom_start, control_scale=True, tiles="OpenStreetMap")
+    map_obj = folium.Map(location=center, zoom_start=zoom_start, control_scale=True, tiles=None)
+    folium.FeatureGroup(
+        name="Offline analytic canvas",
+        overlay=False,
+        control=True,
+        show=True,
+    ).add_to(map_obj)
+    folium.TileLayer(
+        tiles="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attr="&copy; OpenStreetMap contributors",
+        name="OpenStreetMap (online)",
+        control=True,
+        show=False,
+        max_zoom=19,
+    ).add_to(map_obj)
 
     groups: dict[str, folium.FeatureGroup] = {}
     clusters: dict[str, MarkerCluster] = {}

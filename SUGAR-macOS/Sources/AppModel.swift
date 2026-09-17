@@ -28,6 +28,7 @@ final class AppModel: ObservableObject {
     @Published var blueskyIdentifier = KeychainStore.read("blueskyIdentifier")
     @Published var blueskyPassword = KeychainStore.read("blueskyPassword")
     @Published var mastodonToken = KeychainStore.read("mastodonToken")
+    @Published var weiboCookie = KeychainStore.read("weiboCookie")
 
     @discardableResult
     func saveCredentials() -> Bool {
@@ -39,6 +40,7 @@ final class AppModel: ObservableObject {
             ("blueskyIdentifier", blueskyIdentifier),
             ("blueskyPassword", blueskyPassword),
             ("mastodonToken", mastodonToken),
+            ("weiboCookie", weiboCookie),
         ]
         for (account, value) in entries {
             let status = KeychainStore.write(value, key: account)
@@ -94,7 +96,7 @@ final class AppModel: ObservableObject {
         let usesLLMKey = command == "search" || command == "llm-check"
         let secrets = BackendSecrets(
             xToken: xToken, llmKey: usesLLMKey ? selectedKey : "", blueskyIdentifier: blueskyIdentifier,
-            blueskyPassword: blueskyPassword, mastodonToken: mastodonToken
+            blueskyPassword: blueskyPassword, mastodonToken: mastodonToken, weiboCookie: weiboCookie
         )
         isRunning = true
         outputs = []
@@ -142,6 +144,7 @@ final class AppModel: ObservableObject {
         environment["SUGAR_BLUESKY_IDENTIFIER"] = secrets.blueskyIdentifier
         environment["SUGAR_BLUESKY_APP_PASSWORD"] = secrets.blueskyPassword
         environment["SUGAR_MASTODON_TOKEN"] = secrets.mastodonToken
+        environment["SUGAR_WEIBO_COOKIE"] = secrets.weiboCookie
         process.environment = environment
         do {
             return try await BackendRunner.run(process, onOutput: onOutput)
@@ -156,6 +159,9 @@ final class AppModel: ObservableObject {
             let sources = (config["sources"] as? [String]) ?? []
             if sources.contains("x") && xToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "Cannot start search: X is selected, but no X bearer token is saved. Open Settings, enter the token, and try again."
+            }
+            if sources.contains("weibo") && weiboCookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Cannot start Weibo keyword search without an authorized Weibo session. Add the session in Settings, or deselect Weibo and use Bilibili/public sources."
             }
             if let output = config["output_directory"] as? String, !output.isEmpty {
                 let path = (output as NSString).expandingTildeInPath
@@ -323,6 +329,7 @@ struct BackendSecrets: Sendable {
     let blueskyIdentifier: String
     let blueskyPassword: String
     let mastodonToken: String
+    let weiboCookie: String
 }
 
 enum KeychainStore {

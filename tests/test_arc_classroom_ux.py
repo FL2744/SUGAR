@@ -10,9 +10,10 @@ def test_arc_model_catalogs_are_current():
     for model in CURRENT_ARC_MODELS:
         assert model in windows
         assert model in mac
-    assert "DeepSeek-V4-Flash" not in windows
+    # Legacy names may appear only in migration dictionaries for saved settings.
+    assert '"DeepSeek-V4-Flash",' not in windows
     assert "DeepSeek-V4-Flash" not in mac
-    assert "GLM-5.2" not in windows
+    assert '"GLM-5.2",' not in windows
 
 
 def test_arc_onboarding_is_visible_in_both_desktops():
@@ -30,6 +31,22 @@ def test_mac_language_names_are_not_opsec_redacted():
     assert "Simplified Chinese" in mac
     assert "Traditional Chinese" in mac
     assert "sponsoring-state" not in mac
+
+
+def test_mac_search_exposes_chinese_media_and_safe_first_run_defaults():
+    mac = (ROOT / "SUGAR-macOS" / "Sources" / "ContentView.swift").read_text(encoding="utf-8")
+    model = (ROOT / "SUGAR-macOS" / "Sources" / "AppModel.swift").read_text(encoding="utf-8")
+    assert 'Toggle("Bilibili"' in mac
+    assert 'Toggle("Weibo"' in mac
+    assert '@State private var useBilibili = true' in mac
+    assert '@State private var useWeibo = false' in mac
+    assert '@State private var maxPosts = 20' in mac
+    assert '@State private var maxPages = 1' in mac
+    assert '@State private var translate = false' in mac
+    assert '@State private var infer = false' in mac
+    assert '"bilibili_hydrate_details": false' in mac
+    assert 'environment["SUGAR_WEIBO_COOKIE"] = secrets.weiboCookie' in model
+    assert "authorized Weibo session" in model
 
 
 def test_bridge_exposes_llm_connection_check():

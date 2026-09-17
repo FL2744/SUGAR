@@ -725,13 +725,22 @@ def create_map(
         prefer_canvas=True,
         world_copy_jump=True,
     )
-    folium.TileLayer("OpenStreetMap", name="OpenStreetMap", control=True, show=True).add_to(m)
+    # Local HTML exports must remain usable even when a remote tile service rejects
+    # file:// referrers or changes its terms. Start on a provider-independent canvas;
+    # analysts can enable OSM explicitly when they have network access.
+    folium.FeatureGroup(
+        name="Offline analytic canvas",
+        overlay=False,
+        control=True,
+        show=True,
+    ).add_to(m)
     folium.TileLayer(
-        tiles="https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
-        attr="&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team",
-        name="Humanitarian OSM",
+        tiles="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attr="&copy; OpenStreetMap contributors",
+        name="OpenStreetMap (online)",
         control=True,
         show=False,
+        max_zoom=19,
     ).add_to(m)
 
     dimension = "_kind" if dataset_type == "research_observations" else "_platform"

@@ -11,7 +11,7 @@ def test_windows_classroom_first_run_copy_and_defaults():
     assert 'self.search_sources.boxes["weibo"].setChecked(True)' not in app
     assert "Audit & Changes" in app
     assert "Compare assessment versions" in app
-    assert "basic public Bilibili/Weibo collection" in app
+    assert "Weibo keyword search requires an authorized Weibo session" in app
 
 
 def test_windows_theme_does_not_paint_every_widget_white():

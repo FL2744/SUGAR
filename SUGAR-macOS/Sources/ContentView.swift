@@ -77,19 +77,21 @@ struct ActivityView: View {
 
 struct SearchView: View {
     @EnvironmentObject var model: AppModel
-    @State private var terms = "Democracy"
+    @State private var terms = ""
     @State private var termLanguages: Set<String> = []
-    @State private var postLanguages: Set<String> = ["en"]
-    @State private var useX = true
+    @State private var postLanguages: Set<String> = []
+    @State private var useBilibili = true
+    @State private var useWeibo = false
+    @State private var useX = false
     @State private var useBluesky = false
     @State private var useMastodon = false
     @State private var fullArchive = false
     @State private var since = ""
     @State private var until = ""
-    @State private var maxPosts = 10
+    @State private var maxPosts = 20
     @State private var maxPages = 1
-    @State private var translate = true
-    @State private var infer = true
+    @State private var translate = false
+    @State private var infer = false
     @State private var includeReposts = false
     @State private var llmSelection = LLMSelection()
     @State private var baseURL = ""
@@ -99,10 +101,17 @@ struct SearchView: View {
         Form {
             Section("Sources") {
                 HStack {
+                    Toggle("Bilibili", isOn: $useBilibili)
+                    Toggle("Weibo", isOn: $useWeibo)
                     Toggle("X", isOn: $useX)
+                }
+                HStack {
                     Toggle("Bluesky", isOn: $useBluesky)
                     Toggle("Mastodon", isOn: $useMastodon)
                 }
+                Text("Bilibili uses bounded anonymous public search when available. Weibo keyword search requires an authorized session saved in Settings.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Terms and languages") {
                 TextField("Search terms, comma separated", text: $terms)
@@ -163,7 +172,11 @@ struct SearchView: View {
             HStack {
                 Spacer()
                 Button("Run Search", action: runSearch).buttonStyle(.borderedProminent)
-                    .disabled(model.isRunning || (!useX && !useBluesky && !useMastodon))
+                    .disabled(
+                        model.isRunning
+                        || terms.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || (!useBilibili && !useWeibo && !useX && !useBluesky && !useMastodon)
+                    )
             }
         }.formStyle(.grouped).navigationTitle("New Search")
     }
@@ -175,6 +188,8 @@ struct SearchView: View {
 
     private func runSearch() {
         var sources: [String] = []
+        if useBilibili { sources.append("bilibili") }
+        if useWeibo { sources.append("weibo") }
         if useX { sources.append("x") }
         if useBluesky { sources.append("bluesky") }
         if useMastodon { sources.append("mastodon") }
@@ -187,6 +202,7 @@ struct SearchView: View {
             "max_posts_per_query": maxPosts, "max_pages_per_query": maxPages,
             "translate_posts": translate, "infer_locations": infer,
             "include_retweets": includeReposts, "target_language": "English",
+            "bilibili_hydrate_details": false,
             "output_directory": outputDirectory, "mastodon_url": "https://mastodon.social",
             "llm": llmSelection.provider.configuration(model: llmSelection.model, customBaseURL: baseURL)
         ])
@@ -308,6 +324,11 @@ struct SettingsView: View {
                     GridRow {
                         Text("Mastodon token").frame(width: 180, alignment: .leading)
                         SecureField("Enter Mastodon access token", text: $model.mastodonToken)
+                            .credentialFieldStyle()
+                    }
+                    GridRow {
+                        Text("Weibo session").frame(width: 180, alignment: .leading)
+                        SecureField("Authorized Weibo cookie for keyword search", text: $model.weiboCookie)
                             .credentialFieldStyle()
                     }
                 }

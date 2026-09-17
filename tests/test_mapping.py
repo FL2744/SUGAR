@@ -187,6 +187,10 @@ def test_create_map_smoke_contains_plain_analytical_panel_content(tmp_path: Path
     assert "records tagged for U.S. overlap" in text
     assert "not influence" in text
     assert "CartoDB" not in text
+    assert "Offline analytic canvas" in text
+    assert "OpenStreetMap (online)" in text
+    assert "tile.openstreetmap.org" in text
+    assert "tile.openstreetmap.fr" not in text
 
 
 def test_create_map_supports_raw_source_records_and_platform_semantics(tmp_path: Path):

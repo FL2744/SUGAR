@@ -84,7 +84,7 @@ Schema 1.1 research observations may contain JSON-serialized `spatial_matches`. 
 
 Generated maps include:
 
-- standard OpenStreetMap and Humanitarian OpenStreetMap basemaps, with no map-provider API key required
+- an offline-safe analytic canvas by default plus an optional online OpenStreetMap basemap, with no map-provider API key required
 - marker clustering
 - layer control
 - automatic bounds fitting across analytical records, external references, and stored proximity endpoints
