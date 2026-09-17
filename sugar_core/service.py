@@ -8,7 +8,7 @@ from typing import Any, Callable
 from .collector_registry import COLLECTORS, CollectorRequest, collect_registered_source
 from .enrichment import enrich_records
 from .harvest import run_harvest as _run_harvest
-from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
+from .llm import ARC_BASE_URL, LLMBudget, LLMConfig, create_client, translate_search_term
 from .mapping import MapOptions, ReferenceLayer, create_map, load_map_frame
 from .observation_storage import load_observations, observations_to_frame, save_observations
 from .reporting import create_analysis_report
@@ -47,7 +47,23 @@ def _llm_config(config: dict[str, Any], secrets: dict[str, str]) -> LLMConfig:
         model=str(raw.get("model", "gpt-5.6-luna")),
         api_key=secrets.get("llm_api_key", ""),
         base_url=base,
+        max_total_tokens=_optional_int(raw.get("max_total_tokens")),
+        max_cost_usd=_optional_float(raw.get("max_cost_usd")),
+        input_cost_per_1k_tokens=_optional_float(raw.get("input_cost_per_1k_tokens")),
+        output_cost_per_1k_tokens=_optional_float(raw.get("output_cost_per_1k_tokens")),
     )
+
+
+def _optional_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    return int(value)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    return float(value)
 
 
 def _translated_terms(
@@ -56,6 +72,7 @@ def _translated_terms(
     llm: LLMConfig,
     cache_dir: Path,
     progress: ProgressCallback | None = None,
+    budget: LLMBudget | None = None,
 ) -> list[str]:
     terms = [str(x).strip() for x in terms if str(x).strip()]
     if not languages:
@@ -71,7 +88,7 @@ def _translated_terms(
     completed = 0
     for term in terms:
         for language in languages:
-            value = translate_search_term(client, llm, cache, term, language)
+            value = translate_search_term(client, llm, cache, term, language, budget=budget)
             completed += 1
             if value and value.casefold() not in seen:
                 result.append(value)
@@ -104,9 +121,12 @@ def run_search(
     csv_path = out_dir / f"social_search_posts_{stamp}.csv"
     cache_dir = workspace.path_for("cache") if workspace is not None else out_dir / ".sugar-cache"
     llm = _llm_config(config, secrets)
+    budget = LLMBudget.from_config(llm) if ai_needed else None
 
     _notify(progress, "starting", operation="search", sources=sources)
-    terms = _translated_terms(config.get("terms") or [], translated_languages, llm, cache_dir, progress=progress)
+    terms = _translated_terms(
+        config.get("terms") or [], translated_languages, llm, cache_dir, progress=progress, budget=budget
+    )
     if not terms:
         raise ValueError("Enter at least one search term.")
 
@@ -136,6 +156,7 @@ def run_search(
         target_language=config.get("target_language", "English"),
         cache_dir=cache_dir,
         progress=progress,
+        budget=budget,
     )
 
     metadata = {
@@ -146,6 +167,7 @@ def run_search(
         "collector_capabilities": {source: COLLECTORS[source].capabilities.as_dict() for source in sources},
         "llm_provider": llm.provider if (translate or infer) else None,
         "llm_model": llm.model if (translate or infer) else None,
+        "llm_budget": budget.as_dict() if budget else None,
         "workspace_project_id": workspace.manifest.project_id if workspace is not None else None,
     }
     _notify(progress, "saving", records=len(records), output=str(csv_path))

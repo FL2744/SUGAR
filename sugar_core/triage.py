@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from .llm import LLMConfig, cached_chat, create_client, parse_json_object
+from .llm import LLMBudget, LLMConfig, cached_chat, create_client, parse_json_object
 from .models import PostRecord
 from .observations import ResearchObservation, observation_from_post
 from .utils import MemoryCache, normalize_whitespace
@@ -221,6 +221,7 @@ def triage_post(
     llm: LLMConfig,
     cache: MemoryCache | None = None,
     project_context: str = DEFAULT_PROJECT_CONTEXT,
+    budget: LLMBudget | None = None,
 ) -> TriageResult:
     system, user = _triage_prompt(record, project_context)
     response = cached_chat(
@@ -231,6 +232,7 @@ def triage_post(
         system,
         user,
         max_tokens=1800,
+        budget=budget,
     )
     return parse_triage_result(parse_json_object(response), record)
 
@@ -271,6 +273,7 @@ def triage_posts(
     project_context: str = DEFAULT_PROJECT_CONTEXT,
     progress: ProgressCallback | None = None,
     continue_on_error: bool = True,
+    budget: LLMBudget | None = None,
 ) -> list[ResearchObservation]:
     records = list(records)
     if not records:
@@ -279,6 +282,7 @@ def triage_posts(
     client = create_client(llm)
     # Triage prompts include source text and must not be persisted in cleartext.
     cache = MemoryCache()
+    budget = budget if budget is not None else LLMBudget.from_config(llm)
     observations: list[ResearchObservation] = []
     total = len(records)
     _notify(progress, "triaging", total=total)
@@ -291,6 +295,7 @@ def triage_posts(
                 llm=llm,
                 cache=cache,
                 project_context=project_context,
+                budget=budget,
             )
             observation = observation_from_triage(record, result, model=llm.model)
         except Exception as exc:

@@ -25,6 +25,11 @@ For a storage-only high-scale probe:
 .\.venv\Scripts\python.exe tools\stress_test.py --records 50000 --skip-export --skip-map --output-dir .\stress-output-50k
 ```
 
+At million-record scale, the storage probe streams synthetic records into SQLite and limits the
+in-memory frame/export sample with `--in-memory-sample`; the report distinguishes full storage
+rows from materialized sample rows. This keeps the qualification run bounded while still checking
+the full checkpoint row count.
+
 For a map-size probe, keep the source frame modest and increase the embedded point count
 deliberately:
 
@@ -35,6 +40,12 @@ deliberately:
 The JSON report records elapsed time, row counts, column counts, artifact sizes, runtime, and the
 fact that the probe was offline. Compare reports from the same machine and Python environment;
 wall-clock values are not portable performance guarantees.
+
+The latest local Windows/Python 3.13 storage-only qualification used 1,000,000 rows with a 10,000
+row in-memory sample. It completed SQLite upsert in 269.529 s, sampled the restored checkpoint in
+2.561 s, built the tabular sample in 4.041 s, used 96.8 MB peak Python allocation, and produced a
+1.394 GB SQLite artifact. These are host observations, not release thresholds; repeat them on the
+representative deployment hardware before setting budgets.
 
 For bounded offline repetition and Python allocation sampling:
 
@@ -75,16 +86,16 @@ large because the current implementation embeds a Folium marker and popup for ea
 ## Repeatable scale matrix
 
 Run storage probes in isolated directories across the planned scale range. The default matrix is
-1,000, 10,000, 50,000, and 100,000 records; larger runs such as 1,000,000 are supported when the
-host has enough memory and disk:
+1,000, 10,000, 100,000, and 1,000,000 records. The 1M scale is a heavy-run ceiling and requires
+enough memory and disk:
 
 ```powershell
-.\\.venv\\Scripts\\python.exe tools\\stress_matrix.py --scales 1000,10000,50000,100000 --output-dir .\\stress-matrix
+.\\.venv\\Scripts\\python.exe tools\\stress_matrix.py --scales 1000,10000,100000,1000000 --output-dir .\\stress-matrix
 ```
 
 Add `--include-export` or `--include-map` only after the storage-only matrix is stable. Each scale
-gets its own `stress-report.json` with elapsed-time and peak Python-allocation measurements, and
-the root gets `stress-matrix-report.json`. Compare runs on the same host and Python environment;
+gets its own `stress-report.json` with elapsed-time, peak Python-allocation, artifact-size, and
+disk-consumption measurements, and the root gets `stress-matrix-report.json`. Compare runs on the same host and Python environment;
 these measurements are qualification inputs, not universal performance guarantees.
 
 ## Test matrix
@@ -92,7 +103,7 @@ these measurements are qualification inputs, not universal performance guarantee
 ### 1. Offline correctness and scale
 
 - Run the normal suite with live tests skipped.
-- Run the stress runner at 1k, 10k, 50k, and 100k records with export and map disabled.
+- Run the stress runner at 1k, 10k, 100k, and 1M records with export and map disabled when the host budget allows.
 - Confirm checkpoint row counts, restored row counts, and report artifact integrity.
 - Repeat the storage probe after an interrupted process to verify resume semantics and no duplicate
   records.

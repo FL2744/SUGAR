@@ -82,6 +82,10 @@ sugar-project register ./team4 observations data/observations/kyrgyzstan.xlsx
 
 Research files remain ordinary CSV/XLSX/JSONL/GeoJSON/HTML/Word/PDF files rather than being hidden inside the project database. Secrets are never stored in the workspace manifest or registry by SUGAR.
 
+Portable projects can be transferred with `sugar-project archive PROJECT ARCHIVE.sugar.zip` and
+validated into a new directory with `sugar-project restore ARCHIVE.sugar.zip NEW_PROJECT`. External
+artifact references remain explicit and are not silently copied.
+
 See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the workspace schema, layout, portability rules, Python API, and desktop bridge operations.
 
 ## Collection
@@ -151,6 +155,10 @@ See [`docs/research-map.md`](docs/research-map.md) and [`docs/spatial-overlap.md
 ## AI use
 
 LLM enrichment and triage are optional. Source text is treated as untrusted data and separated from model instructions. SUGAR does not infer a country from language alone and does not infer private/street-level locations.
+
+AI runs can be bounded with `--max-llm-tokens`. Add `--max-llm-cost-usd` plus explicit input/output
+cost rates when a provider-dollar ceiling is required; the shared budget covers retries and parallel
+State synthesis workers.
 
 For State-specific analysis, AI cannot self-verify evidence, confirm PRC support, invent acceptable evidence references, or establish causal influence. High-consequence claims remain subject to explicit evidence and human review.
 

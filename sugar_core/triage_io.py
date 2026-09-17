@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 from typing import Any, Mapping
 
-from .llm import LLMConfig
+from .llm import LLMBudget, LLMConfig
 from .models import PostRecord
 from .observation_storage import save_observations
 from .storage import load_results
@@ -136,6 +136,7 @@ def triage_dataset(
     if not records:
         raise ValueError("The selected post dataset contains no records.")
 
+    budget = LLMBudget.from_config(llm)
     observations = triage_posts(
         records,
         llm=llm,
@@ -143,6 +144,7 @@ def triage_dataset(
         project_context=project_context,
         progress=progress,
         continue_on_error=continue_on_error,
+        budget=budget,
     )
     save_observations(
         observations,
@@ -152,6 +154,7 @@ def triage_dataset(
             "triage_provider": llm.provider,
             "triage_model": llm.model,
             "triage_project_context": project_context,
+            "triage_budget": budget.as_dict() if budget else None,
         },
     )
     csv_path = output_file if output_file.suffix.lower() == ".csv" else output_file.with_suffix(".csv")

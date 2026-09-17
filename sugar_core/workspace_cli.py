@@ -9,6 +9,7 @@ from typing import Any
 from . import __version__
 from .errors import error_payload
 from .workspace import SugarWorkspace
+from .workspace_archive import create_workspace_archive, restore_workspace_archive
 
 
 def _json_object(value: str | None) -> dict[str, Any]:
@@ -61,6 +62,15 @@ def build_parser() -> argparse.ArgumentParser:
     path_p = sub.add_parser("path", help="Print a canonical workspace directory.")
     path_p.add_argument("workspace")
     path_p.add_argument("key")
+
+    archive = sub.add_parser("archive", help="Create a validated portable archive of project-contained files.")
+    archive.add_argument("workspace")
+    archive.add_argument("output")
+    archive.add_argument("--discover", action="store_true")
+
+    restore = sub.add_parser("restore", help="Validate and restore a portable workspace archive.")
+    restore.add_argument("archive")
+    restore.add_argument("output")
 
     return parser
 
@@ -129,6 +139,16 @@ def _run(argv=None) -> int:
             portable = "external" if artifact.external else "project"
             label = f" — {artifact.label}" if artifact.label else ""
             print(f"{artifact.kind}\t{artifact.path}\t{state}\t{portable}{label}")
+        return 0
+
+    if args.command == "archive":
+        workspace = _open(args.workspace, discover=args.discover)
+        print(create_workspace_archive(workspace, args.output))
+        return 0
+
+    if args.command == "restore":
+        workspace = restore_workspace_archive(args.archive, args.output)
+        print(workspace.manifest_path)
         return 0
 
     workspace = SugarWorkspace.open(args.workspace)

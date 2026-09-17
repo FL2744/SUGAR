@@ -87,6 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
     triage.add_argument("--base-url", default="")
     triage.add_argument("--cache-dir")
     triage.add_argument("--limit", type=int)
+    _add_llm_budget_args(triage)
     _workspace_arg(triage)
 
     review_export = sub.add_parser(
@@ -212,6 +213,17 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _add_llm_budget_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--max-llm-tokens", type=int, help="Hard upper bound for this AI run's tokens.")
+    parser.add_argument(
+        "--max-llm-cost-usd",
+        type=float,
+        help="Hard upper bound for estimated provider cost; requires both token-rate options.",
+    )
+    parser.add_argument("--llm-input-cost-per-1k", type=float, help="Input-token cost used for the run budget.")
+    parser.add_argument("--llm-output-cost-per-1k", type=float, help="Output-token cost used for the run budget.")
+
+
 def _llm_config(args) -> LLMConfig:
     api_key = os.environ.get("SUGAR_LLM_API_KEY", "").strip()
     if not api_key:
@@ -221,7 +233,16 @@ def _llm_config(args) -> LLMConfig:
         base_url = ARC_BASE_URL
     if args.provider == "custom" and not base_url:
         raise ValueError("--base-url is required for provider=custom")
-    return LLMConfig(provider=args.provider, model=args.model, api_key=api_key, base_url=base_url)
+    return LLMConfig(
+        provider=args.provider,
+        model=args.model,
+        api_key=api_key,
+        base_url=base_url,
+        max_total_tokens=getattr(args, "max_llm_tokens", None),
+        max_cost_usd=getattr(args, "max_llm_cost_usd", None),
+        input_cost_per_1k_tokens=getattr(args, "llm_input_cost_per_1k", None),
+        output_cost_per_1k_tokens=getattr(args, "llm_output_cost_per_1k", None),
+    )
 
 
 def _write_or_print(payload: dict, output: str | Path | None) -> str | None:

@@ -21,5 +21,21 @@ def test_offline_stress_matrix_writes_isolated_reports(tmp_path):
     assert report["network"] is False
     assert [run["records"] for run in report["runs"]] == [5, 3]
     assert all(run["peak_python_bytes"] > 0 for run in report["runs"])
+    assert all(run["disk_bytes"] > 0 for run in report["runs"])
+    assert all(run["artifact_sizes_bytes"] for run in report["runs"])
     assert all((tmp_path / f"records-{count}" / "stress-report.json").is_file() for count in (5, 3))
     assert parse_scales("1000, 1000, 5000") == [1000, 5000]
+
+
+def test_stress_probe_streams_storage_and_bounds_in_memory_sample(tmp_path):
+    from tools.stress_test import run_probes
+
+    report = run_probes(25, 5, tmp_path, export=False, map_output=False, in_memory_sample=7)
+
+    assert report["records"] == 25
+    assert report["materialized_records"] == 7
+    assert report["in_memory_sample_limit"] == 7
+    assert next(item for item in report["results"] if item["name"] == "harvest_store_upsert")["records"] == 25
+    read = next(item for item in report["results"] if item["name"] == "harvest_store_read")
+    assert read["records"] == 25
+    assert read["sample_records"] == 7

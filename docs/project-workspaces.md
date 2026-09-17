@@ -159,6 +159,20 @@ Before moving a project between systems, `sugar-project status` should show zero
 
 A workspace is not a security boundary. SUGAR still relies on the operating system, approved storage, and normal access controls to protect research data. Credentials remain environment-, Keychain-, or session-managed and must not be placed in the workspace manifest or registry metadata.
 
+## Portable project archives
+
+Use `sugar-project archive PROJECT ARCHIVE.sugar.zip` to create a versioned ZIP containing the
+manifest, workspace registry, and all project-contained files. The archive is written atomically and
+uses stable member ordering/timestamps so two unchanged workspaces produce comparable archives.
+External artifact references are retained as external registry entries but their files are not copied;
+keep the archive and any referenced external sources under the same approved data-handling controls.
+
+Use `sugar-project restore ARCHIVE.sugar.zip NEW_PROJECT` to validate the archive in a staging directory
+before publishing it. Unsafe member paths, duplicate entries, mismatched file manifests, oversized
+archives, unsupported archive versions, and invalid workspace schemas fail closed. A restore never
+overwrites an existing destination. After restoring, run `sugar-project status NEW_PROJECT --json` and
+re-run the documented pipeline from the portable inputs to verify analytical reproducibility.
+
 ## Schema evolution
 
 There are two versioned contracts:

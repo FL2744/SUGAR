@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "observations": [
+    {
+      "observation_id": "golden_verified",
+      "observation_type": "program",
+      "title": "Verified Nairobi workshop",
+      "summary": "A public entrepreneurship workshop was advertised.",
+      "observed_at": "2026-06-01T12:00:00Z",
+      "country": "Kenya",
+      "city": "Nairobi",
+      "latitude": -1.2864,
+      "longitude": 36.8172,
+      "evidence": [
+        {
+          "url": "https://example.org/golden/verified",
+          "source_type": "official",
+          "published_at": "2026-06-01T12:00:00Z",
+          "collected_at": "2026-08-01T12:00:00Z"
+        }
+      ],
+      "verification_state": "human_verified",
+      "reviewer": "Golden Fixture Analyst"
+    },
+    {
+      "observation_id": "golden_pending",
+      "observation_type": "event",
+      "title": "Pending Nairobi event",
+      "summary": "A second event remains pending review.",
+      "observed_at": "2026-06-02T12:00:00Z",
+      "country": "Kenya",
+      "city": "Nairobi",
+      "evidence": [
+        {
+          "url": "https://example.org/golden/pending",
+          "source_type": "social_media",
+          "published_at": "2026-06-02T12:00:00Z",
+          "collected_at": "2026-08-01T12:00:00Z"
+        }
+      ]
+    },
+    {
+      "observation_id": "golden_historical",
+      "observation_type": "institution",
+      "title": "Historical Nairobi relationship",
+      "summary": "Historical background evidence is retained separately.",
+      "observed_at": "2022-06-01T12:00:00Z",
+      "country": "Kenya",
+      "city": "Nairobi",
+      "evidence": [
+        {
+          "url": "https://example.org/golden/historical",
+          "source_type": "official",
+          "published_at": "2022-06-01T12:00:00Z",
+          "collected_at": "2025-01-01T12:00:00Z"
+        }
+      ],
+      "verification_state": "human_verified",
+      "reviewer": "Golden Fixture Analyst"
+    }
+  ],
+  "assessments": [
+    {
+      "observation_id": "golden_verified",
+      "strategic_audiences": ["entrepreneurs"],
+      "program_domains": ["entrepreneurship"],
+      "narrative_tags": ["economic_opportunity"],
+      "reach": {
+        "attendance": 120,
+        "views": 2400,
+        "qualified": {
+          "followers": {
+            "value": 5000,
+            "qualifier": "minimum",
+            "source_note": "Profile reports at least 5,000 followers."
+          }
+        }
+      },
+      "us_overlap": {
+        "same_city": true,
+        "thematic_overlap": ["entrepreneurship"]
+      },
+      "review_state": "human_verified",
+      "reviewer": "Golden Fixture Analyst"
+    },
+    {
+      "observation_id": "golden_pending",
+      "reach": {"attendance": 900, "views": 9000},
+      "review_state": "ai_triaged"
+    },
+    {
+      "observation_id": "golden_historical",
+      "review_state": "ai_triaged"
+    }
+  ],
+  "references": [
+    {
+      "id": "golden_nairobi_site",
+      "name": "Golden Nairobi Reference",
+      "category": "public site",
+      "city": "Nairobi",
+      "country": "Kenya",
+      "latitude": -1.2865,
+      "longitude": 36.8173,
+      "url": "https://example.org/golden/site"
+    },
+    {
+      "id": "golden_far_site",
+      "name": "Golden Far Reference",
+      "category": "public site",
+      "city": "Mombasa",
+      "country": "Kenya",
+      "latitude": -4.0435,
+      "longitude": 39.6682,
+      "url": "https://example.org/golden/far"
+    }
+  ],
+  "expectations": {
+    "rollup_country": {
+      "observations_total": 3,
+      "observations_verified": 1,
+      "observations_pending": 2,
+      "reported_attendance_verified": 120,
+      "views_verified": 2400,
+      "us_overlap_verified": 1,
+      "program_domains": [{"value": "entrepreneurship", "count": 1}],
+      "strategic_audiences": [{"value": "entrepreneurs", "count": 1}],
+      "narrative_tags": [{"value": "economic_opportunity", "count": 1}]
+    },
+    "freshness": {
+      "current_period_verified": 1,
+      "pre_period_observations": 1,
+      "stale_collection_observations": 1
+    },
+    "spatial": {
+      "observations_total": 3,
+      "observations_analyzed": 1,
+      "observations_matched": 1,
+      "retained_pair_matches": 1,
+      "nearest_reference_id": "golden_nairobi_site",
+      "nearest_distance_band": "0–5 km"
+    }
+  }
+}

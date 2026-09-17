@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-from .llm import LLMConfig, cached_chat, create_client, parse_json_object
+from .llm import LLMBudget, LLMConfig, cached_chat, create_client, parse_json_object
 from .observations import ResearchObservation
 from .state_intelligence import build_intelligence_packet
 from .state_schema import StateAssessment
@@ -240,7 +240,13 @@ def _trim_packet(packet: dict[str, Any], *, max_cases: int = 24) -> dict[str, An
     return value
 
 
-def _call_agent(client, llm: LLMConfig, cache: MemoryCache | None, task: AgentTask) -> dict[str, Any]:
+def _call_agent(
+    client,
+    llm: LLMConfig,
+    cache: MemoryCache | None,
+    task: AgentTask,
+    budget: LLMBudget | None = None,
+) -> dict[str, Any]:
     packet = _trim_packet(task.packet)
     user = (
         f"{task.question}\n"
@@ -255,18 +261,24 @@ def _call_agent(client, llm: LLMConfig, cache: MemoryCache | None, task: AgentTa
         _system_prompt(task.role),
         user,
         max_tokens=6500,
+        budget=budget,
     )
     return sanitize_agent_output(parse_json_object(text), packet, agent=task.name)
 
 
 def _parallel_agents(
-    client, llm: LLMConfig, cache: MemoryCache | None, tasks: list[AgentTask], max_workers: int
+    client,
+    llm: LLMConfig,
+    cache: MemoryCache | None,
+    tasks: list[AgentTask],
+    max_workers: int,
+    budget: LLMBudget | None = None,
 ) -> list[dict[str, Any]]:
     if not tasks:
         return []
     results: dict[str, dict[str, Any]] = {}
     with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(tasks)))) as executor:
-        futures = {executor.submit(_call_agent, client, llm, cache, task): task for task in tasks}
+        futures = {executor.submit(_call_agent, client, llm, cache, task, budget): task for task in tasks}
         for future in as_completed(futures):
             task = futures[future]
             try:
@@ -310,6 +322,7 @@ def _call_integrator(
     *,
     stage: str,
     critique: dict[str, Any] | None = None,
+    budget: LLMBudget | None = None,
 ) -> dict[str, Any]:
     allowed = _allowed_refs(base_packet)
     meta = _meta_packet(base_packet, agent_outputs)
@@ -341,6 +354,7 @@ tradecraft_note: concise note on evidence/coverage limitations
         system,
         f"Integrate this evidence-constrained team output. <team>{json.dumps(meta, ensure_ascii=False, sort_keys=True)}</team>",
         max_tokens=8000,
+        budget=budget,
     )
     raw = parse_json_object(text)
     judgments = []
@@ -417,6 +431,7 @@ def _red_team(
     cache: MemoryCache | None,
     base_packet: dict[str, Any],
     draft: dict[str, Any],
+    budget: LLMBudget | None = None,
 ) -> dict[str, Any]:
     task = AgentTask(
         name="red_team",
@@ -424,7 +439,7 @@ def _red_team(
         question=_role_question("red_team", str(base_packet.get("scope"))),
         packet={**_trim_packet(base_packet), "draft_synthesis": draft},
     )
-    return _call_agent(client, llm, cache, task)
+    return _call_agent(client, llm, cache, task, budget)
 
 
 def _scope_label(country: str, observation_id: str) -> str:
@@ -446,6 +461,7 @@ def run_agentic_synthesis(
     cache_dir: str | Path | None = None,
     max_workers: int = 4,
     max_country_agents: int = 6,
+    budget: LLMBudget | None = None,
 ) -> dict[str, Any]:
     observations, assessments = list(observations), list(assessments)
     if depth not in {"quick", "standard", "deep"}:
@@ -516,20 +532,27 @@ def run_agentic_synthesis(
     # Synthesis prompts include source-derived observations; never persist them
     # as a cleartext JSON cache.
     cache = MemoryCache() if cache_dir else None
-    first_pass = _parallel_agents(client, llm, cache, tasks, max_workers=max_workers)
-    draft = _call_integrator(client, llm, cache, base_packet, first_pass, stage="draft")
+    budget = budget if budget is not None else LLMBudget.from_config(llm)
+    first_pass = _parallel_agents(client, llm, cache, tasks, max_workers=max_workers, budget=budget)
+    draft = _call_integrator(client, llm, cache, base_packet, first_pass, stage="draft", budget=budget)
     critique = None
     final = draft
     if depth != "quick":
-        critique = _red_team(client, llm, cache, base_packet, draft)
-        final = _call_integrator(client, llm, cache, base_packet, first_pass, stage="revised", critique=critique)
+        critique = _red_team(client, llm, cache, base_packet, draft, budget=budget)
+        final = _call_integrator(
+            client, llm, cache, base_packet, first_pass, stage="revised", critique=critique, budget=budget
+        )
 
     return {
         "synthesis_version": SYNTHESIS_VERSION,
         "generated_at": utc_iso(),
         "scope": base_packet.get("scope"),
         "depth": depth,
-        "llm": {"provider": llm.provider, "model": llm.model},
+        "llm": {
+            "provider": llm.provider,
+            "model": llm.model,
+            "budget": budget.as_dict() if budget else None,
+        },
         "method": {
             "architecture": "deterministic intelligence packet -> parallel specialist agents -> integrator -> red team -> revised integrator",
             "probability_confidence_separated": True,
@@ -628,6 +651,7 @@ def save_agentic_synthesis(
     cache_dir: str | Path | None = None,
     max_workers: int = 4,
     name: str = "analytic_intelligence",
+    budget: LLMBudget | None = None,
 ) -> list[str]:
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -641,6 +665,7 @@ def save_agentic_synthesis(
         depth=depth,
         cache_dir=cache_dir,
         max_workers=max_workers,
+        budget=budget,
     )
     json_path = out_dir / f"{stem}.synthesis.json"
     markdown_path = out_dir / f"{stem}.synthesis.md"
@@ -664,6 +689,7 @@ def save_agentic_synthesis(
                 "depth": depth,
                 "provider": llm.provider,
                 "model": llm.model,
+                "llm_budget": (payload.get("llm") or {}).get("budget"),
                 "outputs": [json_path.name, markdown_path.name, agents_path.name],
                 "human_verification_mutated": False,
             },

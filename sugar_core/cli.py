@@ -139,6 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
     search.add_argument("--model", default="gpt-5.6-luna")
     search.add_argument("--base-url", default="")
+    _add_llm_budget_args(search)
     search.add_argument("--no-translate", action="store_true")
     search.add_argument("--no-location", action="store_true")
     search.add_argument("--x-mode", choices=["recent", "all"], default="recent")
@@ -271,6 +272,7 @@ def build_parser() -> argparse.ArgumentParser:
     triage.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
     triage.add_argument("--model", default="gpt-5.6-luna")
     triage.add_argument("--base-url", default="")
+    _add_llm_budget_args(triage)
     triage.add_argument("--project-context-file")
     triage.add_argument("--fail-fast", action="store_true")
     _workspace_arg(triage)
@@ -324,13 +326,47 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _llm_from_cli(provider: str, model: str, base_url: str, api_key: str) -> LLMConfig:
+def _add_llm_budget_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--max-llm-tokens",
+        type=int,
+        help="Hard upper bound for estimated/observed prompt plus completion tokens in this run.",
+    )
+    parser.add_argument(
+        "--max-llm-cost-usd",
+        type=float,
+        help="Hard upper bound for estimated provider cost; pair with both --llm-*-cost-per-1k options.",
+    )
+    parser.add_argument("--llm-input-cost-per-1k", type=float, help="Input-token cost used for the run budget.")
+    parser.add_argument("--llm-output-cost-per-1k", type=float, help="Output-token cost used for the run budget.")
+
+
+def _llm_from_cli(
+    provider: str,
+    model: str,
+    base_url: str,
+    api_key: str,
+    *,
+    max_total_tokens: int | None = None,
+    max_cost_usd: float | None = None,
+    input_cost_per_1k_tokens: float | None = None,
+    output_cost_per_1k_tokens: float | None = None,
+) -> LLMConfig:
     base = base_url.strip()
     if provider == "arc" and not base:
         base = ARC_BASE_URL
     if provider == "custom" and not base:
         raise ValueError("--base-url is required when --provider custom is used.")
-    return LLMConfig(provider=provider, model=model, api_key=api_key, base_url=base)
+    return LLMConfig(
+        provider=provider,
+        model=model,
+        api_key=api_key,
+        base_url=base,
+        max_total_tokens=max_total_tokens,
+        max_cost_usd=max_cost_usd,
+        input_cost_per_1k_tokens=input_cost_per_1k_tokens,
+        output_cost_per_1k_tokens=output_cost_per_1k_tokens,
+    )
 
 
 def _run(argv=None) -> int:
@@ -496,7 +532,16 @@ def _run(argv=None) -> int:
             if not project_context:
                 raise ValueError("The project context file is empty.")
         api_key = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
-        llm = _llm_from_cli(args.provider, args.model, args.base_url, api_key)
+        llm = _llm_from_cli(
+            args.provider,
+            args.model,
+            args.base_url,
+            api_key,
+            max_total_tokens=args.max_llm_tokens,
+            max_cost_usd=args.max_llm_cost_usd,
+            input_cost_per_1k_tokens=args.llm_input_cost_per_1k,
+            output_cost_per_1k_tokens=args.llm_output_cost_per_1k,
+        )
         outputs = triage_dataset(
             source,
             output,
@@ -563,7 +608,15 @@ def _run(argv=None) -> int:
         "x_search_mode": args.x_mode,
         "post_languages": _csv(args.x_languages),
         "mastodon_url": args.mastodon_url,
-        "llm": {"provider": args.provider, "model": args.model, "base_url": args.base_url},
+        "llm": {
+            "provider": args.provider,
+            "model": args.model,
+            "base_url": args.base_url,
+            "max_total_tokens": args.max_llm_tokens,
+            "max_cost_usd": args.max_llm_cost_usd,
+            "input_cost_per_1k_tokens": args.llm_input_cost_per_1k,
+            "output_cost_per_1k_tokens": args.llm_output_cost_per_1k,
+        },
     }
     _emit_outputs(run_search(config, secrets), json_output=args.json_output)
     return 0

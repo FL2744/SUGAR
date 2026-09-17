@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-from .llm import LLMConfig, create_client
+from .llm import LLMBudget, LLMConfig, create_client
 from .observations import ResearchObservation
 from .state_intelligence import build_intelligence_packet
 from .state_schema import StateAssessment
@@ -103,6 +103,7 @@ def _refine_agents(
     first_pass: list[dict[str, Any]],
     *,
     max_workers: int,
+    budget: LLMBudget | None = None,
 ) -> list[dict[str, Any]]:
     by_name = {row.get("agent"): row for row in first_pass}
     refine_tasks: list[AgentTask] = []
@@ -126,7 +127,7 @@ def _refine_agents(
                 packet=neighborhood,
             )
         )
-    refined_outputs = _parallel_agents(client, llm, cache, refine_tasks, max_workers=max_workers)
+    refined_outputs = _parallel_agents(client, llm, cache, refine_tasks, max_workers=max_workers, budget=budget)
     for refined in refined_outputs:
         base_name = str(refined.get("agent") or "").removesuffix(":refined")
         refined["agent"] = base_name
@@ -285,6 +286,7 @@ def run_iterative_agentic_synthesis(
     cache_dir: str | Path | None = None,
     max_workers: int = 4,
     max_country_agents: int = 6,
+    budget: LLMBudget | None = None,
 ) -> dict[str, Any]:
     observations, assessments = list(observations), list(assessments)
     if depth not in {"quick", "standard", "deep"}:
@@ -327,17 +329,22 @@ def run_iterative_agentic_synthesis(
     client = create_client(llm)
     # Agent prompts include source-derived observations; keep cache process-local.
     cache = MemoryCache() if cache_dir else None
-    first_pass = _parallel_agents(client, llm, cache, tasks, max_workers=max_workers)
+    budget = budget if budget is not None else LLMBudget.from_config(llm)
+    first_pass = _parallel_agents(client, llm, cache, tasks, max_workers=max_workers, budget=budget)
     analysis_pass = first_pass
     if depth == "deep":
-        analysis_pass = _refine_agents(client, llm, cache, base_packet, tasks, first_pass, max_workers=max_workers)
+        analysis_pass = _refine_agents(
+            client, llm, cache, base_packet, tasks, first_pass, max_workers=max_workers, budget=budget
+        )
 
     integration_packet = _integration_packet(base_packet, tasks, analysis_pass)
-    draft = _call_integrator(client, llm, cache, integration_packet, analysis_pass, stage="iterative-draft")
+    draft = _call_integrator(
+        client, llm, cache, integration_packet, analysis_pass, stage="iterative-draft", budget=budget
+    )
     critique = None
     final = draft
     if depth != "quick":
-        critique = _red_team(client, llm, cache, integration_packet, draft)
+        critique = _red_team(client, llm, cache, integration_packet, draft, budget=budget)
         final = _call_integrator(
             client,
             llm,
@@ -346,6 +353,7 @@ def run_iterative_agentic_synthesis(
             analysis_pass,
             stage="iterative-revised",
             critique=critique,
+            budget=budget,
         )
 
     audit = base_packet.get("tradecraft_audit") or {}
@@ -355,7 +363,11 @@ def run_iterative_agentic_synthesis(
         "generated_at": utc_iso(),
         "scope": base_packet.get("scope"),
         "depth": depth,
-        "llm": {"provider": llm.provider, "model": llm.model},
+        "llm": {
+            "provider": llm.provider,
+            "model": llm.model,
+            "budget": budget.as_dict() if budget else None,
+        },
         "method": {
             "architecture": "deterministic full evidence index + tradecraft audit -> parallel specialists -> optional evidence-neighborhood refinement -> retrieved integration context -> integrator -> red team -> revised integrator",
             "specialist_prompt_window_is_bounded": True,
@@ -398,6 +410,7 @@ def save_iterative_agentic_synthesis(
     cache_dir: str | Path | None = None,
     max_workers: int = 4,
     name: str = "analytic_intelligence",
+    budget: LLMBudget | None = None,
 ) -> list[str]:
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -411,6 +424,7 @@ def save_iterative_agentic_synthesis(
         depth=depth,
         cache_dir=cache_dir,
         max_workers=max_workers,
+        budget=budget,
     )
     json_path = out_dir / f"{stem}.synthesis.json"
     markdown_path = out_dir / f"{stem}.synthesis.md"
@@ -438,6 +452,7 @@ def save_iterative_agentic_synthesis(
                 "depth": depth,
                 "provider": llm.provider,
                 "model": llm.model,
+                "llm_budget": (payload.get("llm") or {}).get("budget"),
                 "outputs": [json_path.name, markdown_path.name, agents_path.name],
                 "human_verification_mutated": False,
             },

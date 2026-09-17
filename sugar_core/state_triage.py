@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from .llm import LLMConfig, cached_chat, create_client, parse_json_object
+from .llm import LLMBudget, LLMConfig, cached_chat, create_client, parse_json_object
 from .observations import ResearchObservation
 from .state_schema import (
     CLAIM_TYPES,
@@ -291,6 +291,7 @@ def triage_observation(
     llm: LLMConfig,
     client=None,
     cache: MemoryCache | None = None,
+    budget: LLMBudget | None = None,
 ) -> StateAssessment:
     client = client or create_client(llm)
     response = cached_chat(
@@ -301,6 +302,7 @@ def triage_observation(
         _triage_system_prompt(),
         _triage_user_prompt(observation),
         max_tokens=3500,
+        budget=budget,
     )
     payload = parse_json_object(response)
     return assessment_from_triage_payload(observation, payload, model=llm.model)
@@ -314,12 +316,14 @@ def triage_observations(
     limit: int | None = None,
     progress: ProgressCallback | None = None,
     continue_on_error: bool = True,
+    budget: LLMBudget | None = None,
 ) -> list[StateAssessment]:
     rows = list(observations)
     if limit is not None:
         rows = rows[: max(0, int(limit))]
     # State-triage prompts include observation text; cache only in process memory.
     cache = MemoryCache() if cache_dir else None
+    budget = budget if budget is not None else LLMBudget.from_config(llm)
     client = create_client(llm)
     result: list[StateAssessment] = []
     total = len(rows)
@@ -328,7 +332,7 @@ def triage_observations(
             progress, "state_triage_item_start", current=index, total=total, observation_id=observation.observation_id
         )
         try:
-            assessment = triage_observation(observation, llm=llm, client=client, cache=cache)
+            assessment = triage_observation(observation, llm=llm, client=client, cache=cache, budget=budget)
         except Exception as exc:
             if not continue_on_error:
                 raise

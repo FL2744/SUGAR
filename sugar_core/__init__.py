@@ -1,5 +1,7 @@
 """Stable SUGAR core for repeatable public-source collection and analysis."""
 
+__version__ = "1.2.0"
+
 from .collector_registry import (
     COLLECTORS,
     CollectorCapabilities,
@@ -80,6 +82,7 @@ from .workspace import (
     WorkspaceManifest,
     open_workspace,
 )
+from .workspace_archive import create_workspace_archive, restore_workspace_archive
 
 __all__ = [
     "PostRecord",
@@ -156,6 +159,6 @@ __all__ = [
     "ArtifactRecord",
     "SugarWorkspace",
     "open_workspace",
+    "create_workspace_archive",
+    "restore_workspace_archive",
 ]
-
-__version__ = "1.2.0"

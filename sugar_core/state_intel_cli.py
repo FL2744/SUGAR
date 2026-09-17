@@ -56,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     synthesize.add_argument("--base-url", default="")
     synthesize.add_argument("--cache-dir", default=".sugar-cache")
     synthesize.add_argument("--workers", type=int, default=4)
+    _add_llm_budget_args(synthesize)
 
     hypotheses = sub.add_parser(
         "hypotheses", help="Turn synthesis alternatives into a competing-hypothesis evidence matrix."
@@ -72,6 +73,17 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _add_llm_budget_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--max-llm-tokens", type=int, help="Hard upper bound for this AI run's tokens.")
+    parser.add_argument(
+        "--max-llm-cost-usd",
+        type=float,
+        help="Hard upper bound for estimated provider cost; requires both token-rate options.",
+    )
+    parser.add_argument("--llm-input-cost-per-1k", type=float, help="Input-token cost used for the run budget.")
+    parser.add_argument("--llm-output-cost-per-1k", type=float, help="Output-token cost used for the run budget.")
+
+
 def _llm(args) -> LLMConfig:
     api_key = os.environ.get("SUGAR_LLM_API_KEY", "").strip()
     if not api_key:
@@ -81,7 +93,16 @@ def _llm(args) -> LLMConfig:
         base_url = ARC_BASE_URL
     if args.provider == "custom" and not base_url:
         raise ValueError("--base-url is required for provider=custom")
-    return LLMConfig(provider=args.provider, model=args.model, api_key=api_key, base_url=base_url)
+    return LLMConfig(
+        provider=args.provider,
+        model=args.model,
+        api_key=api_key,
+        base_url=base_url,
+        max_total_tokens=args.max_llm_tokens,
+        max_cost_usd=args.max_llm_cost_usd,
+        input_cost_per_1k_tokens=args.llm_input_cost_per_1k,
+        output_cost_per_1k_tokens=args.llm_output_cost_per_1k,
+    )
 
 
 def _run(argv=None) -> int:

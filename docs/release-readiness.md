@@ -26,15 +26,16 @@ decision remains; `[ ]` means work remains.
 7. `[~]` Evidence: grounded evidence and unknown/uncertain review semantics exist; a larger fixture
    corpus of deleted/edited/reposted/contradictory/archived-source cases remains.
 8. `[~]` Scientific semantics: deterministic State, overlap, freshness, network, longitudinal,
-   conflict, and review tests exist; golden corpus fixtures and expert sign-off remain.
+   conflict, and review tests exist, including a checked-in cross-module golden fixture; expert
+   sign-off remains.
 9. `[~]` Spatial: coordinate/precision/proximity safeguards and map marker budgets exist; large
    browser-load and 100k/1M aggregation policy tests remain.
 10. `[x]` AI safety: source text is untrusted, prompt-injection behavior is tested, output is
    evidence-grounded, AI provenance is retained, and credentials are runtime-only.
     LLM and triage caches are process-local; only public geocoder metadata may be persisted.
 11. `[~]` Workspaces: portable manifests, relative-path checks, missing-artifact health, migration
-    guards, and atomic manifest writes exist; interruption/concurrency/OneDrive/migration recovery
-    testing remains.
+    guards, atomic manifest writes, and validated portable archive/restore exist; interruption,
+    concurrency, OneDrive, and migration-recovery testing remains.
 12. `[x]` Security: formula-safe spreadsheets, escaped map HTML, typed bridge operations, bounded
     bridge config, secret redaction, fail-closed access behavior, and security scans are present.
 13. `[x]` Structured errors: the desktop bridge emits stable error codes, retryability, remediation,

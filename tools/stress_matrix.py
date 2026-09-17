@@ -41,6 +41,7 @@ def run_matrix(
     export: bool = False,
     map_output: bool = False,
     map_records: int = 500,
+    in_memory_sample: int = 100_000,
 ) -> dict[str, Any]:
     """Run one isolated stress probe per scale and persist each scale report."""
 
@@ -61,6 +62,7 @@ def run_matrix(
                 scale_root,
                 export=export,
                 map_output=map_output,
+                in_memory_sample=in_memory_sample,
             )
             _current_bytes, peak_bytes = tracemalloc.get_traced_memory()
         finally:
@@ -76,6 +78,8 @@ def run_matrix(
                 "peak_python_bytes": report["peak_python_bytes"],
                 "results": report["results"],
                 "artifacts": report["artifacts"],
+                "artifact_sizes_bytes": report["artifact_sizes_bytes"],
+                "disk_bytes": report["disk_bytes"],
                 "report": str(report_path.resolve()),
             }
         )
@@ -98,11 +102,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--scales",
         type=parse_scales,
-        default=[1000, 10000, 50000, 100000],
-        help="Comma-separated synthetic record counts (default: 1000,10000,50000,100000).",
+        default=[1000, 10000, 100000, 1000000],
+        help="Comma-separated synthetic record counts (default: 1000,10000,100000,1000000).",
     )
     parser.add_argument("--output-dir", type=Path, required=True, help="Directory for per-scale and matrix reports.")
     parser.add_argument("--map-records", type=_positive, default=500, help="Points to embed when --include-map is set.")
+    parser.add_argument(
+        "--in-memory-sample",
+        type=_positive,
+        default=100_000,
+        help="Maximum records materialized for frame/export/map probes; storage still processes all records.",
+    )
     parser.add_argument("--include-export", action="store_true", help="Include CSV/XLSX export at every scale.")
     parser.add_argument("--include-map", action="store_true", help="Include interactive map generation at every scale.")
     args = parser.parse_args(argv)
@@ -113,6 +123,7 @@ def main(argv: list[str] | None = None) -> int:
         export=args.include_export,
         map_output=args.include_map,
         map_records=args.map_records,
+        in_memory_sample=args.in_memory_sample,
     )
     report_path = args.output_dir.expanduser().resolve() / "stress-matrix-report.json"
     report["report"] = str(report_path)

@@ -14,6 +14,7 @@ ERROR_CODES = {
     "input_invalid",
     "access_denied",
     "rate_limited",
+    "llm_budget_exceeded",
     "network_failure",
     "output_failure",
     "dependency_failure",
@@ -74,6 +75,8 @@ def classify_error(error: BaseException) -> tuple[str, bool, str]:
         return "cancelled", False, "The operation was cancelled; keep any checkpoint and retry when ready."
     if status == 429 or "rate limit" in text or "rate-limited" in text:
         return "rate_limited", True, "Wait and retry later; preserve the checkpoint if this is a harvest."
+    if "budget exceeded" in text or "llmbudget" in name:
+        return "llm_budget_exceeded", False, "Lower the AI workload or raise the explicit token/cost ceiling and retry."
     if status in {401, 403} or "access" in name or "credential" in text or "login" in text:
         return "access_denied", False, "Check the documented access mode and credentials; do not bypass the gate."
     if isinstance(error, (FileNotFoundError, NotADirectoryError)):

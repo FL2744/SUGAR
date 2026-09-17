@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from sugar_core.workspace import (
     MANIFEST_FILENAME,
     SugarWorkspace,
 )
+from sugar_core.workspace_archive import _safe_member_name, create_workspace_archive, restore_workspace_archive
 
 
 def test_workspace_create_builds_manifest_layout_and_database(tmp_path: Path) -> None:
@@ -149,3 +151,47 @@ def test_workspace_rejects_missing_required_layout_key(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="missing required layout keys"):
         SugarWorkspace.open(workspace.root)
+
+
+def test_workspace_archive_round_trips_project_files_and_external_references(tmp_path: Path) -> None:
+    workspace = SugarWorkspace.create(tmp_path / "project", name="Portable Project")
+    artifact_path = workspace.path_for("observations") / "observations.jsonl"
+    artifact_path.write_text('{"ok": true}\n', encoding="utf-8")
+    external_path = tmp_path / "external.csv"
+    external_path.write_text("id\nexternal\n", encoding="utf-8")
+    workspace.register_artifact("observations", artifact_path)
+    workspace.register_artifact("reference", external_path)
+
+    archive_path = create_workspace_archive(workspace, tmp_path / "portable.sugar.zip")
+    restored = restore_workspace_archive(archive_path, tmp_path / "restored")
+
+    assert restored.manifest.project_id == workspace.manifest.project_id
+    assert (restored.root / "data" / "observations" / "observations.jsonl").read_text(
+        encoding="utf-8"
+    ) == '{"ok": true}\n'
+    restored_artifacts = restored.list_artifacts()
+    assert any(item.path == "data/observations/observations.jsonl" and item.exists for item in restored_artifacts)
+    assert any(item.external and not item.path.startswith("data/") for item in restored_artifacts)
+
+
+def test_workspace_archive_rejects_path_traversal(tmp_path: Path) -> None:
+    archive_path = tmp_path / "unsafe.zip"
+    metadata = {
+        "archive_schema_version": "1",
+        "project_id": "project",
+        "file_count": 1,
+        "files": ["../escape.txt"],
+    }
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("archive-metadata.json", json.dumps(metadata))
+        archive.writestr("../escape.txt", "no")
+
+    with pytest.raises(ValueError, match="unsafe member path"):
+        restore_workspace_archive(archive_path, tmp_path / "restored")
+
+
+def test_workspace_archive_rejects_windows_path_traversal(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="non-canonical member path"):
+        _safe_member_name(r"..\escape.txt")
+    with pytest.raises(ValueError, match="non-canonical member path"):
+        _safe_member_name("C:/escape.txt")

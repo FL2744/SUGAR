@@ -66,6 +66,7 @@ def run_soak(
                 "seconds": round(time.perf_counter() - iteration_started, 6),
                 "records": records_count,
                 "peak_python_bytes": peak_bytes,
+                "disk_bytes": probe["disk_bytes"],
                 "probe_results": probe["results"],
             }
             if len(samples) < max_samples:
