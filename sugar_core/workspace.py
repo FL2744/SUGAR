@@ -6,6 +6,7 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
@@ -14,6 +15,8 @@ DATABASE_SCHEMA_VERSION = 1
 MANIFEST_FILENAME = "sugar-project.json"
 INTERNAL_DIRECTORY = ".sugar"
 DATABASE_FILENAME = "workspace.sqlite3"
+CATALOG_FILENAME = "sugar-artifacts.json"
+CATALOG_SCHEMA_VERSION = "1.0"
 
 DEFAULT_LAYOUT: dict[str, str] = {
     "raw": "data/raw",
@@ -30,6 +33,13 @@ DEFAULT_LAYOUT: dict[str, str] = {
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _software_version() -> str:
+    try:
+        return package_version("sugar-osint")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 @dataclass(frozen=True)
@@ -79,6 +89,10 @@ class SugarWorkspace:
     def database_path(self) -> Path:
         return self.internal_path / DATABASE_FILENAME
 
+    @property
+    def catalog_path(self) -> Path:
+        return self.root / CATALOG_FILENAME
+
     @classmethod
     def create(
         cls,
@@ -112,6 +126,7 @@ class SugarWorkspace:
         workspace._ensure_layout()
         workspace._write_manifest(manifest)
         workspace._initialize_database()
+        workspace._write_catalog()
         return workspace
 
     @classmethod
@@ -152,7 +167,12 @@ class SugarWorkspace:
         workspace = cls(manifest_path.parent, manifest)
         workspace._validate_layout()
         workspace._ensure_layout()
+        database_existed = workspace.database_path.is_file()
         workspace._initialize_database()
+        if not database_existed and workspace.catalog_path.is_file():
+            workspace._restore_catalog()
+        elif not workspace.catalog_path.is_file():
+            workspace._write_catalog()
         return workspace
 
     @classmethod
@@ -213,7 +233,9 @@ class SugarWorkspace:
                 (kind, stored_path),
             ).fetchone()
         assert row is not None
-        return self._artifact_from_row(row)
+        artifact = self._artifact_from_row(row)
+        self._write_catalog()
+        return artifact
 
     def register_outputs(
         self,
@@ -267,6 +289,9 @@ class SugarWorkspace:
             "root": str(self.root),
             "manifest": str(self.manifest_path),
             "database": str(self.database_path),
+            "catalog": str(self.catalog_path),
+            "catalog_schema_version": CATALOG_SCHEMA_VERSION,
+            "software_version": _software_version(),
             "layout": {key: str(self.path_for(key)) for key in sorted(self.manifest.layout)},
             "artifact_count": len(artifacts),
             "artifact_counts": dict(sorted(counts.items())),
@@ -349,6 +374,107 @@ class SugarWorkspace:
             encoding="utf-8",
         )
         temporary.replace(self.manifest_path)
+
+    def export_catalog(self) -> dict[str, Any]:
+        artifacts = self.list_artifacts()
+        return {
+            "schema_version": CATALOG_SCHEMA_VERSION,
+            "generated_at": _utc_now(),
+            "project_id": self.manifest.project_id,
+            "workspace_schema_version": self.manifest.schema_version,
+            "database_schema_version": DATABASE_SCHEMA_VERSION,
+            "software": {"name": "SUGAR", "version": _software_version()},
+            "artifacts": [
+                {
+                    "kind": artifact.kind,
+                    "path": artifact.path,
+                    "label": artifact.label,
+                    "registered_at": artifact.registered_at,
+                    "updated_at": artifact.updated_at,
+                    "metadata": artifact.metadata,
+                    "external": artifact.external,
+                }
+                for artifact in artifacts
+            ],
+        }
+
+    def _write_catalog(self) -> None:
+        payload = self.export_catalog()
+        temporary = self.catalog_path.with_suffix(self.catalog_path.suffix + ".tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(self.catalog_path)
+
+    def _validate_catalog_artifact_path(self, stored_path: str, *, external: bool) -> None:
+        raw = Path(stored_path)
+        if external:
+            if not raw.is_absolute():
+                raise ValueError(f"External catalog artifact paths must be absolute: {stored_path!r}")
+            return
+        if raw.is_absolute():
+            raise ValueError(f"Project catalog artifact paths must be relative: {stored_path!r}")
+        resolved = (self.root / raw).resolve()
+        try:
+            resolved.relative_to(self.root)
+        except ValueError as exc:
+            raise ValueError(f"Catalog artifact path escapes project root: {stored_path!r}") from exc
+
+    def _restore_catalog(self) -> None:
+        payload = json.loads(self.catalog_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("Workspace artifact catalog must contain a JSON object.")
+        schema_version = str(payload.get("schema_version") or "")
+        if schema_version != CATALOG_SCHEMA_VERSION:
+            raise ValueError(
+                f"Unsupported workspace artifact catalog schema {schema_version!r}; "
+                f"expected {CATALOG_SCHEMA_VERSION!r}."
+            )
+        if str(payload.get("project_id") or "") != self.manifest.project_id:
+            raise ValueError("Workspace artifact catalog project_id does not match sugar-project.json.")
+        artifacts = payload.get("artifacts") or []
+        if not isinstance(artifacts, list):
+            raise ValueError("Workspace artifact catalog artifacts must be a JSON array.")
+
+        with self._connect() as connection:
+            for raw in artifacts:
+                if not isinstance(raw, dict):
+                    raise ValueError("Workspace artifact catalog entries must be JSON objects.")
+                kind = str(raw.get("kind") or "").strip().casefold().replace(" ", "_")
+                stored_path = str(raw.get("path") or "").strip()
+                external = bool(raw.get("external", False))
+                if not kind or not stored_path:
+                    raise ValueError("Workspace artifact catalog entries require kind and path.")
+                self._validate_catalog_artifact_path(stored_path, external=external)
+                metadata = raw.get("metadata") or {}
+                if not isinstance(metadata, dict):
+                    raise ValueError("Workspace artifact catalog metadata must be a JSON object.")
+                registered_at = str(raw.get("registered_at") or _utc_now())
+                updated_at = str(raw.get("updated_at") or registered_at)
+                connection.execute(
+                    """
+                    INSERT INTO artifacts(kind, path, label, registered_at, updated_at, metadata_json, external)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(kind, path) DO UPDATE SET
+                        label = excluded.label,
+                        registered_at = excluded.registered_at,
+                        updated_at = excluded.updated_at,
+                        metadata_json = excluded.metadata_json,
+                        external = excluded.external
+                    """,
+                    (
+                        kind,
+                        stored_path,
+                        str(raw.get("label") or "").strip(),
+                        registered_at,
+                        updated_at,
+                        json.dumps(metadata, ensure_ascii=False, sort_keys=True),
+                        int(external),
+                    ),
+                )
+            connection.commit()
+        self._write_catalog()
 
     def _initialize_database(self) -> None:
         self.internal_path.mkdir(parents=True, exist_ok=True)

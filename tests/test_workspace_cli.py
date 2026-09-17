@@ -47,3 +47,15 @@ def test_workspace_cli_path_prints_canonical_directory(tmp_path: Path, capsys) -
     assert main(["path", str(root), "reports"]) == 0
     output = capsys.readouterr().out.strip()
     assert Path(output) == (root / "outputs" / "reports").resolve()
+
+
+def test_workspace_cli_exposes_portable_catalog(tmp_path: Path, capsys) -> None:
+    root = tmp_path / "workspace"
+    main(["init", str(root), "--name", "Catalog"])
+    capsys.readouterr()
+
+    assert main(["catalog", str(root), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["project_id"]
+    assert payload["software"]["name"] == "SUGAR"
+    assert payload["workspace_schema_version"] == "1.0"

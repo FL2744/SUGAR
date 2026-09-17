@@ -74,7 +74,7 @@ SUGAR never installs or upgrades packages at runtime.
 
 ## Project workspaces
 
-SUGAR 1.2 adds persistent project workspaces. A workspace keeps a portable `sugar-project.json` manifest, a local `.sugar/workspace.sqlite3` artifact registry, and standardized locations for raw collection, research observations, reference layers, State assessments, maps, reports, and intelligence outputs.
+SUGAR 1.2 adds persistent project workspaces. A workspace keeps a portable `sugar-project.json` identity/layout manifest, a portable `sugar-artifacts.json` evidentiary catalog, a rebuildable local `.sugar/workspace.sqlite3` index, and standardized locations for raw collection, research observations, reference layers, State assessments, maps, reports, and intelligence outputs.
 
 ```bash
 sugar-project init ./team4 \
@@ -87,6 +87,8 @@ sugar-project register ./team4 observations data/observations/example host count
 ```
 
 Research files remain ordinary CSV/XLSX/JSONL/GeoJSON/HTML/Word/PDF files rather than being hidden inside the project database. Secrets are never stored in the workspace manifest or registry by SUGAR.
+
+If a project is copied to another machine without `.sugar/workspace.sqlite3`, opening it rebuilds the local artifact index from `sugar-artifacts.json`; registered missing files remain visible as missing, and deliberately external references remain marked external.
 
 See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the workspace schema, layout, portability rules, Python API, and desktop bridge operations.
 

@@ -1,9 +1,22 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Iterable
 
 from .workspace import ArtifactRecord, SugarWorkspace
+
+
+HANDOFF_ROLE_KINDS = {
+    "research_requirement": "research_requirement",
+    "search_plan": "search_plan",
+    "normalized_records": "evidence",
+    "research_observations": "observations",
+    "human_review_state": "state_assessments",
+    "coverage_and_limitations": "limitations",
+    "provenance": "provenance",
+    "analytic_output": "analytic_output",
+}
 
 
 def optional_workspace(
@@ -114,4 +127,68 @@ def register_workspace_outputs(
                 metadata={"operation": operation},
             )
         )
+    return records
+
+
+def register_handoff_bundle(
+    workspace: SugarWorkspace | None,
+    manifest_file: str | Path,
+    *,
+    archive_file: str | Path | None = None,
+) -> list[ArtifactRecord]:
+    """Register a handoff manifest and each manifest-listed component in the project catalog."""
+    if workspace is None:
+        return []
+    manifest_path = Path(manifest_file).expanduser().resolve()
+    if not manifest_path.is_file():
+        raise FileNotFoundError(manifest_path)
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Handoff manifest must contain a JSON object.")
+    artifacts = payload.get("artifacts") or []
+    if not isinstance(artifacts, list):
+        raise ValueError("Handoff manifest artifacts must be a JSON array.")
+
+    metadata_base = {
+        "operation": "handoff",
+        "requirement_id": str(payload.get("requirement_id") or ""),
+        "handoff_schema_version": str(payload.get("handoff_schema_version") or ""),
+    }
+    records = [
+        workspace.register_artifact(
+            "handoff_manifest",
+            manifest_path,
+            metadata=metadata_base,
+        )
+    ]
+    bundle_root = manifest_path.parent.resolve()
+    for raw in artifacts:
+        if not isinstance(raw, dict):
+            raise ValueError("Handoff manifest artifact entries must be JSON objects.")
+        role = str(raw.get("role") or "").strip()
+        relative = Path(str(raw.get("path") or ""))
+        if not role or not str(relative):
+            raise ValueError("Handoff manifest artifacts require role and path.")
+        if relative.is_absolute():
+            raise ValueError(f"Handoff artifact path must be relative: {relative}")
+        resolved = (bundle_root / relative).resolve()
+        try:
+            resolved.relative_to(bundle_root)
+        except ValueError as exc:
+            raise ValueError(f"Handoff artifact path escapes bundle root: {relative}") from exc
+        if not resolved.is_file():
+            raise FileNotFoundError(resolved)
+        kind = HANDOFF_ROLE_KINDS.get(role, "handoff_artifact")
+        records.append(
+            workspace.register_artifact(
+                kind,
+                resolved,
+                metadata={**metadata_base, "handoff_role": role},
+            )
+        )
+
+    if archive_file:
+        archive = Path(archive_file).expanduser().resolve()
+        if archive.is_file():
+            records.append(workspace.register_artifact("export", archive, metadata=metadata_base))
     return records

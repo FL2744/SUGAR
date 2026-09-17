@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from sugar_core.workspace_runtime import (
     choose_output_directory,
     latest_workspace_artifact_path,
     optional_workspace,
+    register_handoff_bundle,
     register_workspace_outputs,
     workspace_from_config,
 )
@@ -119,3 +121,54 @@ def test_register_outputs_classifies_existing_files_and_skips_missing(tmp_path: 
     assert records[0].kind == "raw_collection"
     assert records[0].metadata == {"operation": "weibo-investigate"}
     assert register_workspace_outputs(None, [output], operation="search") == []
+
+
+def test_handoff_registration_indexes_each_portable_component(tmp_path: Path):
+    workspace = SugarWorkspace.create(tmp_path / "project", name="Project")
+    bundle = workspace.path_for("exports") / "case"
+    (bundle / "context").mkdir(parents=True)
+    (bundle / "evidence").mkdir(parents=True)
+    (bundle / "review").mkdir(parents=True)
+    (bundle / "outputs").mkdir(parents=True)
+    (bundle / "context" / "research-requirement.json").write_text("{}", encoding="utf-8")
+    (bundle / "context" / "search-plan.json").write_text("{}", encoding="utf-8")
+    (bundle / "evidence" / "records.jsonl").write_text("{}\n", encoding="utf-8")
+    (bundle / "evidence" / "observations.jsonl").write_text("{}\n", encoding="utf-8")
+    (bundle / "review" / "state-assessments.jsonl").write_text("{}\n", encoding="utf-8")
+    (bundle / "limitations.json").write_text("{}", encoding="utf-8")
+    (bundle / "outputs" / "brief.md").write_text("# Brief\n", encoding="utf-8")
+    manifest = {
+        "handoff_schema_version": "1.0",
+        "requirement_id": "rq_example",
+        "artifacts": [
+            {"role": "research_requirement", "path": "context/research-requirement.json"},
+            {"role": "search_plan", "path": "context/search-plan.json"},
+            {"role": "normalized_records", "path": "evidence/records.jsonl"},
+            {"role": "research_observations", "path": "evidence/observations.jsonl"},
+            {"role": "human_review_state", "path": "review/state-assessments.jsonl"},
+            {"role": "coverage_and_limitations", "path": "limitations.json"},
+            {"role": "analytic_output", "path": "outputs/brief.md"},
+        ],
+    }
+    manifest_path = bundle / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    archive = workspace.path_for("exports") / "case.zip"
+    archive.write_bytes(b"zip")
+
+    registered = register_handoff_bundle(workspace, manifest_path, archive_file=archive)
+    kinds = {item.kind for item in registered}
+    assert {
+        "handoff_manifest",
+        "research_requirement",
+        "search_plan",
+        "evidence",
+        "observations",
+        "state_assessments",
+        "limitations",
+        "analytic_output",
+        "export",
+    } <= kinds
+    catalog = json.loads(workspace.catalog_path.read_text(encoding="utf-8"))
+    catalog_kinds = {item["kind"] for item in catalog["artifacts"]}
+    assert "limitations" in catalog_kinds
+    assert "evidence" in catalog_kinds

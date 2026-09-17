@@ -7,7 +7,8 @@ SUGAR 1.2 introduces a persistent project workspace so a research effort can kee
 A workspace is intentionally boring and inspectable:
 
 - `sugar-project.json` is the portable project manifest. It contains identity, schema version, description, and canonical directory layout. It must never contain API keys, passwords, cookies, session tokens, or other secrets.
-- `.sugar/workspace.sqlite3` is a local artifact registry. It tracks which files belong to the project, their artifact type, labels, timestamps, and small JSON metadata records.
+- `sugar-artifacts.json` is the portable artifact catalog. It records the artifact kind, portable path, label, timestamps, metadata, workspace/schema versions, and SUGAR software version needed to interpret the project on another machine.
+- `.sugar/workspace.sqlite3` is a local mutable index over that artifact catalog. It is optimized for normal lookup/discovery but is rebuildable from `sugar-artifacts.json` and is not required to preserve the evidentiary record.
 - Research products remain ordinary files. CSV, XLSX, JSONL, GeoJSON, HTML, Word, PDF, and other outputs are not hidden inside SQLite.
 - Paths inside the workspace are stored relatively so the project directory can be moved between machines. External reference files are allowed but are explicitly reported as external/non-portable artifacts.
 - Missing registered files remain visible in workspace status rather than silently disappearing from project history.
@@ -20,6 +21,7 @@ Creating a workspace produces:
 ```text
 project/
 ├── sugar-project.json
+├── sugar-artifacts.json
 ├── .sugar/
 │   ├── workspace.sqlite3
 │   └── cache/
@@ -81,6 +83,13 @@ List registered files:
 ```bash
 sugar-project list ./team4
 sugar-project list ./team4 --kind observations --json
+```
+
+Inspect the portable artifact catalog directly:
+
+```bash
+sugar-project catalog ./team4
+sugar-project catalog ./team4 --json
 ```
 
 `SugarWorkspace.discover()` locates a workspace by walking upward from a nested project directory. The normal `sugar` and `sugar-state` CLIs use the same behavior, so users working anywhere inside a project normally do not need to repeat `--workspace`.
@@ -154,17 +163,22 @@ State/intelligence desktop operations also consume the same workspace implementa
 
 ## Portability and collaboration
 
-The manifest is designed to be safe to share with the rest of a research team. The SQLite registry is local mutable metadata by default and is ignored by the repository's standard `.gitignore`; a team can still transfer it deliberately when that is appropriate. It may contain paths to intentionally external files.
+The manifest and artifact catalog are designed to travel with the project. Internal artifact paths in `sugar-artifacts.json` are relative to the project root, so moving or copying the entire directory does not require path rewriting. Intentionally external files remain absolute and explicitly marked `external`; if they are unavailable on the destination machine they remain visible as missing rather than being silently discarded.
 
-Before moving a project between systems, `sugar-project status` should show zero missing artifacts and ideally zero external artifacts unless those references are deliberately machine-specific.
+`.sugar/workspace.sqlite3` is local mutable state and remains ignored by the repository's standard `.gitignore`. If the database is absent after a move, SUGAR automatically recreates it and restores the registered artifacts from `sugar-artifacts.json`. The portable catalog therefore preserves registration of evidence, research requirements, search plans, assessment/review state, limitations, and outputs even when the local SQLite index is not transferred.
+
+Portable handoff bundles created inside a workspace are registered component-by-component rather than only as a ZIP. Their requirement, plan, canonical evidence, observations, review state, limitations, provenance, analytic products, handoff manifest, and archive are consequently visible in the workspace artifact catalog.
+
+Before moving a project between systems, `sugar-project status` should show zero missing artifacts and ideally zero external artifacts unless those references are deliberately machine-specific. After moving it, deleting `.sugar/workspace.sqlite3` is safe from an evidentiary-catalog perspective: opening the workspace rebuilds the index from the portable catalog.
 
 A workspace is not a security boundary. SUGAR still relies on the operating system, approved storage, and normal access controls to protect research data. Credentials remain environment-, Keychain-, or session-managed and must not be placed in the workspace manifest or registry metadata.
 
 ## Schema evolution
 
-There are two versioned contracts:
+There are three versioned contracts:
 
 - workspace manifest schema: `1.0`;
+- portable artifact catalog schema: `1.0`;
 - workspace SQLite schema: `1` (stored in SQLite `PRAGMA user_version`).
 
-SUGAR fails closed when opening an unknown future manifest schema or database schema instead of guessing how to interpret it. Future changes should include an explicit migration path and regression fixtures before either version is advanced.
+SUGAR fails closed when opening an unknown future manifest, portable-catalog, or database schema instead of guessing how to interpret it. Future changes should include an explicit migration path and regression fixtures before any version is advanced.
