@@ -16,6 +16,7 @@ Use this index to find the current design or methodology document for the part o
 - [`high-volume-harvest.md`](high-volume-harvest.md) — durable, resumable collection at research scale.
 - [`bilibili-public.md`](bilibili-public.md) — Bilibili public collector behavior and boundaries.
 - [`weibo-public.md`](weibo-public.md) — Weibo public/authorized collection behavior.
+- [`wechat-public.md`](wechat-public.md) — public WeChat Official Account article ingestion and access boundaries.
 - [`weibo-investigation.md`](weibo-investigation.md) — known-public-post expansion and context workflow.
 - [`weibo-qualification.md`](weibo-qualification.md) — reproducible Weibo collection/investigation acceptance campaign.
 

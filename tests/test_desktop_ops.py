@@ -49,6 +49,8 @@ def test_bridge_advertises_typed_desktop_operations():
     assert "workspace-init" in info["operations"]
     assert "workspace-status" in info["operations"]
     assert "workspace-register" in info["operations"]
+    assert "ingest" in info["operations"]
+    assert info["collectors"]["wechat"]["known_item"] is True
     assert set(DESKTOP_ANALYTIC_OPERATIONS).issubset(info["operations"])
 
 

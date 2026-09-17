@@ -47,3 +47,12 @@ def test_classroom_quick_search_is_bounded_and_credential_honest() -> None:
     assert '"DeepSeek-V4-Flash": "DeepSeek-V4.1-Flash"' in app
     assert "DeepSeek-V4.1-Flash-thinking-max" in app
     assert "gpt-oss-120b-thinking-high" in app
+
+
+def test_windows_exposes_generic_public_item_ingestion_without_fake_wechat_search() -> None:
+    app = (ROOT / "SUGAR-Windows" / "app.py").read_text(encoding="utf-8")
+    assert 'tabs.addTab(self._ingest_tab(), "Public URL")' in app
+    assert '("WeChat Official Account article", "wechat")' in app
+    assert 'self.run_operation(\n            "ingest"' in app
+    assert "mp.weixin.qq.com" in app
+    assert 'SourceSelector(SOURCES)' in app

@@ -15,6 +15,7 @@ This guide is for a first-time user who wants to get useful results without lear
 - **Home** — status, workflow map, and first-run shortcuts.
 - **Collect** — normal keyword collection and resumable larger harvests.
 - **Weibo** — investigate a known public Weibo post or run repeatable Weibo qualification/coverage checks.
+- **Public URL** — import a specific known public item without pretending it is searchable. This is the supported path for public WeChat Official Account articles.
 - **State Workflow** — turn normalized observations into reviewable assessments, change reports, templates, and briefing packages.
 - **Intelligence** — deterministic tradecraft checks and optional LLM-assisted synthesis. Use this after you have a real corpus.
 - **Maps & Reports** — turn existing results into maps, PDF, or Word outputs.
@@ -27,6 +28,8 @@ This guide is for a first-time user who wants to get useful results without lear
 **Bilibili:** no source credential is required for the supported public collection path.
 
 **Weibo:** supported public surfaces can be used without a saved session. An authorized existing Weibo session is optional and may improve access to surfaces that are otherwise limited.
+
+**WeChat Official Accounts:** use **Collect → Public URL** with an ordinary public `https://mp.weixin.qq.com/...` article URL. SUGAR does not provide WeChat keyword search, private-chat collection, Mini Program collection, automated login, or challenge bypass.
 
 **X / Bluesky / Mastodon:** optional general-source adapters. Only configure their credentials if you intentionally plan to use those sources.
 

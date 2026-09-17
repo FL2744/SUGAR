@@ -480,6 +480,7 @@ class CollectPage(QWidget):
         root.addWidget(page_header("Collection", "Run bounded interactive searches or durable, checkpointed high-volume harvest campaigns."))
         tabs = QTabWidget()
         tabs.addTab(self._search_tab(), "Quick Search")
+        tabs.addTab(self._ingest_tab(), "Public URL")
         tabs.addTab(self._harvest_tab(), "Resumable Harvest")
         root.addWidget(tabs, 1)
 
@@ -563,6 +564,59 @@ class CollectPage(QWidget):
         }
         need_llm = bool(config["translate_posts"] or config["infer_locations"] or config["translate_term_languages"])
         self.run_operation("search", config, need_llm)
+
+    def _ingest_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 16, 16, 16)
+        self.ingest_source = EnumCombo((
+            ("WeChat Official Account article", "wechat"),
+            ("Bilibili video", "bilibili"),
+            ("Weibo post", "weibo"),
+        ))
+        self.ingest_identifier = QLineEdit()
+        self.ingest_identifier.setPlaceholderText("Paste a public URL or supported native item ID")
+        self.ingest_query = QLineEdit()
+        self.ingest_query.setPlaceholderText("Optional research query/provenance label")
+        self.ingest_output = PathField(mode="directory")
+        self.ingest_output.setText(self.settings.default_output())
+
+        form = QGridLayout()
+        form.addWidget(LabeledRow("Source", self.ingest_source), 0, 0)
+        form.addWidget(LabeledRow("Public URL or item ID", self.ingest_identifier), 0, 1)
+        form.addWidget(LabeledRow("Research query", self.ingest_query, "Optional. Stored as query provenance on the imported item."), 1, 0)
+        form.addWidget(LabeledRow("Output folder", self.ingest_output), 1, 1)
+        layout.addLayout(form)
+        note = QLabel(
+            "Use this for a specific public item you already know about. WeChat currently supports public "
+            "mp.weixin.qq.com Official Account articles; SUGAR does not search private WeChat, manufacture "
+            "login state, solve challenges, or bypass access controls."
+        )
+        note.setObjectName("hint")
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        row.addWidget(primary_button("Import Public Item", self._run_ingest))
+        layout.addLayout(row)
+        layout.addStretch(1)
+        return page
+
+    def _run_ingest(self) -> None:
+        identifier = self.ingest_identifier.text().strip()
+        if not identifier:
+            QMessageBox.warning(self, "Missing public item", "Paste a public URL or supported native item ID.")
+            return
+        self.run_operation(
+            "ingest",
+            {
+                "source": self.ingest_source.value(),
+                "identifier": identifier,
+                "query": self.ingest_query.text().strip(),
+                "output_directory": self.ingest_output.text() or self.settings.default_output(),
+            },
+            False,
+        )
 
     def _harvest_tab(self) -> QWidget:
         page = QWidget()

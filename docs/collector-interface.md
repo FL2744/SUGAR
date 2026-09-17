@@ -27,8 +27,10 @@ Current registry examples:
 | Bluesky | yes | no | no | yes |
 | Mastodon | yes | no | no | yes/instance-dependent |
 | Bilibili | yes/public-session-dependent | yes | yes/public-response-dependent | yes/fail-closed |
+| Weibo | yes/access-dependent | yes | yes/public-response-dependent | yes/access-dependent |
+| WeChat Official Accounts | no | yes/public article URL | no | no |
 
-Future Weibo, WeChat, REDnote, Douyin, Zhihu, and Kuaishou adapters should advertise only the surfaces they can actually provide under the project's public/authorized-access rules.
+Future REDnote, Douyin, Zhihu, and Kuaishou adapters should advertise only the surfaces they can actually provide under the project's public/authorized-access rules. WeChat currently advertises only known public articles rather than implying that SUGAR has a reliable anonymous keyword-search surface.
 
 ## Normalized thread relationships
 
@@ -43,7 +45,7 @@ These fields are deliberately separate from `raw_stats`. They let downstream ana
 
 A collector should leave a relationship blank when the source does not expose enough evidence to identify it. It should not infer a parent or root from text similarity.
 
-For Bilibili registry comment collection, top-level comments are linked to the source video as both parent and thread root. Future Weibo comments should link to the source status in the same way; nested replies should use their direct reply parent when the public response supplies it.
+For Bilibili registry comment collection, top-level comments are linked to the source video as both parent and thread root. Weibo comments use the source status/thread identity supplied by the collector. Known public WeChat articles are roots in their own right; SUGAR does not infer a discussion tree that the public article page does not expose.
 
 ## Adding a platform
 

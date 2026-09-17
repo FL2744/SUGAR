@@ -69,6 +69,9 @@ def test_capabilities_advertise_partial_platform_surfaces():
     assert caps["bilibili"]["comments"] is True
     assert caps["x"]["keyword_search"] is True
     assert caps["x"]["comments"] is False
+    assert caps["wechat"]["known_item"] is True
+    assert caps["wechat"]["keyword_search"] is False
+    assert caps["wechat"]["comments"] is False
 
 
 def test_required_credentials_are_validated_before_collection():
@@ -105,6 +108,49 @@ def test_bilibili_known_item_gets_thread_root(monkeypatch):
 
     assert row.thread_root_key == "bilibili:BV456"
     assert row.conversation_id == "BV456"
+
+
+def test_bilibili_known_item_accepts_public_video_url(monkeypatch):
+    seen = {}
+
+    def fake_fetch(native_id, query=""):
+        seen["native_id"] = native_id
+        return _record("bilibili", native_id, "video")
+
+    monkeypatch.setattr(collector_registry, "fetch_bilibili_video", fake_fetch)
+    row = fetch_registered_item("bilibili", "https://www.bilibili.com/video/BV1ABC123/?spm_id_from=333")
+    assert seen["native_id"] == "BV1ABC123"
+    assert row.native_id == "BV1ABC123"
+
+
+def test_weibo_known_item_accepts_public_status_url(monkeypatch):
+    seen = {}
+
+    def fake_fetch(native_id, **kwargs):
+        seen["native_id"] = native_id
+        return _record("weibo", native_id)
+
+    monkeypatch.setattr(collector_registry, "fetch_weibo_status", fake_fetch)
+    row = fetch_registered_item("weibo", "https://weibo.com/123456/NabcDEF12")
+    assert seen["native_id"] == "NabcDEF12"
+    assert row.native_id == "NabcDEF12"
+
+
+def test_wechat_known_item_uses_shared_registry_and_gets_thread_root(monkeypatch):
+    monkeypatch.setattr(
+        collector_registry,
+        "fetch_wechat_article",
+        lambda identifier, query="": _record("wechat", "ARTICLE123", "article"),
+    )
+
+    row = fetch_registered_item(
+        "wechat",
+        "https://mp.weixin.qq.com/s/ARTICLE123",
+        CollectorRequest(search_terms=["public diplomacy"]),
+    )
+
+    assert row.thread_root_key == "wechat:ARTICLE123"
+    assert row.conversation_id == "ARTICLE123"
 
 
 def test_bilibili_comments_link_to_video(monkeypatch):

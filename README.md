@@ -16,7 +16,7 @@ SUGAR provides one shared Python research core with native macOS and Windows cli
 
 **Collect → Normalize → Enrich/triage → Human review → Evidence dataset → Spatial/analytic products → Refresh**
 
-The core currently supports collection/workflows for **X, Bluesky, Mastodon, Bilibili, and Weibo**, including resumable high-volume harvesting, source provenance, thread relationships, AI-assisted triage, research observations, project workspaces, mapping, State-specific assessment/review, networks, rollups, freshness/change detection, and analytic-intelligence workflows.
+The core currently supports collection/workflows for **X, Bluesky, Mastodon, Bilibili, Weibo, and public WeChat Official Account articles**, including resumable high-volume harvesting, known-public-item ingestion, source provenance, thread relationships, AI-assisted triage, research observations, project workspaces, mapping, State-specific assessment/review, networks, rollups, freshness/change detection, and analytic-intelligence workflows.
 
 SUGAR deliberately distinguishes **presence, activity, reach, engagement, outcomes, and causal influence**. It does not manufacture a universal influence score or treat collection density as influence.
 
@@ -95,6 +95,7 @@ See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the workspace
 | Mastodon | Instance-scoped status search |
 | Bilibili | Public video search, known-video metadata, and public comments |
 | Weibo | Public/authorized search where available, known-public-post retrieval, comments, seed expansion, qualification workflows |
+| WeChat Official Accounts | Known public `mp.weixin.qq.com` article ingestion; no keyword search or private/account-only surfaces |
 
 All collectors normalize into the shared `PostRecord` model. SUGAR preserves stable native IDs, canonical URLs, collection/published times, query matches, canonical engagement fields, raw platform metrics, source mode, and schema/collector versions.
 
@@ -190,6 +191,7 @@ See [`docs/architecture.md`](docs/architecture.md) for module boundaries, fronte
 - [`docs/high-volume-harvest.md`](docs/high-volume-harvest.md) — durable large-scale collection
 - [`docs/bilibili-public.md`](docs/bilibili-public.md) — Bilibili public collector
 - [`docs/weibo-public.md`](docs/weibo-public.md) — Weibo public collector
+- [`docs/wechat-public.md`](docs/wechat-public.md) — WeChat Official Account public-article ingestion
 - [`docs/weibo-investigation.md`](docs/weibo-investigation.md) — known-post investigation workflow
 - [`docs/weibo-qualification.md`](docs/weibo-qualification.md) — reproducible Weibo acceptance/qualification
 - [`docs/research-observations.md`](docs/research-observations.md) — evidence-layer schema

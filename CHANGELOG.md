@@ -4,7 +4,11 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ## Unreleased
 
-_No unreleased changes recorded after 1.2.6._
+### Added
+
+- added a reusable `ingest`/Public URL workflow for collector surfaces that support known-item retrieval, with normalized CSV/XLSX/metadata outputs and the same workspace/provenance contract as search;
+- added fail-closed public WeChat Official Account article ingestion for `mp.weixin.qq.com` URLs, including stable article identity, account/publish metadata, source provenance, same-origin redirect validation, deterministic fixtures, and Windows/macOS Public URL UI;
+- WeChat capability metadata deliberately advertises known-item ingestion only; keyword discovery, private WeChat surfaces, automated login state, challenge solving, and access-control bypass remain unsupported.
 
 ## 1.2.6 — 2026-09-17
 

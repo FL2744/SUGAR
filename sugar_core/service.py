@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from .collector_registry import CollectorRequest, COLLECTORS, collect_registered_source
+from .collector_registry import CollectorRequest, COLLECTORS, collect_registered_source, fetch_registered_item
 from .enrichment import enrich_records
 from .harvest import run_harvest as _run_harvest
 from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
@@ -146,6 +146,52 @@ def run_search(
     save_records(records, csv_path, metadata=metadata)
     outputs = [str(csv_path), str(csv_path.with_suffix(".xlsx")), str(csv_path.with_suffix(".metadata.json"))]
     register_workspace_outputs(workspace, outputs, operation="search", kind="raw_collection")
+    _notify(progress, "saved", outputs=outputs)
+    return outputs
+
+
+def run_ingest(
+    config: dict[str, Any],
+    secrets: dict[str, str] | None = None,
+    progress: ProgressCallback | None = None,
+) -> list[str]:
+    """Ingest one known public item through the shared collector registry."""
+
+    secrets = secrets or {}
+    workspace = workspace_from_config(config)
+    source = str(config.get("source") or "").strip().lower()
+    identifier = str(config.get("identifier") or config.get("url") or config.get("item") or "").strip()
+    query = str(config.get("query") or "").strip()
+    if not source:
+        raise ValueError("Choose a source for public-item ingestion.")
+    if source not in COLLECTORS:
+        raise ValueError(f"Unsupported source: {source}")
+    if not identifier:
+        raise ValueError("Enter a public URL or native item identifier.")
+
+    out_dir = choose_output_directory(config.get("output_directory"), workspace, "raw", fallback=Path.cwd())
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv_path = out_dir / f"public_item_{source}_{stamp}.csv"
+    request = CollectorRequest(
+        search_terms=[query] if query else [],
+        config=config,
+        secrets=secrets,
+    )
+    _notify(progress, "starting", operation="ingest", source=source)
+    _notify(progress, "collecting", source=source)
+    record = fetch_registered_item(source, identifier, request)
+    _notify(progress, "collected", source=source, records=1)
+    metadata = {
+        "operation": "ingest",
+        "source": source,
+        "input_identifier": identifier,
+        "query": query or None,
+        "collector_capabilities": COLLECTORS[source].capabilities.as_dict(),
+        "workspace_project_id": workspace.manifest.project_id if workspace is not None else None,
+    }
+    save_records([record], csv_path, metadata=metadata)
+    outputs = [str(csv_path), str(csv_path.with_suffix(".xlsx")), str(csv_path.with_suffix(".metadata.json"))]
+    register_workspace_outputs(workspace, outputs, operation="ingest", kind="raw_collection")
     _notify(progress, "saved", outputs=outputs)
     return outputs
 

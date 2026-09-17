@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
+from urllib.parse import urlsplit
 
 from .bilibili import (
     collect_bilibili_comments,
@@ -18,6 +20,7 @@ from .collectors import (
 from .models import PostRecord
 from .paged_collectors import collect_bilibili_page_range, collect_weibo_page_range
 from .weibo import collect_weibo_comments, collect_weibo_public, fetch_weibo_status
+from .wechat import fetch_wechat_article
 
 
 @dataclass(frozen=True)
@@ -135,6 +138,40 @@ def _set_thread_root(record: PostRecord, conversation_id: str | None = None) -> 
     return record
 
 
+def _known_bilibili_id(value: str) -> str:
+    value = str(value or "").strip()
+    if not value.lower().startswith(("http://", "https://")):
+        return value
+    parsed = urlsplit(value)
+    host = (parsed.hostname or "").casefold().rstrip(".")
+    if host not in {"www.bilibili.com", "m.bilibili.com", "bilibili.com"}:
+        raise ValueError("Bilibili known-item URLs must use bilibili.com.")
+    match = re.search(r"/video/(BV[A-Za-z0-9]+|av\d+)(?:[/?#]|$)", parsed.path + "/")
+    if not match:
+        raise ValueError("Could not find a Bilibili BV/av identifier in that public video URL.")
+    identifier = match.group(1)
+    if identifier.lower().startswith("av"):
+        raise ValueError("SUGAR known-video retrieval currently requires a Bilibili BV identifier.")
+    return identifier
+
+
+def _known_weibo_id(value: str) -> str:
+    value = str(value or "").strip()
+    if not value.lower().startswith(("http://", "https://")):
+        return value
+    parsed = urlsplit(value)
+    host = (parsed.hostname or "").casefold().rstrip(".")
+    if host not in {"weibo.com", "www.weibo.com", "m.weibo.cn"}:
+        raise ValueError("Weibo known-item URLs must use weibo.com or m.weibo.cn.")
+    parts = [part for part in parsed.path.split("/") if part]
+    if host == "m.weibo.cn" and len(parts) >= 2 and parts[-2] in {"status", "detail"}:
+        return parts[-1]
+    if len(parts) >= 2:
+        # Ordinary desktop status URLs are typically /<account>/<bid>.
+        return parts[-1]
+    raise ValueError("Could not find a Weibo status ID/bid in that public URL.")
+
+
 def _collect_bilibili(request: CollectorRequest) -> list[PostRecord]:
     if request.config.get("_harvest_page_start"):
         rows = collect_bilibili_page_range(request)
@@ -150,7 +187,7 @@ def _collect_bilibili(request: CollectorRequest) -> list[PostRecord]:
 
 def _fetch_bilibili(native_id: str, request: CollectorRequest) -> PostRecord:
     query = request.search_terms[0] if request.search_terms else ""
-    return _set_thread_root(fetch_bilibili_video(native_id, query=query))
+    return _set_thread_root(fetch_bilibili_video(_known_bilibili_id(native_id), query=query))
 
 
 def _bilibili_comments(native_id: str, request: CollectorRequest) -> list[PostRecord]:
@@ -201,6 +238,7 @@ def _collect_weibo(request: CollectorRequest) -> list[PostRecord]:
 def _fetch_weibo(native_id: str, request: CollectorRequest) -> PostRecord:
     query = request.search_terms[0] if request.search_terms else ""
     cookie = request.secrets.get("weibo_cookie", "")
+    native_id = _known_weibo_id(native_id)
     record = fetch_weibo_status(
         native_id,
         query=query,
@@ -222,6 +260,11 @@ def _weibo_comments(native_id: str, request: CollectorRequest) -> list[PostRecor
         cookie=cookie,
     )
     return _mark_weibo_access(rows, cookie)
+
+
+def _fetch_wechat(identifier: str, request: CollectorRequest) -> PostRecord:
+    query = request.search_terms[0] if request.search_terms else ""
+    return _set_thread_root(fetch_wechat_article(identifier, query=query))
 
 
 COLLECTORS: dict[str, CollectorSpec] = {
@@ -284,6 +327,15 @@ COLLECTORS: dict[str, CollectorSpec] = {
         description=(
             "Fail-closed Weibo mobile-web search/status/comments. Public status and basic comment "
             "surfaces are anonymous; search availability can vary and may use a legitimate supplied session."
+        ),
+    ),
+    "wechat": CollectorSpec(
+        name="wechat",
+        known_item=_fetch_wechat,
+        capabilities=CollectorCapabilities(known_item=True),
+        description=(
+            "Public WeChat Official Account article ingestion from mp.weixin.qq.com URLs. "
+            "Keyword discovery and private/account-only surfaces are not supported."
         ),
     ),
 }

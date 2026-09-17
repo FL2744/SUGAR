@@ -18,7 +18,7 @@ import sugar_core
 from sugar_core.collector_registry import collector_capabilities
 from sugar_core.desktop_ops import DESKTOP_ANALYTIC_OPERATIONS, run_desktop_analytic_operation
 from sugar_core.llm import ARC_BASE_URL, LLMConfig, create_client
-from sugar_core.service import run_analysis, run_harvest, run_map, run_overlap, run_search
+from sugar_core.service import run_analysis, run_harvest, run_ingest, run_map, run_overlap, run_search
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from sugar_core.weibo_qualification import run_weibo_qualification
 from sugar_core.weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
@@ -33,6 +33,7 @@ BRIDGE_PROTOCOL_VERSION = 3
 WORKSPACE_OPERATIONS = {"workspace-init", "workspace-status", "workspace-register"}
 BASE_OPERATIONS = {
     "search",
+    "ingest",
     "harvest",
     "weibo-investigate",
     "weibo-seed-harvest",
@@ -228,6 +229,8 @@ def main(argv=None) -> int:
             outputs = _run_workspace_operation(args.command, config)
         elif args.command == "search":
             outputs = run_search(config, secrets, progress=progress_event)
+        elif args.command == "ingest":
+            outputs = run_ingest(config, secrets, progress=progress_event)
         elif args.command == "harvest":
             emit("starting", operation="harvest")
             outputs = run_harvest(config, secrets, progress=progress_event)

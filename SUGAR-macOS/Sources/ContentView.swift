@@ -3,11 +3,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum AppSection: String, CaseIterable, Identifiable {
-    case search = "Search", map = "Map", analysis = "Analysis", settings = "Settings"
+    case search = "Search", ingest = "Public URL", map = "Map", analysis = "Analysis", settings = "Settings"
     var id: String { rawValue }
     var icon: String {
         switch self {
         case .search: "magnifyingglass"
+        case .ingest: "link"
         case .map: "map"
         case .analysis: "chart.bar.doc.horizontal"
         case .settings: "key"
@@ -27,6 +28,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 switch selection ?? .search {
                 case .search: SearchView()
+                case .ingest: PublicItemView()
                 case .map: MapResultsView()
                 case .analysis: AnalysisView()
                 case .settings: SettingsView()
@@ -35,6 +37,62 @@ struct ContentView: View {
                 ActivityView()
             }
         }
+    }
+}
+
+private struct PublicItemSource: Identifiable {
+    let label: String
+    let value: String
+    var id: String { value }
+}
+
+struct PublicItemView: View {
+    @EnvironmentObject var model: AppModel
+    @State private var source = "wechat"
+    @State private var identifier = ""
+    @State private var query = ""
+    @State private var outputDirectory = NSHomeDirectory() + "/Documents/SUGAR"
+
+    private let sources = [
+        PublicItemSource(label: "WeChat Official Account article", value: "wechat"),
+        PublicItemSource(label: "Bilibili video", value: "bilibili"),
+        PublicItemSource(label: "Weibo post", value: "weibo"),
+    ]
+
+    var body: some View {
+        Form {
+            Section("Known public item") {
+                Picker("Source", selection: $source) {
+                    ForEach(sources) { item in
+                        Text(item.label).tag(item.value)
+                    }
+                }
+                TextField("Public URL or supported native item ID", text: $identifier)
+                TextField("Optional research query / provenance label", text: $query)
+                HStack {
+                    TextField("Output folder", text: $outputDirectory)
+                    Button("Choose…") { if let url = chooseDirectory() { outputDirectory = url.path } }
+                }
+                Text("WeChat currently supports ordinary public mp.weixin.qq.com Official Account articles. SUGAR does not search private WeChat, manufacture login state, solve challenges, or bypass access controls.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            HStack {
+                Spacer()
+                Button("Import Public Item") {
+                    model.run(command: "ingest", config: [
+                        "source": source,
+                        "identifier": identifier.trimmingCharacters(in: .whitespacesAndNewlines),
+                        "query": query.trimmingCharacters(in: .whitespacesAndNewlines),
+                        "output_directory": outputDirectory,
+                    ])
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.isRunning || identifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Public URL")
     }
 }
 

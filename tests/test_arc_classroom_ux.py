@@ -49,6 +49,16 @@ def test_mac_search_exposes_chinese_media_and_safe_first_run_defaults():
     assert "authorized Weibo session" in model
 
 
+def test_mac_exposes_public_item_ingestion_without_wechat_search_toggle():
+    mac = (ROOT / "SUGAR-macOS" / "Sources" / "ContentView.swift").read_text(encoding="utf-8")
+    assert 'case search = "Search", ingest = "Public URL"' in mac
+    assert 'struct PublicItemView: View' in mac
+    assert 'PublicItemSource(label: "WeChat Official Account article", value: "wechat")' in mac
+    assert 'model.run(command: "ingest"' in mac
+    assert "mp.weixin.qq.com" in mac
+    assert 'Toggle("WeChat"' not in mac
+
+
 def test_bridge_exposes_llm_connection_check():
     import sugar_bridge
     assert "llm-check" in sugar_bridge.ALL_OPERATIONS
