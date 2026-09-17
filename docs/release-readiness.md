@@ -6,8 +6,9 @@ release approval. `[x]` means the repository has a checked-in implementation or 
 decision remains; `[ ]` means work remains.
 
 1. `[~]` Legal and ownership: access/data-handling policy and disclaimers are documented; license,
-   copyright owner, institutional affiliation approval, project-name review, third-party notices,
-   and a confirmed private vulnerability route still require the release owner.
+   copyright owner, institutional affiliation approval, project-name review, and third-party notices
+   still require the release owner. `SECURITY.md` names the GitHub Security Advisory route, but an
+   administrator must verify that private reporting is enabled.
 2. `[~]` Releases: tagged wheel/sdist, exact version/changelog validation, checksums, and SBOM
    automation are present; Windows Authenticode and macOS signing/notarization identities are not
    configured.
@@ -40,8 +41,9 @@ decision remains; `[ ]` means work remains.
     bridge config, secret redaction, fail-closed access behavior, and security scans are present.
 13. `[x]` Structured errors: the desktop bridge emits stable error codes, retryability, remediation,
     and redacted messages with nonzero failure exit status.
-14. `[x]` Diagnostics: bridge diagnostics report protocol/runtime/capabilities and credential
-    presence booleans without including credential values, config contents, or research data.
+14. `[x]` Diagnostics: bridge diagnostics and `sugar diagnostics --bundle` report
+    protocol/runtime/capabilities and credential presence booleans without including credential
+    values, config contents, or research data.
 15. `[~]` CLI: public entry points expose `--help`/`--version`, live tests are separately marked,
     major exports are atomic, cancellation has a stable exit/event contract, and JSON mode works
     before or after subcommands; config precedence, full output-manifest semantics, and a product

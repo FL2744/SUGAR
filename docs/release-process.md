@@ -23,7 +23,7 @@ The release owner must also resolve before publishing:
 
 - the repository license and copyright/ownership wording;
 - any official institutional affiliation and project-name/trademark review;
-- a concrete private vulnerability-reporting route;
+- verification that the GitHub Security Advisory private-reporting route named in `SECURITY.md` is enabled;
 - the supported upgrade/migration policy and exact changelog entry.
 
 Never put signing keys, API credentials, cookies, private research data, or unsigned “production” claims
