@@ -164,19 +164,20 @@ these measurements are qualification inputs, not universal performance guarantee
 
 ## Improvement queue informed by the baseline
 
-1. Add repeatable performance budgets and report comparison to CI without making live calls.
+1. Done: deterministic stress reports now record elapsed time, disk use, and optional peak Python
+   allocation; CI enforces wall-time and disk budgets without making live calls.
 2. Replace per-record SQLite read/deserialize/update loops with batched or conflict-aware writes
    while preserving query provenance and merge semantics.
 3. Stream CSV/JSONL exports and make XLSX generation an explicit bounded review export for large
    collections.
 4. Add large-map guardrails and a scalable delivery path that preserves evidence drill-down without
    embedding every popup in one HTML document.
-5. Define single-writer/checkpoint locking and crash-recovery tests for concurrent or interrupted
-   harvest processes.
+5. Extend single-writer/checkpoint locking and crash-recovery tests for concurrent or interrupted
+   harvest processes; legacy workspace migrations now create atomic pre-migration backups.
 6. Add property-based or fuzz-style tests for bridge JSON, collector payload normalization, import
    schemas, and source-conflict adjudication.
-7. Add memory, timeout, and cancellation budgets to workspace, state, and desktop operations before
-   attempting multi-user or unattended runs.
+7. Extend memory, timeout, and cancellation budgets from the offline stress runner to workspace,
+   state, and desktop operations before attempting multi-user or unattended runs.
 
 All functional or methodology changes should retain the repository’s existing provenance,
 fail-closed access behavior, human-review gates, and explicit distinction between descriptive
