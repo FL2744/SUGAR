@@ -19,7 +19,7 @@ from .state_synthesis import (
     render_synthesis_markdown,
 )
 from .state_tradecraft import build_tradecraft_audit
-from .utils import JsonCache, MemoryCache, atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
+from .utils import MemoryCache, atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
 
 AGENTIC_ORCHESTRATION_VERSION = "1.4"
 
@@ -97,7 +97,7 @@ def _evidence_neighborhood(packet: dict[str, Any], output: dict[str, Any], *, li
 def _refine_agents(
     client,
     llm: LLMConfig,
-    cache: JsonCache | None,
+    cache: MemoryCache | None,
     base_packet: dict[str, Any],
     tasks: list[AgentTask],
     first_pass: list[dict[str, Any]],

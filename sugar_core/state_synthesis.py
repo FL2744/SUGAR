@@ -10,7 +10,7 @@ from .llm import LLMConfig, cached_chat, create_client, parse_json_object
 from .observations import ResearchObservation
 from .state_intelligence import build_intelligence_packet
 from .state_schema import StateAssessment
-from .utils import JsonCache, MemoryCache, atomic_path, atomic_write_text, safe_artifact_stem, stable_hash, utc_iso
+from .utils import MemoryCache, atomic_path, atomic_write_text, safe_artifact_stem, stable_hash, utc_iso
 
 SYNTHESIS_VERSION = "1.0"
 LIKELIHOODS = {
@@ -240,7 +240,7 @@ def _trim_packet(packet: dict[str, Any], *, max_cases: int = 24) -> dict[str, An
     return value
 
 
-def _call_agent(client, llm: LLMConfig, cache: JsonCache | None, task: AgentTask) -> dict[str, Any]:
+def _call_agent(client, llm: LLMConfig, cache: MemoryCache | None, task: AgentTask) -> dict[str, Any]:
     packet = _trim_packet(task.packet)
     user = (
         f"{task.question}\n"
@@ -260,7 +260,7 @@ def _call_agent(client, llm: LLMConfig, cache: JsonCache | None, task: AgentTask
 
 
 def _parallel_agents(
-    client, llm: LLMConfig, cache: JsonCache | None, tasks: list[AgentTask], max_workers: int
+    client, llm: LLMConfig, cache: MemoryCache | None, tasks: list[AgentTask], max_workers: int
 ) -> list[dict[str, Any]]:
     if not tasks:
         return []
@@ -304,7 +304,7 @@ def _meta_packet(
 def _call_integrator(
     client,
     llm: LLMConfig,
-    cache: JsonCache | None,
+    cache: MemoryCache | None,
     base_packet: dict[str, Any],
     agent_outputs: list[dict[str, Any]],
     *,
@@ -414,7 +414,7 @@ tradecraft_note: concise note on evidence/coverage limitations
 def _red_team(
     client,
     llm: LLMConfig,
-    cache: JsonCache | None,
+    cache: MemoryCache | None,
     base_packet: dict[str, Any],
     draft: dict[str, Any],
 ) -> dict[str, Any]:

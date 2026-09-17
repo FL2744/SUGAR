@@ -18,7 +18,7 @@ from .state_schema import (
     StateAssessment,
     SupportAssessment,
 )
-from .utils import JsonCache, MemoryCache
+from .utils import MemoryCache
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 
@@ -290,7 +290,7 @@ def triage_observation(
     *,
     llm: LLMConfig,
     client=None,
-    cache: JsonCache | None = None,
+    cache: MemoryCache | None = None,
 ) -> StateAssessment:
     client = client or create_client(llm)
     response = cached_chat(
