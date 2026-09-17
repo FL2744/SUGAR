@@ -229,7 +229,7 @@ class SettingsPage(QWidget):
         llm.layout.addLayout(arc_row)
         root.addWidget(llm)
 
-        sources = Card("Optional source credentials", "For the core classroom Bilibili/Weibo workflow, leave this section blank unless a specific task requires an authenticated source. X, Bluesky, Mastodon, and an authorized Weibo session are optional extensions; SUGAR never manufactures accounts or bypasses access controls.")
+        sources = Card("Optional source credentials", "Bilibili Quick Search uses ordinary anonymous public access when Bilibili currently permits it. Weibo keyword search requires an existing authorized session. X requires its API token; Bluesky and Mastodon credentials are optional for their public modes. SUGAR never manufactures accounts or bypasses access controls.")
         source_grid = QGridLayout()
         self.x_token = PasswordField("X bearer token")
         self.bluesky_id = QLineEdit()
@@ -241,7 +241,7 @@ class SettingsPage(QWidget):
         source_grid.addWidget(LabeledRow("Bluesky identifier", self.bluesky_id), 0, 1)
         source_grid.addWidget(LabeledRow("Bluesky app password", self.bluesky_password), 1, 0)
         source_grid.addWidget(LabeledRow("Mastodon token", self.mastodon_token), 1, 1)
-        source_grid.addWidget(LabeledRow("Weibo session", self.weibo_cookie, "Optional. Anonymous public surfaces remain the default when this is blank."), 2, 0, 1, 2)
+        source_grid.addWidget(LabeledRow("Weibo session", self.weibo_cookie, "Required for Weibo keyword search. Use only a session you are authorized to use."), 2, 0, 1, 2)
         sources.layout.addLayout(source_grid)
         root.addWidget(sources)
 
@@ -278,9 +278,16 @@ class SettingsPage(QWidget):
         self.mastodon_url.setText(str(self.store.value("sources/mastodon_url", "https://mastodon.social")))
         self._provider_changed()
         saved_model = str(self.store.value("llm/model", "gpt-oss-120b"))
+        if provider == "arc":
+            saved_model = {
+                "DeepSeek-V4-Flash": "DeepSeek-V4.1-Flash",
+                "GLM-5.2": "GLM-5.3",
+            }.get(saved_model, saved_model)
         idx = self.model.findText(saved_model)
         if idx >= 0:
             self.model.setCurrentIndex(idx)
+        elif provider == "arc":
+            self.model.setCurrentIndex(0)
         else:
             self.model.setEditText(saved_model)
 
@@ -292,7 +299,19 @@ class SettingsPage(QWidget):
             models = ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
             default = "gpt-5.6-luna"
         elif provider == "arc":
-            models = ["gpt-oss-120b", "DeepSeek-V4.1-Flash", "GLM-5.3", "Kimi-K3"]
+            models = [
+                "gpt-oss-120b",
+                "gpt-oss-120b-thinking-low",
+                "gpt-oss-120b-thinking-high",
+                "DeepSeek-V4.1-Flash",
+                "DeepSeek-V4.1-Flash-thinking-low",
+                "DeepSeek-V4.1-Flash-thinking-max",
+                "GLM-5.3",
+                "GLM-5.3-thinking-high",
+                "Kimi-K3",
+                "Kimi-K3-thinking-low",
+                "Kimi-K3-thinking-high",
+            ]
             default = "gpt-oss-120b"
         else:
             models = []
@@ -359,18 +378,18 @@ class HomePage(QWidget):
 
         start = Card(
             "Start here — first time?",
-            "Recommended classroom path: connect Virginia Tech ARC once, collect a small public-source sample, inspect the outputs, then move into the advanced workflow pages only when you need them.",
+            "Recommended classroom path: first prove a small collection works, then enable ARC-powered enrichment. Keep the first Bilibili run small because live public access can be rate- or risk-controlled by the platform.",
         )
         steps = QLabel(
-            "1. Settings → Virginia Tech ARC → Get ARC API Key → paste the key → Test ARC Connection.\n"
-            "2. Collect → Quick Search → use Bilibili and/or Weibo → enter a few search terms → Run Search.\n"
-            "3. Open the generated files from Activity & Outputs. Basic public Bilibili/Weibo collection does not require source credentials."
+            "1. Collect → Quick Search → leave Bilibili selected → enter one term → keep the 20-post / 1-page defaults → Run Search.\n"
+            "2. Inspect the generated files from Activity & Outputs. If Bilibili denies anonymous access, stop rather than repeatedly retrying.\n"
+            "3. For translation or location inference, open Settings → Virginia Tech ARC → Get ARC API Key → paste the key → Test ARC Connection. Weibo keyword search requires an authorized Weibo session."
         )
         steps.setWordWrap(True)
         start.layout.addWidget(steps)
         start_row = QHBoxLayout()
-        setup_arc = primary_button("1. Set up Virginia Tech ARC", lambda: self.navigate.emit("Settings"))
-        collect_public = QPushButton("2. Start public collection")
+        setup_arc = primary_button("3. Set up Virginia Tech ARC", lambda: self.navigate.emit("Settings"))
+        collect_public = QPushButton("1. Start small Bilibili search")
         collect_public.clicked.connect(lambda: self.navigate.emit("Collect"))
         guide = QPushButton("Open 5-minute guide")
         guide.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(resource_path("CLASSROOM-QUICK-START.md")))))
@@ -470,30 +489,29 @@ class CollectPage(QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         self.search_sources = SourceSelector(SOURCES)
         self.search_sources.boxes["bilibili"].setChecked(True)
-        self.search_sources.boxes["weibo"].setChecked(True)
         self.search_terms = QTextEdit()
         self.search_terms.setPlaceholderText("One search term per line\nCultural exchange Institute\nTechnical training Workshop")
         self.search_terms.setMaximumHeight(120)
         self.term_languages = QLineEdit()
         self.term_languages.setPlaceholderText("Optional translated query languages, comma separated")
-        self.post_languages = QLineEdit("en")
+        self.post_languages = QLineEdit()
         self.since = QLineEdit()
         self.since.setPlaceholderText("YYYY-MM-DD")
         self.until = QLineEdit()
         self.until.setPlaceholderText("YYYY-MM-DD")
-        self.max_posts = NumberField(1, 5000, 100)
-        self.max_pages = NumberField(1, 500, 5)
+        self.max_posts = NumberField(1, 5000, 20)
+        self.max_pages = NumberField(1, 500, 1)
         self.x_mode = EnumCombo((("Recent", "recent"), ("Full archive (authorized X access)", "all")))
         self.translate_posts = QCheckBox("Translate posts")
-        self.translate_posts.setChecked(True)
+        self.translate_posts.setChecked(False)
         self.infer_locations = QCheckBox("Infer broad locations")
-        self.infer_locations.setChecked(True)
+        self.infer_locations.setChecked(False)
         self.include_reposts = QCheckBox("Include reposts/retweets")
         self.search_output = PathField(mode="directory")
         self.search_output.setText(self.settings.default_output())
 
         form = QGridLayout()
-        form.addWidget(LabeledRow("Sources", self.search_sources), 0, 0, 1, 2)
+        form.addWidget(LabeledRow("Sources", self.search_sources, "Bilibili: anonymous public access when available. Weibo: authorized session required for keyword search."), 0, 0, 1, 2)
         form.addWidget(LabeledRow("Search terms", self.search_terms), 1, 0, 1, 2)
         form.addWidget(LabeledRow("Translate terms into", self.term_languages, "Example: Spanish, Russian. Leave blank to use only original terms."), 2, 0)
         form.addWidget(LabeledRow("Post language filters", self.post_languages, "BCP-47 codes; currently most relevant to X."), 2, 1)
@@ -538,6 +556,7 @@ class CollectPage(QWidget):
             "infer_locations": self.infer_locations.isChecked(),
             "include_retweets": self.include_reposts.isChecked(),
             "target_language": "English",
+            "bilibili_hydrate_details": False,
             "output_directory": self.search_output.text() or self.settings.default_output(),
             "mastodon_url": self.settings.mastodon_url.text().strip() or "https://mastodon.social",
             "llm": self.settings.llm_config(),
@@ -1011,10 +1030,10 @@ class MainWindow(QMainWindow):
         box.setTextFormat(Qt.RichText)
         box.setText(
             "<b>Recommended first run</b><br><br>"
-            "<b>1.</b> Open <b>Settings</b>, choose <b>Virginia Tech ARC</b>, click <b>Get ARC API Key</b>, paste the key, and test the connection.<br><br>"
-            "<b>2.</b> Open <b>Collect → Quick Search</b>. Bilibili and Weibo are selected by default; enter a few terms and run a small search.<br><br>"
-            "<b>3.</b> Inspect the generated files under <b>Activity & Outputs</b>. The State Workflow, Intelligence, and reporting pages are advanced follow-on tools.<br><br>"
-            "<b>Source credentials are optional:</b> basic public Bilibili/Weibo collection does not require X, Bluesky, Mastodon, or Weibo credentials."
+            "<b>1.</b> Open <b>Collect → Quick Search</b>. Leave <b>Bilibili</b> selected, use one search term, and keep the small 20-post / 1-page defaults.<br><br>"
+            "<b>2.</b> Inspect the generated files under <b>Activity & Outputs</b>. If Bilibili denies anonymous access, stop and retry later rather than repeatedly hammering the public endpoint.<br><br>"
+            "<b>3.</b> For translation/location inference, open <b>Settings</b>, choose <b>Virginia Tech ARC</b>, get your personal API key, and test the connection.<br><br>"
+            "<b>Credentials:</b> Weibo keyword search requires an authorized Weibo session. X requires its API token. Bilibili Quick Search uses anonymous public access only when Bilibili permits it."
         )
         check=QCheckBox("Don't show this automatically again")
         check.setChecked(True)
