@@ -44,10 +44,21 @@ from widgets import Card, EnumCombo, LabeledRow, NumberField, OutputChip, Passwo
 
 APP_NAME = "SUGAR"
 APP_ORGANIZATION = "Virginia Tech Diplomacy Lab"
-SOURCES = ("x", "bluesky", "mastodon", "bilibili", "weibo")
+SOURCES = ("bilibili", "weibo", "x", "bluesky", "mastodon")
 
 STYLE = """
-QMainWindow, QWidget { background: #f5f7fb; color: #172033; font-family: "Segoe UI"; font-size: 10pt; }
+QMainWindow { background: #f5f7fb; color: #172033; }
+QWidget { color: #172033; font-family: "Segoe UI"; font-size: 10pt; }
+QStackedWidget, QScrollArea { background: #f5f7fb; border: none; }
+QScrollArea > QWidget > QWidget { background: #f5f7fb; }
+QLabel, QCheckBox { background: transparent; }
+QMenuBar { background: #ffffff; color: #172033; border-bottom: 1px solid #dfe5ef; }
+QMenuBar::item { background: transparent; padding: 5px 8px; }
+QMenuBar::item:selected { background: #eef3fa; }
+QMenu { background: #ffffff; color: #172033; border: 1px solid #cfd8e6; }
+QMenu::item:selected { background: #e8f0fb; }
+QToolButton { background: #ffffff; color: #172033; border: 1px solid #cbd5e4; border-radius: 6px; padding: 6px 9px; }
+QToolButton:hover { background: #eef3fa; }
 QFrame#sidebar { background: #111b2e; border: none; }
 QLabel#brand { color: white; font-size: 19pt; font-weight: 700; }
 QLabel#brandSub { color: #aab8cf; font-size: 9pt; }
@@ -132,6 +143,7 @@ def primary_button(label: str, callback: Callable[[], None]) -> QPushButton:
 
 class SettingsPage(QWidget):
     diagnostics_requested = Signal()
+    arc_test_requested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -154,9 +166,28 @@ class SettingsPage(QWidget):
         grid.addWidget(LabeledRow("Base URL", self.base_url), 1, 0)
         grid.addWidget(LabeledRow("API key", self.llm_key, "If blank, SUGAR_LLM_API_KEY from the environment is used."), 1, 1)
         llm.layout.addLayout(grid)
+        arc_help = QLabel(
+            "Virginia Tech ARC quick setup — available to VT students, faculty, and staff without a separate ARC HPC account. "
+            "1) Get a personal key from llm.arc.vt.edu (User profile → Settings → Account → API keys). "
+            "2) Paste it above and choose Virginia Tech ARC. 3) Test the connection."
+        )
+        arc_help.setWordWrap(True)
+        arc_help.setObjectName("muted")
+        llm.layout.addWidget(arc_help)
+        arc_row = QHBoxLayout()
+        get_arc_key = QPushButton("1. Get ARC API Key")
+        get_arc_key.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://llm.arc.vt.edu")))
+        test_arc = QPushButton("3. Test ARC Connection")
+        test_arc.clicked.connect(lambda: self.arc_test_requested.emit())
+        self.arc_status = StatusPill("ARC not tested", "neutral")
+        arc_row.addWidget(get_arc_key)
+        arc_row.addWidget(test_arc)
+        arc_row.addWidget(self.arc_status)
+        arc_row.addStretch(1)
+        llm.layout.addLayout(arc_row)
         root.addWidget(llm)
 
-        sources = Card("Source credentials", "Only use legitimate credentials or sessions you are authorized to use. SUGAR does not automate login or manufacture browser/session identities.")
+        sources = Card("Optional source credentials", "For the core classroom Bilibili/Weibo workflow, leave this section blank unless a specific task requires an authenticated source. X, Bluesky, Mastodon, and an authorized Weibo session are optional extensions; SUGAR never manufactures accounts or bypasses access controls.")
         source_grid = QGridLayout()
         self.x_token = PasswordField("X bearer token")
         self.bluesky_id = QLineEdit()
@@ -196,7 +227,7 @@ class SettingsPage(QWidget):
         self._load()
 
     def _load(self) -> None:
-        provider = str(self.store.value("llm/provider", "openai"))
+        provider = str(self.store.value("llm/provider", "arc"))
         index = self.provider.findData(provider)
         self.provider.setCurrentIndex(max(0, index))
         self.base_url.setText(str(self.store.value("llm/base_url", "")))
@@ -204,7 +235,7 @@ class SettingsPage(QWidget):
         self.output_root.setText(default_output)
         self.mastodon_url.setText(str(self.store.value("sources/mastodon_url", "https://mastodon.social")))
         self._provider_changed()
-        saved_model = str(self.store.value("llm/model", "gpt-5.6-luna"))
+        saved_model = str(self.store.value("llm/model", "gpt-oss-120b"))
         idx = self.model.findText(saved_model)
         if idx >= 0:
             self.model.setCurrentIndex(idx)
@@ -219,7 +250,7 @@ class SettingsPage(QWidget):
             models = ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
             default = "gpt-5.6-luna"
         elif provider == "arc":
-            models = ["gpt-oss-120b", "DeepSeek-V4-Flash", "GLM-5.2", "Kimi-K3"]
+            models = ["gpt-oss-120b", "DeepSeek-V4.1-Flash", "GLM-5.3", "Kimi-K3"]
             default = "gpt-oss-120b"
         else:
             models = []
@@ -283,6 +314,30 @@ class HomePage(QWidget):
         root.setContentsMargins(24, 20, 24, 24)
         root.setSpacing(14)
         root.addWidget(page_header("SUGAR Research Workbench", "Evidence-first collection, State Department research coding, macro/micro analytic intelligence, and reproducible briefing outputs."))
+
+        start = Card(
+            "Start here — first time?",
+            "Recommended classroom path: connect Virginia Tech ARC once, collect a small public-source sample, inspect the outputs, then move into the advanced workflow pages only when you need them.",
+        )
+        steps = QLabel(
+            "1. Settings → Virginia Tech ARC → Get ARC API Key → paste the key → Test ARC Connection.\n"
+            "2. Collect → Quick Search → use Bilibili and/or Weibo → enter a few search terms → Run Search.\n"
+            "3. Open the generated files from Activity & Outputs. Basic public Bilibili/Weibo collection does not require source credentials."
+        )
+        steps.setWordWrap(True)
+        start.layout.addWidget(steps)
+        start_row = QHBoxLayout()
+        setup_arc = primary_button("1. Set up Virginia Tech ARC", lambda: self.navigate.emit("Settings"))
+        collect_public = QPushButton("2. Start public collection")
+        collect_public.clicked.connect(lambda: self.navigate.emit("Collect"))
+        guide = QPushButton("Open 5-minute guide")
+        guide.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(resource_path("CLASSROOM-QUICK-START.md")))))
+        start_row.addWidget(setup_arc)
+        start_row.addWidget(collect_public)
+        start_row.addWidget(guide)
+        start_row.addStretch(1)
+        start.layout.addLayout(start_row)
+        root.addWidget(start)
 
         summary = QHBoxLayout()
         self.backend_card = Card("Backend")
@@ -372,7 +427,8 @@ class CollectPage(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(16, 16, 16, 16)
         self.search_sources = SourceSelector(SOURCES)
-        self.search_sources.boxes["x"].setChecked(True)
+        self.search_sources.boxes["bilibili"].setChecked(True)
+        self.search_sources.boxes["weibo"].setChecked(True)
         self.search_terms = QTextEdit()
         self.search_terms.setPlaceholderText("One search term per line\nCultural exchange Institute\nTechnical training Workshop")
         self.search_terms.setMaximumHeight(120)
@@ -403,7 +459,7 @@ class CollectPage(QWidget):
         form.addWidget(LabeledRow("Until", self.until), 3, 1)
         form.addWidget(LabeledRow("Posts per query", self.max_posts), 4, 0)
         form.addWidget(LabeledRow("Pages per query", self.max_pages), 4, 1)
-        form.addWidget(LabeledRow("X mode", self.x_mode), 5, 0)
+        form.addWidget(LabeledRow("X options (ignored unless X is selected)", self.x_mode), 5, 0)
         toggles = QWidget()
         toggle_layout = QHBoxLayout(toggles)
         toggle_layout.setContentsMargins(0, 0, 0, 0)
@@ -671,7 +727,7 @@ class StatePage(QWidget):
         tabs.addTab(self._package_tab(), "State Package")
         tabs.addTab(self._triage_tab(), "AI Triage")
         tabs.addTab(self._review_tab(), "Human Review")
-        tabs.addTab(self._audit_tab(), "Audit & Diff")
+        tabs.addTab(self._audit_tab(), "Audit & Changes")
         tabs.addTab(self._templates_tab(), "Monitoring Templates")
         root.addWidget(tabs, 1)
 
@@ -754,9 +810,9 @@ class StatePage(QWidget):
         audit=Card("Evidence / verification audit")
         self.audit_obs=PathField(mode="file",extensions=("csv","xlsx","jsonl")); self.audit_assess=PathField(mode="file",extensions=("jsonl",)); self.audit_out=PathField(mode="save",save_extension="json")
         audit.layout.addWidget(LabeledRow("Observations",self.audit_obs)); audit.layout.addWidget(LabeledRow("Assessments",self.audit_assess)); audit.layout.addWidget(LabeledRow("Audit JSON",self.audit_out)); audit.layout.addWidget(primary_button("Run Audit",self._audit)); layout.addWidget(audit)
-        diff=Card("Assessment snapshot diff")
+        diff=Card("Compare assessment versions","Shows what changed between a previous and current assessment snapshot.")
         self.diff_prev=PathField(mode="file",extensions=("jsonl",)); self.diff_cur=PathField(mode="file",extensions=("jsonl",)); self.diff_out=PathField(mode="save",save_extension="json")
-        diff.layout.addWidget(LabeledRow("Previous assessments",self.diff_prev)); diff.layout.addWidget(LabeledRow("Current assessments",self.diff_cur)); diff.layout.addWidget(LabeledRow("Diff JSON",self.diff_out)); diff.layout.addWidget(primary_button("Compare Snapshots",self._diff)); layout.addWidget(diff); layout.addStretch(1); return page
+        diff.layout.addWidget(LabeledRow("Previous assessments",self.diff_prev)); diff.layout.addWidget(LabeledRow("Current assessments",self.diff_cur)); diff.layout.addWidget(LabeledRow("Change report JSON",self.diff_out)); diff.layout.addWidget(primary_button("Compare Snapshots",self._diff)); layout.addWidget(diff); layout.addStretch(1); return page
 
     def _audit(self)->None:
         if not self.audit_obs.text() or not self.audit_assess.text(): QMessageBox.warning(self,"Missing files","Choose observations and assessments."); return
@@ -892,13 +948,39 @@ class MainWindow(QMainWindow):
             self.pages[name]=self.stack.count(); self.nav.addItem(QListWidgetItem(name)); self.stack.addWidget(scroll_page(page))
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex); self.nav.setCurrentRow(0); self.home.navigate.connect(self.navigate)
         self.activity=ActivityDock(self); self.addDockWidget(Qt.BottomDockWidgetArea,self.activity); self.activity.cancel_requested.connect(self.runner.cancel)
-        self.runner.event.connect(self._event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.settings_page.diagnostics_requested.connect(self._diagnostics_run)
+        self.runner.event.connect(self._event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.settings_page.diagnostics_requested.connect(self._diagnostics_run); self.settings_page.arc_test_requested.connect(self._arc_test_run)
         self._build_menu()
-        if not smoke: QTimer.singleShot(150,self._diagnostics_run)
+        if not smoke:
+            QTimer.singleShot(150,self._diagnostics_run)
+            QTimer.singleShot(450,self._show_getting_started)
 
     def _build_menu(self)->None:
         bar=self.menuBar(); file_menu=bar.addMenu("File"); open_output=QAction("Open default output folder",self); open_output.triggered.connect(lambda:QDesktopServices.openUrl(QUrl.fromLocalFile(self.settings_page.default_output()))); file_menu.addAction(open_output); file_menu.addSeparator(); quit_action=QAction("Exit",self); quit_action.triggered.connect(self.close); file_menu.addAction(quit_action)
         tools=bar.addMenu("Tools"); diag=QAction("Backend diagnostics",self); diag.triggered.connect(self._diagnostics_run); tools.addAction(diag); cancel=QAction("Cancel current operation",self); cancel.triggered.connect(self.runner.cancel); tools.addAction(cancel)
+        help_menu=bar.addMenu("Help"); getting_started=QAction("Getting Started",self); getting_started.triggered.connect(lambda: self._show_getting_started(True)); help_menu.addAction(getting_started)
+
+    def _show_getting_started(self, force: bool = False)->None:
+        store=QSettings(APP_ORGANIZATION,APP_NAME)
+        if not force and store.value("ux/getting_started_seen",False,type=bool):
+            return
+        box=QMessageBox(self)
+        box.setWindowTitle("Getting started with SUGAR")
+        box.setIcon(QMessageBox.Information)
+        box.setTextFormat(Qt.RichText)
+        box.setText(
+            "<b>Recommended first run</b><br><br>"
+            "<b>1.</b> Open <b>Settings</b>, choose <b>Virginia Tech ARC</b>, click <b>Get ARC API Key</b>, paste the key, and test the connection.<br><br>"
+            "<b>2.</b> Open <b>Collect → Quick Search</b>. Bilibili and Weibo are selected by default; enter a few terms and run a small search.<br><br>"
+            "<b>3.</b> Inspect the generated files under <b>Activity & Outputs</b>. The State Workflow, Intelligence, and reporting pages are advanced follow-on tools.<br><br>"
+            "<b>Source credentials are optional:</b> basic public Bilibili/Weibo collection does not require X, Bluesky, Mastodon, or Weibo credentials."
+        )
+        check=QCheckBox("Don't show this automatically again")
+        check.setChecked(True)
+        box.setCheckBox(check)
+        box.exec()
+        if check.isChecked():
+            store.setValue("ux/getting_started_seen",True)
+            store.sync()
 
     def navigate(self,name:str)->None:
         if name in self.pages: self.nav.setCurrentRow(self.pages[name])
@@ -914,6 +996,21 @@ class MainWindow(QMainWindow):
             self.runner.run(command,config,secrets)
         except Exception as exc: self._error(str(exc))
 
+    def _arc_test_run(self)->None:
+        if self.runner.is_running: return
+        arc_index=self.settings_page.provider.findData("arc")
+        if arc_index>=0: self.settings_page.provider.setCurrentIndex(arc_index)
+        secrets=self.settings_page.secrets()
+        if not secrets.get("llm_api_key"):
+            QMessageBox.warning(self,"ARC API key required","Click 'Get ARC API Key', create your personal key, paste it into the API key field, then test again.")
+            return
+        self.settings_page.arc_status.setText("Testing ARC…"); self.settings_page.arc_status.set_tone("neutral")
+        model=self.settings_page.model.currentText().strip() or "gpt-oss-120b"
+        try:
+            self.runner.run("llm-check",{"llm":{"provider":"arc","model":model,"base_url":""}},secrets)
+        except Exception as exc:
+            self.settings_page.arc_status.setText("ARC test failed"); self.settings_page.arc_status.set_tone("bad"); self._error(str(exc))
+
     def _diagnostics_run(self)->None:
         if self.runner.is_running: return
         try: self.runner.diagnostics()
@@ -923,6 +1020,11 @@ class MainWindow(QMainWindow):
         event=payload.get("event");
         if event in {"diagnostics","backend"}:
             self._diagnostics=payload; self.home.update_diagnostics(payload)
+        if event=="llm_connection":
+            available=bool(payload.get("selected_model_available",True)); model=str(payload.get("model") or "ARC model")
+            self.settings_page.arc_status.setText("ARC connected" if available else "ARC connected · model unavailable"); self.settings_page.arc_status.set_tone("good" if available else "warn")
+            message=f"Connected to Virginia Tech ARC. {model} is available." if available else f"Connected to Virginia Tech ARC, but {model} was not listed by the service. Choose another ARC model."
+            QMessageBox.information(self,"ARC connection",message) if available else QMessageBox.warning(self,"ARC connection",message)
         self.activity.append_event(payload)
 
     def _error(self,message:str)->None:

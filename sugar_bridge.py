@@ -17,6 +17,7 @@ for stream in (sys.stdout, sys.stderr):
 import sugar_core
 from sugar_core.collector_registry import collector_capabilities
 from sugar_core.desktop_ops import DESKTOP_ANALYTIC_OPERATIONS, run_desktop_analytic_operation
+from sugar_core.llm import ARC_BASE_URL, LLMConfig, create_client
 from sugar_core.service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from sugar_core.weibo_qualification import run_weibo_qualification
@@ -40,6 +41,7 @@ BASE_OPERATIONS = {
     "overlap",
     "analysis",
     "diagnostics",
+    "llm-check",
 } | WORKSPACE_OPERATIONS
 ALL_OPERATIONS = BASE_OPERATIONS | DESKTOP_ANALYTIC_OPERATIONS
 
@@ -116,6 +118,38 @@ def _run_weibo_investigation(config: dict[str, Any], secrets: dict[str, str]) ->
     return outputs
 
 
+def _run_llm_check(config: dict[str, Any], secrets: dict[str, str]) -> list[str]:
+    raw = config.get("llm") or {}
+    if not isinstance(raw, dict):
+        raise ValueError("llm configuration must be an object.")
+    provider = str(raw.get("provider") or "arc").strip()
+    model = str(raw.get("model") or "gpt-oss-120b").strip()
+    base_url = str(raw.get("base_url") or "").strip()
+    llm_config = LLMConfig(
+        provider=provider,
+        model=model,
+        api_key=secrets.get("llm_api_key", ""),
+        base_url=base_url,
+    )
+    client = create_client(llm_config)
+    response = client.models.list()
+    model_ids = sorted(
+        str(getattr(item, "id", "")).strip()
+        for item in getattr(response, "data", [])
+        if str(getattr(item, "id", "")).strip()
+    )
+    endpoint = base_url or (ARC_BASE_URL if provider == "arc" else "provider default")
+    emit(
+        "llm_connection",
+        provider=provider,
+        endpoint=endpoint,
+        model=model,
+        selected_model_available=(not model_ids or model in model_ids),
+        available_model_count=len(model_ids),
+    )
+    return []
+
+
 def _workspace_path(config: dict[str, Any]) -> str:
     value = str(config.get("workspace") or config.get("path") or "").strip()
     if not value:
@@ -159,6 +193,19 @@ def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
 
 
 def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in {"cli", "project", "state", "intel"}:
+        mode = argv.pop(0)
+        if mode == "cli":
+            from sugar_core.cli import main as command_main
+        elif mode == "project":
+            from sugar_core.workspace_cli import main as command_main
+        elif mode == "state":
+            from sugar_core.state_cli import main as command_main
+        else:
+            from sugar_core.state_intel_cli import main as command_main
+        return int(command_main(argv) or 0)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=sorted(ALL_OPERATIONS))
     parser.add_argument("--config")
@@ -174,7 +221,9 @@ def main(argv=None) -> int:
         emit("backend", **backend_info())
         config = load_config(args.config)
         secrets = secrets_from_environment()
-        if args.command in WORKSPACE_OPERATIONS:
+        if args.command == "llm-check":
+            outputs = _run_llm_check(config, secrets)
+        elif args.command in WORKSPACE_OPERATIONS:
             outputs = _run_workspace_operation(args.command, config)
         elif args.command == "search":
             outputs = run_search(config, secrets, progress=progress_event)

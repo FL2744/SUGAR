@@ -26,6 +26,7 @@ python -m PyInstaller `
     --paths $RepoRoot `
     --paths $WindowsDir `
     --add-data "$(Join-Path $RepoRoot 'sugar-logo.png');." `
+    --add-data "$(Join-Path $RepoRoot 'docs\classroom-quick-start.md');." `
     (Join-Path $WindowsDir "app.py")
 
 Write-Host "Building SUGAR backend bridge..."
@@ -47,7 +48,19 @@ $BridgeExe = Join-Path $BridgeDist "sugar-bridge.exe"
 if (-not (Test-Path $BridgeExe)) { throw "PyInstaller did not create sugar-bridge.exe" }
 Copy-Item -Force $BridgeExe (Join-Path $AppDir "sugar-bridge.exe")
 
+$CliWrappers = @{
+    "sugar.cmd" = "cli"
+    "sugar-project.cmd" = "project"
+    "sugar-state.cmd" = "state"
+    "sugar-intel.cmd" = "intel"
+}
+foreach ($wrapper in $CliWrappers.GetEnumerator()) {
+    $wrapperText = "@echo off`r`n`"%~dp0sugar-bridge.exe`" $($wrapper.Value) %*`r`n"
+    Set-Content -Encoding ASCII -Path (Join-Path $AppDir $wrapper.Key) -Value $wrapperText
+}
+
 Copy-Item -Force (Join-Path $WindowsDir "README.md") (Join-Path $AppDir "README-Windows.md")
+Copy-Item -Force (Join-Path $RepoRoot "docs\classroom-quick-start.md") (Join-Path $AppDir "CLASSROOM-QUICK-START.md")
 Copy-Item -Force (Join-Path $RepoRoot "LICENSE") (Join-Path $AppDir "LICENSE")
 Copy-Item -Force (Join-Path $RepoRoot "NOTICE") (Join-Path $AppDir "NOTICE")
 Copy-Item -Force (Join-Path $RepoRoot "THIRD_PARTY_NOTICES.md") (Join-Path $AppDir "THIRD_PARTY_NOTICES.md")
