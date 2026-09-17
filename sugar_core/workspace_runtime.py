@@ -56,12 +56,10 @@ def latest_workspace_artifact_path(
     if isinstance(kinds, str):
         kinds = [kinds]
     for kind in kinds:
-        artifact = workspace.latest_artifact(kind)
-        if artifact is None:
-            continue
-        path = workspace.artifact_absolute_path(artifact)
-        if not require_exists or path.exists():
-            return path
+        for artifact in workspace.list_artifacts(kind):
+            path = workspace.artifact_absolute_path(artifact)
+            if not require_exists or path.exists():
+                return path
     return None
 
 
@@ -71,15 +69,19 @@ def classify_workspace_output(path: str | Path, *, operation: str = "") -> str:
     suffix = value.suffix.casefold()
     operation = operation.casefold()
 
+    if operation in {"search", "weibo-investigate", "weibo-qualify"}:
+        return "raw_collection"
+    if operation in {"harvest", "weibo-seed-harvest"}:
+        return "harvest"
     if suffix == ".html" and "map" in name:
         return "map"
     if suffix in {".pdf", ".docx"}:
         return "report"
     if "observation" in name or operation == "triage":
         return "observations"
-    if "harvest" in name or operation in {"harvest", "weibo-seed-harvest"}:
+    if "harvest" in name:
         return "harvest"
-    if operation == "search" or name.startswith("social_search_posts_"):
+    if name.startswith("social_search_posts_"):
         return "raw_collection"
     if operation.startswith("intel-") or "intelligence" in name or "hypoth" in name or "tradecraft" in name:
         return "intelligence"
