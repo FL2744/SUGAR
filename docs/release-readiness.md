@@ -62,8 +62,9 @@ decision remains; `[ ]` means work remains.
     present; final operator runbooks and deployment-specific data-retention guidance remain.
 21. `[~]` Canonical demo: the deterministic Kyrgyzstan case is in CI; a polished clean-room demo
     package and expected-output review remain.
-22. `[ ]` External reproducibility: an independent operator has not yet completed a clean-machine
-    install, fixture run, and artifact verification.
+22. `[~]` External reproducibility: CI now installs the built wheel into an empty environment, and
+    a fresh supported Python 3.13 environment has passed CLI/diagnostic smoke locally; an
+    independent operator still needs to complete the clean-machine fixture run and artifact review.
 23. `[ ]` Analyst usability: task-based evaluation with representative analysts has not yet run.
 24. `[ ]` Domain review: methodology, legal/privacy, and platform-access review has not yet been
     recorded by the responsible experts.

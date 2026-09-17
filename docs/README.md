@@ -10,6 +10,7 @@ Start with [`quickstart.md`](quickstart.md) for a first offline workspace.
 - [`project-workspaces.md`](project-workspaces.md) — persistent project manifest/artifact-registry contract and automatic workflow routing.
 - [`release-process.md`](release-process.md) — versioning, CI, packaged-app inspection, research-integrity review, and release checklist.
 - [`reproducibility.md`](reproducibility.md) — clean-install verification, dependency tracks, offline demo, artifact checks, and workspace transfer.
+- [`error-handling.md`](error-handling.md) — structured failures, fail-closed boundaries, retry/defer semantics, and the silent-exception audit.
 - [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — contribution/test expectations.
 - [`../SECURITY.md`](../SECURITY.md) — security, credential, workspace, and packaging policy.
 
