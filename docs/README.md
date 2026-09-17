@@ -2,6 +2,8 @@
 
 Use this index to find the current design or methodology document for the part of SUGAR you are changing or using.
 
+Start with [`quickstart.md`](quickstart.md) for a first offline workspace.
+
 ## Architecture and development
 
 - [`architecture.md`](architecture.md) — system boundaries, dependency direction, desktop/core separation, and engineering rules.

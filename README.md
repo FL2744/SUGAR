@@ -64,6 +64,8 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
+For a first successful offline workspace, follow [`docs/quickstart.md`](docs/quickstart.md).
+
 SUGAR never installs or upgrades packages at runtime.
 
 ## Project workspaces
