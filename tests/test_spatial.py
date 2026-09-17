@@ -80,6 +80,12 @@ def test_haversine_is_symmetric_and_reasonable():
     assert haversine_km(42.0, 74.0, 42.0, 74.0) == pytest.approx(0.0)
 
 
+def test_haversine_handles_international_date_line_crossing():
+    distance = haversine_km(0.0, 179.9, 0.0, -179.9)
+
+    assert distance == pytest.approx(22.24, abs=0.1)
+
+
 def test_distance_bands_are_boundary_inclusive():
     bands = (5, 25, 100, 250)
     assert distance_band(0, bands) == "0–5 km"
