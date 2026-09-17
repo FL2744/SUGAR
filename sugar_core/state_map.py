@@ -19,7 +19,7 @@ from .state_proximity import (
     proximity_note,
 )
 from .state_schema import StateAssessment, USPresenceSite
-from .utils import atomic_write_text
+from .utils import atomic_path, atomic_write_text
 
 _PRECISION_LABELS = {
     "exact": "Exact/native coordinates",
@@ -435,7 +435,8 @@ def create_state_map(
     map_obj.get_root().html.add_child(folium.Element(legend))
     folium.LayerControl(collapsed=False).add_to(map_obj)
 
-    map_obj.save(str(target))
+    with atomic_path(target, suffix=target.suffix or ".html") as temporary:
+        map_obj.save(str(temporary))
     metadata = target.with_suffix(target.suffix + ".metadata.json")
     atomic_write_text(
         metadata,

@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
+from .utils import atomic_path
+
 ENTITY_TYPES = {
     "prc_government",
     "prc_diplomatic_mission",
@@ -206,9 +208,10 @@ def save_entity_registry(registry: EntityRegistry, path: str | Path) -> str:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.suffix.lower() == ".jsonl":
-        with target.open("w", encoding="utf-8") as stream:
-            for entity in registry.entities.values():
-                stream.write(json.dumps(asdict(entity), ensure_ascii=False, sort_keys=True) + "\n")
+        with atomic_path(target, suffix=".jsonl") as temporary:
+            with temporary.open("w", encoding="utf-8") as stream:
+                for entity in registry.entities.values():
+                    stream.write(json.dumps(asdict(entity), ensure_ascii=False, sort_keys=True) + "\n")
         return str(target.resolve())
     if target.suffix.lower() != ".csv":
         target = target.with_suffix(".csv")
@@ -229,14 +232,15 @@ def save_entity_registry(registry: EntityRegistry, path: str | Path) -> str:
         "active",
         "notes",
     ]
-    with target.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        for entity in registry.entities.values():
-            raw = asdict(entity)
-            for key in ("aliases", "native_names", "official_urls", "social_urls", "languages", "query_terms"):
-                raw[key] = "; ".join(raw[key])
-            writer.writerow(raw)
+    with atomic_path(target, suffix=".csv") as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fields)
+            writer.writeheader()
+            for entity in registry.entities.values():
+                raw = asdict(entity)
+                for key in ("aliases", "native_names", "official_urls", "social_urls", "languages", "query_terms"):
+                    raw[key] = "; ".join(raw[key])
+                writer.writerow(raw)
     return str(target.resolve())
 
 
@@ -265,8 +269,9 @@ def save_query_plan(registry: EntityRegistry, path: str | Path) -> str:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     fields = ["entity_id", "entity_type", "canonical_name", "country", "city", "priority", "query"]
-    with target.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(registry.query_plan())
+    with atomic_path(target, suffix=".csv") as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(registry.query_plan())
     return str(target.resolve())

@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
+from .utils import atomic_path
+
 _IDENTIFIER_COLUMNS = {
     "observation_id",
     "native_id",
@@ -998,6 +1000,8 @@ def create_map(
     folium.LayerControl(collapsed=False, position="topright").add_to(m)
 
     output_file = str(Path(output_file).expanduser().resolve())
-    Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-    m.save(output_file)
+    target = Path(output_file)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with atomic_path(target, suffix=target.suffix or ".html") as temporary:
+        m.save(str(temporary))
     return output_file

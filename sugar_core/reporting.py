@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from .storage import load_results
+from .utils import atomic_path
 
 ENGAGEMENT_KEYS = ("likes", "replies", "reposts", "quotes", "bookmarks")
 
@@ -243,10 +244,12 @@ def create_analysis_report(source_file: str, output_stem: str, output_format: st
         _bar(work.location.value_counts(), "Top inferred locations", charts["location"])
         if output_format in {"docx", "both"}:
             path = str(base.with_suffix(".docx"))
-            _docx(work, metrics, charts, source_file, path)
+            with atomic_path(path, suffix=".docx") as temporary:
+                _docx(work, metrics, charts, source_file, str(temporary))
             outputs.append(path)
         if output_format in {"pdf", "both"}:
             path = str(base.with_suffix(".pdf"))
-            _pdf(work, metrics, charts, source_file, path)
+            with atomic_path(path, suffix=".pdf") as temporary:
+                _pdf(work, metrics, charts, source_file, str(temporary))
             outputs.append(path)
     return outputs

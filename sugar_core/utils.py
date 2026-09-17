@@ -73,12 +73,17 @@ def stable_hash(*parts: Any) -> str:
 
 
 @contextmanager
-def atomic_path(path: str | Path) -> Iterator[Path]:
-    """Yield a same-directory temporary path and publish it atomically on success."""
+def atomic_path(path: str | Path, *, suffix: str | None = None) -> Iterator[Path]:
+    """Yield a same-directory temporary path and publish it atomically on success.
+
+    Pass a real file suffix when the producer selects a codec from the path
+    extension (for example, openpyxl requires a temporary ``.xlsx`` path).
+    """
 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
+    temporary_suffix = ".tmp" if suffix is None else suffix
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=temporary_suffix, dir=target.parent)
     os.close(descriptor)
     temporary = Path(temporary_name)
     try:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -25,7 +26,7 @@ from .state_workflow import (
     load_us_presence_sites,
     save_state_package,
 )
-from .utils import safe_artifact_stem, safe_cell
+from .utils import atomic_path, atomic_write_text, safe_artifact_stem, safe_cell
 
 _CONFLICT_SECTION_START = "<!-- SUGAR_SOURCE_CONFLICTS_START -->"
 _CONFLICT_SECTION_END = "<!-- SUGAR_SOURCE_CONFLICTS_END -->"
@@ -236,10 +237,7 @@ def _augment_audit(path: Path, conflicts: list[SourceConflict]) -> None:
         audit["findings"] = findings
         if audit.get("status") == "pass":
             audit["status"] = "conditional"
-    path.write_text(
-        json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
+    atomic_write_text(path, json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True))
 
 
 def _conflict_fields_for_record(
@@ -325,7 +323,9 @@ def export_review_workbook_with_conflicts(
             "Open or provisional source conflicts require human review. A provisional preferred claim is not a human adjudication and does not establish influence, competition, displacement, persuasion, or causal effect.",
         ]
     )
-    workbook.save(output)
+    with atomic_path(output, suffix=".xlsx") as temporary:
+        shutil.copyfile(output, temporary)
+        workbook.save(temporary)
     return str(Path(output).resolve())
 
 
@@ -358,28 +358,25 @@ def augment_state_package_with_conflicts(
     review_rows = build_conflict_aware_review_queue(observations, assessments, conflicts)
     review_frame = _formula_safe_frame(review_rows)
     conflict_frame = _formula_safe_frame(_source_conflict_rows(conflicts))
-    review_frame.to_csv(queue_path, index=False, encoding="utf-8-sig")
-    with pd.ExcelWriter(xlsx_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-        review_frame.to_excel(writer, index=False, sheet_name="review_queue")
-        conflict_frame.to_excel(writer, index=False, sheet_name="source_conflicts")
+    with atomic_path(queue_path, suffix=".csv") as temporary:
+        review_frame.to_csv(temporary, index=False, encoding="utf-8-sig")
+    with atomic_path(xlsx_path, suffix=".xlsx") as temporary:
+        shutil.copyfile(xlsx_path, temporary)
+        with pd.ExcelWriter(temporary, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+            review_frame.to_excel(writer, index=False, sheet_name="review_queue")
+            conflict_frame.to_excel(writer, index=False, sheet_name="source_conflicts")
 
     _augment_audit(audit_path, conflicts)
 
     brief = brief_path.read_text(encoding="utf-8")
-    brief_path.write_text(
-        _replace_conflict_section(brief, render_source_conflict_section(conflicts)),
-        encoding="utf-8",
-    )
+    atomic_write_text(brief_path, _replace_conflict_section(brief, render_source_conflict_section(conflicts)))
 
     package_audit = json.loads(audit_path.read_text(encoding="utf-8"))
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
     snapshot["audit_status"] = package_audit.get("status")
     snapshot["source_conflicts"] = source_conflict_summary(conflicts)
     snapshot["source_conflict_ids"] = [conflict.conflict_id for conflict in conflicts]
-    snapshot_path.write_text(
-        json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
+    atomic_write_text(snapshot_path, json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True))
     return [str(conflict_path.resolve())]
 
 

@@ -157,47 +157,48 @@ def write_us_presence_template(path: str | Path) -> str:
         "location_uncertainty_km",
         "location_basis",
     ]
-    with target.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        writer.writerow(
-            {
-                "name": "Example American Space",
-                "network": "american_space",
-                "subtype": "American Corner",
-                "country": "Example Country",
-                "city": "Example City",
-                "latitude": "",
-                "longitude": "",
-                "service_tags": "english_language;entrepreneurship;stem",
-                "source_url": "https://example.gov/source",
-                "status": "active",
-                "delivery_mode": "physical",
-                "coverage_scope": "site",
-                "location_precision": "city",
-                "location_confidence": "0.75",
-                "location_uncertainty_km": "12",
-                "location_basis": "city_reference_replace_with_verified_site_data_when_available",
-            }
-        )
-        writer.writerow(
-            {
-                "name": "Example virtual advising service",
-                "network": "educationusa",
-                "subtype": "Virtual advising",
-                "country": "Example Country",
-                "city": "",
-                "latitude": "",
-                "longitude": "",
-                "service_tags": "educationusa;study_in_the_us;higher_education",
-                "source_url": "https://example.gov/virtual-service",
-                "status": "active",
-                "delivery_mode": "virtual",
-                "coverage_scope": "country",
-                "location_precision": "unknown",
-                "location_basis": "official_service_directory_nonspatial",
-            }
-        )
+    with atomic_path(target, suffix=target.suffix or ".csv") as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fields)
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "name": "Example American Space",
+                    "network": "american_space",
+                    "subtype": "American Corner",
+                    "country": "Example Country",
+                    "city": "Example City",
+                    "latitude": "",
+                    "longitude": "",
+                    "service_tags": "english_language;entrepreneurship;stem",
+                    "source_url": "https://example.gov/source",
+                    "status": "active",
+                    "delivery_mode": "physical",
+                    "coverage_scope": "site",
+                    "location_precision": "city",
+                    "location_confidence": "0.75",
+                    "location_uncertainty_km": "12",
+                    "location_basis": "city_reference_replace_with_verified_site_data_when_available",
+                }
+            )
+            writer.writerow(
+                {
+                    "name": "Example virtual advising service",
+                    "network": "educationusa",
+                    "subtype": "Virtual advising",
+                    "country": "Example Country",
+                    "city": "",
+                    "latitude": "",
+                    "longitude": "",
+                    "service_tags": "educationusa;study_in_the_us;higher_education",
+                    "source_url": "https://example.gov/virtual-service",
+                    "status": "active",
+                    "delivery_mode": "virtual",
+                    "coverage_scope": "country",
+                    "location_precision": "unknown",
+                    "location_basis": "official_service_directory_nonspatial",
+                }
+            )
     return str(target.resolve())
 
 
