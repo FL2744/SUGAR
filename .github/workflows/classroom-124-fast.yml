@@ -1,0 +1,87 @@
+name: Classroom 1.2.4 fast Windows publish
+
+on:
+  push:
+    branches:
+      - release/classroom-v1.2.4-fast
+
+permissions:
+  contents: write
+
+jobs:
+  build-publish-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v1.2.4-classroom.2
+      SOURCE_SHA: f463d1e519518c9648e5835eaf59c131acafc8f1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+          cache: pip
+
+      - name: Install Windows build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,windows]"
+
+      - name: Build portable Windows application
+        shell: pwsh
+        run: .\SUGAR-Windows\scripts\build.ps1
+
+      - name: Validate packaged GUI and CLI
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          .\SUGAR-Windows\dist\SUGAR\SUGAR.exe --smoke-test
+          & .\SUGAR-Windows\dist\SUGAR\sugar.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar.cmd --help failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar-project.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar-project.cmd --help failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar-state.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar-state.cmd --help failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar-intel.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar-intel.cmd --help failed" }
+
+      - name: Replace stuck draft and publish Windows hotfix
+        shell: pwsh
+        run: |
+          gh release delete v1.2.4-classroom.1 --repo $env:GITHUB_REPOSITORY --cleanup-tag --yes 2>$null
+          if ($LASTEXITCODE -ne 0) { Write-Host "No old v1.2.4 draft to delete (or it already disappeared)." }
+
+          @"
+          # SUGAR v1.2.4 Classroom Release — Quick Search Reliability
+
+          Fast Windows classroom hotfix based on live first-run testing.
+
+          ## Windows changes
+          - Quick Search defaults to Bilibili only, 20 posts, and 1 page.
+          - AI enrichment is off by default for the first collection.
+          - Quick Search disables per-result Bilibili detail hydration to avoid a large burst of requests.
+          - Valid Bilibili search-result metadata is retained if optional detail hydration is access-controlled.
+          - Weibo keyword search is clearly marked as requiring an existing authorized session.
+          - Saved DeepSeek-V4-Flash selections migrate to DeepSeek-V4.1-Flash.
+          - ARC fallback choices include current primary and reasoning model names.
+          - Includes the deterministic Windows light-palette fix.
+          - Includes the packaged Windows CLI entry points.
+
+          ## macOS
+          The latest fixes in this release are Windows/classroom-UX changes. Continue using the validated v1.2.3 macOS builds:
+          - Apple Silicon: https://github.com/FL2744/SUGAR/releases/download/v1.2.3-classroom.1/SUGAR-macOS-Apple-Silicon.zip
+          - Intel: https://github.com/FL2744/SUGAR/releases/download/v1.2.3-classroom.1/SUGAR-macOS-Intel.zip
+          "@ | Set-Content -Encoding UTF8 RELEASE_NOTES.md
+
+          gh release create $env:TAG .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip `
+            --repo $env:GITHUB_REPOSITORY `
+            --target $env:SOURCE_SHA `
+            --title "SUGAR v1.2.4 Classroom Release — Quick Search Reliability" `
+            --notes-file RELEASE_NOTES.md `
+            --latest
