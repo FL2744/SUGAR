@@ -10,6 +10,7 @@ from typing import Any, Iterable
 
 import pandas as pd
 
+from . import __version__
 from .observation_storage import load_observations
 from .observations import ResearchObservation
 from .state_schema import (
@@ -1171,6 +1172,7 @@ def save_state_package(
 
     snapshot: dict[str, Any] = {
         "generated_at": utc_iso(),
+        "sugar_version": __version__,
         "name": stem,
         "observations": len(observations),
         "assessments": len(assessments),

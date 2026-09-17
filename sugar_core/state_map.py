@@ -9,6 +9,7 @@ from typing import Iterable
 import folium
 from folium.plugins import HeatMap, MarkerCluster
 
+from . import __version__
 from .observations import ResearchObservation
 from .state_location import ResolvedLocation, default_state_geocode_cache, resolve_observation_locations
 from .state_proximity import (
@@ -442,6 +443,7 @@ def create_state_map(
         metadata,
         json.dumps(
             {
+                "sugar_version": __version__,
                 "verified_only": verified_only,
                 "location_resolution_enabled": resolve_missing_locations,
                 "minimum_location_confidence": minimum_location_confidence,

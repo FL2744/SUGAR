@@ -12,6 +12,7 @@ from typing import Any, Callable, Iterable
 
 import requests
 
+from . import __version__
 from .collector_registry import CollectorRequest, collect_registered_source, get_collector
 from .models import PostRecord, merge_record
 from .storage import save_records
@@ -741,6 +742,7 @@ def run_harvest(
         task_counts = store.task_counts()
         manifest = {
             "generated_at": utc_iso(),
+            "sugar_version": __version__,
             "operation": "harvest",
             "sources": list(harvest_config.sources),
             "terms": list(harvest_config.terms),

@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from sugar_core import __version__
 from sugar_core.models import PostRecord
 from sugar_core.observation_storage import load_observations, observations_to_frame, save_observations
 from sugar_core.observations import EvidenceReference, ResearchObservation, observation_from_post
@@ -176,6 +177,7 @@ def test_observation_storage_round_trip(tmp_path):
 
     metadata = json.loads(target.with_suffix(".metadata.json").read_text(encoding="utf-8"))
     assert metadata["dataset_type"] == "research_observations"
+    assert metadata["sugar_version"] == __version__
     assert metadata["project"] == "test"
 
 

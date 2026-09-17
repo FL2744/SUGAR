@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from sugar_core import __version__
 from sugar_core.observations import EvidenceReference, ResearchObservation
 from sugar_core.state_schema import (
     AnalyticClaim,
@@ -196,6 +197,8 @@ def test_package_emits_state_outputs_and_verified_geojson(tmp_path: Path):
         assert Path(output).is_file()
     audit = json.loads((tmp_path / "kyrgyzstan.audit.json").read_text(encoding="utf-8"))
     assert audit["status"] == "pass"
+    snapshot = json.loads((tmp_path / "kyrgyzstan.snapshot.json").read_text(encoding="utf-8"))
+    assert snapshot["sugar_version"] == __version__
     geojson = json.loads((tmp_path / "kyrgyzstan.map.geojson").read_text(encoding="utf-8"))
     assert {feature["properties"]["layer"] for feature in geojson["features"]} == {"prc_observation", "us_presence"}
 

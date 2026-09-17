@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import requests
 
+from sugar_core import __version__
 from sugar_core.harvest import (
     HarvestConfig,
     HarvestStore,
@@ -249,6 +250,7 @@ def test_full_harvest_scales_to_five_thousand_and_resumes_without_recollection(
     with jsonl.open("r", encoding="utf-8") as stream:
         assert sum(1 for _ in stream) == 5000
     manifest = json.loads((tmp_path / "scale5000.harvest.json").read_text(encoding="utf-8"))
+    assert manifest["sugar_version"] == __version__
     assert manifest["unique_records"] == 5000
     assert manifest["task_counts"] == {"completed": 20}
 

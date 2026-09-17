@@ -9,6 +9,7 @@ import pandas as pd
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from . import __version__
 from .models import PostRecord
 from .utils import atomic_path, atomic_write_text, safe_cell, utc_iso
 
@@ -121,6 +122,7 @@ def save_records(
     metadata_path = csv_path.with_suffix(".metadata.json")
     payload = {
         "generated_at": utc_iso(),
+        "sugar_version": __version__,
         "records": len(df),
         "csv": csv_path.name,
         "xlsx": xlsx_path.name,

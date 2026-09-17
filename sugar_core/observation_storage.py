@@ -9,6 +9,7 @@ import pandas as pd
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from . import __version__
 from .observations import OBSERVATION_SCHEMA_VERSION, ResearchObservation
 from .utils import atomic_path, atomic_write_text, safe_cell, utc_iso
 
@@ -141,6 +142,7 @@ def save_observations(
     metadata_path = csv_path.with_suffix(".metadata.json")
     payload = {
         "generated_at": utc_iso(),
+        "sugar_version": __version__,
         "records": len(frame),
         "dataset_type": "research_observations",
         "observation_schema_version": OBSERVATION_SCHEMA_VERSION,

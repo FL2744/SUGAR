@@ -2,6 +2,7 @@ import json
 
 import pandas as pd
 
+from sugar_core import __version__
 from sugar_core.collectors import normalize_engagement
 from sugar_core.models import PostRecord, merge_record
 from sugar_core.reporting import _prepare
@@ -57,6 +58,8 @@ def test_csv_and_xlsx_loaders_preserve_numeric_looking_native_ids(tmp_path):
         query="q",
     )
     save_records([record], tmp_path / "posts.csv")
+    metadata = json.loads((tmp_path / "posts.metadata.json").read_text(encoding="utf-8"))
+    assert metadata["sugar_version"] == __version__
 
     for path in (tmp_path / "posts.csv", tmp_path / "posts.xlsx"):
         loaded = load_results(path)
