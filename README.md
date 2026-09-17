@@ -8,6 +8,8 @@ SUGAR is a cross-platform public-source research system for collecting social-me
 
 Current package version: **1.2.0**.
 
+License: **Apache License 2.0**. Copyright 2026 Alejandro Grenier and contributors.
+
 ## What SUGAR does
 
 SUGAR provides one shared Python research core with native macOS and Windows clients. The supported pipeline is:
@@ -48,7 +50,7 @@ See [`SUGAR-Windows/README.md`](SUGAR-Windows/README.md) for development, packag
 
 ## Python installation
 
-Python **3.11–3.13** is supported.
+Python **3.11–3.14** is supported.
 
 ```bash
 python3 -m venv .venv
@@ -194,6 +196,16 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-CI runs the Python suite on Ubuntu, macOS, and Windows with Python 3.11–3.13 and separately builds/smoke-tests the packaged macOS and Windows applications. Schema, collector, bridge, workspace, or methodology changes should include regression tests and documentation in the same pull request.
+CI runs the Python suite on Ubuntu, macOS, and Windows with Python 3.11–3.14 and separately builds/smoke-tests the packaged macOS and Windows applications. The Windows package is built under Python 3.14. The macOS package deliberately embeds Python 3.12 so the frozen application can retain its macOS 13 Ventura deployment floor; that packaging choice does not limit normal SUGAR installs from using Python 3.14. Schema, collector, bridge, workspace, or methodology changes should include regression tests and documentation in the same pull request.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), and [`CHANGELOG.md`](CHANGELOG.md).
+
+## License and institutional status
+
+SUGAR source code and repository documentation are released under the [Apache License 2.0](LICENSE), except for third-party material that carries its own license. See [`NOTICE`](NOTICE) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for attribution and dependency-license information.
+
+SUGAR was developed in connection with Virginia Tech Diplomacy Lab coursework and research. Copyright for this release is identified as **Alejandro Grenier and contributors**; Virginia Tech is not identified as the licensor or copyright holder. References to Virginia Tech or the U.S. Department of State describe project context and do not make SUGAR an official product, endorsement, security authorization, or government publication.
+
+Apache-2.0 permits use, modification, and redistribution, including by government, academic, nonprofit, and commercial users, subject to the license terms. The license does not grant rights to third-party platform content, collected research data, or third-party trademarks.
+
+As provided by Section 6 of Apache-2.0, the license does not grant trademark rights in the SUGAR name, logo, or other project marks beyond reasonable use needed to describe the origin of the software and reproduce required notices.

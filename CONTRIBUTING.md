@@ -15,7 +15,7 @@ New work should target `sugar_core/`. The historical `SUGAR.py` and `sugar_analy
 
 ## Development setup
 
-Python 3.11–3.13 is supported.
+Python 3.11–3.14 is supported.
 
 ```bash
 python3 -m venv .venv
@@ -53,7 +53,7 @@ Run at minimum:
 python -m pytest
 ```
 
-CI additionally tests the core on Ubuntu, macOS, and Windows across Python 3.11–3.13 and builds/smoke-tests the packaged desktop applications.
+CI additionally tests the core on Ubuntu, macOS, and Windows across Python 3.11–3.14 and builds/smoke-tests the packaged desktop applications. Windows packaging is validated under Python 3.14; macOS packaging intentionally embeds Python 3.12 to preserve the macOS 13 deployment target.
 
 Changes to the following require regression tests in the same pull request:
 
@@ -122,3 +122,11 @@ Use precise terminology. In particular, distinguish collection coverage from abs
 ## Credentials and test data
 
 Never commit real API keys, passwords, session cookies, bearer tokens, private research notes, or other secrets. Fixtures should use synthetic/non-sensitive values. If a secret is accidentally committed, treat it as compromised even if the commit is later reverted; follow `SECURITY.md`.
+
+## Contribution licensing
+
+SUGAR is distributed under the Apache License, Version 2.0. Unless you explicitly state otherwise when submitting a contribution, intentionally submitted code, documentation, tests, or other material is provided under the same Apache-2.0 terms in accordance with Section 5 of the license.
+
+Contributors retain copyright in their original contributions. The project-level notice is `Copyright 2026 Alejandro Grenier and contributors`; it is not an assignment of every contributor's copyright to the maintainer.
+
+Do not contribute material that you do not have the right to license under these terms. Third-party code, data, images, fonts, models, or other assets must have compatible licensing and must carry the required notices or attribution.

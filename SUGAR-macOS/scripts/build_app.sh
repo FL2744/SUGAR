@@ -24,6 +24,12 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$HERE/.build/release/SUGARMac" "$APP/Contents/MacOS/SUGAR"
 cp "$BUILD/backend/sugar-bridge" "$APP/Contents/Resources/sugar-bridge"
 cp "$HERE/Resources/Info.plist" "$APP/Contents/Info.plist"
+cp "$ROOT/LICENSE" "$APP/Contents/Resources/LICENSE"
+cp "$ROOT/NOTICE" "$APP/Contents/Resources/NOTICE"
+cp "$ROOT/THIRD_PARTY_NOTICES.md" "$APP/Contents/Resources/THIRD_PARTY_NOTICES.md"
+"$BUILD/backend-venv/bin/python" "$ROOT/tools/collect_third_party_licenses.py" \
+  --output "$APP/Contents/Resources/licenses" \
+  --extra macos
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
 
 if [[ -f "$ROOT/sugar-logo.png" ]]; then

@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
       - name: Install quality and audit tooling
         run: |
@@ -28,13 +28,32 @@ jobs:
       - name: Verify installed dependency consistency
         run: python -m pip check
       - name: Correctness lint
-        run: ruff check sugar_core sugar_bridge.py tests
+        run: ruff check sugar_core sugar_bridge.py tools tests
       - name: Test with branch coverage
         run: python -m pytest --cov=sugar_core --cov-branch --cov-report=term-missing
       - name: Audit installed dependencies
         run: pip-audit --progress-spinner off
       - name: Build source and wheel distributions
         run: python -m build
+      - name: Verify distribution licensing metadata
+        shell: bash
+        run: |
+          python - <<'PY'
+          import email
+          import glob
+          import zipfile
+
+          wheels = glob.glob("dist/*.whl")
+          assert len(wheels) == 1, wheels
+          with zipfile.ZipFile(wheels[0]) as archive:
+              metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
+              metadata = email.message_from_bytes(archive.read(metadata_name))
+              assert metadata.get("License-Expression") == "Apache-2.0", metadata.items()
+              legal = [name for name in archive.namelist() if ".dist-info/licenses/" in name]
+              assert any(name.endswith("/LICENSE") for name in legal), legal
+              assert any(name.endswith("/NOTICE") for name in legal), legal
+              assert any(name.endswith("/THIRD_PARTY_NOTICES.md") for name in legal), legal
+          PY
       - name: Smoke-test the built wheel in a clean environment
         shell: bash
         run: |
