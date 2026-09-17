@@ -14,6 +14,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from . import __version__
 from .storage import load_results
 from .utils import atomic_path
 
@@ -140,6 +141,7 @@ def _docx(work: pd.DataFrame, metrics: dict, charts: dict[str, Path], source: st
     doc.styles["Normal"].font.name = "Arial"
     doc.styles["Normal"].font.size = Pt(10)
     doc.add_heading("SUGAR Collection Analysis", 0)
+    doc.add_paragraph(f"SUGAR version {__version__}.")
     doc.add_paragraph(f"Deterministic descriptive review of {metrics['records']:,} collected records.")
     table = doc.add_table(rows=1, cols=2)
     table.style = "Table Grid"
@@ -185,7 +187,11 @@ def _pdf(work: pd.DataFrame, metrics: dict, charts: dict[str, Path], source: str
     from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     styles = getSampleStyleSheet()
-    story = [Paragraph("SUGAR Collection Analysis", styles["Title"]), Spacer(1, 8)]
+    story = [
+        Paragraph("SUGAR Collection Analysis", styles["Title"]),
+        Paragraph(f"SUGAR version {__version__}.", styles["BodyText"]),
+        Spacer(1, 8),
+    ]
     data = [
         ["Measure", "Value"],
         ["Records", f"{metrics['records']:,}"],

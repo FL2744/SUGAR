@@ -6,6 +6,7 @@ import pytest
 
 import sugar_core.reporting as reporting
 import sugar_core.state_review as state_review
+from sugar_core import __version__
 from sugar_core.observations import EvidenceReference, ResearchObservation
 from sugar_core.state_schema import StateAssessment
 
@@ -48,6 +49,7 @@ def test_analysis_reports_are_valid_and_publish_complete_files(tmp_path: Path):
     assert pdf.is_file()
     with zipfile.ZipFile(docx) as archive:
         assert archive.testzip() is None
+        assert __version__.encode() in archive.read("word/document.xml")
     assert pdf.read_bytes().startswith(b"%PDF-")
     assert pdf.read_bytes().rstrip().endswith(b"%%EOF")
 
