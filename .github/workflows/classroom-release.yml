@@ -100,7 +100,7 @@ jobs:
     needs: [windows-x64, macos-apple-silicon, macos-intel]
     env:
       GH_TOKEN: ${{ github.token }}
-      TAG: v1.2.2-classroom.1
+      TAG: v1.2.1-classroom.2
       TARGET_SHA: ${{ github.sha }}
     steps:
       - uses: actions/download-artifact@v7
@@ -117,9 +117,9 @@ jobs:
       - name: Write release notes
         run: |
           cat > RELEASE_NOTES.md <<'EOF'
-          # SUGAR v1.2.2 Classroom Release
+          # SUGAR v1.2.1 Classroom Release — ARC Hotfix
 
-          ARC classroom onboarding hotfix for September 17, 2026.
+          Classroom ARC onboarding update for September 17, 2026.
 
           ## Virginia Tech ARC quick setup
 
@@ -145,5 +145,5 @@ jobs:
           gh release create "$TAG" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$TARGET_SHA" \
-            --title "SUGAR v1.2.2 Classroom Release" \
+            --title "SUGAR v1.2.1 Classroom Release — ARC Hotfix" \
             --notes-file RELEASE_NOTES.md
