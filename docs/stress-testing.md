@@ -72,6 +72,21 @@ Initial synthetic probes showed the following approximate behavior:
 These figures are a starting point, not acceptance thresholds. The map result is intentionally
 large because the current implementation embeds a Folium marker and popup for each point.
 
+## Repeatable scale matrix
+
+Run storage probes in isolated directories across the planned scale range. The default matrix is
+1,000, 10,000, 50,000, and 100,000 records; larger runs such as 1,000,000 are supported when the
+host has enough memory and disk:
+
+```powershell
+.\\.venv\\Scripts\\python.exe tools\\stress_matrix.py --scales 1000,10000,50000,100000 --output-dir .\\stress-matrix
+```
+
+Add `--include-export` or `--include-map` only after the storage-only matrix is stable. Each scale
+gets its own `stress-report.json`, and the root gets `stress-matrix-report.json`. Compare runs on
+the same host and Python environment; these measurements are qualification inputs, not universal
+performance guarantees.
+
 ## Test matrix
 
 ### 1. Offline correctness and scale
