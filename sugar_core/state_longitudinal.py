@@ -5,7 +5,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .utils import utc_iso
+from .utils import atomic_write_text, utc_iso
 
 LIKELIHOOD_ORDER = {
     "very_unlikely": 1,
@@ -216,5 +216,5 @@ def save_longitudinal_comparison(
         payload = compare_intelligence_packets(previous, current)
     else:
         raise ValueError("kind must be synthesis or packet")
-    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(target, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     return str(target)

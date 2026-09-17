@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 import pandas as pd
 
 from .observations import ResearchObservation, SpatialMatch
-from .utils import safe_cell, utc_iso
+from .utils import atomic_path, atomic_write_text, safe_cell, utc_iso
 
 EARTH_RADIUS_KM = 6371.0088
 DEFAULT_DISTANCE_BANDS_KM = (5.0, 25.0, 100.0, 250.0)
@@ -297,14 +297,16 @@ def save_spatial_matches(frame: pd.DataFrame, output_file: str | Path) -> list[s
     for column in export.columns:
         if column not in {"distance_km", "same_city", "same_country", "reference_latitude", "reference_longitude"}:
             export[column] = export[column].map(lambda value: safe_cell(value, formula_safe=True))
-    export.to_csv(csv_path, index=False, encoding="utf-8-sig")
-    with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
-        export.to_excel(writer, index=False, sheet_name="spatial_matches")
+    with atomic_path(csv_path) as temporary:
+        export.to_csv(temporary, index=False, encoding="utf-8-sig")
+    with atomic_path(xlsx_path) as temporary:
+        with pd.ExcelWriter(temporary, engine="openpyxl") as writer:
+            export.to_excel(writer, index=False, sheet_name="spatial_matches")
     return [str(csv_path.resolve()), str(xlsx_path.resolve())]
 
 
 def save_spatial_summary(summary: dict[str, Any], output_file: str | Path) -> str:
     path = Path(output_file)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(path, json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
     return str(path.resolve())

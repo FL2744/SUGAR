@@ -19,6 +19,7 @@ from .state_proximity import (
     proximity_note,
 )
 from .state_schema import StateAssessment, USPresenceSite
+from .utils import atomic_write_text
 
 _PRECISION_LABELS = {
     "exact": "Exact/native coordinates",
@@ -436,7 +437,8 @@ def create_state_map(
 
     map_obj.save(str(target))
     metadata = target.with_suffix(target.suffix + ".metadata.json")
-    metadata.write_text(
+    atomic_write_text(
+        metadata,
         json.dumps(
             {
                 "verified_only": verified_only,
@@ -476,6 +478,5 @@ def create_state_map(
             indent=2,
             sort_keys=True,
         ),
-        encoding="utf-8",
     )
     return str(target)

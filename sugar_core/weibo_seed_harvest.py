@@ -12,7 +12,7 @@ from typing import Any, Callable, Iterable
 
 from .models import PostRecord, merge_record
 from .storage import save_records
-from .utils import safe_artifact_stem, utc_iso
+from .utils import atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
 from .weibo_investigation import WeiboInvestigation, investigate_weibo_seed, parse_weibo_seed
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
@@ -344,9 +344,10 @@ def _retryable(exc: Exception) -> bool:
 
 
 def _write_jsonl(records: Iterable[PostRecord], path: Path) -> str:
-    with path.open("w", encoding="utf-8") as stream:
-        for record in records:
-            stream.write(json.dumps(record.export_dict(), ensure_ascii=False, sort_keys=True) + "\n")
+    with atomic_path(path) as temporary:
+        with temporary.open("w", encoding="utf-8") as stream:
+            for record in records:
+                stream.write(json.dumps(record.export_dict(), ensure_ascii=False, sort_keys=True) + "\n")
     return str(path.resolve())
 
 
@@ -365,15 +366,16 @@ def _write_seed_status(rows: list[dict[str, Any]], path: Path) -> str:
         "author_posts_retrieved",
         "surface_status",
     ]
-    with path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        for row in rows:
-            payload = dict(row)
-            payload["surface_status"] = json.dumps(
-                payload.get("surface_status") or {}, ensure_ascii=False, sort_keys=True
-            )
-            writer.writerow(payload)
+    with atomic_path(path) as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fields)
+            writer.writeheader()
+            for row in rows:
+                payload = dict(row)
+                payload["surface_status"] = json.dumps(
+                    payload.get("surface_status") or {}, ensure_ascii=False, sort_keys=True
+                )
+                writer.writerow(payload)
     return str(path.resolve())
 
 
@@ -500,7 +502,7 @@ def run_weibo_seed_harvest(
             },
             "methodology": "Known public seed expansion with durable per-seed checkpoints. Gated optional surfaces are recorded independently; no login automation or access-control bypass.",
         }
-        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+        atomic_write_text(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
         _write_seed_status(seeds, status_path)
         outputs = [str(checkpoint.resolve()), str(manifest_path.resolve()), str(status_path.resolve())]
         if records:

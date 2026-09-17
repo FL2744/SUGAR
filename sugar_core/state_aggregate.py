@@ -8,7 +8,7 @@ from typing import Any, Iterable
 
 from .observations import ResearchObservation
 from .state_schema import StateAssessment
-from .utils import safe_artifact_stem, utc_iso
+from .utils import atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
 
 
 def _sorted_counts(values: Iterable[str]) -> list[dict[str, Any]]:
@@ -119,7 +119,7 @@ def save_state_rollups(
     json_path = out_dir / f"{stem}.rollups.json"
     country_path = out_dir / f"{stem}.countries.csv"
     place_path = out_dir / f"{stem}.places.csv"
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(json_path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
     flat_fields = [
         "country",
@@ -142,18 +142,19 @@ def save_state_rollups(
         "review_states",
     ]
     for path, rows in ((country_path, payload["countries"]), (place_path, payload["places"])):
-        with path.open("w", encoding="utf-8-sig", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=flat_fields)
-            writer.writeheader()
-            for row in rows:
-                raw = dict(row)
-                for key in (
-                    "program_domains",
-                    "strategic_audiences",
-                    "narrative_tags",
-                    "observation_types",
-                    "review_states",
-                ):
-                    raw[key] = json.dumps(raw[key], ensure_ascii=False, sort_keys=True)
-                writer.writerow(raw)
+        with atomic_path(path) as temporary:
+            with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=flat_fields)
+                writer.writeheader()
+                for row in rows:
+                    raw = dict(row)
+                    for key in (
+                        "program_domains",
+                        "strategic_audiences",
+                        "narrative_tags",
+                        "observation_types",
+                        "review_states",
+                    ):
+                        raw[key] = json.dumps(raw[key], ensure_ascii=False, sort_keys=True)
+                    writer.writerow(raw)
     return [str(json_path), str(country_path), str(place_path)]

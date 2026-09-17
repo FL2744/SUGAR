@@ -12,7 +12,7 @@ from typing import Any, Callable, Iterable
 
 from .harvest import run_harvest
 from .models import PostRecord
-from .utils import safe_artifact_stem, utc_iso
+from .utils import atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
 from .weibo_investigation import WeiboInvestigation, investigate_weibo_seed, save_weibo_investigation
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
@@ -339,36 +339,37 @@ def write_human_audit_sample(records: list[PostRecord], path: str | Path, *, siz
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     sample = _deterministic_audit_sample(records, size)
-    with path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(
-            stream,
-            fieldnames=[
-                "record_key",
-                "query_matches",
-                "published_at",
-                "author",
-                "text",
-                "url",
-                "human_relevant",
-                "human_provenance_ok",
-                "human_notes",
-            ],
-        )
-        writer.writeheader()
-        for row in sample:
-            writer.writerow(
-                {
-                    "record_key": row.record_key,
-                    "query_matches": " | ".join(sorted(_record_queries(row))),
-                    "published_at": row.published_at,
-                    "author": row.author_name or row.author_handle,
-                    "text": row.original_text,
-                    "url": row.canonical_url,
-                    "human_relevant": "",
-                    "human_provenance_ok": "",
-                    "human_notes": "",
-                }
+    with atomic_path(path) as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(
+                stream,
+                fieldnames=[
+                    "record_key",
+                    "query_matches",
+                    "published_at",
+                    "author",
+                    "text",
+                    "url",
+                    "human_relevant",
+                    "human_provenance_ok",
+                    "human_notes",
+                ],
             )
+            writer.writeheader()
+            for row in sample:
+                writer.writerow(
+                    {
+                        "record_key": row.record_key,
+                        "query_matches": " | ".join(sorted(_record_queries(row))),
+                        "published_at": row.published_at,
+                        "author": row.author_name or row.author_handle,
+                        "text": row.original_text,
+                        "url": row.canonical_url,
+                        "human_relevant": "",
+                        "human_provenance_ok": "",
+                        "human_notes": "",
+                    }
+                )
     return str(path.resolve())
 
 
@@ -715,8 +716,8 @@ def run_weibo_qualification(
 
     json_path = out_dir / f"{name}.qualification.json"
     md_path = out_dir / f"{name}.qualification.md"
-    json_path.write_text(json.dumps(asdict(result), ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    md_path.write_text(_markdown_report(result), encoding="utf-8")
+    atomic_write_text(json_path, json.dumps(asdict(result), ensure_ascii=False, indent=2, sort_keys=True))
+    atomic_write_text(md_path, _markdown_report(result))
     outputs = [
         str(json_path.resolve()),
         str(md_path.resolve()),
@@ -724,6 +725,6 @@ def run_weibo_qualification(
         *[str(path.resolve()) for path in replicate_checkpoints],
     ]
     result.outputs = outputs
-    json_path.write_text(json.dumps(asdict(result), ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(json_path, json.dumps(asdict(result), ensure_ascii=False, indent=2, sort_keys=True))
     _notify(progress, "qualification_complete", status=status, outputs=outputs)
     return outputs

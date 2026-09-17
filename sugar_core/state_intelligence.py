@@ -11,7 +11,7 @@ from typing import Any, Iterable
 
 from .observations import ResearchObservation
 from .state_schema import StateAssessment
-from .utils import utc_iso
+from .utils import atomic_write_text, utc_iso
 
 ANALYTIC_INTELLIGENCE_VERSION = "1.0"
 OFFLINE_TYPES = {"institution", "program", "event", "partnership"}
@@ -772,7 +772,8 @@ def save_intelligence_packet(
 ) -> str:
     target = Path(output_file).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
+    atomic_write_text(
+        target,
         json.dumps(
             build_intelligence_packet(
                 observations,
@@ -785,6 +786,5 @@ def save_intelligence_packet(
             indent=2,
             sort_keys=True,
         ),
-        encoding="utf-8",
     )
     return str(target)

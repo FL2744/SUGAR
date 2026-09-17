@@ -11,7 +11,7 @@ from .state_entities import EntityRegistry
 from .state_freshness import build_freshness_report
 from .state_schema import StateAssessment, USPresenceSite
 from .state_workflow import build_review_queue
-from .utils import safe_artifact_stem, utc_iso
+from .utils import atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
 
 
 def _clean(value: Any) -> str:
@@ -209,10 +209,11 @@ def save_gap_report(
     stem = safe_artifact_stem(name, "state_research")
     json_path = out_dir / f"{stem}.gaps.json"
     csv_path = out_dir / f"{stem}.gaps.csv"
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(json_path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     fields = ["priority", "category", "subject_id", "subject", "country", "city", "reason", "next_action"]
-    with csv_path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(payload["gaps"])
+    with atomic_path(csv_path) as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(payload["gaps"])
     return [str(json_path), str(csv_path)]

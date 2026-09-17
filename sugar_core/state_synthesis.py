@@ -10,7 +10,7 @@ from .llm import LLMConfig, cached_chat, create_client, parse_json_object
 from .observations import ResearchObservation
 from .state_intelligence import build_intelligence_packet
 from .state_schema import StateAssessment
-from .utils import JsonCache, safe_artifact_stem, stable_hash, utc_iso
+from .utils import JsonCache, atomic_path, atomic_write_text, safe_artifact_stem, stable_hash, utc_iso
 
 SYNTHESIS_VERSION = "1.0"
 LIKELIHOODS = {
@@ -644,14 +644,16 @@ def save_agentic_synthesis(
     markdown_path = out_dir / f"{stem}.synthesis.md"
     agents_path = out_dir / f"{stem}.agents.jsonl"
     manifest_path = out_dir / f"{stem}.manifest.json"
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    markdown_path.write_text(render_synthesis_markdown(payload), encoding="utf-8")
-    with agents_path.open("w", encoding="utf-8") as stream:
-        for agent in payload.get("agents") or []:
-            stream.write(json.dumps(agent, ensure_ascii=False, sort_keys=True) + "\n")
-        if payload.get("red_team"):
-            stream.write(json.dumps(payload["red_team"], ensure_ascii=False, sort_keys=True) + "\n")
-    manifest_path.write_text(
+    atomic_write_text(json_path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+    atomic_write_text(markdown_path, render_synthesis_markdown(payload))
+    with atomic_path(agents_path) as temporary:
+        with temporary.open("w", encoding="utf-8") as stream:
+            for agent in payload.get("agents") or []:
+                stream.write(json.dumps(agent, ensure_ascii=False, sort_keys=True) + "\n")
+            if payload.get("red_team"):
+                stream.write(json.dumps(payload["red_team"], ensure_ascii=False, sort_keys=True) + "\n")
+    atomic_write_text(
+        manifest_path,
         json.dumps(
             {
                 "generated_at": payload.get("generated_at"),
@@ -667,6 +669,5 @@ def save_agentic_synthesis(
             indent=2,
             sort_keys=True,
         ),
-        encoding="utf-8",
     )
     return [str(json_path), str(markdown_path), str(agents_path), str(manifest_path)]

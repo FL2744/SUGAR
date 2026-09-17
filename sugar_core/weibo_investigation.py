@@ -13,7 +13,7 @@ import requests
 
 from .models import PostRecord, merge_record
 from .storage import save_records
-from .utils import normalize_whitespace, safe_artifact_stem, utc_iso
+from .utils import atomic_write_text, normalize_whitespace, safe_artifact_stem, utc_iso
 from .weibo import (
     WEIBO_MOBILE_BASE_URL,
     WEIBO_SEARCH_ENDPOINT,
@@ -561,9 +561,9 @@ def save_weibo_investigation(
         },
     )
     insights_path = out / f"{name}.insights.json"
-    insights_path.write_text(json.dumps(investigation.insights, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(insights_path, json.dumps(investigation.insights, ensure_ascii=False, indent=2))
     brief_path = out / f"{name}.brief.md"
-    brief_path.write_text(render_weibo_brief(investigation), encoding="utf-8")
+    atomic_write_text(brief_path, render_weibo_brief(investigation))
     return [
         str(csv_path),
         str(csv_path.with_suffix(".xlsx")),

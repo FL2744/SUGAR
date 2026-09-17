@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 from .observations import ResearchObservation
 from .state_schema import StateAssessment
-from .utils import utc_iso
+from .utils import atomic_write_text, utc_iso
 
 
 def _parse_time(value: str) -> datetime | None:
@@ -102,10 +102,10 @@ def save_freshness_report(
 ) -> str:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
+    atomic_write_text(
+        target,
         json.dumps(
             build_freshness_report(observations, assessments, **kwargs), ensure_ascii=False, indent=2, sort_keys=True
         ),
-        encoding="utf-8",
     )
     return str(target.resolve())

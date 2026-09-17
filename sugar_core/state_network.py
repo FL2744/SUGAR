@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 from .observations import ResearchObservation
 from .state_schema import StateAssessment, USPresenceSite, stable_state_id
-from .utils import safe_artifact_stem
+from .utils import atomic_path, atomic_write_text, safe_artifact_stem
 
 
 def _clean(value: Any) -> str:
@@ -162,15 +162,18 @@ def save_state_network(
 
     node_fields = sorted({key for row in nodes for key in row}) or ["node_id", "node_type", "label"]
     edge_fields = sorted({key for row in edges for key in row}) or ["edge_id", "source", "target", "relationship"]
-    with nodes_path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=node_fields, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(nodes)
-    with edges_path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=edge_fields, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(edges)
-    json_path.write_text(
+    with atomic_path(nodes_path) as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=node_fields, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(nodes)
+    with atomic_path(edges_path) as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=edge_fields, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(edges)
+    atomic_write_text(
+        json_path,
         json.dumps(
             {
                 "verified_only": verified_only,
@@ -182,6 +185,5 @@ def save_state_network(
             indent=2,
             sort_keys=True,
         ),
-        encoding="utf-8",
     )
     return [str(nodes_path), str(edges_path), str(json_path)]

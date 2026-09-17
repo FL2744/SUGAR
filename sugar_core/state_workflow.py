@@ -18,7 +18,7 @@ from .state_schema import (
     USPresenceSite,
     USServiceSourceAttribution,
 )
-from .utils import safe_artifact_stem, safe_cell, utc_iso
+from .utils import atomic_path, atomic_write_text, safe_artifact_stem, safe_cell, utc_iso
 
 DOMAIN_TO_US_SERVICES = {
     "higher_education": {"educationusa", "study_in_the_us", "higher_education"},
@@ -1018,9 +1018,10 @@ def state_geojson(
 def save_state_assessments(assessments: Iterable[StateAssessment], path: str | Path) -> str:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("w", encoding="utf-8") as stream:
-        for assessment in assessments:
-            stream.write(json.dumps(asdict(assessment), ensure_ascii=False, sort_keys=True) + "\n")
+    with atomic_path(target) as temporary:
+        with temporary.open("w", encoding="utf-8") as stream:
+            for assessment in assessments:
+                stream.write(json.dumps(asdict(assessment), ensure_ascii=False, sort_keys=True) + "\n")
     return str(target.resolve())
 
 
@@ -1144,20 +1145,23 @@ def save_state_package(
 
     save_state_assessments(assessments, jsonl_path)
     frame = _assessment_frame(assessments)
-    frame.to_csv(csv_path, index=False, encoding="utf-8-sig", quoting=csv.QUOTE_ALL, lineterminator="\n")
-    with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
-        frame.to_excel(writer, index=False, sheet_name="state_assessments")
-        pd.DataFrame(build_review_queue(observations, assessments)).to_excel(
-            writer, index=False, sheet_name="review_queue"
-        )
-        pd.DataFrame([asdict(site) for site in sites]).to_excel(writer, index=False, sheet_name="us_presence")
+    with atomic_path(csv_path) as temporary:
+        frame.to_csv(temporary, index=False, encoding="utf-8-sig", quoting=csv.QUOTE_ALL, lineterminator="\n")
+    with atomic_path(xlsx_path) as temporary:
+        with pd.ExcelWriter(temporary, engine="openpyxl") as writer:
+            frame.to_excel(writer, index=False, sheet_name="state_assessments")
+            pd.DataFrame(build_review_queue(observations, assessments)).to_excel(
+                writer, index=False, sheet_name="review_queue"
+            )
+            pd.DataFrame([asdict(site) for site in sites]).to_excel(writer, index=False, sheet_name="us_presence")
 
     audit = audit_state_records(observations, assessments)
-    audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    pd.DataFrame(build_review_queue(observations, assessments)).to_csv(queue_path, index=False, encoding="utf-8-sig")
-    brief_path.write_text(render_state_bluf(observations, assessments, title=title), encoding="utf-8")
-    geojson_path.write_text(
-        json.dumps(state_geojson(observations, assessments, sites), ensure_ascii=False, indent=2), encoding="utf-8"
+    atomic_write_text(audit_path, json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True))
+    with atomic_path(queue_path) as temporary:
+        pd.DataFrame(build_review_queue(observations, assessments)).to_csv(temporary, index=False, encoding="utf-8-sig")
+    atomic_write_text(brief_path, render_state_bluf(observations, assessments, title=title))
+    atomic_write_text(
+        geojson_path, json.dumps(state_geojson(observations, assessments, sites), ensure_ascii=False, indent=2)
     )
 
     snapshot: dict[str, Any] = {
@@ -1172,7 +1176,7 @@ def save_state_package(
     }
     if previous_assessments is not None:
         snapshot["change_detection"] = compare_state_snapshots(previous_assessments, assessments)
-    snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(snapshot_path, json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True))
 
     return [
         str(jsonl_path),

@@ -19,7 +19,7 @@ from .spatial import (
     save_spatial_summary,
 )
 from .storage import save_records
-from .utils import JsonCache, safe_artifact_stem
+from .utils import JsonCache, atomic_write_text, safe_artifact_stem
 from .workspace_runtime import (
     choose_output_directory,
     register_workspace_outputs,
@@ -205,7 +205,8 @@ def run_harvest(
                 "Use a new harvest --name instead of mixing anonymous and authenticated coverage."
             )
     else:
-        marker.write_text(
+        atomic_write_text(
+            marker,
             json.dumps(
                 {
                     "access_modes": modes,
@@ -215,7 +216,6 @@ def run_harvest(
                 indent=2,
                 sort_keys=True,
             ),
-            encoding="utf-8",
         )
 
     outputs = _run_harvest(effective, secrets, progress=progress)
@@ -228,7 +228,7 @@ def run_harvest(
         payload["access_modes"] = modes
         if workspace is not None:
             payload["workspace_project_id"] = workspace.manifest.project_id
-        manifest.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+        atomic_write_text(manifest, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     if str(marker.resolve()) not in outputs:
         outputs.append(str(marker.resolve()))
     register_workspace_outputs(workspace, outputs, operation="harvest", kind="harvest")

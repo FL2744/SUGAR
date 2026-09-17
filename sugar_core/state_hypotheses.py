@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .utils import safe_artifact_stem, stable_hash, utc_iso
+from .utils import atomic_path, atomic_write_text, safe_artifact_stem, stable_hash, utc_iso
 
 
 def _clean(value: Any) -> str:
@@ -174,7 +174,7 @@ def save_hypothesis_matrix(
     json_path = out_dir / f"{stem}.hypotheses.json"
     csv_path = out_dir / f"{stem}.hypotheses.csv"
     markdown_path = out_dir / f"{stem}.hypotheses.md"
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(json_path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     hypotheses = payload.get("hypotheses") or []
     fields = [
         "hypothesis_id",
@@ -185,13 +185,14 @@ def save_hypothesis_matrix(
         "discriminators",
         "collection_needed",
     ]
-    with csv_path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        for row in hypotheses:
-            value = dict(row)
-            for key in ("supporting_refs", "contradicting_refs", "discriminators", "collection_needed"):
-                value[key] = json.dumps(value.get(key) or [], ensure_ascii=False)
-            writer.writerow({key: value.get(key, "") for key in fields})
-    markdown_path.write_text(render_hypothesis_markdown(payload), encoding="utf-8")
+    with atomic_path(csv_path) as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fields)
+            writer.writeheader()
+            for row in hypotheses:
+                value = dict(row)
+                for key in ("supporting_refs", "contradicting_refs", "discriminators", "collection_needed"):
+                    value[key] = json.dumps(value.get(key) or [], ensure_ascii=False)
+                writer.writerow({key: value.get(key, "") for key in fields})
+    atomic_write_text(markdown_path, render_hypothesis_markdown(payload))
     return [str(json_path), str(csv_path), str(markdown_path)]

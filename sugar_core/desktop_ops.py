@@ -35,7 +35,7 @@ from .state_workflow import (
     save_state_assessments,
     write_us_presence_template,
 )
-from .utils import safe_artifact_stem
+from .utils import atomic_write_text, safe_artifact_stem
 from .workspace import SugarWorkspace
 from .workspace_runtime import (
     latest_workspace_artifact_path,
@@ -170,7 +170,7 @@ def _llm_config(config: dict[str, Any], secrets: dict[str, str]) -> LLMConfig:
 
 def _write_json(path: Path, payload: dict[str, Any]) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     return str(path.resolve())
 
 

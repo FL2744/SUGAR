@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlparse
 
+from .utils import atomic_write_text
+
 SOURCE_AUTHORITY_TYPES = {
     "official_authority",
     "official_operator",
@@ -209,10 +211,7 @@ def save_source_conflicts(conflicts: Iterable[SourceConflict], path: str | Path)
     target = Path(path).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     payload = source_conflicts_to_dicts(conflicts)
-    target.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
+    atomic_write_text(target, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     return str(target)
 
 

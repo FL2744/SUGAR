@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from .observations import ResearchObservation
 from .state_schema import StateAssessment
-from .utils import utc_iso
+from .utils import atomic_write_text, utc_iso
 
 
 def _clean(value: Any) -> str:
@@ -312,8 +312,8 @@ def save_tradecraft_audit(
 ) -> str:
     target = Path(output_file).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
+    atomic_write_text(
+        target,
         json.dumps(build_tradecraft_audit(observations, assessments), ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
     )
     return str(target)

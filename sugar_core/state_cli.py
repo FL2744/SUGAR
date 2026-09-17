@@ -34,7 +34,7 @@ from .state_workflow import (
     save_state_assessments,
     write_us_presence_template,
 )
-from .utils import safe_artifact_stem
+from .utils import atomic_write_text, safe_artifact_stem
 from .workspace_runtime import (
     choose_output_directory,
     optional_workspace,
@@ -229,7 +229,7 @@ def _write_or_print(payload: dict, output: str | Path | None) -> str | None:
     if output:
         target = Path(output)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8")
+        atomic_write_text(target, text)
         print(str(target.resolve()))
         return str(target.resolve())
     print(text)
