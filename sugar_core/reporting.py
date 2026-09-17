@@ -7,6 +7,7 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 from typing import Any
+from xml.sax.saxutils import escape
 
 import matplotlib
 matplotlib.use("Agg")
@@ -131,16 +132,41 @@ def _pdf(work: pd.DataFrame, metrics: dict, charts: dict[str, Path], source: str
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle, PageBreak
     from reportlab.lib import colors
-    styles = getSampleStyleSheet(); story = [Paragraph("SUGAR Collection Analysis", styles["Title"]), Spacer(1, 8)]
+    styles = getSampleStyleSheet(); story = [
+        Paragraph("SUGAR Collection Analysis", styles["Title"]),
+        Spacer(1, 8),
+        Paragraph(
+            f"Deterministic descriptive review of {metrics['records']:,} collected records.",
+            styles["BodyText"],
+        ),
+        Spacer(1, 8),
+    ]
     data = [["Measure","Value"], ["Records",f"{metrics['records']:,}"], ["Unique IDs",f"{metrics['unique_ids']:,}"],
             ["Observed dates",f"{metrics['start']} to {metrics['end']}"], ["Recorded engagement",f"{metrics['engagement']:,}"],
             ["Recorded impressions",f"{metrics['impressions']:,}"]]
     t = Table(data, colWidths=[2.2*inch, 3.8*inch]); t.setStyle(TableStyle([("GRID",(0,0),(-1,-1),.4,colors.grey),("BACKGROUND",(0,0),(-1,0),colors.lightgrey)])); story += [t, Spacer(1,12)]
     for title, key in (("Collection composition","platform"),("Languages","language"),("Geographic distribution","location")):
         story += [Paragraph(title, styles["Heading1"]), Image(str(charts[key]), width=6.3*inch, height=2.8*inch), Spacer(1,8)]
-    story += [PageBreak(), Paragraph("Method caveats", styles["Heading1"]), Paragraph(
+    story += [Paragraph(
+        "Locations are model-assisted or profile-derived research fields, not verified precise geotags. Use source evidence and human review before drawing geographic conclusions.",
+        styles["BodyText"],
+    ), Spacer(1, 8), Paragraph("Engagement", styles["Heading1"])]
+    platform_eng = work.groupby("platform")["engagement_total"].sum().sort_values(ascending=False)
+    if len(platform_eng):
+        for platform, value in platform_eng.items():
+            story.append(Paragraph(
+                f"• <b>{escape(str(platform))}</b>: {int(value):,} recorded interactions",
+                styles["BodyText"],
+            ))
+    else:
+        story.append(Paragraph("No engagement totals calculated.", styles["BodyText"]))
+    terms = ", ".join(f"{escape(word)} ({count})" for word, count in _terms(work))
+    story += [
+        Spacer(1, 8), Paragraph("Recurring vocabulary", styles["Heading1"]),
+        Paragraph(terms or "No recurring terms calculated.", styles["BodyText"]),
+        PageBreak(), Paragraph("Method caveats", styles["Heading1"]), Paragraph(
         "Counts describe retrieved records, not the full population of online discussion. Platform search coverage, pagination, source availability, and query design affect what is observed. Locations require source review and human verification before geographic claims.", styles["BodyText"]),
-        Spacer(1,8), Paragraph(f"Source file: {Path(source).name}", styles["BodyText"])]
+        Spacer(1,8), Paragraph(f"Source file: {escape(Path(source).name)}", styles["BodyText"])]
     SimpleDocTemplate(output, pagesize=letter, leftMargin=.7*inch, rightMargin=.7*inch, topMargin=.7*inch, bottomMargin=.7*inch).build(story)
 
 

@@ -8,6 +8,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 - hardened the evidence-constrained synthesis and LLM boundary with deterministic tests for retry/cache behavior, prompt-injection boundaries, JSON parsing, agent failure handling, integrator evidence allowlisting, orchestration, and persisted synthesis artifacts;
 - alternative-hypothesis consistency labels are now normalized case-insensitively instead of silently downgrading valid mixed-case labels to `mixed`;
+- deterministic collection reports now have parity between DOCX and PDF outputs for engagement, recurring vocabulary, geographic caveats, and descriptive context, with PDF text safely escaped for ordinary special characters;
 - release hardening now validates package builds, dependency vulnerabilities, correctness linting, and test coverage in dedicated CI;
 - branch-aware core coverage now has a 70% regression floor, below the current measured suite coverage;
 - developer dependencies now include reproducible local quality/build tooling, with a separate dependency-audit extra;
