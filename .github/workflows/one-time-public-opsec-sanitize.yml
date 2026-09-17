@@ -21,7 +21,58 @@ jobs:
           python-version: "3.12"
 
       - name: Apply target-neutral public refactor
-        run: python tools/one_time_public_opsec_sanitize.py
+        run: |
+          python tools/one_time_public_opsec_sanitize.py
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+          for path in root.glob('tests/test_kyrgyzstan*.py'):
+              path.unlink()
+
+          text_ext = {'.py','.md','.yml','.yaml','.toml','.txt','.swift','.ps1','.sh','.json','.html','.plist','.ini','.cfg'}
+          exact = [
+              ('_CHINA_TZ', '_PLATFORM_TZ'),
+              ('china_russia_coordination', 'cross_state_coordination'),
+              ('china_us_comparison', 'sponsor_us_comparison'),
+              ('china_model', 'sponsor_model'),
+              ('prc_observation', 'sponsor_observation'),
+              ('prc_public_diplomacy', 'sponsor_public_diplomacy'),
+              ('prc_government', 'sponsor_government'),
+              ('prc_diplomatic_mission', 'sponsor_diplomatic_mission'),
+              ('Confucius', 'Cultural exchange'),
+              ('Luban', 'Technical training'),
+          ]
+          for path in root.rglob('*'):
+              if not path.is_file() or '.git' in path.parts or path.suffix.lower() not in text_ext:
+                  continue
+              if path.as_posix() in {'tools/one_time_public_opsec_sanitize.py', '.github/workflows/one-time-public-opsec-sanitize.yml'}:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except UnicodeDecodeError:
+                  continue
+              original = text
+              text = '\n'.join(line for line in text.splitlines() if 'kyrgyzstan_2026' not in line.casefold())
+              if original.endswith('\n'):
+                  text += '\n'
+              for old, new in exact:
+                  text = text.replace(old, new)
+                  text = text.replace(old.upper(), new.upper())
+              # Catch target tokens embedded beside underscores/dots as well as ordinary prose.
+              text = re.sub(r'(?i)(?<![A-Za-z0-9])prc(?![A-Za-z0-9])', 'sponsor', text)
+              text = re.sub(r'(?i)(?<![A-Za-z0-9])china(?![A-Za-z0-9])', 'sponsor', text)
+              text = re.sub(r'(?i)(?<![A-Za-z0-9])chinese(?![A-Za-z0-9])', 'sponsoring-state', text)
+              text = re.sub(r'(?i)(?<![A-Za-z0-9])beijing(?![A-Za-z0-9])', 'capital-city', text)
+              text = re.sub(r'(?i)(?<![A-Za-z0-9])ccp(?![A-Za-z0-9])', 'ruling-party', text)
+              text = re.sub(r'(?i)(?<![A-Za-z0-9])cpc(?![A-Za-z0-9])', 'ruling-party', text)
+              text = re.sub(r'(?i)(?<![A-Za-z0-9])confucius(?![A-Za-z0-9])', 'cultural-exchange', text)
+              text = re.sub(r'(?i)(?<![A-Za-z0-9])luban(?![A-Za-z0-9])', 'technical-training', text)
+              text = re.sub(r'(?i)(?<![A-Za-z0-9])kyrgyzstan(?![A-Za-z0-9])', 'example-host-country', text)
+              if text != original:
+                  path.write_text(text, encoding='utf-8')
+          PY
 
       - name: Remove one-time automation from final tree
         run: |
