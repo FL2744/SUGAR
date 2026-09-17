@@ -182,6 +182,8 @@ The supported implementation lives in `sugar_core/`. Historical pre-package mono
 
 See [`docs/architecture.md`](docs/architecture.md) for module boundaries, frontend/core dependency rules, bridge architecture, and test expectations.
 
+For the State/Diplomacy Lab delivery target, the versioned product contract lives in [`product/requirements/state_product.v1.json`](product/requirements/state_product.v1.json), with rationale and implementation order in [`docs/product/state-product-contract.md`](docs/product/state-product-contract.md). The contract treats Virginia Tech ARC as an optional development integration rather than a State deployment dependency and requires interoperable import/export boundaries for existing Department capabilities.
+
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md) — current system architecture and engineering rules
