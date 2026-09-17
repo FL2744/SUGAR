@@ -1,0 +1,149 @@
+name: Classroom desktop release
+
+on:
+  push:
+    branches:
+      - release/classroom-v1.2.0
+
+permissions:
+  contents: write
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev,windows]"
+      - name: Build portable Windows application
+        shell: pwsh
+        run: .\SUGAR-Windows\scripts\build.ps1
+      - name: Validate Windows bundle
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $line = & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe diagnostics
+          Write-Host $line
+          $payload = $line | ConvertFrom-Json
+          if ($payload.event -ne "diagnostics") { throw "Expected diagnostics event" }
+          & .\SUGAR-Windows\dist\SUGAR\SUGAR.exe --smoke-test
+          if (-not (Test-Path .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip)) { throw "Portable Windows ZIP missing" }
+          if ((Get-Item .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip).Length -lt 1000000) { throw "Portable Windows ZIP is unexpectedly small" }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-windows-x64
+          path: SUGAR-Windows/dist/SUGAR-Windows-x64.zip
+          if-no-files-found: error
+
+  macos-apple-silicon:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build macOS Apple Silicon application
+        run: ./SUGAR-macOS/scripts/build_app.sh
+      - name: Validate and archive Apple Silicon app
+        run: |
+          test "$(uname -m)" = "arm64"
+          test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/MacOS/SUGAR
+          test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
+          SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge diagnostics
+          codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
+          ditto -c -k --sequesterRsrc --keepParent SUGAR-macOS/.build-native/SUGAR.app SUGAR-macOS-Apple-Silicon.zip
+          test -s SUGAR-macOS-Apple-Silicon.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-macos-apple-silicon
+          path: SUGAR-macOS-Apple-Silicon.zip
+          if-no-files-found: error
+
+  macos-intel:
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build macOS Intel application
+        run: ./SUGAR-macOS/scripts/build_app.sh
+      - name: Validate and archive Intel app
+        run: |
+          test "$(uname -m)" = "x86_64"
+          test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/MacOS/SUGAR
+          test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
+          SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge diagnostics
+          codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
+          ditto -c -k --sequesterRsrc --keepParent SUGAR-macOS/.build-native/SUGAR.app SUGAR-macOS-Intel.zip
+          test -s SUGAR-macOS-Intel.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-macos-intel
+          path: SUGAR-macOS-Intel.zip
+          if-no-files-found: error
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs: [windows-x64, macos-apple-silicon, macos-intel]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v1.2.0-classroom.1
+      TARGET_SHA: 62db7aeec29c1ec0dcd6959974929424218cc238
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify release payload
+        run: |
+          ls -lh release-assets
+          test -s release-assets/SUGAR-Windows-x64.zip
+          test -s release-assets/SUGAR-macOS-Apple-Silicon.zip
+          test -s release-assets/SUGAR-macOS-Intel.zip
+      - name: Write release notes
+        run: |
+          cat > RELEASE_NOTES.md <<'EOF'
+          # SUGAR v1.2.0 Classroom Preview
+
+          Desktop builds prepared for classroom use on September 17, 2026.
+
+          ## Download the right file
+
+          - **Windows 10/11 x64:** `SUGAR-Windows-x64.zip`
+          - **Mac with Apple Silicon (M1/M2/M3/M4 and later):** `SUGAR-macOS-Apple-Silicon.zip`
+          - **Intel Mac:** `SUGAR-macOS-Intel.zip`
+
+          ## Windows
+
+          Download the ZIP, extract the entire folder, then launch `SUGAR.exe` from the extracted SUGAR folder. The portable build includes its packaged backend; a separate Python install is not required for this release.
+
+          ## macOS
+
+          Download the ZIP for your processor, unzip it, and open `SUGAR.app`. These classroom builds are ad-hoc signed rather than Apple-notarized, so macOS may require the normal first-launch override: Control-click/right-click the app and choose **Open**, or use **System Settings → Privacy & Security → Open Anyway** if Gatekeeper blocks the first launch.
+
+          The current macOS build target is macOS 13 or newer.
+
+          ## Notes
+
+          This is a classroom preview of SUGAR 1.2.0 built from the sanitized public tree. It includes the generic research/collection engine and platform adapters while excluding project-specific case material.
+          EOF
+      - name: Publish GitHub prerelease
+        run: |
+          gh release create "$TAG" release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$TARGET_SHA" \
+            --title "SUGAR v1.2.0 Classroom Preview" \
+            --notes-file RELEASE_NOTES.md \
+            --prerelease
