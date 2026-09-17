@@ -6,7 +6,7 @@ This guide is for a first-time user who wants to get useful results without lear
 
 1. **Open Settings.** Choose **Virginia Tech ARC**. Click **Get ARC API Key**, sign in with your VT account, create a personal key, paste it into SUGAR, and click **Test ARC Connection**.
 2. **Open Collect → Quick Search.** Start with **Bilibili** and/or **Weibo**. Enter a few search terms, one per line.
-3. Leave **Source credentials** blank unless your specific task requires an authenticated source. Basic public Bilibili/Weibo work is designed to operate without X, Bluesky, or Mastodon credentials.
+3. Leave **Source credentials** blank unless your specific task requires an authenticated source. Basic public Bilibili work is designed to operate without X, Bluesky, or Mastodon credentials.
 4. Keep the first search small. Run it and watch **Activity & Outputs** at the bottom of the window.
 5. Open the generated CSV/XLSX/JSONL outputs before moving on to advanced analysis.
 
@@ -34,7 +34,7 @@ SUGAR does not create accounts, bypass authentication, rotate identities, or def
 
 ## A sensible first exercise
 
-Search one or two narrow terms on Bilibili/Weibo with a small page limit. Inspect what was actually collected. Then decide whether you need translation/inference, a larger resumable harvest, a post-level Weibo investigation, or downstream analysis. Do not begin with every source and every enrichment option enabled.
+Search one or two narrow terms on Bilibili with a small page limit. Inspect what was actually collected. Then decide whether you need translation/inference, a larger resumable harvest, a post-level Weibo investigation, or downstream analysis. Do not begin with every source and every enrichment option enabled.
 
 ## Windows command line
 
@@ -55,3 +55,8 @@ This does **not** require a separate Python installation. The GUI is best for di
 - **Compare assessment versions** means showing what changed between two saved assessment snapshots (the operation is often called a “diff” in developer tools).
 - **Qualification** means measuring collector coverage, failures, access limits, provenance, duplicates, and repeatability. It is not an official certification or authority-to-operate.
 - **Observation** is collected evidence. **Assessment** is an analytic judgment linked to evidence. SUGAR deliberately keeps those separate.
+
+
+## Live-source reliability note
+
+For a first Bilibili run, use one search term, 20 posts per query, and one page. Quick Search disables per-result Bilibili detail hydration so a classroom test does not create a large burst of requests. Bilibili may still deny anonymous search under its current access/risk-control policy; if that happens, stop and retry later rather than repeatedly retrying. Weibo keyword search requires an existing authorized Weibo session.

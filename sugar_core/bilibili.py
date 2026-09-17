@@ -302,10 +302,9 @@ def collect_bilibili_public(
                         detail.source_mode = "bilibili_public_search+video"
                         detail.source_url = response.url
                         record = detail
-                    except BilibiliAccessError:
-                        raise
-                    except (requests.RequestException, RuntimeError, ValueError):
-                        # A single detail failure should not discard a valid public search result.
+                    except (BilibiliAccessError, requests.RequestException, RuntimeError, ValueError):
+                        # Detail hydration is optional. Preserve a valid search result even if
+                        # the separate metadata endpoint is unavailable or access-controlled.
                         record = search_record
                 if not in_inclusive_date_range(record.published_at, since, until):
                     continue
