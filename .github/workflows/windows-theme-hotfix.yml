@@ -1,0 +1,166 @@
+name: Windows theme hotfix
+
+on:
+  push:
+    branches:
+      - feat/classroom-ux-clean
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-build-release:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v1.2.3-classroom.1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/classroom-ux-clean
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+          cache: pip
+
+      - name: Apply deterministic light-palette fix
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          path = Path('SUGAR-Windows/app.py')
+          text = path.read_text(encoding='utf-8')
+
+          text = text.replace(
+              'from PySide6.QtGui import QAction, QDesktopServices, QIcon',
+              'from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QPalette',
+          )
+
+          marker = 'QMainWindow { background: #f5f7fb; color: #172033; }\n'
+          additions = '''QDialog, QMessageBox { background: #ffffff; color: #172033; }\nQMessageBox QLabel, QMessageBox QCheckBox { background: transparent; color: #172033; }\nQToolTip { background: #ffffff; color: #172033; border: 1px solid #cfd8e6; padding: 4px; }\nQAbstractItemView { background: #ffffff; color: #172033; selection-background-color: #e8f0fb; selection-color: #172033; }\n'''
+          if additions not in text:
+              text = text.replace(marker, marker + additions)
+
+          function_marker = '\n\ndef resource_path(name: str) -> Path:\n'
+          palette_function = '''\n\ndef apply_light_palette(app: QApplication) -> None:\n    """Use a deterministic light palette instead of inheriting the OS dark palette."""\n    palette = QPalette()\n    normal = QPalette.ColorGroup.Normal\n    disabled = QPalette.ColorGroup.Disabled\n    role = QPalette.ColorRole\n\n    colors = {\n        role.Window: "#f5f7fb",\n        role.WindowText: "#172033",\n        role.Base: "#ffffff",\n        role.AlternateBase: "#f5f7fb",\n        role.ToolTipBase: "#ffffff",\n        role.ToolTipText: "#172033",\n        role.Text: "#172033",\n        role.Button: "#ffffff",\n        role.ButtonText: "#172033",\n        role.BrightText: "#ffffff",\n        role.Link: "#235fa8",\n        role.Highlight: "#2d6cc0",\n        role.HighlightedText: "#ffffff",\n        role.PlaceholderText: "#6e7b91",\n    }\n    for color_role, value in colors.items():\n        palette.setColor(normal, color_role, QColor(value))\n        palette.setColor(QPalette.ColorGroup.Active, color_role, QColor(value))\n        palette.setColor(QPalette.ColorGroup.Inactive, color_role, QColor(value))\n\n    palette.setColor(disabled, role.Window, QColor("#f5f7fb"))\n    palette.setColor(disabled, role.Base, QColor("#f2f4f8"))\n    palette.setColor(disabled, role.Button, QColor("#eef1f5"))\n    palette.setColor(disabled, role.WindowText, QColor("#7a8496"))\n    palette.setColor(disabled, role.Text, QColor("#7a8496"))\n    palette.setColor(disabled, role.ButtonText, QColor("#7a8496"))\n    palette.setColor(disabled, role.PlaceholderText, QColor("#9098a7"))\n    app.setPalette(palette)\n'''
+          if 'def apply_light_palette(' not in text:
+              text = text.replace(function_marker, palette_function + function_marker)
+
+          old_main = 'app=QApplication(sys.argv); app.setApplicationName(APP_NAME); app.setOrganizationName(APP_ORGANIZATION); app.setStyle("Fusion"); app.setStyleSheet(STYLE)'
+          new_main = 'app=QApplication(sys.argv); app.setApplicationName(APP_NAME); app.setOrganizationName(APP_ORGANIZATION); app.setStyle("Fusion"); apply_light_palette(app); app.setStyleSheet(STYLE)'
+          if old_main not in text and new_main not in text:
+              raise SystemExit('Could not locate QApplication initialization')
+          text = text.replace(old_main, new_main)
+          path.write_text(text, encoding='utf-8')
+
+          test_path = Path('tests/test_windows_classroom_ux.py')
+          test_text = test_path.read_text(encoding='utf-8')
+          static_test = '''\n\ndef test_windows_ui_uses_deterministic_light_palette() -> None:\n    source = Path("SUGAR-Windows/app.py").read_text(encoding="utf-8")\n    assert "def apply_light_palette(" in source\n    assert "QPalette.ColorRole.WindowText" not in source  # roles are intentionally aliased locally\n    assert 'role.WindowText: "#172033"' in source\n    assert 'role.Window: "#f5f7fb"' in source\n    assert "QDialog, QMessageBox { background: #ffffff; color: #172033; }" in source\n    assert "apply_light_palette(app)" in source\n'''
+          if 'test_windows_ui_uses_deterministic_light_palette' not in test_text:
+              test_path.write_text(test_text.rstrip() + static_test + '\n', encoding='utf-8')
+          '@ | python -
+
+      - name: Install development and Windows dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,windows]"
+
+      - name: Validate source and regression suite
+        shell: pwsh
+        run: |
+          python -m py_compile SUGAR-Windows/app.py sugar_bridge.py
+          python -m pytest
+          git diff --check
+
+      - name: Validate actual dialog palette offscreen
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          @'
+          import sys
+          sys.path.insert(0, 'SUGAR-Windows')
+          from PySide6.QtGui import QPalette
+          from PySide6.QtWidgets import QApplication, QMessageBox
+          import app as sugar_app
+
+          qapp = QApplication([])
+          qapp.setStyle('Fusion')
+          sugar_app.apply_light_palette(qapp)
+          qapp.setStyleSheet(sugar_app.STYLE)
+          box = QMessageBox()
+          box.setWindowTitle('Theme smoke test')
+          box.setText('<b>Readable first-run text</b>')
+          box.ensurePolished()
+          p = qapp.palette()
+          assert p.color(QPalette.ColorRole.Window).name().lower() == '#f5f7fb'
+          assert p.color(QPalette.ColorRole.WindowText).name().lower() == '#172033'
+          assert p.color(QPalette.ColorRole.Base).name().lower() == '#ffffff'
+          assert p.color(QPalette.ColorRole.Text).name().lower() == '#172033'
+          print('Deterministic light palette verified for QApplication/QMessageBox path.')
+          '@ | python -
+
+      - name: Commit tested palette fix
+        shell: pwsh
+        run: |
+          git config user.name "Alejandro Grenier"
+          git config user.email "53024346+Jandro22@users.noreply.github.com"
+          git add SUGAR-Windows/app.py tests/test_windows_classroom_ux.py
+          git commit -m "Fix Windows dark-mode dialog readability"
+          git push origin HEAD:feat/classroom-ux-clean
+
+      - name: Build portable Windows application
+        shell: pwsh
+        run: .\SUGAR-Windows\scripts\build.ps1
+
+      - name: Validate packaged GUI and CLI
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          .\SUGAR-Windows\dist\SUGAR\SUGAR.exe --smoke-test
+          & .\SUGAR-Windows\dist\SUGAR\sugar.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar.cmd --help failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar-project.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar-project.cmd --help failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar-state.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar-state.cmd --help failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar-intel.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar-intel.cmd --help failed" }
+
+      - name: Prepare release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          Copy-Item .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip .\release-assets\SUGAR-Windows-x64.zip
+          gh release download v1.2.2-classroom.1 --repo $env:GITHUB_REPOSITORY --pattern "SUGAR-macOS-*" --dir release-assets
+
+      - name: Publish corrected classroom release
+        shell: pwsh
+        run: |
+          $target = git rev-parse HEAD
+          @"
+          # SUGAR v1.2.3 Classroom Release — Windows Theme Fix
+
+          Corrects the unreadable first-run dialog seen when Windows dark mode supplies a dark Qt palette underneath SUGAR's light stylesheet.
+
+          ## Windows changes
+          - SUGAR now applies a deterministic light Qt palette instead of inheriting Windows dark-mode colors.
+          - Dialogs, message boxes, checkboxes, tooltips, and item views receive explicit readable foreground/background colors.
+          - The actual QMessageBox palette path is validated offscreen before packaging.
+          - Includes the v1.2.2 first-run walkthrough, ARC-first setup, Bilibili/Weibo defaults, and bundled Windows CLI.
+
+          macOS binaries are unchanged from v1.2.2.
+          "@ | Set-Content -Encoding UTF8 RELEASE_NOTES.md
+
+          gh release create $env:TAG release-assets/* `
+            --repo $env:GITHUB_REPOSITORY `
+            --target $target `
+            --title "SUGAR v1.2.3 Classroom Release — Windows Theme Fix" `
+            --notes-file RELEASE_NOTES.md
