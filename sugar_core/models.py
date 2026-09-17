@@ -5,8 +5,10 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from . import __version__
+
 SCHEMA_VERSION = "1.2"
-COLLECTOR_VERSION = "sugar-core-1.1"
+COLLECTOR_VERSION = f"sugar-core-{__version__}"
 
 
 def utc_now_iso() -> str:

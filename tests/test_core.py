@@ -50,6 +50,11 @@ def test_export_has_stable_and_legacy_fields():
     assert json.loads(frame.loc[0, "query_matches"]) == ["q"]
 
 
+def test_new_records_advertise_the_current_collector_version():
+    record = PostRecord(platform="x", native_id="abc", canonical_url="u", query="q")
+    assert record.collector_version == f"sugar-core-{__version__}"
+
+
 def test_csv_and_xlsx_loaders_preserve_numeric_looking_native_ids(tmp_path):
     record = PostRecord(
         platform="x",

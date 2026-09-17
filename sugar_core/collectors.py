@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
+from . import __version__
 from .models import PostRecord, merge_record
 from .utils import in_inclusive_date_range, normalize_whitespace
 
@@ -20,7 +21,7 @@ def create_session() -> requests.Session:
     session = requests.Session()
     session.headers.update(
         {
-            "User-Agent": "SUGAR/1.1 research-client (+Virginia Tech Diplomacy Lab)",
+            "User-Agent": f"SUGAR/{__version__} research-client (+Virginia Tech Diplomacy Lab)",
             "Accept": "application/json,text/plain;q=0.9,*/*;q=0.8",
         }
     )

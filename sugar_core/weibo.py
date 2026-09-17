@@ -8,6 +8,7 @@ from urllib.parse import quote
 import requests
 from bs4 import BeautifulSoup
 
+from . import __version__
 from .models import PostRecord, merge_record
 from .utils import in_inclusive_date_range, normalize_whitespace
 
@@ -38,7 +39,7 @@ def create_weibo_session(cookie: str = "") -> requests.Session:
             "User-Agent": (
                 "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
                 "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 "
-                "Mobile/15E148 Safari/604.1 SUGAR-VT-Diplomacy-Lab/1.1"
+                f"Mobile/15E148 Safari/604.1 SUGAR-VT-Diplomacy-Lab/{__version__}"
             ),
             "Accept": "application/json,text/plain,*/*",
             "Referer": f"{WEIBO_MOBILE_BASE_URL}/",
