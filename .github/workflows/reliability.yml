@@ -1,0 +1,48 @@
+name: Offline reliability
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reliability-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repeat-and-soak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      - name: Repeat deterministic suite to expose flaky tests
+        run: |
+          for attempt in 1 2 3; do
+            echo "deterministic attempt ${attempt}/3"
+            python -m pytest --basetemp "$RUNNER_TEMP/sugar-pytest-${attempt}" -m "not live"
+          done
+      - name: Run bounded offline soak
+        run: python tools/soak_test.py --records 1000 --duration-seconds 300 --output-dir "$RUNNER_TEMP/sugar-soak"
+      - name: Verify soak report
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report_path = Path(os.environ["RUNNER_TEMP"]) / "sugar-soak/soak-report.json"
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          assert report["network"] is False
+          assert report["interrupted"] is False
+          assert report["iterations_completed"] >= 1
+          assert report["samples"]
+          PY

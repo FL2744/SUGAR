@@ -50,9 +50,9 @@ decision remains; `[ ]` means work remains.
     Unicode/RTL/emoji/long-field workbook and document rendering QA remains.
 18. `[x]` Performance harness: deterministic storage/export/map probes and a CI 5k smoke are
     checked in; 1k/10k/100k/1M targets still need measured budgets on representative hardware.
-19. `[~]` Long-running reliability: a bounded offline repetition/memory harness is checked in;
-    six-hour/24-hour collector, retry, checkpoint, and network-reset qualification runs have not
-    been completed.
+19. `[~]` Long-running reliability: a bounded offline repetition/memory harness and scheduled
+    three-pass CI reliability workflow are checked in; six-hour/24-hour collector, retry,
+    checkpoint, and network-reset qualification runs have not been completed.
 20. `[~]` Documentation: architecture, collector, workspace, access, stress, and release docs are
     present; final operator runbooks and deployment-specific data-retention guidance remain.
 21. `[~]` Canonical demo: the deterministic Kyrgyzstan case is in CI; a polished clean-room demo
