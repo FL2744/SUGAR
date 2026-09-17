@@ -25,6 +25,20 @@ def test_ci_retains_a_validated_mac_bundle() -> None:
     assert "actions/upload-artifact@v7" in workflow
 
 
+def test_branch_ci_uses_fast_gate_and_reserves_expensive_jobs() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "fast-test:" in workflow
+    assert 'python-version: "3.14"' in workflow
+    assert "compatibility-test:" in workflow
+    expensive_gate = "github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'"
+    # Live-network and packaged desktop jobs should not run on every fix-branch push.
+    assert workflow.count(expensive_gate) >= 3
+    # The compatibility matrix is intentionally non-Cartesian: supported Python
+    # versions are covered cheaply on Linux while native OS checks use one runtime.
+    assert "os: [ubuntu-latest, macos-latest, windows-latest]" not in workflow
+    assert 'python-version: ["3.11", "3.12", "3.13", "3.14"]' not in workflow
+
+
 def test_windows_build_info_matches_current_bridge_protocol() -> None:
     build = (ROOT / "SUGAR-Windows" / "scripts" / "build.ps1").read_text(encoding="utf-8")
     assert "bridge_protocol = 3" in build

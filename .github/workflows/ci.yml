@@ -4,17 +4,43 @@ on:
   push:
     branches: [main, "stabilize/**", "fix/**"]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  test:
+  fast-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q
+      - run: python -c "import sugar_core; print(sugar_core.__version__)"
+
+  compatibility-test:
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        include:
+          # Exercise the supported Python range cheaply on Linux, then verify the
+          # two native operating systems on their packaged-runtime Python lines.
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: ubuntu-latest
+            python-version: "3.13"
+          - os: macos-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.14"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -22,15 +48,15 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
-      - run: python -m pytest
+      - run: python -m pytest -q
       - name: Import smoke test
         run: python -c "import sugar_core; print(sugar_core.__version__)"
       - name: Workspace smoke test
         run: python -c "import tempfile; from pathlib import Path; from sugar_core.workspace import SugarWorkspace; d=Path(tempfile.mkdtemp())/'project'; w=SugarWorkspace.create(d,name='CI'); p=w.path_for('raw')/'sample.txt'; p.write_text('ok',encoding='utf-8'); w.register_artifact('raw',p); assert SugarWorkspace.open(d).status()['artifact_count']==1"
 
   weibo-live-smoke:
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -39,7 +65,6 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
       - name: Bounded live public Weibo seed, qualification, and bulk-seed smoke
         env:
@@ -47,6 +72,7 @@ jobs:
         run: python -m pytest -q -s tests/test_weibo_live.py tests/test_weibo_qualification_live.py tests/test_weibo_seed_harvest_live.py
 
   macos-app:
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
@@ -97,6 +123,7 @@ jobs:
           retention-days: 14
 
   windows-app:
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
@@ -105,7 +132,6 @@ jobs:
         with:
           python-version: "3.14"
           cache: pip
-      - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev,windows]"
       - name: Build portable Windows application
         shell: pwsh
