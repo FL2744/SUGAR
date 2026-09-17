@@ -79,7 +79,6 @@ jobs:
         run: |
           rm tools/one_time_public_opsec_sanitize.py
           rm .github/workflows/one-time-public-opsec-sanitize.yml
-          git checkout origin/main -- .github/workflows/ci.yml .github/workflows/quality.yml
 
       - name: Install project and test dependencies
         run: |
