@@ -42,10 +42,12 @@ fact that the probe was offline. Compare reports from the same machine and Pytho
 wall-clock values are not portable performance guarantees.
 
 The latest local Windows/Python 3.13 storage-only qualification used 1,000,000 rows with a 10,000
-row in-memory sample. It completed SQLite upsert in 269.529 s, sampled the restored checkpoint in
-2.561 s, built the tabular sample in 4.041 s, used 96.8 MB peak Python allocation, and produced a
-1.394 GB SQLite artifact. These are host observations, not release thresholds; repeat them on the
-representative deployment hardware before setting budgets.
+row in-memory sample. The normal run completed SQLite upsert in 46.518 s, sampled the restored
+checkpoint in 1.852 s, built the tabular sample in 0.916 s, and produced a 1.394 GB SQLite artifact.
+A separate `stress_matrix.py` run measured 96.8 MB peak Python allocation; because `tracemalloc`
+adds substantial overhead, that instrumented run took 264.328 s for the upsert. These are host
+observations, not release thresholds; repeat them on the representative deployment hardware
+before setting budgets.
 
 For bounded offline repetition and Python allocation sampling:
 

@@ -50,8 +50,9 @@ decision remains; `[ ]` means work remains.
     accessibility, long-run cancellation, and signed-install testing require Windows/macOS hosts.
 17. `[~]` Exports: CSV/XLSX/JSONL plus PDF/DOCX/HTML paths and formula/HTML safety exist; exhaustive
     Unicode/RTL/emoji/long-field workbook and document rendering QA remains.
-18. `[x]` Performance harness: deterministic storage/export/map probes and a CI 5k smoke are
-    checked in; 1k/10k/100k/1M targets still need measured budgets on representative hardware.
+18. `[~]` Performance harness: deterministic storage/export/map probes and a CI 5k smoke are
+    checked in; a 1M storage-only qualification is measured on the current Windows host, but
+    representative-hardware budgets and large-map browser policy still need owner approval.
 19. `[~]` Long-running reliability: a bounded offline repetition/memory harness and scheduled
     three-pass CI reliability workflow are checked in; six-hour/24-hour collector, retry,
     checkpoint, and network-reset qualification runs have not been completed.

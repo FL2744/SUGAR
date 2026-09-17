@@ -402,23 +402,27 @@ class HarvestStore:
                 key = incoming.record_key
                 if not key:
                     continue
+                inserted_row = self.connection.execute(
+                    """
+                    INSERT OR IGNORE INTO records(record_key,platform,native_id,payload_json,first_seen_at,last_seen_at)
+                    VALUES(?,?,?,?,?,?)
+                    """,
+                    (
+                        key,
+                        incoming.platform,
+                        incoming.native_id,
+                        json.dumps(asdict(incoming), ensure_ascii=False, sort_keys=True),
+                        now,
+                        now,
+                    ),
+                )
+                if inserted_row.rowcount == 1:
+                    inserted += 1
+                    continue
                 row = self.connection.execute("SELECT payload_json FROM records WHERE record_key=?", (key,)).fetchone()
                 if row is None:
-                    self.connection.execute(
-                        """
-                        INSERT INTO records(record_key,platform,native_id,payload_json,first_seen_at,last_seen_at)
-                        VALUES(?,?,?,?,?,?)
-                        """,
-                        (
-                            key,
-                            incoming.platform,
-                            incoming.native_id,
-                            json.dumps(asdict(incoming), ensure_ascii=False, sort_keys=True),
-                            now,
-                            now,
-                        ),
-                    )
-                    inserted += 1
+                    # A concurrent deletion cannot normally occur on this connection, but do not
+                    # turn a missing conflict row into a false update count if the store is embedded.
                     continue
                 existing = PostRecord(**json.loads(row[0]))
                 merge_record(existing, incoming)
