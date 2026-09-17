@@ -7,6 +7,7 @@ Use this index to find the current design or methodology document for the part o
 - [`architecture.md`](architecture.md) — system boundaries, dependency direction, desktop/core separation, and engineering rules.
 - [`importer-interface.md`](importer-interface.md) ? external CSV/JSONL ingestion contract and provenance rules.
 - [`research-requirements.md`](research-requirements.md) ? research-question schema, bounded search-plan model, and drift controls.
+- [`handoff-bundles.md`](handoff-bundles.md) ? portable hash-verified evidence-package format and verification workflow.
 - [`product/state-product-contract.md`](product/state-product-contract.md) — State delivery boundary, integration posture, and implementation sequence.
 - [`../product/requirements/state_product.v1.json`](../product/requirements/state_product.v1.json) — machine-readable State product requirements and acceptance criteria enforced by tests.
 - [`adr/0001-state-integration-first-boundary.md`](adr/0001-state-integration-first-boundary.md) — decision record establishing the integration-first State delivery architecture.

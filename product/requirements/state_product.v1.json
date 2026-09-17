@@ -87,7 +87,7 @@
       "priority": "P0",
       "category": "integration",
       "title": "Portable outbound evidence package",
-      "status": "partially_met",
+      "status": "met",
       "requirement": "A completed research run must export an application-independent evidence package suitable for handoff, review, or downstream ingestion.",
       "acceptance": [
         "Package includes a machine-readable manifest, normalized evidence, analytic outputs, provenance, limitations, and human-review state.",

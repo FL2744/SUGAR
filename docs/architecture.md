@@ -65,6 +65,8 @@ High-volume collection is checkpointed and resumable. It must not become a mecha
 
 `workspace.py` defines the persistent project contract. Research data remains in ordinary files while `sugar-project.json` defines portable project identity/layout and `.sugar/workspace.sqlite3` indexes project artifacts. See `project-workspaces.md`.
 
+`handoff.py` is the application-independent outbound boundary. It packages canonical records/observations, the research requirement/search plan, coverage limitations, review state, provenance sidecars, and existing analytic products into a relative-path manifest with per-artifact SHA-256 verification. Sponsor-specific package builders remain responsible for their own analytic products; the handoff layer transports them without reimplementing their methodology.
+
 ### Desktop bridge
 
 `sugar_bridge.py` is the supported process boundary for native desktop clients. It exposes only named/typed operations and emits line-delimited JSON events. Frontends should not expose arbitrary shell passthrough. Long operations belong in the child process so the UI can remain responsive and cancel work safely.
