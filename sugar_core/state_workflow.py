@@ -81,7 +81,9 @@ def _list_cell(value: Any) -> list[str]:
             if isinstance(raw, list):
                 return [_clean(item) for item in raw if _clean(item)]
         except json.JSONDecodeError:
-            pass
+            # Preserve the legacy delimiter form when a spreadsheet cell starts
+            # like JSON but contains an invalid list literal.
+            return [_clean(item) for item in text.replace("|", ";").split(";") if _clean(item)]
     return [_clean(item) for item in text.replace("|", ";").split(";") if _clean(item)]
 
 

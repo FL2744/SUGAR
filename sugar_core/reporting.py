@@ -27,7 +27,7 @@ def _json_dict(value: Any) -> dict:
     try:
         parsed = json.loads(str(value))
         return parsed if isinstance(parsed, dict) else {}
-    except Exception:
+    except (TypeError, ValueError):
         return {}
 
 
@@ -53,7 +53,7 @@ def _prepare(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
             if alias in d:
                 try:
                     return int(float(d.get(alias, 0) or 0))
-                except Exception:
+                except (OverflowError, TypeError, ValueError):
                     return 0
         return 0
 

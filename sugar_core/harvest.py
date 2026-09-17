@@ -282,7 +282,8 @@ class HarvestStore:
         try:
             self.close()
         except Exception:
-            pass
+            # Destructors must not raise during interpreter shutdown.
+            return
 
     def bind_plan(self, signature: str) -> None:
         row = self.connection.execute("SELECT value FROM meta WHERE key='plan_signature'").fetchone()
@@ -473,7 +474,7 @@ def _header_wait_seconds(headers: Any) -> float | None:
                     parsed = parsed.replace(tzinfo=timezone.utc)
                 return max(0.0, (parsed.astimezone(timezone.utc) - _utc_now()).total_seconds())
             except (TypeError, ValueError, OverflowError):
-                pass
+                retry_after = ""
     reset = _clean(headers.get("x-rate-limit-reset", headers.get("X-RateLimit-Reset", "")))
     if reset:
         try:
@@ -486,7 +487,7 @@ def _header_wait_seconds(headers: Any) -> float | None:
                 parsed = datetime.fromisoformat(reset.replace("Z", "+00:00"))
                 return max(0.0, (parsed.astimezone(timezone.utc) - _utc_now()).total_seconds())
             except ValueError:
-                pass
+                reset = ""
     return None
 
 

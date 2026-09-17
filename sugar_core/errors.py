@@ -136,7 +136,7 @@ def redacted_path(path: str | Path) -> str:
                 if ntpath.commonpath([normalized, windows_home]) == windows_home:
                     return ntpath.relpath(normalized, windows_home)
             except ValueError:
-                pass
+                return normalized
         return normalized
     try:
         return str(Path(value).resolve().relative_to(Path.home().resolve()))

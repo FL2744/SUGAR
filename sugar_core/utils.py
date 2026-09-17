@@ -54,7 +54,7 @@ def parse_date(value: str | None) -> date | None:
     except ValueError:
         try:
             return date.fromisoformat(value[:10])
-        except Exception:
+        except (TypeError, ValueError):
             return None
 
 
@@ -93,7 +93,8 @@ def atomic_path(path: str | Path, *, suffix: str | None = None) -> Iterator[Path
         try:
             temporary.unlink()
         except FileNotFoundError:
-            pass
+            # The producer may have moved or removed the temporary file.
+            return
 
 
 def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -> None:
@@ -109,7 +110,7 @@ class JsonCache:
         self.path = Path(path)
         try:
             self.data = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
-        except Exception:
+        except (OSError, TypeError, ValueError):
             self.data = {}
 
     def get(self, key: str):

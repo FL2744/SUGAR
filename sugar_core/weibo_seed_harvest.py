@@ -158,7 +158,8 @@ class SeedHarvestStore:
         try:
             self.close()
         except Exception:
-            pass
+            # Destructors must not raise during interpreter shutdown.
+            return
 
     def get_meta(self, key: str) -> str | None:
         row = self.db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()

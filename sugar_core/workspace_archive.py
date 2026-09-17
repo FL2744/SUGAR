@@ -57,11 +57,12 @@ def create_workspace_archive(workspace: SugarWorkspace | str | Path, output: str
     if not isinstance(workspace, SugarWorkspace):
         workspace = SugarWorkspace.open(workspace)
     target = Path(output).expanduser().resolve()
+    inside_workspace = True
     try:
         target.relative_to(workspace.root)
     except ValueError:
-        pass
-    else:
+        inside_workspace = False
+    if inside_workspace:
         raise ValueError("Workspace archive output must be outside the workspace root.")
     if target.is_dir():
         raise ValueError("Workspace archive output must be a file outside the workspace root.")

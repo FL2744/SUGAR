@@ -5,6 +5,9 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
+from langdetect import DetectorFactory, detect
+from langdetect.lang_detect_exception import LangDetectException
+
 from .llm import LLMBudget, LLMConfig, cached_chat, create_client, parse_json_object, translate_text
 from .models import PostRecord
 from .utils import JsonCache, MemoryCache, normalize_whitespace, stable_hash
@@ -29,14 +32,12 @@ def _progress_tick(progress: ProgressCallback | None, event: str, current: int, 
 
 def detect_language(text: str) -> str:
     try:
-        from langdetect import DetectorFactory, detect
-
         # langdetect is nondeterministic for short/ambiguous text unless a seed is fixed.
         # SUGAR treats language labels as research data, so identical input should produce
         # identical output across reruns.
         DetectorFactory.seed = 0
         return detect(text) if text.strip() else "unknown"
-    except Exception:
+    except (LangDetectException, TypeError, ValueError):
         return "unknown"
 
 

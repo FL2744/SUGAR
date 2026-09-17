@@ -19,7 +19,7 @@ def _clean(value: Any) -> str:
 def _host(url: str) -> str:
     try:
         return urlparse(url).netloc.casefold().removeprefix("www.")
-    except Exception:
+    except (TypeError, ValueError):
         return ""
 
 
