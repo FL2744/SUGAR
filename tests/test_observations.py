@@ -14,14 +14,14 @@ def test_post_conversion_preserves_source_and_location_provenance():
         platform="bluesky",
         native_id="abc123",
         canonical_url="https://bsky.app/profile/example/post/abc123",
-        query="confucius institute",
-        query_matches=["confucius institute"],
+        query="language-and-culture centers",
+        query_matches=["language-and-culture centers"],
         published_at="2026-09-10T12:00:00Z",
         author_handle="example.bsky.social",
         author_name="Example Institution",
         original_text="Public event announcement",
         translated_text="Public event announcement",
-        inferred_location="Bishkek, Kyrgyzstan",
+        inferred_location="Bishkek, example_host_country",
         location_confidence=0.82,
         location_source="explicit place mention",
         latitude=42.8746,
@@ -31,7 +31,7 @@ def test_post_conversion_preserves_source_and_location_provenance():
     observation = observation_from_post(post)
 
     assert observation.observation_type == "digital_post"
-    assert observation.location_label == "Bishkek, Kyrgyzstan"
+    assert observation.location_label == "Bishkek, example_host_country"
     assert observation.location_basis == "ai_inferred"
     assert observation.location_confidence == pytest.approx(0.82)
     assert observation.source_record_keys == ["bluesky:abc123"]
@@ -102,7 +102,7 @@ def test_observation_frame_keeps_numeric_confidence_and_coordinates():
     observation = ResearchObservation(
         observation_type="institution",
         summary="Institution observed.",
-        location_label="Bishkek, Kyrgyzstan",
+        location_label="Bishkek, example_host_country",
         latitude=42.8746,
         longitude=74.5698,
         location_confidence=0.91,
@@ -120,7 +120,7 @@ def test_observation_storage_round_trip(tmp_path):
         observation_type="program",
         summary="Technical training program advertised to university students.",
         title="Example technical program",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         institution_name="Example Center",
         program_name="Technical Training",
@@ -158,7 +158,7 @@ def test_observation_jsonl_loading_preserves_nested_evidence(tmp_path):
         observation_type="program",
         title="JSONL program",
         summary="A structured observation stored as line-delimited JSON.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         actors=["Example Center"],
         audiences=["students"],
@@ -179,7 +179,7 @@ def test_observation_jsonl_loading_preserves_nested_evidence(tmp_path):
 
     assert len(restored) == 1
     assert restored[0].observation_id == observation.observation_id
-    assert restored[0].country == "Kyrgyzstan"
+    assert restored[0].country == "example_host_country"
     assert restored[0].source_record_keys == ["weibo:12345"]
     assert restored[0].evidence[0].native_id == "12345"
     assert restored[0].evidence[0].url == "https://example.org/jsonl"

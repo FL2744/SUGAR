@@ -51,7 +51,7 @@ def _video_payload(*, bvid="BV1TEST123", aid=1001, pubdate=1789056000):
             "bvid": bvid,
             "aid": aid,
             "cid": 555,
-            "title": "Confucius Institute technology workshop",
+            "title": "language-and-culture centers technology workshop",
             "desc": "Public event for university students in Bishkek.",
             "pubdate": pubdate,
             "duration": 180,
@@ -86,7 +86,7 @@ def test_bilibili_metrics_do_not_mislabel_shares_as_reposts():
 
 def test_fetch_public_video_normalizes_metadata_and_preserves_native_stats():
     session = FakeSession([FakeResponse(_video_payload())])
-    record = fetch_bilibili_video("BV1TEST123", query="孔子学院", session=session)
+    record = fetch_bilibili_video("BV1TEST123", query="文化交流", session=session)
 
     assert record.platform == "bilibili"
     assert record.content_type == "video"
@@ -101,7 +101,7 @@ def test_fetch_public_video_normalizes_metadata_and_preserves_native_stats():
     assert record.raw_stats["coin"] == 7
     assert record.raw_stats["danmaku"] == 9
     assert "technology workshop" in record.original_text
-    assert record.query_matches == ["孔子学院"]
+    assert record.query_matches == ["文化交流"]
 
 
 def test_keyword_search_merges_duplicate_video_query_provenance_without_auth_state():
@@ -112,7 +112,7 @@ def test_keyword_search_merges_duplicate_video_query_provenance_without_auth_sta
                 {
                     "bvid": "BV1DUPLICATE",
                     "aid": 100,
-                    "title": '<em class="keyword">Confucius</em> event',
+                    "title": '<em class="keyword">Cultural exchange</em> event',
                     "description": "Student program",
                     "author": "Example Center",
                     "mid": 10,
@@ -131,7 +131,7 @@ def test_keyword_search_merges_duplicate_video_query_provenance_without_auth_sta
                 {
                     "bvid": "BV1DUPLICATE",
                     "aid": 100,
-                    "title": "孔子学院 event",
+                    "title": "文化交流 event",
                     "description": "Student program",
                     "author": "Example Center",
                     "mid": 10,
@@ -146,7 +146,7 @@ def test_keyword_search_merges_duplicate_video_query_provenance_without_auth_sta
     session = FakeSession([FakeResponse(search_one), FakeResponse(search_two)])
 
     records = collect_bilibili_public(
-        search_terms=["Confucius Institute", "孔子学院"],
+        search_terms=["language-and-culture centers", "文化交流"],
         max_posts_per_query=1,
         max_pages_per_query=1,
         hydrate_details=False,
@@ -155,7 +155,7 @@ def test_keyword_search_merges_duplicate_video_query_provenance_without_auth_sta
     )
 
     assert len(records) == 1
-    assert records[0].query_matches == ["Confucius Institute", "孔子学院"]
+    assert records[0].query_matches == ["language-and-culture centers", "文化交流"]
     assert records[0].native_id == "BV1DUPLICATE"
     assert "<em" not in records[0].original_text
 
@@ -166,7 +166,7 @@ def test_search_fails_closed_when_bilibili_returns_access_control_code():
     )
     with pytest.raises(BilibiliAccessError, match="will not synthesize credentials"):
         collect_bilibili_public(
-            search_terms=["孔子学院"],
+            search_terms=["文化交流"],
             initialize_session=False,
             session=session,
         )

@@ -74,6 +74,6 @@ A Weibo comment or repost endpoint can expose only a partial public sample. Dele
 
 ## Live validation contract
 
-The repository includes an opt-in live smoke test using the public 2026-07-13 Weibo status `5320265912291527`, a post about ANTA KAI 3 that explicitly discusses blending Chinese kite imagery with other cultural motifs. The test performs only a bounded handful of anonymous public requests and verifies that the live seed text and engagement normalize into the investigation pipeline.
+The repository includes an opt-in bounded live smoke test using a stable public status observed during development. The test performs only a bounded handful of anonymous public requests and verifies that the live seed text and engagement normalize into the investigation pipeline.
 
 Normal unit/CI tests use deterministic captured response shapes. The separate live smoke exists to detect when Weibo changes a public surface without turning the entire ordinary unit-test matrix into a network-dependent test suite.

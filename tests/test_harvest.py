@@ -156,7 +156,7 @@ def test_numbered_page_ranges_are_durable_tasks_and_reach_collector(tmp_path: Pa
     run_harvest(
         {
             "sources": ["bilibili"],
-            "terms": ["孔子学院"],
+            "terms": ["文化交流"],
             "output_directory": str(tmp_path),
             "harvest": {
                 "name": "page_shards",

@@ -32,7 +32,7 @@ The LLM key is read from `SUGAR_LLM_API_KEY` when set; otherwise the CLI prompts
 
 ## Project scope
 
-The default project context is designed for the current Diplomacy Lab research problem: overt, public PRC government-supported cultural, educational, technical, commercial, and public-diplomacy activity outside mainland China, with emphasis on current program activity, audiences, geographic concentration, narratives, explicit anti-U.S. content, joint activity, and explicit U.S. public-diplomacy overlap.
+The default project context is designed for the current Diplomacy Lab research problem: overt, public state-supported cultural, educational, technical, commercial, and public-diplomacy activity outside the sponsoring state's home territory, with emphasis on current program activity, audiences, geographic concentration, narratives, explicit anti-U.S. content, joint activity, and explicit U.S. public-diplomacy overlap.
 
 A different project context can be supplied without changing code:
 
@@ -51,7 +51,7 @@ SUGAR then checks those spans against the actual record. A model-generated span 
 Several high-consequence labels require their own validated evidence span and are removed otherwise:
 
 - `anti_us_explicit`
-- `china_russia_joint_activity`
+- `cross_state_joint_activity`
 - `third_country_joint_activity`
 - `us_overlap_explicit`
 
@@ -70,7 +70,7 @@ The initial triage vocabulary is intentionally small:
 - commercial diplomacy
 - strategic audiences: students, emerging leaders, entrepreneurs, technical professionals
 - explicit anti-U.S. content
-- China-Russia joint activity
+- cross-state joint activity
 - third-country joint activity
 - explicit U.S. overlap
 - needs-context / triage-error states
@@ -87,6 +87,6 @@ If one record fails AI triage because of malformed model output or another per-r
 
 ## What AI triage does not claim
 
-Triage does not determine covert intent, causation, persuasion effects, population-level influence, or a single China-influence score. It structures and prioritizes observable public evidence for human analysts.
+Triage does not determine covert intent, causation, persuasion effects, population-level influence, or a single single influence score. It structures and prioritizes observable public evidence for human analysts.
 
 The resulting observation dataset is therefore suitable for a review queue and downstream coding, but unverified AI-triaged rows should not automatically be treated as final analytical findings.

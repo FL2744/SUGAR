@@ -8,12 +8,12 @@ from sugar_core.triage import TriageResult, observation_from_triage, parse_triag
 from sugar_core.triage_io import post_record_from_mapping
 
 
-def _post(text: str = "The Confucius Institute will host a student technology workshop in Bishkek.") -> PostRecord:
+def _post(text: str = "The language-and-culture centers will host a student technology workshop in Bishkek.") -> PostRecord:
     return PostRecord(
         platform="bluesky",
         native_id="p1",
         canonical_url="https://example.test/p1",
-        query="confucius institute",
+        query="language-and-culture centers",
         original_text=text,
         translated_text=text,
         published_at="2026-09-10T12:00:00Z",
@@ -26,7 +26,7 @@ def test_grounded_sensitive_label_is_kept_and_fake_span_is_dropped():
     raw = {
         "relevance": "relevant",
         "relevance_confidence": 0.92,
-        "labels": ["event_activity", "anti_us_explicit", "china_russia_joint_activity"],
+        "labels": ["event_activity", "anti_us_explicit", "cross_state_joint_activity"],
         "summary": "A public student workshop was announced and U.S. policy was criticized.",
         "institution_name": "Example Center",
         "program_name": "Student Workshop",
@@ -39,7 +39,7 @@ def test_grounded_sensitive_label_is_kept_and_fake_span_is_dropped():
         "evidence": [
             {"label": "relevance", "span": "announced a student workshop in Bishkek"},
             {"label": "anti_us_explicit", "span": "criticized U.S. policy"},
-            {"label": "china_russia_joint_activity", "span": "joint China-Russia program"},
+            {"label": "cross_state_joint_activity", "span": "joint cross-state program"},
             {"label": "location", "span": "in Bishkek"},
         ],
     }
@@ -48,10 +48,10 @@ def test_grounded_sensitive_label_is_kept_and_fake_span_is_dropped():
 
     assert result.relevance == "relevant"
     assert "anti_us_explicit" in result.labels
-    assert "china_russia_joint_activity" not in result.labels
+    assert "cross_state_joint_activity" not in result.labels
     assert result.location_label == "Bishkek"
     assert any(item.label == "anti_us_explicit" for item in result.evidence)
-    assert not any(item.label == "china_russia_joint_activity" for item in result.evidence)
+    assert not any(item.label == "cross_state_joint_activity" for item in result.evidence)
 
 
 def test_ungrounded_relevant_result_is_downgraded_to_uncertain():
@@ -99,7 +99,7 @@ def test_observation_from_triage_populates_review_queue_fields():
         relevance_confidence=0.84,
         labels=["event_activity", "education", "strategic_audience_students"],
         summary="A student technology workshop was announced.",
-        institution_name="Confucius Institute",
+        institution_name="language-and-culture centers",
         program_name="Technology Workshop",
         audiences=["students"],
         themes=["technology", "education"],
@@ -111,7 +111,7 @@ def test_observation_from_triage_populates_review_queue_fields():
     assert observation.relevance == "relevant"
     assert observation.relevance_confidence == pytest.approx(0.84)
     assert observation.verification_state == "ai_triaged"
-    assert observation.institution_name == "Confucius Institute"
+    assert observation.institution_name == "language-and-culture centers"
     assert observation.program_name == "Technology Workshop"
     assert observation.audiences == ["students"]
     assert observation.ai_model == "test-model"

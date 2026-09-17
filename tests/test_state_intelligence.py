@@ -36,11 +36,11 @@ def _assessment(obs, *, domain="stem_technology", audience="students", narrative
 def test_packet_builds_macro_micro_comparability_and_coupling_without_influence_score():
     event = _observation(
         "event", "Bishkek technology event", "2026-08-01T12:00:00Z",
-        "Kyrgyzstan", "Bishkek", "Shared Actor", "https://example.org/event",
+        "example_host_country", "Bishkek", "Shared Actor", "https://example.org/event",
     )
     digital = _observation(
         "digital_post", "Bishkek event promotion", "2026-08-05T12:00:00Z",
-        "Kyrgyzstan", "Bishkek", "Shared Actor", "https://example.org/post", "social_media",
+        "example_host_country", "Bishkek", "Shared Actor", "https://example.org/post", "social_media",
     )
     comparison = _observation(
         "program", "Tashkent technology program", "2026-08-03T12:00:00Z",
@@ -66,7 +66,7 @@ def test_packet_builds_macro_micro_comparability_and_coupling_without_influence_
 def test_case_profile_identifies_comparables_and_uncertainty():
     first = _observation(
         "program", "Program A", "2026-07-01T12:00:00Z",
-        "Kyrgyzstan", "Bishkek", "Actor A", "https://example.org/a",
+        "example_host_country", "Bishkek", "Actor A", "https://example.org/a",
     )
     second = _observation(
         "program", "Program B", "2026-07-15T12:00:00Z",

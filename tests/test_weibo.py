@@ -51,7 +51,7 @@ def _status(status_id="123", text="<b>Hello</b> world", created="Sat Sep 12 10:0
         "attitudes_count": 7,
         "comments_count": 3,
         "reposts_count": 2,
-        "user": {"id": "42", "screen_name": "中国机构", "location": "北京"},
+        "user": {"id": "42", "screen_name": "国际机构", "location": "首都"},
     }
 
 
@@ -85,7 +85,7 @@ def test_fetch_status_normalizes_text_time_metrics_and_thread_root():
     assert record.engagement["reposts"] == 2
     assert record.thread_root_key == "weibo:123"
     assert record.conversation_id == "123"
-    assert record.author_name == "中国机构"
+    assert record.author_name == "国际机构"
 
 
 def test_fetch_long_status_uses_public_extend_text():
@@ -121,7 +121,7 @@ def test_search_preserves_multi_query_provenance_without_hydration():
     )
 
     rows = collect_weibo_public(
-        search_terms=["孔子学院", "Confucius Institute"],
+        search_terms=["文化交流", "language-and-culture centers"],
         max_posts_per_query=1,
         max_pages_per_query=1,
         hydrate_details=False,
@@ -129,7 +129,7 @@ def test_search_preserves_multi_query_provenance_without_hydration():
     )
 
     assert len(rows) == 1
-    assert rows[0].query_matches == ["孔子学院", "Confucius Institute"]
+    assert rows[0].query_matches == ["文化交流", "language-and-culture centers"]
     assert rows[0].source_mode == "weibo_public_search"
 
 
@@ -138,7 +138,7 @@ def test_search_login_gate_is_not_retried_or_bypassed():
 
     with pytest.raises(WeiboAccessError):
         collect_weibo_public(
-            search_terms=["鲁班工坊"],
+            search_terms=["技术培训"],
             hydrate_details=False,
             session=session,
         )

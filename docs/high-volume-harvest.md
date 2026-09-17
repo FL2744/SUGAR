@@ -60,9 +60,9 @@ Example `csm_terms_zh.txt`:
 
 ```text
 # Institutions and program families
-孔子学院
-鲁班工坊
-中国文化中心
+文化交流
+技术培训
+国际文化中心
 汉语桥
 
 # Add project-approved institution/program names and local-language variants below.

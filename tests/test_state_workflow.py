@@ -29,7 +29,7 @@ def verified_observation() -> ResearchObservation:
         observation_type="program",
         title="Technology and university advising program",
         summary="Verified reporting describes a technology program for university students in Bishkek.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.8746,
         longitude=74.5698,
@@ -47,10 +47,10 @@ def verified_assessment(obs: ResearchObservation) -> StateAssessment:
         strategic_audiences=["students", "emerging_leaders"],
         program_domains=["higher_education", "stem_technology"],
         narrative_tags=["technology_innovation"],
-        sponsor_entities=["Example PRC-linked sponsor"],
-        prc_support=SupportAssessment(
+        sponsor_entities=["Example sponsor-linked sponsor"],
+        sponsor_support=SupportAssessment(
             level="confirmed",
-            bases=["official_prc_source"],
+            bases=["official_sponsor_source"],
             rationale="Verified source identifies official sponsorship.",
             confidence=1.0,
             evidence_refs=[SOURCE],
@@ -61,7 +61,7 @@ def verified_assessment(obs: ResearchObservation) -> StateAssessment:
         reach=ReachMetrics(attendance=120, views=10000, likes=400, comments=50, shares_reposts=20),
         claims=[
             AnalyticClaim(
-                statement="The program had official PRC sponsorship.",
+                statement="The program had official sponsoring state sponsorship.",
                 claim_type="support_relationship",
                 epistemic_status="observed_fact",
                 confidence=1.0,
@@ -96,7 +96,7 @@ def us_site() -> USPresenceSite:
         name="American Space Bishkek",
         network="american_space",
         subtype="American Center",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.87,
         longitude=74.59,
@@ -189,16 +189,16 @@ def test_package_emits_state_outputs_and_verified_geojson(tmp_path: Path):
         [obs],
         [assessment],
         tmp_path,
-        name="kyrgyzstan",
+        name="example_host_country",
         us_sites=[us_site()],
     )
     assert len(outputs) == 8
     for output in outputs:
         assert Path(output).is_file()
-    audit = json.loads((tmp_path / "kyrgyzstan.audit.json").read_text(encoding="utf-8"))
+    audit = json.loads((tmp_path / "example_host_country.audit.json").read_text(encoding="utf-8"))
     assert audit["status"] == "pass"
-    geojson = json.loads((tmp_path / "kyrgyzstan.map.geojson").read_text(encoding="utf-8"))
-    assert {feature["properties"]["layer"] for feature in geojson["features"]} == {"prc_observation", "us_presence"}
+    geojson = json.loads((tmp_path / "example_host_country.map.geojson").read_text(encoding="utf-8"))
+    assert {feature["properties"]["layer"] for feature in geojson["features"]} == {"sponsor_observation", "us_presence"}
 
 
 def test_snapshot_diff_calls_out_policy_relevant_changes():

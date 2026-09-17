@@ -23,12 +23,12 @@ from sugar_core.state_schema import StateAssessment
 
 
 STATE_URL = "https://educationusa.state.gov/node/421"
-OPERATOR_URL = "https://kyrgyzstan.americancouncils.org/edusa"
+OPERATOR_URL = "https://example_host_country.americancouncils.org/edusa"
 
 
 def _conflict() -> SourceConflict:
     state = SourceClaim(
-        statement="EducationUSA Kyrgyzstan is fully online beginning April 1, 2026.",
+        statement="EducationUSA example_host_country is fully online beginning April 1, 2026.",
         source_url=STATE_URL,
         publisher="U.S. Department of State EducationUSA",
         authority_type="official_authority",
@@ -36,14 +36,14 @@ def _conflict() -> SourceConflict:
         effective_date="2026-04-01",
     )
     operator = SourceClaim(
-        statement="EducationUSA Kyrgyzstan provides in-person advising in Bishkek.",
+        statement="EducationUSA example_host_country provides in-person advising in Bishkek.",
         source_url=OPERATOR_URL,
-        publisher="American Councils Kyrgyzstan",
+        publisher="American Councils example_host_country",
         authority_type="official_operator",
         freshness="unknown",
     )
     return SourceConflict(
-        topic="EducationUSA Kyrgyzstan service topology",
+        topic="EducationUSA example_host_country service topology",
         conflict_type="service_topology",
         status="provisional_treatment",
         claims=[state, operator],
@@ -58,7 +58,7 @@ def _dataset() -> tuple[ResearchObservation, StateAssessment]:
         observation_type="program",
         title="Education advising context",
         summary="Public-source record used for conflict-review regression coverage.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         evidence=[
             EvidenceReference(

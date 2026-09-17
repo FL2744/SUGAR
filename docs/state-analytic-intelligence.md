@@ -44,8 +44,8 @@ Country scope:
 
 ```bash
 sugar-intel packet observations.xlsx state.reviewed.jsonl \
-  --country Kyrgyzstan \
-  --output kyrgyzstan.intelligence.json
+  --country example host country \
+  --output example host country.intelligence.json
 ```
 
 Micro-case scope:
@@ -68,7 +68,7 @@ The packet reports distributions for:
 - strategic audiences;
 - narratives;
 - delivery modes;
-- PRC-support levels;
+- sponsor-support levels;
 - source types.
 
 It also calculates normalized entropy and Herfindahl-Hirschman concentration (HHI) for audiences, program domains, and narratives.
@@ -348,7 +348,7 @@ Micro mode focuses on a single observation and asks:
 - What is directly observed?
 - What is inferred?
 - What is the evidence chain?
-- Is PRC support actually established?
+- Is sponsor support actually established?
 - What mechanism could explain the observation?
 - What comparable cases exist?
 - What evidence cuts against the leading explanation?
@@ -523,7 +523,7 @@ Evidence-reference deltas should therefore be reviewed before interpreting an as
 
 A useful macro judgment is not:
 
-> Country A had 70 posts and Country B had 30, therefore Country A has more Chinese influence.
+> Country A had 70 posts and Country B had 30, therefore Country A has more sponsoring-state influence.
 
 A useful judgment is closer to:
 

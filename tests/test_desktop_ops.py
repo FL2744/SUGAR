@@ -18,7 +18,7 @@ def _dataset(tmp_path: Path) -> tuple[Path, Path]:
         title="Technology workshop",
         summary="A university technology workshop targeted students.",
         observed_at="2026-09-01T12:00:00Z",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         institution_name="Example University",
         program_name="Innovation Workshop",
@@ -81,7 +81,7 @@ def test_desktop_templates_and_intelligence_packet(tmp_path):
     assert outputs == [str(packet_path.resolve())]
     payload = json.loads(packet_path.read_text(encoding="utf-8"))
     assert payload["corpus"]["observations"] == 1
-    assert payload["representative_cases"][0]["location"]["country"] == "Kyrgyzstan"
+    assert payload["representative_cases"][0]["location"]["country"] == "example_host_country"
 
 
 def test_state_audit_desktop_operation_writes_json(tmp_path):
@@ -107,7 +107,7 @@ def test_desktop_state_map_can_resolve_registered_workspace_inputs(tmp_path):
         observation_type="event",
         title="Verified event",
         summary="Verified public event.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.8746,
         longitude=74.5698,

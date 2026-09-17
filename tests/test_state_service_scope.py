@@ -15,7 +15,7 @@ from sugar_core.state_workflow import (
 
 def observation(
     *,
-    country: str = "Kyrgyzstan",
+    country: str = "example_host_country",
     city: str = "Bishkek",
     lat: float = 42.8746,
     lon: float = 74.5698,
@@ -37,7 +37,7 @@ def physical_space() -> USPresenceSite:
     return USPresenceSite(
         name="American Space Bishkek",
         network="american_space",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.88,
         longitude=74.60,
@@ -51,9 +51,9 @@ def physical_space() -> USPresenceSite:
 
 def virtual_educationusa() -> USPresenceSite:
     return USPresenceSite(
-        name="EducationUSA Kyrgyzstan",
+        name="EducationUSA example_host_country",
         network="educationusa",
-        country="Kyrgyzstan",
+        country="example_host_country",
         service_tags=["educationusa", "study_in_the_us", "higher_education"],
         delivery_mode="virtual",
         coverage_scope="country",
@@ -75,7 +75,7 @@ def test_country_virtual_service_contributes_without_becoming_nearest_site():
     assert "higher_education" in overlap.thematic_overlap
     assert "educationusa" in overlap.service_overlap
     assert "students" in overlap.audience_overlap
-    assert "EducationUSA Kyrgyzstan [virtual/country]" in overlap.note
+    assert "EducationUSA example_host_country [virtual/country]" in overlap.note
 
 
 def test_country_virtual_service_does_not_leak_across_countries():
@@ -113,7 +113,7 @@ def test_city_and_site_scopes_fail_closed_when_not_geographically_applicable():
     city_service = USPresenceSite(
         name="Osh city entrepreneurship service",
         network="american_space",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Osh",
         service_tags=["entrepreneurship"],
         delivery_mode="virtual",
@@ -122,7 +122,7 @@ def test_city_and_site_scopes_fail_closed_when_not_geographically_applicable():
     distant_site = USPresenceSite(
         name="Distant site program",
         network="american_space",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Osh",
         latitude=40.5140,
         longitude=72.8161,
@@ -142,7 +142,7 @@ def test_structured_locations_supersede_stale_summary_city_for_service_scope():
         locations=[
             ObservationLocation(
                 label="Osh venue",
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Osh",
                 precision="city",
                 basis="source_stated",
@@ -153,7 +153,7 @@ def test_structured_locations_supersede_stale_summary_city_for_service_scope():
     bishkek_service = USPresenceSite(
         name="Bishkek city entrepreneurship service",
         network="american_space",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         service_tags=["entrepreneurship"],
         delivery_mode="virtual",
@@ -162,7 +162,7 @@ def test_structured_locations_supersede_stale_summary_city_for_service_scope():
     osh_service = USPresenceSite(
         name="Osh city entrepreneurship service",
         network="american_space",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Osh",
         service_tags=["entrepreneurship"],
         delivery_mode="virtual",
@@ -181,7 +181,7 @@ def test_multi_country_structured_locations_union_applicable_service_sources():
         locations=[
             ObservationLocation(
                 label="Bishkek venue",
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Bishkek",
                 precision="city",
                 basis="source_stated",
@@ -200,9 +200,9 @@ def test_multi_country_structured_locations_union_applicable_service_sources():
         program_domains=["higher_education", "entrepreneurship"],
     )
     kg_service = USPresenceSite(
-        name="EducationUSA Kyrgyzstan",
+        name="EducationUSA example_host_country",
         network="educationusa",
-        country="Kyrgyzstan",
+        country="example_host_country",
         service_tags=["educationusa"],
         delivery_mode="virtual",
         coverage_scope="country",
@@ -220,7 +220,7 @@ def test_multi_country_structured_locations_union_applicable_service_sources():
     overlap = assess_us_overlap(obs, assessment, [kg_service, kz_service])
 
     assert overlap.service_overlap == ["educationusa", "entrepreneurship"]
-    assert "EducationUSA Kyrgyzstan [virtual/country]" in overlap.note
+    assert "EducationUSA example_host_country [virtual/country]" in overlap.note
     assert "Almaty entrepreneurship service [virtual/city]" in overlap.note
     assert "2 structured activity locations" in overlap.note
 
@@ -230,7 +230,7 @@ def test_nearest_physical_site_uses_structured_location_coordinates_not_summary_
         locations=[
             ObservationLocation(
                 label="Osh venue",
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Osh",
                 latitude=40.53347,
                 longitude=72.792545,
@@ -242,7 +242,7 @@ def test_nearest_physical_site_uses_structured_location_coordinates_not_summary_
     osh_space = USPresenceSite(
         name="American Corner Osh",
         network="american_space",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Osh",
         latitude=40.53347,
         longitude=72.792545,
@@ -263,7 +263,7 @@ def test_site_scope_distance_does_not_borrow_coordinates_from_other_country_loca
         locations=[
             ObservationLocation(
                 label="Osh venue",
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Osh",
                 precision="city",
                 basis="source_stated",
@@ -283,7 +283,7 @@ def test_site_scope_distance_does_not_borrow_coordinates_from_other_country_loca
     bishkek_site_service = USPresenceSite(
         name="Bishkek site entrepreneurship service",
         network="american_space",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.88,
         longitude=74.60,
@@ -306,7 +306,7 @@ def test_virtual_service_with_incidental_coordinate_is_not_emitted_as_geojson_po
     virtual.latitude = 42.87
     virtual.longitude = 74.60
     geojson = state_geojson([obs], [assessment], [virtual], verified_only=False)
-    assert [feature["properties"]["layer"] for feature in geojson["features"]] == ["prc_observation"]
+    assert [feature["properties"]["layer"] for feature in geojson["features"]] == ["sponsor_observation"]
 
 
 def test_us_presence_loader_reads_scope_and_precision_fields(tmp_path: Path):
@@ -321,9 +321,9 @@ def test_us_presence_loader_reads_scope_and_precision_fields(tmp_path: Path):
         writer.writeheader()
         writer.writerow(
             {
-                "name": "EducationUSA Kyrgyzstan",
+                "name": "EducationUSA example_host_country",
                 "network": "educationusa",
-                "country": "Kyrgyzstan",
+                "country": "example_host_country",
                 "city": "",
                 "latitude": "",
                 "longitude": "",

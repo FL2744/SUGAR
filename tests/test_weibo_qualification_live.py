@@ -22,7 +22,7 @@ def test_live_weibo_qualification_exercises_search_and_real_seed(tmp_path):
     """
     config = {
         "sources": ["weibo"],
-        "terms": ["孔子学院"],
+        "terms": ["文化交流"],
         "output_directory": str(tmp_path),
         "weibo_hydrate_details": False,
         "harvest": {

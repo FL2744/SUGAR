@@ -161,7 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     package.add_argument("--previous-assessments")
     package.add_argument("--output")
     package.add_argument("--name", default="state_research")
-    package.add_argument("--title", default="PRC Cultural Influence Network Research Update")
+    package.add_argument("--title", default="State-Supported Public Engagement Research Update")
     package.add_argument("--current-start", default="2024-01-01")
     package.add_argument("--stale-days", type=int, default=90)
     package.add_argument("--resolve-locations", action="store_true")

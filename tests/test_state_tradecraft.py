@@ -9,7 +9,7 @@ def _observation(*, title="Case", verification_state="human_verified", evidence=
         title=title,
         summary=f"Evidence for {title}",
         observed_at="2026-08-01T12:00:00Z",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         evidence=evidence or [
             EvidenceReference(
@@ -29,7 +29,7 @@ def test_source_adequacy_distinguishes_diverse_multi_source_from_single_identity
         title="Diverse case",
         evidence=[
             EvidenceReference(url="https://host.example/program", source_type="official_host_source"),
-            EvidenceReference(url="https://prc.example/notice", source_type="official_prc_source"),
+            EvidenceReference(url="https://sponsoring state.example/notice", source_type="official_sponsor_source"),
             EvidenceReference(
                 url="https://social.example/post", source_type="social_media", platform="weibo", native_id="123"
             ),
@@ -46,8 +46,8 @@ def test_confirmed_support_single_identity_and_coordination_without_verified_cla
     observation = _observation()
     assessment = StateAssessment(
         observation_id=observation.observation_id,
-        narrative_tags=["china_russia_coordination"],
-        prc_support=SupportAssessment(
+        narrative_tags=["cross_state_coordination"],
+        sponsor_support=SupportAssessment(
             level="confirmed",
             bases=["official_host_source"],
             rationale="Host source explicitly attributes sponsorship.",
@@ -83,7 +83,7 @@ def test_tradecraft_audit_counts_epistemic_debt():
     observation = _observation(verification_state="unreviewed")
     assessment = StateAssessment(
         observation_id=observation.observation_id,
-        prc_support=SupportAssessment(
+        sponsor_support=SupportAssessment(
             level="probable",
             bases=["credible_secondary_reporting"],
             rationale="Probable pending human review.",

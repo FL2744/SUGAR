@@ -42,7 +42,7 @@ def test_state_map_labels_density_and_proximity_without_implying_influence(tmp_p
     assert path.is_file()
     html = path.read_text(encoding="utf-8")
     assert "not influence" in html
-    assert "PRC activity locations" in html
+    assert "sponsor-linked activity locations" in html
     assert "Location precision" in html
     assert "City level" in html
     assert "U.S. proximity" in html
@@ -81,13 +81,13 @@ def test_multi_site_map_renders_two_locations_but_one_activity_weight(tmp_path: 
         observation_type="event",
         title="Multi-site activity",
         summary="One activity was reported at two universities.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         evidence=[EvidenceReference(url="https://example.org/activity")],
         locations=[
             ObservationLocation(
                 label="University A",
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Bishkek",
                 latitude=42.85035,
                 longitude=74.58509,
@@ -97,7 +97,7 @@ def test_multi_site_map_renders_two_locations_but_one_activity_weight(tmp_path: 
             ),
             ObservationLocation(
                 label="University B campus unresolved",
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Bishkek",
                 latitude=42.8746,
                 longitude=74.5698,
@@ -113,7 +113,7 @@ def test_multi_site_map_renders_two_locations_but_one_activity_weight(tmp_path: 
     site = USPresenceSite(
         name="American Space Bishkek",
         network="american_space",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.8776,
         longitude=74.6105,

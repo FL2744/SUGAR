@@ -43,8 +43,8 @@ def record(native_id: str, query: str) -> PostRecord:
 
 def test_checkpoint_metrics(tmp_path: Path):
     path = tmp_path / "run.sqlite3"
-    first = HarvestTask(source="weibo", query="孔子学院", page_start=1, page_count=1)
-    second = HarvestTask(source="weibo", query="鲁班工坊", page_start=2, page_count=1)
+    first = HarvestTask(source="weibo", query="文化交流", page_start=1, page_count=1)
+    second = HarvestTask(source="weibo", query="技术培训", page_start=2, page_count=1)
     with HarvestStore(path) as store:
         store.register_tasks([first, second])
         store.start_task(first)
@@ -69,7 +69,7 @@ def test_checkpoint_metrics(tmp_path: Path):
 
 def test_access_gate_is_not_false_zero(tmp_path: Path):
     path = tmp_path / "gated.sqlite3"
-    task = HarvestTask(source="weibo", query="孔子学院", page_start=1, page_count=1)
+    task = HarvestTask(source="weibo", query="文化交流", page_start=1, page_count=1)
     with HarvestStore(path) as store:
         store.register_tasks([task])
         store.start_task(task)

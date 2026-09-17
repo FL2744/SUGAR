@@ -69,7 +69,7 @@ def test_nearest_us_presence_uses_site_specific_uncertainty_and_ignores_virtual_
         observation_type="event",
         title="Example activity",
         summary="Example activity for proximity regression testing.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.8746,
         longitude=74.5698,
@@ -88,7 +88,7 @@ def test_nearest_us_presence_uses_site_specific_uncertainty_and_ignores_virtual_
     virtual = USPresenceSite(
         name="Virtual service with incidental coordinates",
         network="educationusa",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.8747,
         longitude=74.5699,
@@ -100,7 +100,7 @@ def test_nearest_us_presence_uses_site_specific_uncertainty_and_ignores_virtual_
     physical = USPresenceSite(
         name="Physical American Space",
         network="american_space",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.88,
         longitude=74.60,

@@ -16,7 +16,7 @@ def observation() -> ResearchObservation:
         observation_type="program",
         title="Reviewed program",
         summary="Evidence for a reviewed program.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         evidence=[EvidenceReference(url=SOURCE)],
         verification_state="human_verified",
@@ -29,9 +29,9 @@ def assessment(obs: ResearchObservation) -> StateAssessment:
         observation_id=obs.observation_id,
         strategic_audiences=["students"],
         program_domains=["higher_education"],
-        prc_support=SupportAssessment(
+        sponsor_support=SupportAssessment(
             level="probable",
-            bases=["official_prc_source"],
+            bases=["official_sponsor_source"],
             evidence_refs=[SOURCE],
             review_state="ai_triaged",
         ),
@@ -72,8 +72,8 @@ def test_review_workbook_can_promote_assessment_support_and_claim_with_named_rev
 
     reviewed = apply_review_workbook([original], path)[0]
     assert reviewed.review_state == "human_verified"
-    assert reviewed.prc_support.level == "confirmed"
-    assert reviewed.prc_support.review_state == "human_verified"
+    assert reviewed.sponsor_support.level == "confirmed"
+    assert reviewed.sponsor_support.review_state == "human_verified"
     assert reviewed.claims[0].review_state == "human_verified"
     assert reviewed.brief_eligible
 

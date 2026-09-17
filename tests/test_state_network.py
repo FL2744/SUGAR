@@ -14,7 +14,7 @@ def fixtures():
         observation_type="program",
         title="Student innovation workshop",
         summary="Verified workshop evidence.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         institution_name="Host University",
         program_name="Innovation Workshop",
@@ -26,7 +26,7 @@ def fixtures():
     site = USPresenceSite(
         name="American Space Bishkek",
         network="american_space",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         site_id="us_bishkek",
     )
@@ -38,9 +38,9 @@ def fixtures():
         strategic_audiences=["students"],
         program_domains=["stem_technology"],
         narrative_tags=["technology_innovation"],
-        prc_support=SupportAssessment(
+        sponsor_support=SupportAssessment(
             level="confirmed",
-            bases=["official_prc_source"],
+            bases=["official_sponsor_source"],
             evidence_refs=[SOURCE],
             review_state="human_verified",
             reviewer="analyst",

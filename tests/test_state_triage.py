@@ -7,7 +7,7 @@ def observation() -> ResearchObservation:
         observation_type="program",
         title="Technology workshop",
         summary="A public source describes a technology workshop for university students.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         evidence=[
             EvidenceReference(
@@ -29,9 +29,9 @@ def test_ai_confirmed_support_is_downgraded_and_bogus_taxonomy_is_dropped():
             "strategic_audiences": ["students", "invented_audience"],
             "program_domains": ["stem_technology", "invented_domain"],
             "narrative_tags": ["technology_innovation", "invented_narrative"],
-            "prc_support": {
+            "sponsor_support": {
                 "level": "confirmed",
-                "bases": ["official_prc_source", "invented_basis"],
+                "bases": ["official_sponsor_source", "invented_basis"],
                 "rationale": "The source identifies official sponsorship.",
                 "confidence": 0.9,
                 "evidence_refs": ["https://example.org/program", "https://invented.invalid"],
@@ -43,9 +43,9 @@ def test_ai_confirmed_support_is_downgraded_and_bogus_taxonomy_is_dropped():
         },
         model="test-model",
     )
-    assert assessment.prc_support.level == "probable"
-    assert assessment.prc_support.evidence_refs == ["https://example.org/program"]
-    assert assessment.prc_support.bases == ["official_prc_source"]
+    assert assessment.sponsor_support.level == "probable"
+    assert assessment.sponsor_support.evidence_refs == ["https://example.org/program"]
+    assert assessment.sponsor_support.bases == ["official_sponsor_source"]
     assert assessment.strategic_audiences == ["students"]
     assert assessment.program_domains == ["stem_technology"]
     assert assessment.narrative_tags == ["technology_innovation"]
@@ -59,7 +59,7 @@ def test_ai_probable_support_without_attached_evidence_is_downgraded():
     assessment = assessment_from_triage_payload(
         obs,
         {
-            "prc_support": {
+            "sponsor_support": {
                 "level": "probable",
                 "bases": ["branding"],
                 "confidence": 0.7,
@@ -67,8 +67,8 @@ def test_ai_probable_support_without_attached_evidence_is_downgraded():
             }
         },
     )
-    assert assessment.prc_support.level == "possible"
-    assert assessment.prc_support.evidence_refs == []
+    assert assessment.sponsor_support.level == "possible"
+    assert assessment.sponsor_support.evidence_refs == []
 
 
 def test_ai_influence_language_becomes_followup_hypothesis_not_finding():

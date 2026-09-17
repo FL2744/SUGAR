@@ -81,13 +81,13 @@ def export_review_workbook(
                 "decision": "",
                 "reviewer": "",
                 "review_note": assessment.review_note,
-                "current_support_level": assessment.prc_support.level,
+                "current_support_level": assessment.sponsor_support.level,
                 "support_level_decision": "",
-                "current_support_review_state": assessment.prc_support.review_state,
+                "current_support_review_state": assessment.sponsor_support.review_state,
                 "support_review_decision": "",
                 "support_reviewer": "",
-                "support_rationale": assessment.prc_support.rationale,
-                "support_evidence_refs": _list_text(assessment.prc_support.evidence_refs),
+                "support_rationale": assessment.sponsor_support.rationale,
+                "support_evidence_refs": _list_text(assessment.sponsor_support.evidence_refs),
                 "strategic_audiences": _list_text(assessment.strategic_audiences),
                 "program_domains": _list_text(assessment.program_domains),
                 "narrative_tags": _list_text(assessment.narrative_tags),
@@ -125,7 +125,7 @@ def export_review_workbook(
         [
             {"rule": "Purpose", "guidance": "This workbook records human analytic decisions. It does not edit raw source evidence."},
             {"rule": "Evidence", "guidance": "Do not verify a claim unless its evidence_refs identify source evidence attached to the observation."},
-            {"rule": "PRC support", "guidance": "Confirmed support requires explicit evidence and support_review_decision=human_verified with a named reviewer."},
+            {"rule": "sponsor support", "guidance": "Confirmed support requires explicit evidence and support_review_decision=human_verified with a named reviewer."},
             {"rule": "Influence", "guidance": "Do not verify an influence claim from views, likes, comments, attendance, repetition, or proximity alone. Causal influence requires outcome/causal evidence and will still be audited."},
             {"rule": "Anti-U.S./coordination", "guidance": "Use these labels only when the content or relationship is explicit and source-supported."},
             {"rule": "Decision", "guidance": "Use human_verified, rejected, needs_followup, ai_triaged, or unreviewed. A reviewer is required for human_verified/rejected."},
@@ -267,7 +267,7 @@ def apply_review_workbook(
             raise ValueError(f"Unsupported support review decision: {support_review}")
         if support_review in {"human_verified", "rejected"} and not support_reviewer:
             raise ValueError(f"Support review for {assessment_id} requires a reviewer.")
-        support_payload = asdict(assessment.prc_support)
+        support_payload = asdict(assessment.sponsor_support)
         if support_level:
             support_payload["level"] = support_level
         if support_review:
@@ -277,7 +277,7 @@ def apply_review_workbook(
         rationale = _clean(raw.get("support_rationale"))
         if rationale:
             support_payload["rationale"] = rationale
-        assessment.prc_support = SupportAssessment(**support_payload)
+        assessment.sponsor_support = SupportAssessment(**support_payload)
 
     claim_lookup: dict[str, tuple[StateAssessment, int]] = {}
     for assessment in assessments:

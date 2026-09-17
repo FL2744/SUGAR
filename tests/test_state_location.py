@@ -10,7 +10,7 @@ def test_recorded_coordinates_preserve_location_but_expose_precision():
         observation_type="event",
         summary="Event at a recorded campus location.",
         city="Bishkek",
-        country="Kyrgyzstan",
+        country="example_host_country",
         latitude=42.875,
         longitude=74.612,
         location_basis="institution_site",
@@ -29,12 +29,12 @@ def test_multi_site_observation_resolves_each_location_with_its_own_provenance()
         observation_type="event",
         title="Two-campus activity",
         summary="One activity occurred at two reported institutions.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         locations=[
             ObservationLocation(
                 label="Venue A",
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Bishkek",
                 latitude=42.85,
                 longitude=74.58,
@@ -46,7 +46,7 @@ def test_multi_site_observation_resolves_each_location_with_its_own_provenance()
             ),
             ObservationLocation(
                 label="Venue B campus unresolved",
-                country="Kyrgyzstan",
+                country="example_host_country",
                 city="Bishkek",
                 latitude=42.8746,
                 longitude=74.5698,
@@ -75,8 +75,8 @@ def test_structured_unresolved_location_does_not_erase_resolved_sibling():
         observation_type="event",
         summary="One activity with one resolved and one unresolved venue.",
         locations=[
-            ObservationLocation(label="Resolved", city="Bishkek", country="Kyrgyzstan", latitude=42.85, longitude=74.58, precision="site"),
-            ObservationLocation(label="Unresolved campus", city="Bishkek", country="Kyrgyzstan", precision="site", source_ref="https://example.org/source"),
+            ObservationLocation(label="Resolved", city="Bishkek", country="example_host_country", latitude=42.85, longitude=74.58, precision="site"),
+            ObservationLocation(label="Unresolved campus", city="Bishkek", country="example_host_country", precision="site", source_ref="https://example.org/source"),
         ],
     )
     resolved = resolve_observation_locations(observation)
@@ -92,7 +92,7 @@ def test_missing_city_coordinates_can_be_resolved_without_false_site_precision(t
         observation_type="program",
         summary="Program reported in Bishkek.",
         city="Bishkek",
-        country="Kyrgyzstan",
+        country="example_host_country",
         location_basis="reported_city",
         location_confidence=0.8,
     )
@@ -103,7 +103,7 @@ def test_missing_city_coordinates_can_be_resolved_without_false_site_precision(t
         return {
             "latitude": 42.8746,
             "longitude": 74.5698,
-            "display_name": "Bishkek, Kyrgyzstan",
+            "display_name": "Bishkek, example_host_country",
             "boundingbox": [42.75, 43.0, 74.4, 74.75],
             "type": "city",
             "addresstype": "city",
@@ -116,7 +116,7 @@ def test_missing_city_coordinates_can_be_resolved_without_false_site_precision(t
         geocoder=fake_geocoder,
         resolve_missing=True,
     )
-    assert queries == ["Bishkek, Kyrgyzstan"]
+    assert queries == ["Bishkek, example_host_country"]
     assert resolved.resolved is True
     assert resolved.precision == "city"
     assert resolved.derived is True

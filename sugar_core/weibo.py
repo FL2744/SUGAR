@@ -18,7 +18,7 @@ WEIBO_STATUS_ENDPOINT = f"{WEIBO_MOBILE_BASE_URL}/statuses/show"
 WEIBO_EXTEND_ENDPOINT = f"{WEIBO_MOBILE_BASE_URL}/statuses/extend"
 WEIBO_COMMENTS_ENDPOINT = f"{WEIBO_MOBILE_BASE_URL}/api/comments/show"
 
-_CHINA_TZ = timezone(timedelta(hours=8))
+_PLATFORM_TZ = timezone(timedelta(hours=8))
 _LOGIN_MARKERS = ("登录", "登陆", "login", "请先登录", "未登录")
 
 
@@ -123,12 +123,12 @@ def _parse_weibo_time(value: Any, *, now: datetime | None = None) -> str:
         try:
             parsed = datetime.strptime(text, fmt)
             if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=_CHINA_TZ)
+                parsed = parsed.replace(tzinfo=_PLATFORM_TZ)
             return parsed.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         except ValueError:
             pass
 
-    local_now = (now or datetime.now(timezone.utc)).astimezone(_CHINA_TZ)
+    local_now = (now or datetime.now(timezone.utc)).astimezone(_PLATFORM_TZ)
     try:
         if text == "刚刚":
             parsed = local_now

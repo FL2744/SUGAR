@@ -52,7 +52,7 @@ AI triage is therefore visible and reversible. It is not equivalent to human ver
 
 ## What is intentionally not in this schema
 
-There is no single "China influence score" in the observation model. Presence, activity, reach, audience relevance, persistence, engagement, overlap with U.S. efforts, and source confidence are analytically different concepts. They should not be collapsed into one number until the project agrees on a defensible methodology and tests it against real cases.
+There is no single "single influence score" in the observation model. Presence, activity, reach, audience relevance, persistence, engagement, overlap with U.S. efforts, and source confidence are analytically different concepts. They should not be collapsed into one number until the project agrees on a defensible methodology and tests it against real cases.
 
 The schema does preserve the evidence needed to add such dimensions later without rebuilding collection from scratch.
 

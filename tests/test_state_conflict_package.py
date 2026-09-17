@@ -16,7 +16,7 @@ from sugar_core.state_workflow import build_review_queue
 
 
 STATE_URL = "https://educationusa.state.gov/node/421"
-OPERATOR_URL = "https://kyrgyzstan.americancouncils.org/edusa"
+OPERATOR_URL = "https://example_host_country.americancouncils.org/edusa"
 OBSERVATION_URL = "https://example.org/observation"
 
 
@@ -25,7 +25,7 @@ def observation() -> ResearchObservation:
         observation_type="program",
         title="University-facing activity",
         summary="Public reporting describes a higher-education activity.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.8746,
         longitude=74.5698,
@@ -49,9 +49,9 @@ def assessment(obs: ResearchObservation) -> StateAssessment:
 
 def educationusa_site() -> USPresenceSite:
     return USPresenceSite(
-        name="EducationUSA Kyrgyzstan",
+        name="EducationUSA example_host_country",
         network="educationusa",
-        country="Kyrgyzstan",
+        country="example_host_country",
         service_tags=["educationusa", "study_in_the_us", "higher_education"],
         source_url=STATE_URL,
         delivery_mode="virtual",
@@ -61,7 +61,7 @@ def educationusa_site() -> USPresenceSite:
 
 def provisional_conflict() -> SourceConflict:
     state = SourceClaim(
-        statement="EducationUSA Kyrgyzstan is fully online beginning April 1, 2026.",
+        statement="EducationUSA example_host_country is fully online beginning April 1, 2026.",
         source_url=STATE_URL,
         publisher="U.S. Department of State EducationUSA",
         authority_type="official_authority",
@@ -69,14 +69,14 @@ def provisional_conflict() -> SourceConflict:
         effective_date="2026-04-01",
     )
     operator = SourceClaim(
-        statement="EducationUSA Kyrgyzstan provides in-person advising in Bishkek.",
+        statement="EducationUSA example_host_country provides in-person advising in Bishkek.",
         source_url=OPERATOR_URL,
-        publisher="American Councils Kyrgyzstan",
+        publisher="American Councils example_host_country",
         authority_type="official_operator",
         freshness="unknown",
     )
     return SourceConflict(
-        topic="EducationUSA Kyrgyzstan service topology",
+        topic="EducationUSA example_host_country service topology",
         conflict_type="service_topology",
         status="provisional_treatment",
         claims=[state, operator],
@@ -88,7 +88,7 @@ def provisional_conflict() -> SourceConflict:
 
 def human_adjudicated_conflict() -> SourceConflict:
     state = SourceClaim(
-        statement="EducationUSA Kyrgyzstan is fully online beginning April 1, 2026.",
+        statement="EducationUSA example_host_country is fully online beginning April 1, 2026.",
         source_url=STATE_URL,
         publisher="U.S. Department of State EducationUSA",
         authority_type="official_authority",
@@ -96,13 +96,13 @@ def human_adjudicated_conflict() -> SourceConflict:
         effective_date="2026-04-01",
     )
     operator = SourceClaim(
-        statement="EducationUSA Kyrgyzstan provides in-person advising in Bishkek.",
+        statement="EducationUSA example_host_country provides in-person advising in Bishkek.",
         source_url=OPERATOR_URL,
-        publisher="American Councils Kyrgyzstan",
+        publisher="American Councils example_host_country",
         authority_type="official_operator",
     )
     return SourceConflict(
-        topic="EducationUSA Kyrgyzstan service topology",
+        topic="EducationUSA example_host_country service topology",
         conflict_type="service_topology",
         status="human_adjudicated",
         claims=[state, operator],
@@ -160,7 +160,7 @@ def test_exact_source_identity_prevents_topic_only_conflict_linkage():
     unrelated_site = USPresenceSite(
         name="Different Education Service",
         network="educationusa",
-        country="Kyrgyzstan",
+        country="example_host_country",
         service_tags=["educationusa", "higher_education"],
         source_url="https://example.gov/different-service",
         delivery_mode="virtual",
@@ -218,7 +218,7 @@ def test_state_package_persists_provisional_conflict_across_analyst_surfaces(tmp
     brief = (tmp_path / "case.brief.md").read_text(encoding="utf-8")
     assert "## Source Conflicts" in brief
     assert "not a human adjudication" in brief
-    assert "EducationUSA Kyrgyzstan service topology" in brief
+    assert "EducationUSA example_host_country service topology" in brief
 
 
 def test_human_adjudicated_conflict_is_preserved_without_unresolved_review_penalty(tmp_path):

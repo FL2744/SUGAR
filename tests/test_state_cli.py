@@ -17,7 +17,7 @@ def test_state_cli_builds_complete_analyst_bundle(tmp_path: Path):
         title="Verified education program",
         summary="Verified current program for students.",
         observed_at="2026-06-01T12:00:00Z",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.8746,
         longitude=74.5698,
@@ -50,7 +50,7 @@ def test_state_cli_builds_complete_analyst_bundle(tmp_path: Path):
             {
                 "name": "American Space Bishkek",
                 "network": "american_space",
-                "country": "Kyrgyzstan",
+                "country": "example_host_country",
                 "city": "Bishkek",
                 "latitude": 42.87,
                 "longitude": 74.59,
@@ -100,7 +100,7 @@ def test_state_cli_builds_complete_analyst_bundle(tmp_path: Path):
     audit = json.loads((out_dir / "state_smoke.audit.json").read_text(encoding="utf-8"))
     assert audit["status"] == "pass"
     geojson = json.loads((out_dir / "state_smoke.map.geojson").read_text(encoding="utf-8"))
-    assert {row["properties"]["layer"] for row in geojson["features"]} == {"prc_observation", "us_presence"}
+    assert {row["properties"]["layer"] for row in geojson["features"]} == {"sponsor_observation", "us_presence"}
     network = json.loads((out_dir / "state_smoke.network.json").read_text(encoding="utf-8"))
     assert any(edge["relationship"] == "overlaps_us_public_diplomacy" for edge in network["edges"])
 
@@ -111,7 +111,7 @@ def test_state_cli_routes_map_into_workspace_and_registers_it(tmp_path: Path):
         observation_type="event",
         title="Verified event",
         summary="Verified event with city-level coordinates.",
-        country="Kyrgyzstan",
+        country="example_host_country",
         city="Bishkek",
         latitude=42.8746,
         longitude=74.5698,

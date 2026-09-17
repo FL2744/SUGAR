@@ -12,14 +12,14 @@ from .utils import JsonCache, normalize_whitespace
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 
 DEFAULT_PROJECT_CONTEXT = (
-    "Triage overt, public PRC government-supported cultural, educational, technical, commercial, "
-    "or public-diplomacy activity outside mainland China. Relevant examples can include Confucius "
-    "Institutes, Luban Workshops, Chinese cultural centers, embassy/consulate public engagement, "
+    "Triage overt, public state-supported cultural, educational, technical, commercial, "
+    "or public-diplomacy activity involving a sponsoring state outside its home territory. Relevant examples can include language-and-culture "
+    "centers, technical training programs, cultural centers, embassy/consulate public engagement, "
     "state-linked educational or technical outreach, public programs, and narratives tied to those "
     "activities. The research emphasis is current activity (especially 2024-present), program-level "
     "activity, audiences, geographic concentration, public narratives, explicit anti-U.S. content, "
-    "explicit China-Russia or third-country joint activity, and explicit overlap with U.S. public-"
-    "diplomacy efforts. Ordinary discussion about China is not automatically relevant."
+    "explicit cross-state or third-country joint activity, and explicit overlap with U.S. public-"
+    "diplomacy efforts. Ordinary discussion about a country is not automatically relevant."
 )
 
 TRIAGE_LABELS = {
@@ -35,7 +35,7 @@ TRIAGE_LABELS = {
     "strategic_audience_entrepreneurs",
     "strategic_audience_technical_professionals",
     "anti_us_explicit",
-    "china_russia_joint_activity",
+    "cross_state_joint_activity",
     "third_country_joint_activity",
     "us_overlap_explicit",
     "needs_context",
@@ -45,7 +45,7 @@ TRIAGE_LABELS = {
 _EVIDENCE_LABELS = TRIAGE_LABELS | {"relevance", "location"}
 _STRICTLY_GROUNDED_LABELS = {
     "anti_us_explicit",
-    "china_russia_joint_activity",
+    "cross_state_joint_activity",
     "third_country_joint_activity",
     "us_overlap_explicit",
 }
@@ -201,7 +201,7 @@ def _triage_prompt(record: PostRecord, project_context: str) -> tuple[str, str]:
         "(array), us_overlap (array), location_label, reason, evidence (array of objects with label and "
         "span). Evidence spans must be short exact contiguous excerpts copied from either source_text or "
         "translated_text. Use evidence label 'relevance' for the central relevance judgment and 'location' "
-        "for an explicitly stated place. For anti_us_explicit, china_russia_joint_activity, "
+        "for an explicitly stated place. For anti_us_explicit, cross_state_joint_activity, "
         "third_country_joint_activity, or us_overlap_explicit, include an evidence object with that exact "
         "label or omit the label. Keep summaries factual and narrow."
     )

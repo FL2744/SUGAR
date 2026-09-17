@@ -54,7 +54,7 @@ AUDIENCE_TO_US_SERVICES = {
     "other": set(),
 }
 
-SENSITIVE_NARRATIVES = {"anti_us", "china_russia_coordination", "third_party_coordination"}
+SENSITIVE_NARRATIVES = {"anti_us", "cross_state_coordination", "third_party_coordination"}
 _REACH_METRIC_NAMES = ("attendance", "views", "likes", "comments", "shares_reposts", "followers")
 _ENGAGEMENT_METRIC_NAMES = ("likes", "comments", "shares_reposts")
 
@@ -561,10 +561,10 @@ def audit_state_records(
                 assessment,
                 "State assessment is human-verified but the underlying observation is not human-verified.",
             )
-        if assessment.prc_support.level in {"probable", "confirmed"}:
-            missing = [ref for ref in assessment.prc_support.evidence_refs if ref not in evidence]
+        if assessment.sponsor_support.level in {"probable", "confirmed"}:
+            missing = [ref for ref in assessment.sponsor_support.evidence_refs if ref not in evidence]
             if missing:
-                finding("error", "support_evidence_not_in_observation", assessment, f"PRC-support evidence references are not attached to the observation: {missing}")
+                finding("error", "support_evidence_not_in_observation", assessment, f"sponsor-support evidence references are not attached to the observation: {missing}")
         if assessment.observability_level == "reach_observed" and not _has_reach_metric(assessment):
             finding("warning", "reach_without_metric", assessment, "Reach is marked observed but no quantitative reach/engagement metric is stored.")
         if assessment.observability_level == "engagement_observed" and not _has_reach_metric(assessment, _ENGAGEMENT_METRIC_NAMES):
@@ -581,8 +581,8 @@ def audit_state_records(
                     finding("error", "unverified_influence_claim", assessment, "Influence claims cannot enter State-facing output without human verification.")
                 if assessment.observability_level != "causal_influence_evidence":
                     finding("error", "influence_without_causal_evidence", assessment, "Influence claim exists without causal_influence_evidence observability level.")
-            if claim.claim_type == "support_relationship" and claim.review_state != "human_verified" and assessment.prc_support.level == "confirmed":
-                finding("error", "confirmed_support_unverified_claim", assessment, "Confirmed PRC support requires the supporting relationship claim to be human-verified.")
+            if claim.claim_type == "support_relationship" and claim.review_state != "human_verified" and assessment.sponsor_support.level == "confirmed":
+                finding("error", "confirmed_support_unverified_claim", assessment, "Confirmed sponsor support requires the supporting relationship claim to be human-verified.")
         sensitive = SENSITIVE_NARRATIVES & set(assessment.narrative_tags)
         if sensitive:
             supported_types = {claim.claim_type for claim in assessment.claims if claim.review_state == "human_verified"}
@@ -635,9 +635,9 @@ def review_priority(assessment: StateAssessment, observation: ResearchObservatio
     if assessment.review_state == "needs_followup":
         score += 5
         reasons.append("explicit follow-up required")
-    if assessment.prc_support.level in {"probable", "confirmed"} and assessment.review_state != "human_verified":
+    if assessment.sponsor_support.level in {"probable", "confirmed"} and assessment.review_state != "human_verified":
         score += 4
-        reasons.append(f"{assessment.prc_support.level} PRC-support assessment needs verification")
+        reasons.append(f"{assessment.sponsor_support.level} sponsor-support assessment needs verification")
     if assessment.us_overlap.material:
         score += 3
         reasons.append("material overlap with U.S. public-diplomacy presence/audience")
@@ -680,7 +680,7 @@ def build_review_queue(
                 "country": observation.country if observation else "",
                 "city": observation.city if observation else "",
                 "verification_state": assessment.review_state,
-                "prc_support": assessment.prc_support.level,
+                "sponsor_support": assessment.sponsor_support.level,
                 "observability_level": assessment.observability_level,
                 "strategic_audiences": "; ".join(assessment.strategic_audiences),
                 "program_domains": "; ".join(assessment.program_domains),
@@ -713,7 +713,7 @@ def render_state_bluf(
     observations: Iterable[ResearchObservation],
     assessments: Iterable[StateAssessment],
     *,
-    title: str = "PRC Cultural Influence Network Research Update",
+    title: str = "State-Supported Public Engagement Research Update",
 ) -> str:
     observations = list(observations)
     assessments = list(assessments)
@@ -722,7 +722,7 @@ def render_state_bluf(
     domains = Counter(domain for _, assessment in verified for domain in assessment.program_domains)
     audiences = Counter(audience for _, assessment in verified for audience in assessment.strategic_audiences)
     narratives = Counter(tag for _, assessment in verified for tag in assessment.narrative_tags)
-    support = Counter(assessment.prc_support.level for _, assessment in verified)
+    support = Counter(assessment.sponsor_support.level for _, assessment in verified)
     overlaps = [(obs, assessment) for obs, assessment in verified if assessment.us_overlap.material]
     gaps = Counter(assessment.review_state for assessment in assessments if not assessment.brief_eligible)
 
@@ -733,7 +733,7 @@ def render_state_bluf(
             f"{len(countries)} countries from {len(observations)} total research observations. "
             f"{len(overlaps)} verified observations show material geographic, audience, thematic, or service overlap "
             "with an entered American Spaces/EducationUSA/U.S. public-diplomacy presence. "
-            f"PRC support is confirmed in {support.get('confirmed', 0)} verified observations and probable in "
+            f"sponsor support is confirmed in {support.get('confirmed', 0)} verified observations and probable in "
             f"{support.get('probable', 0)}. These are evidence-status statements, not a claim that observed activity or "
             "engagement caused attitudinal or behavioral influence."
         )
@@ -811,7 +811,7 @@ def render_state_bluf(
             "## Analytic Guardrails",
             "",
             "- Presence, activity, reach, engagement, outcomes, and causal influence are separate concepts in this package.",
-            "- Confirmed PRC support requires explicit evidence and human verification; Chinese identity, language, branding, or location alone is insufficient.",
+            "- Confirmed sponsor support requires explicit evidence and human verification; national identity, language, branding, or location alone is insufficient.",
             "- Anti-U.S. or coordination labels should not enter briefing judgments without a human-verified narrative/coordination claim tied to source evidence.",
             "- Public comments and social engagement are observable response surfaces, not representative public-opinion samples.",
             "- American Spaces/EducationUSA overlap identifies geographic, audience, thematic, or service co-presence; it does not itself establish competition, displacement, persuasion, or complementarity.",
@@ -830,13 +830,13 @@ def _observation_geo_features(observation: ResearchObservation, assessment: Stat
     activity count.
     """
     common = {
-        "layer": "prc_observation",
+        "layer": "sponsor_observation",
         "observation_id": observation.observation_id,
         "assessment_id": assessment.assessment_id,
         "title": observation.title,
         "observation_type": observation.observation_type,
         "verification_state": assessment.review_state,
-        "prc_support": assessment.prc_support.level,
+        "sponsor_support": assessment.sponsor_support.level,
         "observability_level": assessment.observability_level,
         "reach": asdict(assessment.reach),
         "strategic_audiences": assessment.strategic_audiences,
@@ -989,8 +989,8 @@ def compare_state_snapshots(previous: Iterable[StateAssessment], current: Iterab
         if left.fingerprint() == right.fingerprint():
             continue
         fields: list[str] = []
-        if left.prc_support.level != right.prc_support.level:
-            fields.append("prc_support")
+        if left.sponsor_support.level != right.sponsor_support.level:
+            fields.append("sponsor_support")
         if left.review_state != right.review_state:
             fields.append("review_state")
         if left.observability_level != right.observability_level:
@@ -1023,7 +1023,7 @@ def _assessment_frame(assessments: Iterable[StateAssessment]) -> pd.DataFrame:
         raw = asdict(assessment)
         for key in (
             "strategic_audiences", "program_domains", "narrative_tags", "sponsor_entities", "host_entities",
-            "partner_entities", "delivery_modes", "policy_relevance", "prc_support", "reach", "us_overlap", "claims",
+            "partner_entities", "delivery_modes", "policy_relevance", "sponsor_support", "reach", "us_overlap", "claims",
         ):
             raw[key] = json.dumps(raw[key], ensure_ascii=False, sort_keys=True)
         rows.append(raw)
@@ -1042,7 +1042,7 @@ def save_state_package(
     name: str = "state_research",
     us_sites: Iterable[USPresenceSite] = (),
     previous_assessments: Iterable[StateAssessment] | None = None,
-    title: str = "PRC Cultural Influence Network Research Update",
+    title: str = "State-Supported Public Engagement Research Update",
 ) -> list[str]:
     observations = list(observations)
     assessments = list(assessments)
@@ -1105,7 +1105,7 @@ def package_from_files(
     us_sites_file: str | Path | None = None,
     previous_assessments_file: str | Path | None = None,
     name: str = "state_research",
-    title: str = "PRC Cultural Influence Network Research Update",
+    title: str = "State-Supported Public Engagement Research Update",
 ) -> list[str]:
     observations = load_observations(observations_file)
     assessments = load_state_assessments(assessments_file) if assessments_file else blank_state_assessments(observations)

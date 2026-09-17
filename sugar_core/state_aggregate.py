@@ -64,7 +64,7 @@ def _rollup_row(
     rows: list[tuple[ResearchObservation, StateAssessment]],
     verified: list[tuple[ResearchObservation, StateAssessment]],
 ) -> dict[str, Any]:
-    support = Counter(assessment.prc_support.level for _, assessment in verified)
+    support = Counter(assessment.sponsor_support.level for _, assessment in verified)
     review = Counter(assessment.review_state for _, assessment in rows)
     return {
         "country": country,
@@ -73,8 +73,8 @@ def _rollup_row(
         "observations_verified": len(verified),
         "observations_pending": len(rows) - len(verified),
         "us_overlap_verified": sum(assessment.us_overlap.material for _, assessment in verified),
-        "confirmed_prc_support_verified": support.get("confirmed", 0),
-        "probable_prc_support_verified": support.get("probable", 0),
+        "confirmed_sponsor_support_verified": support.get("confirmed", 0),
+        "probable_sponsor_support_verified": support.get("probable", 0),
         "reported_attendance_verified": sum(assessment.reach.attendance or 0 for _, assessment in verified),
         "views_verified": sum(assessment.reach.views or 0 for _, assessment in verified),
         "likes_verified": sum(assessment.reach.likes or 0 for _, assessment in verified),
@@ -106,7 +106,7 @@ def save_state_rollups(
 
     flat_fields = [
         "country", "city", "observations_total", "observations_verified", "observations_pending",
-        "us_overlap_verified", "confirmed_prc_support_verified", "probable_prc_support_verified",
+        "us_overlap_verified", "confirmed_sponsor_support_verified", "probable_sponsor_support_verified",
         "reported_attendance_verified", "views_verified", "likes_verified", "comments_verified",
         "shares_reposts_verified", "program_domains", "strategic_audiences", "narrative_tags",
         "observation_types", "review_states",

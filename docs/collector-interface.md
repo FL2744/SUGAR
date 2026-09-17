@@ -17,7 +17,7 @@ A platform advertises the surfaces SUGAR actually implements:
 
 A capability is a statement about the current SUGAR implementation, not a claim that the underlying platform can never expose anything else.
 
-This matters for Chinese social-media sources because access surfaces differ sharply by platform. A source can therefore support known public URLs and comments without pretending that anonymous keyword search is available.
+This matters for platform-specific social-media sources because access surfaces differ sharply by platform. A source can therefore support known public URLs and comments without pretending that anonymous keyword search is available.
 
 Current registry examples:
 
