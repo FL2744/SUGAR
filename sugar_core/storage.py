@@ -75,4 +75,16 @@ def load_results(path: str | Path) -> pd.DataFrame:
     if not path.is_file(): raise FileNotFoundError(path)
     if path.suffix.lower() == ".xlsx": return pd.read_excel(path, sheet_name="posts")
     if path.suffix.lower() == ".csv": return pd.read_csv(path)
-    raise ValueError("Results file must be CSV or XLSX.")
+    if path.suffix.lower() in {".jsonl", ".ndjson"}:
+        rows: list[dict] = []
+        with path.open("r", encoding="utf-8-sig") as stream:
+            for line_number, line in enumerate(stream, start=1):
+                text = line.strip()
+                if not text:
+                    continue
+                payload = json.loads(text)
+                if not isinstance(payload, dict):
+                    raise ValueError(f"JSONL line {line_number} must contain an object.")
+                rows.append(payload)
+        return pd.DataFrame(rows)
+    raise ValueError("Results file must be CSV, XLSX, JSONL, or NDJSON.")

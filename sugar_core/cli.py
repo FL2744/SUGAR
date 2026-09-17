@@ -7,10 +7,24 @@ import os
 from pathlib import Path
 
 from . import __version__
+from .importers import import_external_dataset, parse_field_mappings
 from .llm import ARC_BASE_URL, LLMConfig
+from .plan_execution import execute_search_plan
+from .plan_feedback import apply_triage_feedback, evidence_excerpts_for_branch
+from .observation_storage import load_observations
+from .research_requirements import (
+    ResearchRequirement,
+    ResearchTimeframe,
+    build_initial_search_plan,
+    load_requirement,
+    load_search_plan,
+    save_requirement,
+    save_search_plan,
+)
+from .search_planner import expand_branch_from_evidence, expand_initial_plan_with_llm
 from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from .triage import DEFAULT_PROJECT_CONTEXT
-from .triage_io import triage_dataset
+from .triage_io import load_post_records, triage_dataset
 from .weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from .weibo_qualification import run_weibo_qualification
 from .weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
@@ -132,6 +146,91 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--mastodon-url", default="https://mastodon.social")
     search.add_argument("--include-reposts", action="store_true")
     _workspace_arg(search)
+
+    import_p = sub.add_parser(
+        "import",
+        help="Normalize an external CSV/JSONL dataset into SUGAR records without recollection.",
+    )
+    import_p.add_argument("source_file")
+    import_p.add_argument("--output")
+    import_p.add_argument("--source-system", default="external")
+    import_p.add_argument("--platform", default="")
+    import_p.add_argument(
+        "--map",
+        action="append",
+        default=[],
+        metavar="CANONICAL=SOURCE_COLUMN",
+        help="Explicit column mapping. Repeatable.",
+    )
+    import_p.add_argument("--strict", action="store_true")
+    import_p.add_argument("--drop-unmapped", action="store_true")
+    _workspace_arg(import_p)
+
+    requirement = sub.add_parser("requirement", help="Create or validate a versioned research requirement.")
+    requirement_sub = requirement.add_subparsers(dest="requirement_command", required=True)
+    requirement_create = requirement_sub.add_parser("create")
+    requirement_create.add_argument("--question", required=True)
+    requirement_create.add_argument("--geography", action="append", default=[])
+    requirement_create.add_argument("--since", default="")
+    requirement_create.add_argument("--until", default="")
+    requirement_create.add_argument("--audience", action="append", default=[])
+    requirement_create.add_argument("--language", action="append", default=[])
+    requirement_create.add_argument("--known-entity", action="append", default=[])
+    requirement_create.add_argument("--exclude", action="append", default=[])
+    requirement_create.add_argument("--source", action="append", default=[])
+    requirement_create.add_argument("--mode", choices=["quick", "standard", "deep"], default="standard")
+    requirement_create.add_argument("--notes", default="")
+    requirement_create.add_argument("--output")
+    _workspace_arg(requirement_create)
+    requirement_validate = requirement_sub.add_parser("validate")
+    requirement_validate.add_argument("requirement_file")
+
+    plan = sub.add_parser("plan", help="Create an inspectable bounded initial search plan from a requirement.")
+    plan.add_argument("requirement_file")
+    plan.add_argument("--output")
+    plan.add_argument("--ai-expand", action="store_true", help="Ask the configured LLM for additional bounded query branches.")
+    plan.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
+    plan.add_argument("--model", default="gpt-5.6-luna")
+    plan.add_argument("--base-url", default="")
+    plan.add_argument("--max-ai-queries", type=int, default=24)
+    _workspace_arg(plan)
+
+    collect_plan = sub.add_parser("collect-plan", help="Execute runnable branches from a saved search plan.")
+    collect_plan.add_argument("requirement_file")
+    collect_plan.add_argument("plan_file")
+    collect_plan.add_argument("--sources", default="")
+    collect_plan.add_argument("--posts", type=int, default=20)
+    collect_plan.add_argument("--pages", type=int, default=1)
+    collect_plan.add_argument("--output")
+    collect_plan.add_argument("--x-mode", choices=["recent", "all"], default="recent")
+    collect_plan.add_argument("--mastodon-url", default="https://mastodon.social")
+    collect_plan.add_argument("--include-reposts", action="store_true")
+    _workspace_arg(collect_plan)
+
+    feedback_plan = sub.add_parser(
+        "plan-feedback",
+        help="Update branch relevance metrics and bounded continue/retire/review decisions from triaged observations.",
+    )
+    feedback_plan.add_argument("plan_file")
+    feedback_plan.add_argument("records_file")
+    feedback_plan.add_argument("observations_file")
+    _workspace_arg(feedback_plan)
+
+    expand_plan = sub.add_parser(
+        "expand-plan",
+        help="Propose evidence-grounded follow-up queries for one search branch using original source text.",
+    )
+    expand_plan.add_argument("requirement_file")
+    expand_plan.add_argument("plan_file")
+    expand_plan.add_argument("records_file")
+    expand_plan.add_argument("observations_file")
+    expand_plan.add_argument("--branch", required=True, dest="branch_id")
+    expand_plan.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
+    expand_plan.add_argument("--model", default="gpt-5.6-luna")
+    expand_plan.add_argument("--base-url", default="")
+    expand_plan.add_argument("--max-ai-queries", type=int, default=8)
+    expand_plan.add_argument("--max-evidence", type=int, default=24)
+    _workspace_arg(expand_plan)
 
     harvest = sub.add_parser(
         "harvest",
@@ -293,6 +392,237 @@ def _llm_from_cli(provider: str, model: str, base_url: str, api_key: str) -> LLM
 def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "import":
+        workspace = optional_workspace(args.workspace)
+        source = Path(args.source_file).expanduser().resolve()
+        output = (
+            Path(args.output).expanduser()
+            if args.output
+            else (
+                workspace.path_for("raw") / f"{source.stem}.import"
+                if workspace is not None
+                else source.with_name(source.stem + ".sugar-import")
+            )
+        )
+        outputs = import_external_dataset(
+            source,
+            output,
+            source_system=args.source_system,
+            platform=args.platform,
+            field_map=parse_field_mappings(args.map),
+            strict=args.strict,
+            preserve_unmapped_fields=not args.drop_unmapped,
+        )
+        register_workspace_outputs(workspace, outputs, operation="external-import", kind="import")
+        print("\n".join(outputs))
+        return 0
+
+    if args.command == "requirement":
+        if args.requirement_command == "validate":
+            requirement = load_requirement(args.requirement_file)
+            print(json.dumps({
+                "requirement_id": requirement.requirement_id,
+                "schema_version": requirement.schema_version,
+                "question": requirement.question,
+                "collection_mode": requirement.collection_mode,
+                "geographies": requirement.geographies,
+                "languages": requirement.languages,
+                "known_entities": requirement.known_entities,
+            }, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+
+        workspace = optional_workspace(args.workspace)
+        target = (
+            Path(args.output).expanduser()
+            if args.output
+            else (
+                workspace.path_for("state") / "research-requirement.json"
+                if workspace is not None
+                else Path("research-requirement.json")
+            )
+        )
+        requirement = ResearchRequirement(
+            question=args.question,
+            geographies=args.geography,
+            timeframe=ResearchTimeframe(start=args.since, end=args.until),
+            target_audiences=args.audience,
+            languages=args.language or ["auto"],
+            known_entities=args.known_entity,
+            excluded_topics=args.exclude,
+            preferred_sources=args.source,
+            collection_mode=args.mode,
+            notes=args.notes,
+        )
+        output = save_requirement(requirement, target)
+        if workspace is not None:
+            workspace.register_artifact(
+                "research_requirement",
+                output,
+                label=requirement.question,
+                metadata={"requirement_id": requirement.requirement_id, "schema_version": requirement.schema_version},
+            )
+        print(output)
+        return 0
+
+    if args.command == "plan":
+        workspace = optional_workspace(args.workspace)
+        requirement = load_requirement(args.requirement_file)
+        target = (
+            Path(args.output).expanduser()
+            if args.output
+            else (
+                workspace.path_for("state") / "search-plan.json"
+                if workspace is not None
+                else Path(args.requirement_file).expanduser().with_name("search-plan.json")
+            )
+        )
+        plan = build_initial_search_plan(requirement)
+        if args.ai_expand:
+            api_key = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
+            llm = _llm_from_cli(args.provider, args.model, args.base_url, api_key)
+            cache_dir = workspace.path_for("cache") if workspace is not None else target.parent / ".sugar-cache"
+            plan = expand_initial_plan_with_llm(
+                requirement,
+                plan,
+                llm=llm,
+                cache_dir=cache_dir,
+                max_candidates=args.max_ai_queries,
+            )
+        output = save_search_plan(plan, target)
+        if workspace is not None:
+            workspace.register_artifact(
+                "search_plan",
+                output,
+                label=f"Search plan for {requirement.requirement_id}",
+                metadata={
+                    "requirement_id": requirement.requirement_id,
+                    "schema_version": plan.schema_version,
+                    "branch_count": len(plan.branches),
+                },
+            )
+        print(output)
+        return 0
+
+    if args.command == "collect-plan":
+        workspace = optional_workspace(args.workspace)
+        requirement = load_requirement(args.requirement_file)
+        plan = load_search_plan(args.plan_file)
+        sources = _csv(args.sources) or requirement.preferred_sources
+        if not sources:
+            parser.error("collect-plan requires --sources or preferred_sources in the research requirement")
+        secrets = _collection_secrets(sources)
+        result = execute_search_plan(
+            requirement,
+            plan,
+            config={
+                "sources": sources,
+                "max_posts_per_query": args.posts,
+                "max_pages_per_query": args.pages,
+                "output_directory": args.output,
+                "workspace": args.workspace,
+                "translate_posts": False,
+                "infer_locations": False,
+                "include_retweets": args.include_reposts,
+                "x_search_mode": args.x_mode,
+                "mastodon_url": args.mastodon_url,
+            },
+            secrets=secrets,
+        )
+        save_search_plan(plan, args.plan_file)
+        if workspace is not None:
+            workspace.register_artifact(
+                "search_plan",
+                args.plan_file,
+                label=f"Executed search plan for {requirement.requirement_id}",
+                metadata={
+                    "requirement_id": requirement.requirement_id,
+                    "executed_branches": len(result.executed_branch_ids),
+                    "records": result.records,
+                },
+            )
+        print("\n".join([*result.outputs, str(Path(args.plan_file).expanduser().resolve())]))
+        return 0
+
+    if args.command == "plan-feedback":
+        workspace = optional_workspace(args.workspace)
+        plan = load_search_plan(args.plan_file)
+        records = load_post_records(args.records_file)
+        observations = load_observations(args.observations_file)
+        feedback = apply_triage_feedback(plan, records, observations)
+        output = save_search_plan(plan, args.plan_file)
+        if workspace is not None:
+            workspace.register_artifact(
+                "search_plan",
+                output,
+                label=f"Evaluated search plan {plan.requirement_id}",
+                metadata={
+                    "requirement_id": plan.requirement_id,
+                    "evaluated_branches": len(feedback),
+                    "retired": sum(item.decision.action == "retire" for item in feedback),
+                    "review": sum(item.decision.action == "review" for item in feedback),
+                },
+            )
+        print(json.dumps({
+            "plan": output,
+            "branches": [
+                {
+                    "branch_id": item.branch_id,
+                    "decision": item.decision.action,
+                    "reasons": item.decision.reasons,
+                    "matched_records": item.matched_records,
+                    "matched_observations": item.matched_observations,
+                }
+                for item in feedback
+            ],
+        }, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "expand-plan":
+        workspace = optional_workspace(args.workspace)
+        requirement = load_requirement(args.requirement_file)
+        plan = load_search_plan(args.plan_file)
+        records = load_post_records(args.records_file)
+        observations = load_observations(args.observations_file)
+        excerpts = evidence_excerpts_for_branch(
+            plan,
+            args.branch_id,
+            records,
+            observations,
+            max_excerpts=args.max_evidence,
+        )
+        if not excerpts:
+            raise ValueError(
+                "No relevant/uncertain source-grounded observations are available for this branch."
+            )
+        api_key = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
+        llm = _llm_from_cli(args.provider, args.model, args.base_url, api_key)
+        cache_dir = workspace.path_for("cache") if workspace is not None else Path(args.plan_file).expanduser().resolve().parent / ".sugar-cache"
+        plan = expand_branch_from_evidence(
+            requirement,
+            plan,
+            parent_branch_id=args.branch_id,
+            evidence=excerpts,
+            llm=llm,
+            cache_dir=cache_dir,
+            max_candidates=args.max_ai_queries,
+        )
+        output = save_search_plan(plan, args.plan_file)
+        if workspace is not None:
+            workspace.register_artifact(
+                "search_plan",
+                output,
+                label=f"Expanded search plan {plan.requirement_id}",
+                metadata={
+                    "requirement_id": plan.requirement_id,
+                    "expanded_parent_branch": args.branch_id,
+                    "evidence_count": len(excerpts),
+                    "provider": llm.provider,
+                    "model": llm.model,
+                },
+            )
+        print(output)
+        return 0
 
     if args.command == "map":
         outputs = run_map({"source_file": args.source_file, "output_file": args.output, "workspace": args.workspace})

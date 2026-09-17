@@ -43,6 +43,8 @@ The desktop applications are clients of the shared core. They may provide platfo
 
 `collector_registry.py`, `collectors.py`, platform-specific collectors, `paged_collectors.py`, and `harvest.py` retrieve public or authorized source material and normalize it into `PostRecord`. New collectors must preserve stable native identifiers, source URLs, query provenance, source-specific metrics, and explicit access failures.
 
+`importers.py` is the peer inbound boundary for data already collected by another approved system. External data passes the same identity/provenance checks and normalizes into `PostRecord`; downstream evidence and analysis should not care whether a record arrived through a native collector or an importer.
+
 High-volume collection is checkpointed and resumable. It must not become a mechanism for defeating platform controls; rate limits and access gates remain authoritative.
 
 ### Evidence layer
@@ -52,6 +54,8 @@ High-volume collection is checkpointed and resumable. It must not become a mecha
 ### State workflow
 
 `state_schema.py` and the `state_*` modules provide sponsor-oriented assessment, review, auditing, freshness, gap analysis, entity monitoring, overlap, networks, rollups, briefing products, hypotheses, and analytic intelligence. These modules may interpret evidence but must not mutate the underlying source facts to match an assessment.
+
+`research_requirements.py` sits above collection. It persists the analyst's information need and an auditable bounded search plan. `search_planner.py` provides the optional model boundary for initial expansion and evidence-grounded pivots; `plan_execution.py` routes runnable branches through the existing collector service; and `plan_feedback.py` joins triaged observations back to search branches for deterministic continue/retire/review decisions. Branch budgets, evidence-linked discovery, hop limits, statuses, model provenance, and stopping decisions remain explicit domain state rather than hidden agent behavior.
 
 ### Spatial and reporting layer
 

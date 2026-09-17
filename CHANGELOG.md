@@ -8,7 +8,15 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 - added a reusable `ingest`/Public URL workflow for collector surfaces that support known-item retrieval, with normalized CSV/XLSX/metadata outputs and the same workspace/provenance contract as search;
 - added fail-closed public WeChat Official Account article ingestion for `mp.weixin.qq.com` URLs, including stable article identity, account/publish metadata, source provenance, same-origin redirect validation, deterministic fixtures, and Windows/macOS Public URL UI;
-- WeChat capability metadata deliberately advertises known-item ingestion only; keyword discovery, private WeChat surfaces, automated login state, challenge solving, and access-control bypass remain unsupported.
+- WeChat capability metadata deliberately advertises known-item ingestion only; keyword discovery, private WeChat surfaces, automated login state, challenge solving, and access-control bypass remain unsupported;
+- integration-first external CSV/JSONL ingestion that normalizes partner/Department exports into `PostRecord`, preserves unmapped source fields, quarantines invalid identities, merges duplicate query provenance, and emits source-hashed import manifests;
+- versioned research requirements and bounded search plans with stable IDs, explicit branch families/statuses, mode-specific branch/hop budgets, and timestamped audit events;
+- optional provider-neutral model-assisted query planning with generator provenance, target-neutral exclusions, and evidence-grounded follow-up branches that reject invented evidence IDs;
+- executable plan collection and feedback commands that reuse the shared collector registry, join triaged observations back to query branches, track uncertainty separately from decisive relevance evidence, and apply deterministic continue/retire/review rules.
+
+### Changed
+
+- imported URL-only records retain their canonical `record_key` when converted to research observations, canonical JSONL is accepted by shared result loading, and triage loading preserves parent/thread/conversation relationships.
 
 ## 1.2.6 — 2026-09-17
 
