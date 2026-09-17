@@ -284,6 +284,8 @@ final class AppModel: ObservableObject {
                 lines.append("Creating analysis report…")
             case "complete":
                 lines.append("Finished successfully.")
+            case "warning":
+                lines.append("Warning: \(json["message"] as? String ?? "Backend warning")")
             case "error":
                 lines.append("Error: \(json["message"] as? String ?? "Unknown backend error")")
             default:

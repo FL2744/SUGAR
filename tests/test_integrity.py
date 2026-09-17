@@ -90,3 +90,54 @@ def test_geocode_cache_hit_skips_network_and_throttle(monkeypatch, tmp_path):
     second = geocode_location("Blacksburg, Virginia", cache, min_delay_seconds=1.0)
 
     assert second == first
+
+
+def test_nominatim_uses_bundled_verified_ca_context(monkeypatch):
+    import ssl
+    captured = {}
+
+    class Geocoder:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+        def geocode(self, *args, **kwargs):
+            return None
+
+    monkeypatch.setattr("geopy.geocoders.Nominatim", Geocoder)
+    enrichment._request_nominatim("Canada", "SUGAR test")
+    context = captured["ssl_context"]
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname
+    assert context.cert_store_stats()["x509_ca"] > 0
+
+
+def test_geocoding_outage_preserves_enriched_records_and_does_not_cache(monkeypatch, tmp_path):
+    import pytest
+    from geopy.exc import GeocoderUnavailable
+    from sugar_core.llm import LLMConfig
+    from sugar_core.models import PostRecord
+
+    records = [PostRecord(platform="test", native_id=str(i), canonical_url="", query="test",
+                          original_text="Original") for i in range(2)]
+    monkeypatch.setattr(enrichment, "detect_language", lambda _: "fr")
+    monkeypatch.setattr(enrichment, "create_client", lambda _: object())
+    monkeypatch.setattr(enrichment, "translate_text", lambda *args: "Translated")
+    monkeypatch.setattr(enrichment, "infer_location", lambda *args: dict(
+        location_name="Canada", confidence=0.9, source="profile", reason="Explicit country"))
+    calls = []
+    def unavailable(*args):
+        calls.append(args)
+        raise GeocoderUnavailable("certificate verify failed")
+    monkeypatch.setattr(enrichment, "_request_nominatim", unavailable)
+    monkeypatch.setattr(enrichment, "_NOMINATIM_LAST_REQUEST", 0.0)
+    events = []
+    with pytest.warns(RuntimeWarning, match="saving results without coordinates"):
+        result = enrichment.enrich_records(records, llm=LLMConfig(), cache_dir=tmp_path,
+                                           progress=lambda event, data: events.append((event, data)))
+    assert result == records
+    assert len(calls) == 1
+    assert all(r.translated_text == "Translated" and r.inferred_location == "Canada" for r in result)
+    assert all(r.latitude is None and r.longitude is None for r in result)
+    assert result[0].raw_stats["geocoding"]["status"] == "failed"
+    assert result[1].raw_stats["geocoding"]["status"] == "skipped"
+    assert any(event == "warning" for event, _ in events)
+    assert JsonCache(tmp_path / "geocode.json").data == {}

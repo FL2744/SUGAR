@@ -31,17 +31,45 @@ def create_client(config: LLMConfig):
     return OpenAI(**options)
 
 
-def _chat(client, model: str, system: str, user: str, max_tokens: int = 4000) -> str:
-    response = client.chat.completions.create(
+def _chat(client, model: str, system: str, user: str, max_tokens: int = 4000,
+          provider: str = "openai") -> str:
+    # Keep ARC/OpenAI-compatible servers on their legacy parameter by default.
+    token_parameter = "max_completion_tokens" if provider == "openai" else "max_tokens"
+    options = dict(
         model=model,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        max_tokens=max_tokens,
+        **{token_parameter: max_tokens},
         temperature=0,
     )
-    return (response.choices[0].message.content or "").strip()
+    adapted = set()
+    while True:
+        try:
+            response = client.chat.completions.create(**options)
+            return (response.choices[0].message.content or "").strip()
+        except Exception as exc:
+            # Only negotiate a parameter explicitly rejected by a 400 response.
+            # Never retry the same invalid payload or mask unrelated API errors.
+            body = getattr(exc, "body", None)
+            error = body.get("error", body) if isinstance(body, dict) else {}
+            error = error if isinstance(error, dict) else {}
+            parameter = error.get("param")
+            if (getattr(exc, "status_code", None) != 400
+                    or error.get("code") not in {"unsupported_parameter", "unsupported_value"}
+                    or parameter in adapted):
+                raise
+            if parameter in {"max_tokens", "max_completion_tokens"} and parameter in options:
+                if adapted & {"max_tokens", "max_completion_tokens"}:
+                    raise
+                replacement = "max_tokens" if parameter == "max_completion_tokens" else "max_completion_tokens"
+                options[replacement] = options.pop(parameter)
+            elif parameter == "temperature" and parameter in options:
+                del options[parameter]
+            else:
+                raise
+            adapted.add(parameter)
 
 
 def cached_chat(
@@ -62,12 +90,15 @@ def cached_chat(
     last_error: Exception | None = None
     for attempt in range(retries):
         try:
-            text = _chat(client, config.model, system, user, max_tokens=max_tokens)
+            text = _chat(client, config.model, system, user, max_tokens=max_tokens, provider=config.provider)
             if cache:
                 cache.set(key, text)
             return text
         except Exception as exc:
             last_error = exc
+            status = getattr(exc, "status_code", None)
+            if isinstance(status, int) and 400 <= status < 500 and status not in {408, 409, 429}:
+                raise RuntimeError(f"LLM request rejected (HTTP {status}): {exc}") from exc
             if attempt + 1 < retries:
                 time.sleep(2 ** attempt)
     raise RuntimeError(f"LLM request failed after {retries} attempts: {last_error}")

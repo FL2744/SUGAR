@@ -87,7 +87,7 @@ def test_chat_uses_deterministic_parameters_and_strips_response():
                 {"role": "system", "content": "system"},
                 {"role": "user", "content": "user"},
             ],
-            "max_tokens": 123,
+            "max_completion_tokens": 123,
             "temperature": 0,
         }
     ]
@@ -167,3 +167,56 @@ def test_parse_json_object_rejects_non_object_json():
 def test_parse_json_object_rejects_text_without_json_object():
     with pytest.raises(Exception):
         parse_json_object("not json at all")
+
+
+def _bad_request(parameter, code="unsupported_parameter"):
+    import httpx
+    from openai import BadRequestError
+    return BadRequestError(
+        "Unsupported request parameter",
+        response=httpx.Response(400, request=httpx.Request("POST", "https://example.invalid")),
+        body={"param": parameter, "code": code},
+    )
+
+
+def test_arc_retains_legacy_token_parameter():
+    client, calls = _client("ok")
+    cached_chat(client, LLMConfig(provider="arc"), None, "task", "sys", "user", max_tokens=500)
+    assert calls.calls[0]["max_tokens"] == 500
+    assert "max_completion_tokens" not in calls.calls[0]
+
+
+def test_model_rejecting_temperature_uses_default():
+    client, calls = _client(_bad_request("temperature", "unsupported_value"), "translation")
+    assert translate_search_term(client, LLMConfig(), None, "test", "French") == "translation"
+    assert len(calls.calls) == 2
+    assert "temperature" not in calls.calls[-1]
+    assert calls.calls[-1]["max_completion_tokens"] == 500
+
+
+@pytest.mark.parametrize("provider,first,second", [
+    ("arc", "max_tokens", "max_completion_tokens"),
+    ("openai", "max_completion_tokens", "max_tokens"),
+])
+def test_token_parameter_negotiation_preserves_limit(provider, first, second):
+    client, calls = _client(_bad_request(first), _bad_request("temperature"), "ok")
+    assert _chat(client, "model", "sys", "user", 500, provider) == "ok"
+    assert calls.calls[0][first] == 500
+    assert first not in calls.calls[-1]
+    assert calls.calls[-1][second] == 500
+    assert "temperature" not in calls.calls[-1]
+
+
+def test_permanent_bad_request_is_not_retried(monkeypatch):
+    client, calls = _client(_bad_request("messages"))
+    monkeypatch.setattr("sugar_core.llm.time.sleep", lambda _: pytest.fail("must not sleep"))
+    with pytest.raises(RuntimeError, match="HTTP 400"):
+        cached_chat(client, LLMConfig(), None, "task", "sys", "user")
+    assert len(calls.calls) == 1
+
+
+def test_token_parameter_negotiation_cannot_loop():
+    client, calls = _client(_bad_request("max_completion_tokens"), _bad_request("max_tokens"))
+    with pytest.raises(RuntimeError, match="HTTP 400"):
+        cached_chat(client, LLMConfig(), None, "task", "sys", "user")
+    assert len(calls.calls) == 2

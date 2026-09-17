@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import ssl
+import warnings
+
+import certifi
+from geopy.exc import GeocoderServiceError
+
 import threading
 import time
 from pathlib import Path
@@ -70,7 +76,10 @@ def infer_location(client, llm: LLMConfig, cache: JsonCache | None, record: Post
 def _request_nominatim(location: str, user_agent: str):
     from geopy.geocoders import Nominatim
 
-    geolocator = Nominatim(user_agent=user_agent)
+    # Frozen Python runtimes may have no system OpenSSL CA path. Certifi is
+    # bundled by PyInstaller and supplies the same roots used by Requests.
+    context = ssl.create_default_context(cafile=certifi.where())
+    geolocator = Nominatim(user_agent=user_agent, ssl_context=context)
     return geolocator.geocode(
         location,
         exactly_one=True,
@@ -213,8 +222,28 @@ def enrich_records(
         ]
         if candidates:
             _notify(progress, "geocoding", total=len(candidates))
+            unavailable = False
             for index, record in enumerate(candidates, 1):
-                geo = geocode_location(record.inferred_location, geo_cache)
+                if unavailable:
+                    record.raw_stats["geocoding"] = {"status": "skipped", "reason": "provider_unavailable"}
+                    continue
+                try:
+                    geo = geocode_location(record.inferred_location, geo_cache)
+                except GeocoderServiceError as exc:
+                    # Geocoding is optional enrichment. Preserve collected data,
+                    # translations and location evidence when the provider fails.
+                    # Do not cache outages as genuine no-result responses.
+                    unavailable = True
+                    record.raw_stats["geocoding"] = {"status": "failed", "reason": "provider_unavailable"}
+                    message = (
+                        "Geocoding unavailable; saving results without coordinates for "
+                        f"{len(candidates) - index + 1} remaining records. "
+                        "Location names and translations are preserved. "
+                        f"Provider error: {exc}"
+                    )
+                    warnings.warn(message, RuntimeWarning, stacklevel=2)
+                    _notify(progress, "warning", message=message)
+                    continue
                 record.latitude = geo["latitude"]
                 record.longitude = geo["longitude"]
                 record.geocode_display_name = geo["display_name"]
