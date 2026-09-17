@@ -14,16 +14,21 @@ def test_workspace_cli_init_status_register_and_list(tmp_path: Path, capsys) -> 
     artifact = root / "data" / "raw" / "sample.jsonl"
     artifact.write_text('{"ok": true}\n', encoding="utf-8")
 
-    assert main([
-        "register",
-        str(root),
-        "harvest",
-        "data/raw/sample.jsonl",
-        "--label",
-        "Sample harvest",
-        "--metadata",
-        '{"source":"fixture"}',
-    ]) == 0
+    assert (
+        main(
+            [
+                "register",
+                str(root),
+                "harvest",
+                "data/raw/sample.jsonl",
+                "--label",
+                "Sample harvest",
+                "--metadata",
+                '{"source":"fixture"}',
+            ]
+        )
+        == 0
+    )
     registered = json.loads(capsys.readouterr().out)
     assert registered["kind"] == "harvest"
     assert registered["path"] == "data/raw/sample.jsonl"

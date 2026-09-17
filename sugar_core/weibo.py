@@ -75,9 +75,7 @@ def _handle_http(response: requests.Response, operation: str) -> None:
 
 
 def _message(payload: dict[str, Any]) -> str:
-    return normalize_whitespace(
-        payload.get("msg", payload.get("message", payload.get("errmsg", "")))
-    )
+    return normalize_whitespace(payload.get("msg", payload.get("message", payload.get("errmsg", ""))))
 
 
 def _unwrap(payload: Any, operation: str) -> Any:
@@ -397,9 +395,7 @@ def _comment_to_record(
     user = comment.get("user") if isinstance(comment.get("user"), dict) else {}
     comment_id = normalize_whitespace(comment.get("id", comment.get("idstr", "")))
     reply_comment = comment.get("reply_comment") if isinstance(comment.get("reply_comment"), dict) else {}
-    direct_parent = normalize_whitespace(
-        reply_comment.get("id", comment.get("reply_id", comment.get("replyid", "")))
-    )
+    direct_parent = normalize_whitespace(reply_comment.get("id", comment.get("reply_id", comment.get("replyid", ""))))
     parent_key = f"weibo:{direct_parent}" if direct_parent else f"weibo:{status_id}"
     raw = {
         "like_count": _metric(comment.get("like_count", comment.get("like_counts"))),

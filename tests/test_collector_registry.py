@@ -5,9 +5,9 @@ import pytest
 from sugar_core import collector_registry
 from sugar_core.collector_registry import (
     CollectorRequest,
-    collector_capabilities,
     collect_registered_comments,
     collect_registered_source,
+    collector_capabilities,
     fetch_registered_item,
 )
 from sugar_core.models import PostRecord

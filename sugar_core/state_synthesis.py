@@ -14,13 +14,22 @@ from .utils import JsonCache, stable_hash, utc_iso
 
 SYNTHESIS_VERSION = "1.0"
 LIKELIHOODS = {
-    "not_estimative", "very_unlikely", "unlikely", "roughly_even_chance",
-    "likely", "very_likely", "almost_certain",
+    "not_estimative",
+    "very_unlikely",
+    "unlikely",
+    "roughly_even_chance",
+    "likely",
+    "very_likely",
+    "almost_certain",
 }
 CONFIDENCE_LEVELS = {"low", "moderate", "high"}
 JUDGMENT_TYPES = {
-    "descriptive_pattern", "mechanism_assessment", "trajectory_assessment",
-    "comparative_assessment", "public_diplomacy_implication", "collection_assessment",
+    "descriptive_pattern",
+    "mechanism_assessment",
+    "trajectory_assessment",
+    "comparative_assessment",
+    "public_diplomacy_implication",
+    "collection_assessment",
 }
 
 
@@ -49,7 +58,7 @@ def _allowed_refs(packet: dict[str, Any]) -> set[str]:
             if claim_id:
                 refs.add(claim_id)
             refs.update(_clean(x) for x in claim.get("evidence_refs") or [] if _clean(x))
-    for cluster in ((packet.get("network_patterns") or {}).get("archetype_clusters") or []):
+    for cluster in (packet.get("network_patterns") or {}).get("archetype_clusters") or []:
         refs.update(_clean(x) for x in cluster.get("observation_ids") or [] if _clean(x))
     return refs
 
@@ -119,7 +128,9 @@ def _sanitize_alternative(raw: dict[str, Any], allowed: set[str]) -> dict[str, A
         "hypothesis": hypothesis,
         "supporting_refs": supporting,
         "contradicting_refs": contradicting,
-        "consistency": _clean(raw.get("consistency")).casefold() if _clean(raw.get("consistency")) in {"low", "mixed", "moderate", "high"} else "mixed",
+        "consistency": _clean(raw.get("consistency")).casefold()
+        if _clean(raw.get("consistency")) in {"low", "mixed", "moderate", "high"}
+        else "mixed",
         "discriminators": [_clean(x) for x in raw.get("discriminators") or [] if _clean(x)][:12],
         "collection_needed": [_clean(x) for x in raw.get("collection_needed") or [] if _clean(x)][:12],
     }
@@ -147,13 +158,15 @@ def sanitize_agent_output(payload: dict[str, Any], packet: dict[str, Any], *, ag
         if not statement:
             continue
         refs = _valid_refs(raw.get("refs") or raw.get("evidence_refs") or [], allowed)
-        findings.append({
-            "statement": statement,
-            "significance": _clean(raw.get("significance")),
-            "refs": refs,
-            "confidence": _confidence(raw.get("confidence")) if refs else "low",
-            "status": "supported" if refs else "hypothesis",
-        })
+        findings.append(
+            {
+                "statement": statement,
+                "significance": _clean(raw.get("significance")),
+                "refs": refs,
+                "confidence": _confidence(raw.get("confidence")) if refs else "low",
+                "status": "supported" if refs else "hypothesis",
+            }
+        )
     return {
         "agent": agent,
         "summary": _clean(payload.get("summary")),
@@ -215,7 +228,12 @@ def _trim_packet(packet: dict[str, Any], *, max_cases: int = 24) -> dict[str, An
     comparative["country_pair_comparability"] = list(comparative.get("country_pair_comparability") or [])[:50]
     value["comparative_diagnostics"] = comparative
     patterns = dict(value.get("network_patterns") or {})
-    for key in ("recurrent_entities", "cross_border_entities", "digital_offline_coupling_candidates", "archetype_clusters"):
+    for key in (
+        "recurrent_entities",
+        "cross_border_entities",
+        "digital_offline_coupling_candidates",
+        "archetype_clusters",
+    ):
         patterns[key] = list(patterns.get(key) or [])[:30]
     value["network_patterns"] = patterns
     value["anomalies"] = list(value.get("anomalies") or [])[:25]
@@ -230,13 +248,20 @@ def _call_agent(client, llm: LLMConfig, cache: JsonCache | None, task: AgentTask
         f"<packet>{json.dumps(packet, ensure_ascii=False, sort_keys=True)}</packet>"
     )
     text = cached_chat(
-        client, llm, cache, f"state-intel:{SYNTHESIS_VERSION}:{task.name}",
-        _system_prompt(task.role), user, max_tokens=6500,
+        client,
+        llm,
+        cache,
+        f"state-intel:{SYNTHESIS_VERSION}:{task.name}",
+        _system_prompt(task.role),
+        user,
+        max_tokens=6500,
     )
     return sanitize_agent_output(parse_json_object(text), packet, agent=task.name)
 
 
-def _parallel_agents(client, llm: LLMConfig, cache: JsonCache | None, tasks: list[AgentTask], max_workers: int) -> list[dict[str, Any]]:
+def _parallel_agents(
+    client, llm: LLMConfig, cache: JsonCache | None, tasks: list[AgentTask], max_workers: int
+) -> list[dict[str, Any]]:
     if not tasks:
         return []
     results: dict[str, dict[str, Any]] = {}
@@ -248,15 +273,22 @@ def _parallel_agents(client, llm: LLMConfig, cache: JsonCache | None, tasks: lis
                 results[task.name] = future.result()
             except Exception as exc:
                 results[task.name] = {
-                    "agent": task.name, "summary": "",
-                    "judgments": [], "findings": [], "alternatives": [],
+                    "agent": task.name,
+                    "summary": "",
+                    "judgments": [],
+                    "findings": [],
+                    "alternatives": [],
                     "uncertainties": [f"Agent failed closed ({type(exc).__name__}): {_clean(exc)[:500]}"],
-                    "collection_priorities": [], "dissent_or_tension": [], "failed": True,
+                    "collection_priorities": [],
+                    "dissent_or_tension": [],
+                    "failed": True,
                 }
     return [results[task.name] for task in tasks]
 
 
-def _meta_packet(base_packet: dict[str, Any], agent_outputs: list[dict[str, Any]], *, draft: dict[str, Any] | None = None) -> dict[str, Any]:
+def _meta_packet(
+    base_packet: dict[str, Any], agent_outputs: list[dict[str, Any]], *, draft: dict[str, Any] | None = None
+) -> dict[str, Any]:
     return {
         "scope": base_packet.get("scope"),
         "guardrails": base_packet.get("guardrails"),
@@ -270,14 +302,22 @@ def _meta_packet(base_packet: dict[str, Any], agent_outputs: list[dict[str, Any]
 
 
 def _call_integrator(
-    client, llm: LLMConfig, cache: JsonCache | None, base_packet: dict[str, Any],
-    agent_outputs: list[dict[str, Any]], *, stage: str, critique: dict[str, Any] | None = None,
+    client,
+    llm: LLMConfig,
+    cache: JsonCache | None,
+    base_packet: dict[str, Any],
+    agent_outputs: list[dict[str, Any]],
+    *,
+    stage: str,
+    critique: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     allowed = _allowed_refs(base_packet)
     meta = _meta_packet(base_packet, agent_outputs)
     if critique is not None:
         meta["red_team_critique"] = critique
-    system = _system_prompt("integrator") + """
+    system = (
+        _system_prompt("integrator")
+        + """
 Create a structured finished analytic synthesis. Preserve probability/confidence separation. A key judgment without valid evidence refs must be a low-confidence hypothesis, not a supported judgment. Prefer a smaller number of consequential judgments over a laundry list.
 
 Return keys:
@@ -292,8 +332,12 @@ collection_priorities: array of {question, why_it_matters, discriminates_between
 dissent: array
 tradecraft_note: concise note on evidence/coverage limitations
 """
+    )
     text = cached_chat(
-        client, llm, cache, f"state-intel:{SYNTHESIS_VERSION}:integrator:{stage}",
+        client,
+        llm,
+        cache,
+        f"state-intel:{SYNTHESIS_VERSION}:integrator:{stage}",
         system,
         f"Integrate this evidence-constrained team output. <team>{json.dumps(meta, ensure_ascii=False, sort_keys=True)}</team>",
         max_tokens=8000,
@@ -315,11 +359,15 @@ tradecraft_note: concise note on evidence/coverage limitations
             if not statement:
                 continue
             refs = _valid_refs(item.get("refs") or item.get("evidence_refs") or [], allowed)
-            values.append({
-                "statement": statement, "significance": _clean(item.get("significance")),
-                "refs": refs, "confidence": _confidence(item.get("confidence")) if refs else "low",
-                "status": "supported" if refs else "hypothesis",
-            })
+            values.append(
+                {
+                    "statement": statement,
+                    "significance": _clean(item.get("significance")),
+                    "refs": refs,
+                    "confidence": _confidence(item.get("confidence")) if refs else "low",
+                    "status": "supported" if refs else "hypothesis",
+                }
+            )
         findings[key] = values[:20]
     alternatives = []
     for item in raw.get("alternatives") or []:
@@ -330,21 +378,26 @@ tradecraft_note: concise note on evidence/coverage limitations
     indicators = []
     for item in raw.get("indicators") or []:
         if isinstance(item, dict) and _clean(item.get("indicator")):
-            indicators.append({
-                "indicator": _clean(item.get("indicator")),
-                "would_strengthen": _clean(item.get("would_strengthen")),
-                "would_weaken": _clean(item.get("would_weaken")),
-                "rationale": _clean(item.get("rationale")),
-            })
+            indicators.append(
+                {
+                    "indicator": _clean(item.get("indicator")),
+                    "would_strengthen": _clean(item.get("would_strengthen")),
+                    "would_weaken": _clean(item.get("would_weaken")),
+                    "rationale": _clean(item.get("rationale")),
+                }
+            )
     priorities = []
     for item in raw.get("collection_priorities") or []:
         if isinstance(item, dict) and _clean(item.get("question")):
             priority = _clean(item.get("priority")).casefold()
-            priorities.append({
-                "question": _clean(item.get("question")), "why_it_matters": _clean(item.get("why_it_matters")),
-                "discriminates_between": _clean(item.get("discriminates_between")),
-                "priority": priority if priority in {"low", "normal", "high", "urgent"} else "normal",
-            })
+            priorities.append(
+                {
+                    "question": _clean(item.get("question")),
+                    "why_it_matters": _clean(item.get("why_it_matters")),
+                    "discriminates_between": _clean(item.get("discriminates_between")),
+                    "priority": priority if priority in {"low", "normal", "high", "urgent"} else "normal",
+                }
+            )
     return {
         "executive_assessment": _clean(raw.get("executive_assessment")),
         "key_judgments": judgments[:12],
@@ -359,11 +412,15 @@ tradecraft_note: concise note on evidence/coverage limitations
 
 
 def _red_team(
-    client, llm: LLMConfig, cache: JsonCache | None,
-    base_packet: dict[str, Any], draft: dict[str, Any],
+    client,
+    llm: LLMConfig,
+    cache: JsonCache | None,
+    base_packet: dict[str, Any],
+    draft: dict[str, Any],
 ) -> dict[str, Any]:
     task = AgentTask(
-        name="red_team", role="red_team",
+        name="red_team",
+        role="red_team",
         question=_role_question("red_team", str(base_packet.get("scope"))),
         packet={**_trim_packet(base_packet), "draft_synthesis": draft},
     )
@@ -379,37 +436,81 @@ def _scope_label(country: str, observation_id: str) -> str:
 
 
 def run_agentic_synthesis(
-    observations: Iterable[ResearchObservation], assessments: Iterable[StateAssessment], *,
-    llm: LLMConfig, country: str = "", observation_id: str = "", depth: str = "standard",
-    cache_dir: str | Path | None = None, max_workers: int = 4, max_country_agents: int = 6,
+    observations: Iterable[ResearchObservation],
+    assessments: Iterable[StateAssessment],
+    *,
+    llm: LLMConfig,
+    country: str = "",
+    observation_id: str = "",
+    depth: str = "standard",
+    cache_dir: str | Path | None = None,
+    max_workers: int = 4,
+    max_country_agents: int = 6,
 ) -> dict[str, Any]:
     observations, assessments = list(observations), list(assessments)
     if depth not in {"quick", "standard", "deep"}:
         raise ValueError("depth must be quick, standard, or deep")
     base_packet = build_intelligence_packet(
-        observations, assessments, country=country, observation_id=observation_id,
+        observations,
+        assessments,
+        country=country,
+        observation_id=observation_id,
         representative_case_limit=30 if depth == "deep" else 20,
     )
     scope = _scope_label(country, observation_id)
     if observation_id:
-        roles = ["case_analyst", "methodologist"] if depth == "quick" else ["case_analyst", "network_mechanism_analyst", "public_diplomacy_analyst", "methodologist"]
+        roles = (
+            ["case_analyst", "methodologist"]
+            if depth == "quick"
+            else ["case_analyst", "network_mechanism_analyst", "public_diplomacy_analyst", "methodologist"]
+        )
     elif country:
-        roles = ["system_pattern_analyst", "methodologist"] if depth == "quick" else ["system_pattern_analyst", "network_mechanism_analyst", "public_diplomacy_analyst", "trajectory_indicators_analyst", "methodologist"]
+        roles = (
+            ["system_pattern_analyst", "methodologist"]
+            if depth == "quick"
+            else [
+                "system_pattern_analyst",
+                "network_mechanism_analyst",
+                "public_diplomacy_analyst",
+                "trajectory_indicators_analyst",
+                "methodologist",
+            ]
+        )
     else:
-        roles = ["system_pattern_analyst", "methodologist"] if depth == "quick" else ["system_pattern_analyst", "network_mechanism_analyst", "comparative_analyst", "public_diplomacy_analyst", "trajectory_indicators_analyst", "methodologist"]
+        roles = (
+            ["system_pattern_analyst", "methodologist"]
+            if depth == "quick"
+            else [
+                "system_pattern_analyst",
+                "network_mechanism_analyst",
+                "comparative_analyst",
+                "public_diplomacy_analyst",
+                "trajectory_indicators_analyst",
+                "methodologist",
+            ]
+        )
 
     tasks = [
-        AgentTask(name=role, role=role, question=_role_question(role, scope), packet=base_packet)
-        for role in roles
+        AgentTask(name=role, role=role, question=_role_question(role, scope), packet=base_packet) for role in roles
     ]
     if depth == "deep" and not country and not observation_id:
-        countries = [row["value"] for row in (base_packet.get("macro_structure") or {}).get("countries") or [] if row.get("value") != "Unspecified"]
+        countries = [
+            row["value"]
+            for row in (base_packet.get("macro_structure") or {}).get("countries") or []
+            if row.get("value") != "Unspecified"
+        ]
         for candidate in countries[:max_country_agents]:
-            country_packet = build_intelligence_packet(observations, assessments, country=candidate, representative_case_limit=16)
-            tasks.append(AgentTask(
-                name=f"country:{candidate}", role="country_analyst",
-                question=_role_question("country_analyst", f"country assessment: {candidate}"), packet=country_packet,
-            ))
+            country_packet = build_intelligence_packet(
+                observations, assessments, country=candidate, representative_case_limit=16
+            )
+            tasks.append(
+                AgentTask(
+                    name=f"country:{candidate}",
+                    role="country_analyst",
+                    question=_role_question("country_analyst", f"country assessment: {candidate}"),
+                    packet=country_packet,
+                )
+            )
 
     client = create_client(llm)
     cache = JsonCache(Path(cache_dir) / "state_synthesis.json") if cache_dir else None
@@ -448,33 +549,52 @@ def run_agentic_synthesis(
 
 def render_synthesis_markdown(payload: dict[str, Any], *, title: str = "SUGAR Analytic Intelligence Assessment") -> str:
     final = payload.get("final") or {}
-    lines = [f"# {title}", "", "## BLUF", "", final.get("executive_assessment") or "No supported synthesis was produced.", "", "## Key Judgments", ""]
+    lines = [
+        f"# {title}",
+        "",
+        "## BLUF",
+        "",
+        final.get("executive_assessment") or "No supported synthesis was produced.",
+        "",
+        "## Key Judgments",
+        "",
+    ]
     for index, judgment in enumerate(final.get("key_judgments") or [], 1):
         refs = ", ".join(judgment.get("supporting_refs") or []) or "none"
         contrary = ", ".join(judgment.get("contrary_refs") or []) or "none"
         lines.append(
-            f"{index}. **{judgment.get('statement','')}**  \n"
+            f"{index}. **{judgment.get('statement', '')}**  \n"
             f"   Likelihood: `{judgment.get('likelihood')}` | Confidence: `{judgment.get('confidence')}` | Status: `{judgment.get('status')}`  \n"
             f"   Basis: {judgment.get('basis') or 'Not stated.'}  \n"
             f"   Supporting refs: {refs}. Contrary refs: {contrary}."
         )
     lines.extend(["", "## Macro Findings", ""])
     for item in final.get("macro_findings") or []:
-        lines.append(f"- **{item.get('statement','')}** — {item.get('significance','')} (confidence: {item.get('confidence')}; refs: {', '.join(item.get('refs') or []) or 'none'})")
+        lines.append(
+            f"- **{item.get('statement', '')}** — {item.get('significance', '')} (confidence: {item.get('confidence')}; refs: {', '.join(item.get('refs') or []) or 'none'})"
+        )
     lines.extend(["", "## Micro / Case Findings", ""])
     for item in final.get("micro_findings") or []:
-        lines.append(f"- **{item.get('statement','')}** — {item.get('significance','')} (confidence: {item.get('confidence')}; refs: {', '.join(item.get('refs') or []) or 'none'})")
+        lines.append(
+            f"- **{item.get('statement', '')}** — {item.get('significance', '')} (confidence: {item.get('confidence')}; refs: {', '.join(item.get('refs') or []) or 'none'})"
+        )
     lines.extend(["", "## Alternative Hypotheses", ""])
     for item in final.get("alternatives") or []:
-        lines.append(f"- **{item.get('hypothesis','')}** — consistency: {item.get('consistency')}; supporting: {', '.join(item.get('supporting_refs') or []) or 'none'}; contradicting: {', '.join(item.get('contradicting_refs') or []) or 'none'}.")
+        lines.append(
+            f"- **{item.get('hypothesis', '')}** — consistency: {item.get('consistency')}; supporting: {', '.join(item.get('supporting_refs') or []) or 'none'}; contradicting: {', '.join(item.get('contradicting_refs') or []) or 'none'}."
+        )
         if item.get("discriminators"):
             lines.append("  - Discriminators: " + "; ".join(item["discriminators"]))
     lines.extend(["", "## Indicators and Signposts", ""])
     for item in final.get("indicators") or []:
-        lines.append(f"- **{item.get('indicator','')}** — strengthens: {item.get('would_strengthen','')}; weakens: {item.get('would_weaken','')}. {item.get('rationale','')}")
+        lines.append(
+            f"- **{item.get('indicator', '')}** — strengthens: {item.get('would_strengthen', '')}; weakens: {item.get('would_weaken', '')}. {item.get('rationale', '')}"
+        )
     lines.extend(["", "## Priority Intelligence / Collection Questions", ""])
     for item in final.get("collection_priorities") or []:
-        lines.append(f"- **[{item.get('priority','normal')}] {item.get('question','')}** — {item.get('why_it_matters','')} Discriminates: {item.get('discriminates_between','')}")
+        lines.append(
+            f"- **[{item.get('priority', 'normal')}] {item.get('question', '')}** — {item.get('why_it_matters', '')} Discriminates: {item.get('discriminates_between', '')}"
+        )
     lines.extend(["", "## Uncertainty, Dissent, and Tradecraft", ""])
     for value in final.get("uncertainties") or []:
         lines.append(f"- Uncertainty: {value}")
@@ -482,24 +602,43 @@ def render_synthesis_markdown(payload: dict[str, Any], *, title: str = "SUGAR An
         lines.append(f"- Dissent/tension: {value}")
     if final.get("tradecraft_note"):
         lines.append(f"\n**Tradecraft note:** {final['tradecraft_note']}")
-    lines.extend([
-        "", "## Analytic Guardrail", "",
-        "This synthesis is an AI-assisted analytic layer over an auditable research corpus. It does not alter human-verification states. Corpus patterns can reflect collection access, query design, source availability, and review tempo. Presence, activity, reach, engagement, outcomes, and causal influence remain distinct.", "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Analytic Guardrail",
+            "",
+            "This synthesis is an AI-assisted analytic layer over an auditable research corpus. It does not alter human-verification states. Corpus patterns can reflect collection access, query design, source availability, and review tempo. Presence, activity, reach, engagement, outcomes, and causal influence remain distinct.",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
 def save_agentic_synthesis(
-    observations: Iterable[ResearchObservation], assessments: Iterable[StateAssessment], output_directory: str | Path, *,
-    llm: LLMConfig, country: str = "", observation_id: str = "", depth: str = "standard",
-    cache_dir: str | Path | None = None, max_workers: int = 4, name: str = "analytic_intelligence",
+    observations: Iterable[ResearchObservation],
+    assessments: Iterable[StateAssessment],
+    output_directory: str | Path,
+    *,
+    llm: LLMConfig,
+    country: str = "",
+    observation_id: str = "",
+    depth: str = "standard",
+    cache_dir: str | Path | None = None,
+    max_workers: int = 4,
+    name: str = "analytic_intelligence",
 ) -> list[str]:
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = "_".join(_clean(name).split()) or "analytic_intelligence"
     payload = run_agentic_synthesis(
-        observations, assessments, llm=llm, country=country, observation_id=observation_id,
-        depth=depth, cache_dir=cache_dir, max_workers=max_workers,
+        observations,
+        assessments,
+        llm=llm,
+        country=country,
+        observation_id=observation_id,
+        depth=depth,
+        cache_dir=cache_dir,
+        max_workers=max_workers,
     )
     json_path = out_dir / f"{stem}.synthesis.json"
     markdown_path = out_dir / f"{stem}.synthesis.md"
@@ -512,10 +651,22 @@ def save_agentic_synthesis(
             stream.write(json.dumps(agent, ensure_ascii=False, sort_keys=True) + "\n")
         if payload.get("red_team"):
             stream.write(json.dumps(payload["red_team"], ensure_ascii=False, sort_keys=True) + "\n")
-    manifest_path.write_text(json.dumps({
-        "generated_at": payload.get("generated_at"), "synthesis_version": SYNTHESIS_VERSION,
-        "scope": payload.get("scope"), "depth": depth, "provider": llm.provider, "model": llm.model,
-        "outputs": [json_path.name, markdown_path.name, agents_path.name],
-        "human_verification_mutated": False,
-    }, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": payload.get("generated_at"),
+                "synthesis_version": SYNTHESIS_VERSION,
+                "scope": payload.get("scope"),
+                "depth": depth,
+                "provider": llm.provider,
+                "model": llm.model,
+                "outputs": [json_path.name, markdown_path.name, agents_path.name],
+                "human_verification_mutated": False,
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     return [str(json_path), str(markdown_path), str(agents_path), str(manifest_path)]

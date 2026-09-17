@@ -51,10 +51,7 @@ def haversine_km(latitude_a: float, longitude_a: float, latitude_b: float, longi
     lat2 = math.radians(float(latitude_b))
     delta_lat = math.radians(float(latitude_b) - float(latitude_a))
     delta_lon = math.radians(float(longitude_b) - float(longitude_a))
-    a = (
-        math.sin(delta_lat / 2.0) ** 2
-        + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2.0) ** 2
-    )
+    a = math.sin(delta_lat / 2.0) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2.0) ** 2
     return EARTH_RADIUS_KM * 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
 
 
@@ -94,11 +91,7 @@ def nearest_us_presence(
     """Return the physically nearest active, mapped U.S. presence site for one resolved venue."""
     if not location.resolved:
         return None
-    candidates = [
-        site
-        for site in sites
-        if site.status not in {"closed", "inactive"} and site.is_spatial
-    ]
+    candidates = [site for site in sites if site.status not in {"closed", "inactive"} and site.is_spatial]
     if not candidates:
         return None
 

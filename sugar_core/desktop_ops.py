@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
+from .state_agentic import save_iterative_agentic_synthesis
 from .state_aggregate import save_state_rollups
 from .state_conflict_package import package_from_files_with_conflicts
 from .state_conflict_review import (
@@ -23,7 +23,6 @@ from .state_longitudinal import save_longitudinal_comparison
 from .state_map import create_state_map
 from .state_network import save_state_network
 from .state_review import apply_review_workbook_file
-from .state_agentic import save_iterative_agentic_synthesis
 from .state_tradecraft import save_tradecraft_audit
 from .state_triage import triage_observations
 from .state_workflow import (
@@ -38,7 +37,6 @@ from .state_workflow import (
 )
 from .workspace import SugarWorkspace
 from .workspace_runtime import (
-    choose_output_directory,
     latest_workspace_artifact_path,
     register_workspace_outputs,
     workspace_from_config,
@@ -260,7 +258,9 @@ def _run_state_package(
 
     _notify(progress, "state_package_stage", stage="rollups_network")
     outputs.extend(save_state_rollups(observations, assessments, out_dir, name=name))
-    outputs.extend(save_state_network(observations, assessments, out_dir, us_sites=sites, name=name, verified_only=True))
+    outputs.extend(
+        save_state_network(observations, assessments, out_dir, us_sites=sites, name=name, verified_only=True)
+    )
 
     _notify(progress, "state_package_stage", stage="review_freshness_gaps")
     outputs.append(
@@ -314,7 +314,12 @@ def _run_state_package(
 
     _register(workspace, [assessed_output], operation="state-package", kind="state_assessments")
     _register(workspace, [map_output, metadata_path], operation="state-package", kind="map")
-    other = [value for value in outputs if str(Path(value).resolve()) not in {str(Path(assessed_output).resolve()), str(Path(map_output).resolve()), str(metadata_path.resolve())}]
+    other = [
+        value
+        for value in outputs
+        if str(Path(value).resolve())
+        not in {str(Path(assessed_output).resolve()), str(Path(map_output).resolve()), str(metadata_path.resolve())}
+    ]
     _register(workspace, other, operation="state-package", kind="state")
     return list(dict.fromkeys(str(Path(value).resolve()) for value in outputs))
 
@@ -367,15 +372,23 @@ def run_desktop_analytic_operation(
         assessments = triage_observations(
             observations,
             llm=_llm_config(config, secrets),
-            cache_dir=str(config.get("cache_dir") or (workspace.path_for("cache") if workspace is not None else ".sugar-cache")),
+            cache_dir=str(
+                config.get("cache_dir") or (workspace.path_for("cache") if workspace is not None else ".sugar-cache")
+            ),
             limit=int(config["limit"]) if config.get("limit") not in (None, "") else None,
             progress=progress,
         )
-        return _register(workspace, [save_state_assessments(assessments, target)], operation=operation, kind="state_assessments")
+        return _register(
+            workspace, [save_state_assessments(assessments, target)], operation=operation, kind="state_assessments"
+        )
 
     if operation == "state-review-export":
-        observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
-        assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
+        observations = load_observations(
+            _required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",))
+        )
+        assessments = load_state_assessments(
+            _required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",))
+        )
         source_conflicts = _optional_input_path(config, "source_conflicts", workspace)
         target = _output_path(config, "output_file", "state_review.xlsx", workspace=workspace, workspace_key="state")
         output = export_review_workbook_with_conflict_file(
@@ -417,23 +430,41 @@ def run_desktop_analytic_operation(
         return list(dict.fromkeys(outputs))
 
     if operation == "state-audit":
-        observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
-        assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
+        observations = load_observations(
+            _required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",))
+        )
+        assessments = load_state_assessments(
+            _required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",))
+        )
         target = _output_path(config, "output_file", "state_audit.json", workspace=workspace, workspace_key="state")
-        return _register(workspace, [_write_json(target, audit_state_records(observations, assessments))], operation=operation, kind="state")
+        return _register(
+            workspace,
+            [_write_json(target, audit_state_records(observations, assessments))],
+            operation=operation,
+            kind="state",
+        )
 
     if operation == "state-diff":
         previous = load_state_assessments(_required_path(config, "previous", workspace=workspace))
-        current = load_state_assessments(_required_path(config, "current", workspace=workspace, workspace_kinds=("state_assessments",)))
+        current = load_state_assessments(
+            _required_path(config, "current", workspace=workspace, workspace_kinds=("state_assessments",))
+        )
         target = _output_path(config, "output_file", "state_diff.json", workspace=workspace, workspace_key="state")
-        return _register(workspace, [_write_json(target, compare_state_snapshots(previous, current))], operation=operation, kind="state")
+        return _register(
+            workspace,
+            [_write_json(target, compare_state_snapshots(previous, current))],
+            operation=operation,
+            kind="state",
+        )
 
     if operation == "state-template-us-sites":
         target = _output_path(config, "output_file", "us_presence.csv", workspace=workspace, workspace_key="references")
         return _register(workspace, [write_us_presence_template(target)], operation=operation, kind="reference")
 
     if operation == "state-template-entities":
-        target = _output_path(config, "output_file", "monitored_entities.csv", workspace=workspace, workspace_key="references")
+        target = _output_path(
+            config, "output_file", "monitored_entities.csv", workspace=workspace, workspace_key="references"
+        )
         return _register(workspace, [write_entity_template(target)], operation=operation, kind="reference")
 
     if operation == "state-query-plan":
@@ -442,9 +473,15 @@ def run_desktop_analytic_operation(
         return _register(workspace, [save_query_plan(registry, target)], operation=operation, kind="state")
 
     if operation == "intel-packet":
-        observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
-        assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
-        target = _output_path(config, "output_file", "intelligence_packet.json", workspace=workspace, workspace_key="intelligence")
+        observations = load_observations(
+            _required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",))
+        )
+        assessments = load_state_assessments(
+            _required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",))
+        )
+        target = _output_path(
+            config, "output_file", "intelligence_packet.json", workspace=workspace, workspace_key="intelligence"
+        )
         output = save_intelligence_packet(
             observations,
             assessments,
@@ -456,14 +493,29 @@ def run_desktop_analytic_operation(
         return _register(workspace, [output], operation=operation, kind="intelligence")
 
     if operation == "intel-tradecraft":
-        observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
-        assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
-        target = _output_path(config, "output_file", "tradecraft_audit.json", workspace=workspace, workspace_key="intelligence")
-        return _register(workspace, [save_tradecraft_audit(observations, assessments, target)], operation=operation, kind="intelligence")
+        observations = load_observations(
+            _required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",))
+        )
+        assessments = load_state_assessments(
+            _required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",))
+        )
+        target = _output_path(
+            config, "output_file", "tradecraft_audit.json", workspace=workspace, workspace_key="intelligence"
+        )
+        return _register(
+            workspace,
+            [save_tradecraft_audit(observations, assessments, target)],
+            operation=operation,
+            kind="intelligence",
+        )
 
     if operation == "intel-synthesize":
-        observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
-        assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
+        observations = load_observations(
+            _required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",))
+        )
+        assessments = load_state_assessments(
+            _required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",))
+        )
         out_dir = _output_directory(config, workspace=workspace, workspace_key="intelligence")
         outputs = save_iterative_agentic_synthesis(
             observations,
@@ -473,7 +525,9 @@ def run_desktop_analytic_operation(
             country=str(config.get("country") or ""),
             observation_id=str(config.get("observation_id") or ""),
             depth=str(config.get("depth") or "standard"),
-            cache_dir=str(config.get("cache_dir") or (workspace.path_for("cache") if workspace is not None else ".sugar-cache")),
+            cache_dir=str(
+                config.get("cache_dir") or (workspace.path_for("cache") if workspace is not None else ".sugar-cache")
+            ),
             max_workers=max(1, int(config.get("workers", 4))),
             name=str(config.get("name") or "analytic_intelligence"),
         )
@@ -491,7 +545,9 @@ def run_desktop_analytic_operation(
 
     previous = _required_path(config, "previous", workspace=workspace)
     current = _required_path(config, "current", workspace=workspace, workspace_kinds=("intelligence",))
-    target = _output_path(config, "output_file", "intelligence_comparison.json", workspace=workspace, workspace_key="intelligence")
+    target = _output_path(
+        config, "output_file", "intelligence_comparison.json", workspace=workspace, workspace_key="intelligence"
+    )
     output = save_longitudinal_comparison(
         previous,
         current,

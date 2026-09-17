@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 
+from . import __version__
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
 from .state_aggregate import save_state_rollups
@@ -50,9 +51,12 @@ def build_parser() -> argparse.ArgumentParser:
         prog="sugar-state",
         description="Evidence-first State Department research workflow for SUGAR observations.",
     )
+    parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    template = sub.add_parser("template-us-sites", help="Write a CSV template for American Spaces/EducationUSA/U.S. presence data.")
+    template = sub.add_parser(
+        "template-us-sites", help="Write a CSV template for American Spaces/EducationUSA/U.S. presence data."
+    )
     template.add_argument("output", nargs="?")
     _workspace_arg(template)
 
@@ -60,7 +64,9 @@ def build_parser() -> argparse.ArgumentParser:
     entity_template.add_argument("output", nargs="?")
     _workspace_arg(entity_template)
 
-    query_plan = sub.add_parser("query-plan", help="Create a reproducible watch-query plan from the monitored-entity registry.")
+    query_plan = sub.add_parser(
+        "query-plan", help="Create a reproducible watch-query plan from the monitored-entity registry."
+    )
     query_plan.add_argument("entities")
     query_plan.add_argument("--output")
     _workspace_arg(query_plan)
@@ -80,18 +86,31 @@ def build_parser() -> argparse.ArgumentParser:
     triage.add_argument("--limit", type=int)
     _workspace_arg(triage)
 
-    review_export = sub.add_parser("review-export", help="Create an analyst Excel workbook for assessment, claim, and optional source-conflict review.")
+    review_export = sub.add_parser(
+        "review-export",
+        help="Create an analyst Excel workbook for assessment, claim, and optional source-conflict review.",
+    )
     review_export.add_argument("observations")
     review_export.add_argument("assessments")
-    review_export.add_argument("--source-conflicts", help="Structured source-conflict JSON to include in the analyst review workbook.")
+    review_export.add_argument(
+        "--source-conflicts", help="Structured source-conflict JSON to include in the analyst review workbook."
+    )
     review_export.add_argument("--output")
     _workspace_arg(review_export)
 
-    review_apply = sub.add_parser("review-apply", help="Apply analyst workbook decisions back into validated State assessments and optional source conflicts.")
+    review_apply = sub.add_parser(
+        "review-apply",
+        help="Apply analyst workbook decisions back into validated State assessments and optional source conflicts.",
+    )
     review_apply.add_argument("assessments")
     review_apply.add_argument("workbook")
-    review_apply.add_argument("--source-conflicts", help="Original structured source-conflict JSON used to create the workbook.")
-    review_apply.add_argument("--source-conflicts-output", help="Output path for reviewed source conflicts. Defaults beside the reviewed assessment output.")
+    review_apply.add_argument(
+        "--source-conflicts", help="Original structured source-conflict JSON used to create the workbook."
+    )
+    review_apply.add_argument(
+        "--source-conflicts-output",
+        help="Output path for reviewed source conflicts. Defaults beside the reviewed assessment output.",
+    )
     review_apply.add_argument("--output")
     _workspace_arg(review_apply)
 
@@ -104,7 +123,9 @@ def build_parser() -> argparse.ArgumentParser:
     network.add_argument("--include-unverified", action="store_true")
     _workspace_arg(network)
 
-    rollup = sub.add_parser("rollup", help="Export country/city activity and verification rollups (not an influence score).")
+    rollup = sub.add_parser(
+        "rollup", help="Export country/city activity and verification rollups (not an influence score)."
+    )
     rollup.add_argument("observations")
     rollup.add_argument("assessments")
     rollup.add_argument("--us-sites")
@@ -120,7 +141,9 @@ def build_parser() -> argparse.ArgumentParser:
     freshness.add_argument("--stale-days", type=int, default=90)
     _workspace_arg(freshness)
 
-    gaps = sub.add_parser("gaps", help="Prioritize verification, stale-data, entity, location, and U.S.-comparison research gaps.")
+    gaps = sub.add_parser(
+        "gaps", help="Prioritize verification, stale-data, entity, location, and U.S.-comparison research gaps."
+    )
     gaps.add_argument("observations")
     gaps.add_argument("assessments")
     gaps.add_argument("--entities")
@@ -143,7 +166,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Resolve missing site/city/region coordinates through the cached public geocoder. Country-only records remain unplotted.",
     )
-    map_p.add_argument("--geocode-cache", help="Directory for the State-map geocode cache. Defaults to the project cache when in a workspace.")
+    map_p.add_argument(
+        "--geocode-cache",
+        help="Directory for the State-map geocode cache. Defaults to the project cache when in a workspace.",
+    )
     map_p.add_argument("--min-location-confidence", type=float, default=0.45)
     _workspace_arg(map_p)
 
@@ -154,7 +180,10 @@ def build_parser() -> argparse.ArgumentParser:
     package.add_argument("observations")
     package.add_argument("--assessments")
     package.add_argument("--us-sites")
-    package.add_argument("--source-conflicts", help="Structured source-conflict JSON to preserve in audit, review, BLUF, workbook, and snapshot outputs.")
+    package.add_argument(
+        "--source-conflicts",
+        help="Structured source-conflict JSON to preserve in audit, review, BLUF, workbook, and snapshot outputs.",
+    )
     package.add_argument("--entities")
     package.add_argument("--previous-assessments")
     package.add_argument("--output")
@@ -206,7 +235,11 @@ def _write_or_print(payload: dict, output: str | Path | None) -> str | None:
 
 def _loaded_state_inputs(args):
     observations = load_observations(args.observations)
-    assessments = load_state_assessments(args.assessments) if getattr(args, "assessments", None) else blank_state_assessments(observations)
+    assessments = (
+        load_state_assessments(args.assessments)
+        if getattr(args, "assessments", None)
+        else blank_state_assessments(observations)
+    )
     sites = load_us_presence_sites(args.us_sites) if getattr(args, "us_sites", None) else []
     if sites:
         assessments = apply_us_overlaps(observations, assessments, sites)
@@ -235,14 +268,22 @@ def main(argv=None) -> int:
     workspace = optional_workspace(getattr(args, "workspace", None))
 
     if args.command == "template-us-sites":
-        target = Path(args.output).expanduser().resolve() if args.output else _file_output(args, workspace, "references", "us_presence.csv")
+        target = (
+            Path(args.output).expanduser().resolve()
+            if args.output
+            else _file_output(args, workspace, "references", "us_presence.csv")
+        )
         output = write_us_presence_template(target)
         register_workspace_outputs(workspace, [output], operation="state-template-us-sites", kind="reference")
         print(output)
         return 0
 
     if args.command == "template-entities":
-        target = Path(args.output).expanduser().resolve() if args.output else _file_output(args, workspace, "references", "monitored_entities.csv")
+        target = (
+            Path(args.output).expanduser().resolve()
+            if args.output
+            else _file_output(args, workspace, "references", "monitored_entities.csv")
+        )
         output = write_entity_template(target)
         register_workspace_outputs(workspace, [output], operation="state-template-entities", kind="reference")
         print(output)
@@ -303,7 +344,9 @@ def main(argv=None) -> int:
         target = _file_output(args, workspace, "state", "state_reviewed.jsonl")
         assessment_output = apply_review_workbook_file(args.assessments, args.workbook, target)
         outputs = [assessment_output]
-        register_workspace_outputs(workspace, [assessment_output], operation="state-review-apply", kind="state_assessments")
+        register_workspace_outputs(
+            workspace, [assessment_output], operation="state-review-apply", kind="state_assessments"
+        )
 
         if args.source_conflicts:
             if args.source_conflicts_output:
@@ -325,7 +368,14 @@ def main(argv=None) -> int:
     if args.command == "network":
         out_dir = _directory_output(args, workspace, "state")
         observations, assessments, sites = _loaded_state_inputs(args)
-        outputs = save_state_network(observations, assessments, out_dir, us_sites=sites, name=args.name, verified_only=not args.include_unverified)
+        outputs = save_state_network(
+            observations,
+            assessments,
+            out_dir,
+            us_sites=sites,
+            name=args.name,
+            verified_only=not args.include_unverified,
+        )
         register_workspace_outputs(workspace, outputs, operation="state-network", kind="state")
         print("\n".join(outputs))
         return 0
@@ -341,7 +391,13 @@ def main(argv=None) -> int:
     if args.command == "freshness":
         target = _file_output(args, workspace, "state", "state_freshness.json")
         observations, assessments, _ = _loaded_state_inputs(args)
-        output = save_freshness_report(observations, assessments, target, current_activity_start=args.current_start, collection_stale_days=args.stale_days)
+        output = save_freshness_report(
+            observations,
+            assessments,
+            target,
+            current_activity_start=args.current_start,
+            collection_stale_days=args.stale_days,
+        )
         register_workspace_outputs(workspace, [output], operation="state-freshness", kind="state")
         print(output)
         return 0
@@ -350,7 +406,16 @@ def main(argv=None) -> int:
         out_dir = _directory_output(args, workspace, "state")
         observations, assessments, sites = _loaded_state_inputs(args)
         registry = load_entity_registry(args.entities) if args.entities else None
-        outputs = save_gap_report(observations, assessments, out_dir, entities=registry, us_sites=sites, name=args.name, current_activity_start=args.current_start, collection_stale_days=args.stale_days)
+        outputs = save_gap_report(
+            observations,
+            assessments,
+            out_dir,
+            entities=registry,
+            us_sites=sites,
+            name=args.name,
+            current_activity_start=args.current_start,
+            collection_stale_days=args.stale_days,
+        )
         register_workspace_outputs(workspace, outputs, operation="state-gaps", kind="state")
         print("\n".join(outputs))
         return 0
@@ -394,7 +459,9 @@ def main(argv=None) -> int:
         assessed_output = save_state_assessments(assessments, assessed_snapshot)
         outputs.append(assessed_output)
         outputs.extend(save_state_rollups(observations, assessments, out_dir, name=args.name))
-        outputs.extend(save_state_network(observations, assessments, out_dir, us_sites=sites, name=args.name, verified_only=True))
+        outputs.extend(
+            save_state_network(observations, assessments, out_dir, us_sites=sites, name=args.name, verified_only=True)
+        )
         review_path = out_dir / f"{stem}.review.xlsx"
         outputs.append(
             export_review_workbook_with_conflict_file(
@@ -405,8 +472,27 @@ def main(argv=None) -> int:
             )
         )
         freshness_path = out_dir / f"{stem}.freshness.json"
-        outputs.append(save_freshness_report(observations, assessments, freshness_path, current_activity_start=args.current_start, collection_stale_days=args.stale_days))
-        outputs.extend(save_gap_report(observations, assessments, out_dir, entities=registry, us_sites=sites, name=args.name, current_activity_start=args.current_start, collection_stale_days=args.stale_days))
+        outputs.append(
+            save_freshness_report(
+                observations,
+                assessments,
+                freshness_path,
+                current_activity_start=args.current_start,
+                collection_stale_days=args.stale_days,
+            )
+        )
+        outputs.extend(
+            save_gap_report(
+                observations,
+                assessments,
+                out_dir,
+                entities=registry,
+                us_sites=sites,
+                name=args.name,
+                current_activity_start=args.current_start,
+                collection_stale_days=args.stale_days,
+            )
+        )
         map_dir = workspace.path_for("maps") if workspace is not None else out_dir
         map_path = map_dir / f"{stem}.interactive_map.html"
         map_output = create_state_map(
@@ -423,8 +509,17 @@ def main(argv=None) -> int:
         outputs.append(map_output)
         outputs.append(str(map_path.with_suffix(map_path.suffix + ".metadata.json")))
         register_workspace_outputs(workspace, [assessed_output], operation="state-package", kind="state_assessments")
-        register_workspace_outputs(workspace, [map_output, str(map_path.with_suffix(map_path.suffix + ".metadata.json"))], operation="state-package", kind="map")
-        other_outputs = [value for value in outputs if value not in {assessed_output, map_output, str(map_path.with_suffix(map_path.suffix + ".metadata.json"))}]
+        register_workspace_outputs(
+            workspace,
+            [map_output, str(map_path.with_suffix(map_path.suffix + ".metadata.json"))],
+            operation="state-package",
+            kind="map",
+        )
+        other_outputs = [
+            value
+            for value in outputs
+            if value not in {assessed_output, map_output, str(map_path.with_suffix(map_path.suffix + ".metadata.json"))}
+        ]
         register_workspace_outputs(workspace, other_outputs, operation="state-package", kind="state")
         print("\n".join(dict.fromkeys(outputs)))
         return 0
@@ -432,7 +527,11 @@ def main(argv=None) -> int:
     if args.command == "audit":
         observations = load_observations(args.observations)
         assessments = load_state_assessments(args.assessments)
-        target = Path(args.output).expanduser().resolve() if args.output else (workspace.path_for("state") / "state_audit.json" if workspace is not None else None)
+        target = (
+            Path(args.output).expanduser().resolve()
+            if args.output
+            else (workspace.path_for("state") / "state_audit.json" if workspace is not None else None)
+        )
         output = _write_or_print(audit_state_records(observations, assessments), target)
         if output:
             register_workspace_outputs(workspace, [output], operation="state-audit", kind="state")
@@ -441,7 +540,11 @@ def main(argv=None) -> int:
     if args.command == "diff":
         previous = load_state_assessments(args.previous)
         current = load_state_assessments(args.current)
-        target = Path(args.output).expanduser().resolve() if args.output else (workspace.path_for("state") / "state_diff.json" if workspace is not None else None)
+        target = (
+            Path(args.output).expanduser().resolve()
+            if args.output
+            else (workspace.path_for("state") / "state_diff.json" if workspace is not None else None)
+        )
         output = _write_or_print(compare_state_snapshots(previous, current), target)
         if output:
             register_workspace_outputs(workspace, [output], operation="state-diff", kind="state")

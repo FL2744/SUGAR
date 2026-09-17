@@ -2,7 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from sugar_core.state_entities import EntityRegistry, MonitoredEntity, load_entity_registry, save_entity_registry, save_query_plan
+from sugar_core.state_entities import (
+    EntityRegistry,
+    MonitoredEntity,
+    load_entity_registry,
+    save_entity_registry,
+    save_query_plan,
+)
 
 
 def test_registry_resolves_aliases_without_implying_support():
@@ -19,7 +25,12 @@ def test_registry_resolves_aliases_without_implying_support():
     assert registry.resolve("EI").entity_id == entity.entity_id
     assert registry.resolve("示例学院").canonical_name == "Example Institute"
     assert not hasattr(entity, "prc_support")
-    assert [row["query"] for row in registry.query_plan()] == ["Example Institute", "EI", "示例学院", "Example Institute robotics"]
+    assert [row["query"] for row in registry.query_plan()] == [
+        "Example Institute",
+        "EI",
+        "示例学院",
+        "Example Institute robotics",
+    ]
 
 
 def test_registry_rejects_ambiguous_aliases():

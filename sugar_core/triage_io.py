@@ -86,6 +86,7 @@ def post_record_from_mapping(row: Mapping[str, Any]) -> PostRecord:
         query_matches=query_matches,
         content_type=str(_first(row, "content_type", default="post")),
         source_mode=str(_first(row, "source_mode", default="api")),
+        access_mode=str(_first(row, "access_mode", default="unknown")),
         source_host=str(_first(row, "source_host")),
         source_url=str(_first(row, "source_url")),
         collected_at=str(_first(row, "collected_at")),

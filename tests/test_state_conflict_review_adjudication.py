@@ -21,7 +21,6 @@ from sugar_core.state_conflict_review import (
 )
 from sugar_core.state_schema import StateAssessment
 
-
 STATE_URL = "https://educationusa.state.gov/node/421"
 OPERATOR_URL = "https://kyrgyzstan.americancouncils.org/edusa"
 

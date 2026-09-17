@@ -7,11 +7,13 @@ import pytest
 
 from sugar_core.weibo_seed_harvest import SeedHarvestConfig, SeedHarvestStore, run_weibo_seed_harvest
 
-
-pytestmark = pytest.mark.skipif(
-    os.environ.get("SUGAR_LIVE_WEIBO") != "1",
-    reason="set SUGAR_LIVE_WEIBO=1 to run bounded public Weibo seed-harvest smoke",
-)
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.skipif(
+        os.environ.get("SUGAR_LIVE_WEIBO") != "1",
+        reason="set SUGAR_LIVE_WEIBO=1 to run bounded public Weibo seed-harvest smoke",
+    ),
+]
 
 
 def test_live_seed_harvest_persists_real_post_and_public_comments(tmp_path):

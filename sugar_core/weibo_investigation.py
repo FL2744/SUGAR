@@ -355,7 +355,9 @@ def build_weibo_insights(
             "reposts_retrieved": len(reposts),
             "comment_retrieved_to_reported_ratio": _safe_ratio(len(comments), reported_comments),
             "repost_retrieved_to_reported_ratio": _safe_ratio(len(reposts), reported_reposts),
-            "unique_public_responders": len({row.author_handle or row.author_name for row in responses if row.author_handle or row.author_name}),
+            "unique_public_responders": len(
+                {row.author_handle or row.author_name for row in responses if row.author_handle or row.author_name}
+            ),
             "surface_status": surface_status or {},
         },
         "response_context": {
@@ -389,9 +391,7 @@ def investigate_weibo_seed(
 ) -> WeiboInvestigation:
     session = session or create_weibo_session(cookie)
     seed_record, seed_mode = fetch_weibo_seed_status(seed, cookie=cookie, session=session)
-    surface_status: dict[str, dict[str, str]] = {
-        "seed": {"status": "ok", "mode": seed_mode}
-    }
+    surface_status: dict[str, dict[str, str]] = {"seed": {"status": "ok", "mode": seed_mode}}
 
     def capture(name: str, fn):
         try:
@@ -425,16 +425,20 @@ def investigate_weibo_seed(
             session=session,
         ),
     )
-    timeline = capture(
-        "author_timeline",
-        lambda: collect_weibo_user_timeline(
-            seed_record.author_handle,
-            max_posts=author_posts,
-            max_pages=author_pages,
-            cookie=cookie,
-            session=session,
-        ),
-    ) if seed_record.author_handle else []
+    timeline = (
+        capture(
+            "author_timeline",
+            lambda: collect_weibo_user_timeline(
+                seed_record.author_handle,
+                max_posts=author_posts,
+                max_pages=author_pages,
+                cookie=cookie,
+                session=session,
+            ),
+        )
+        if seed_record.author_handle
+        else []
+    )
 
     original = None
     original_id = normalize_whitespace((seed_record.raw_stats or {}).get("retweeted_status_id", ""))
@@ -524,13 +528,15 @@ def render_weibo_brief(investigation: WeiboInvestigation) -> str:
     if not insight["response_context"]["top_public_responses"]:
         lines.append("- No public response records were retrievable from the tested surfaces.")
 
-    lines.extend([
-        "",
-        "## Methodological note",
-        "",
-        insight["interpretation_guardrail"],
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Methodological note",
+            "",
+            insight["interpretation_guardrail"],
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 

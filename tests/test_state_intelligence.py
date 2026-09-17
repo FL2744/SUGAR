@@ -18,7 +18,15 @@ def _observation(kind, title, date, country, city, actor, url, source_type="offi
     )
 
 
-def _assessment(obs, *, domain="stem_technology", audience="students", narrative="technology_innovation", actor="Partner", overlap=False):
+def _assessment(
+    obs,
+    *,
+    domain="stem_technology",
+    audience="students",
+    narrative="technology_innovation",
+    actor="Partner",
+    overlap=False,
+):
     assessment = StateAssessment(
         observation_id=obs.observation_id,
         program_domains=[domain],
@@ -35,16 +43,32 @@ def _assessment(obs, *, domain="stem_technology", audience="students", narrative
 
 def test_packet_builds_macro_micro_comparability_and_coupling_without_influence_score():
     event = _observation(
-        "event", "Bishkek technology event", "2026-08-01T12:00:00Z",
-        "Kyrgyzstan", "Bishkek", "Shared Actor", "https://example.org/event",
+        "event",
+        "Bishkek technology event",
+        "2026-08-01T12:00:00Z",
+        "Kyrgyzstan",
+        "Bishkek",
+        "Shared Actor",
+        "https://example.org/event",
     )
     digital = _observation(
-        "digital_post", "Bishkek event promotion", "2026-08-05T12:00:00Z",
-        "Kyrgyzstan", "Bishkek", "Shared Actor", "https://example.org/post", "social_media",
+        "digital_post",
+        "Bishkek event promotion",
+        "2026-08-05T12:00:00Z",
+        "Kyrgyzstan",
+        "Bishkek",
+        "Shared Actor",
+        "https://example.org/post",
+        "social_media",
     )
     comparison = _observation(
-        "program", "Tashkent technology program", "2026-08-03T12:00:00Z",
-        "Uzbekistan", "Tashkent", "Other Actor", "https://example.org/uz",
+        "program",
+        "Tashkent technology program",
+        "2026-08-03T12:00:00Z",
+        "Uzbekistan",
+        "Tashkent",
+        "Other Actor",
+        "https://example.org/uz",
     )
     observations = [event, digital, comparison]
     assessments = [
@@ -65,17 +89,28 @@ def test_packet_builds_macro_micro_comparability_and_coupling_without_influence_
 
 def test_case_profile_identifies_comparables_and_uncertainty():
     first = _observation(
-        "program", "Program A", "2026-07-01T12:00:00Z",
-        "Kyrgyzstan", "Bishkek", "Actor A", "https://example.org/a",
+        "program",
+        "Program A",
+        "2026-07-01T12:00:00Z",
+        "Kyrgyzstan",
+        "Bishkek",
+        "Actor A",
+        "https://example.org/a",
     )
     second = _observation(
-        "program", "Program B", "2026-07-15T12:00:00Z",
-        "Kazakhstan", "Almaty", "Actor B", "https://example.org/b",
+        "program",
+        "Program B",
+        "2026-07-15T12:00:00Z",
+        "Kazakhstan",
+        "Almaty",
+        "Actor B",
+        "https://example.org/b",
     )
     first_assessment = _assessment(first)
     second_assessment = _assessment(second)
     profile = build_case_profile(
-        first, first_assessment,
+        first,
+        first_assessment,
         corpus_pairs=[(first, first_assessment), (second, second_assessment)],
     )
     assert profile["comparables"][0]["observation_id"] == second.observation_id

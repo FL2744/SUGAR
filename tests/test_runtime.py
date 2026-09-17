@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from sugar_bridge import backend_info
-from sugar_core.models import PostRecord
 from sugar_core import service
+from sugar_core.models import PostRecord
 
 
 def test_backend_diagnostics_has_support_fields():
@@ -11,6 +11,15 @@ def test_backend_diagnostics_has_support_fields():
     assert info["architecture"]
     assert info["python"]
     assert info["runtime"] in {"python", "bundled"}
+    assert set(info["credentials_configured"]) == {
+        "x_bearer_token",
+        "llm_api_key",
+        "bluesky_identifier",
+        "bluesky_app_password",
+        "mastodon_token",
+        "weibo_cookie",
+    }
+    assert info["redaction"]["credential_values"] == "never included"
 
 
 def test_search_progress_reports_major_stages(monkeypatch, tmp_path: Path):

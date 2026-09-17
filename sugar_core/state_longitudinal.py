@@ -90,13 +90,15 @@ def compare_syntheses(
                 CONFIDENCE_ORDER.get(str(left.get("confidence")), 0),
                 CONFIDENCE_ORDER.get(str(right.get("confidence")), 0),
             )
-            changed.append({
-                "judgment_id": judgment_id,
-                "statement": right.get("statement") or left.get("statement"),
-                "likelihood_change": likelihood_change,
-                "confidence_change": confidence_change,
-                "changed_fields": fields,
-            })
+            changed.append(
+                {
+                    "judgment_id": judgment_id,
+                    "statement": right.get("statement") or left.get("statement"),
+                    "likelihood_change": likelihood_change,
+                    "confidence_change": confidence_change,
+                    "changed_fields": fields,
+                }
+            )
     return {
         "generated_at": utc_iso(),
         "previous_generated_at": previous.get("generated_at"),
@@ -130,12 +132,14 @@ def _distribution_delta(previous: list[dict[str, Any]], current: list[dict[str, 
     for key in sorted(set(left) | set(right)):
         delta = right.get(key, 0.0) - left.get(key, 0.0)
         if abs(delta) >= 0.01:
-            rows.append({
-                "value": key,
-                "previous_share": round(left.get(key, 0.0), 4),
-                "current_share": round(right.get(key, 0.0), 4),
-                "share_delta": round(delta, 4),
-            })
+            rows.append(
+                {
+                    "value": key,
+                    "previous_share": round(left.get(key, 0.0), 4),
+                    "current_share": round(right.get(key, 0.0), 4),
+                    "share_delta": round(delta, 4),
+                }
+            )
     return sorted(rows, key=lambda row: -abs(row["share_delta"]))
 
 
@@ -148,8 +152,12 @@ def compare_intelligence_packets(
     old_corpus, new_corpus = previous.get("corpus") or {}, current.get("corpus") or {}
     old_macro, new_macro = previous.get("macro_structure") or {}, current.get("macro_structure") or {}
     count_fields = (
-        "observations", "assessments", "verified_brief_eligible", "verified_multi_source_cases",
-        "unresolved_country", "material_us_overlap_verified",
+        "observations",
+        "assessments",
+        "verified_brief_eligible",
+        "verified_multi_source_cases",
+        "unresolved_country",
+        "material_us_overlap_verified",
     )
     corpus_delta = {
         field: {
@@ -161,15 +169,25 @@ def compare_intelligence_packets(
         if old_corpus.get(field) is not None or new_corpus.get(field) is not None
     }
     distribution_fields = (
-        "countries", "observation_types", "program_domains", "strategic_audiences",
-        "narrative_tags", "delivery_modes", "prc_support", "source_types_all_records",
+        "countries",
+        "observation_types",
+        "program_domains",
+        "strategic_audiences",
+        "narrative_tags",
+        "delivery_modes",
+        "prc_support",
+        "source_types_all_records",
     )
     distribution_deltas = {
         field: _distribution_delta(old_macro.get(field) or [], new_macro.get(field) or [])
         for field in distribution_fields
     }
-    old_signals = Counter(x.get("signal") for x in (previous.get("temporal") or {}).get("signals") or [] if x.get("signal"))
-    new_signals = Counter(x.get("signal") for x in (current.get("temporal") or {}).get("signals") or [] if x.get("signal"))
+    old_signals = Counter(
+        x.get("signal") for x in (previous.get("temporal") or {}).get("signals") or [] if x.get("signal")
+    )
+    new_signals = Counter(
+        x.get("signal") for x in (current.get("temporal") or {}).get("signals") or [] if x.get("signal")
+    )
     return {
         "generated_at": utc_iso(),
         "corpus_delta": corpus_delta,

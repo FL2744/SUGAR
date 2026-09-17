@@ -38,6 +38,10 @@ def test_post_conversion_preserves_source_and_location_provenance():
     assert observation.primary_source_url == post.canonical_url
     assert observation.evidence[0].platform == "bluesky"
     assert observation.evidence[0].native_id == "abc123"
+    assert observation.provenance[0].platform == "bluesky"
+    assert observation.provenance[0].native_id == "abc123"
+    assert observation.provenance[0].query_matches == ["confucius institute"]
+    assert observation.provenance[0].normalized["canonical_url"] == post.canonical_url
 
 
 def test_observation_id_is_stable_for_same_evidence():
@@ -66,6 +70,7 @@ def test_human_verification_requires_reviewer_and_can_be_reopened():
         observation_type="event",
         summary="A public event was advertised.",
         evidence=[EvidenceReference(url="https://example.org/event")],
+        provenance=[{"platform": "example", "native_id": "event-1", "source_url": "https://example.org/event"}],
     )
 
     observation.set_ai_triage(labels=["education", "students"], confidence=0.77, model="test-model")
@@ -82,6 +87,12 @@ def test_human_verification_requires_reviewer_and_can_be_reopened():
 
     observation.transition_verification("needs_followup", reviewer="Analyst B", notes="New contradictory source.")
     assert observation.verification_state == "needs_followup"
+
+    provenance = observation.provenance[0]
+    assert provenance.ai["model"] == "test-model"
+    assert provenance.review["state"] == "needs_followup"
+    assert [event["event"] for event in provenance.history] == ["ai_triage", "verification", "verification"]
+    assert provenance.conflict_history[0]["from_state"] == "human_verified"
 
 
 def test_invalid_confidence_and_transition_are_rejected():
@@ -151,6 +162,37 @@ def test_observation_storage_round_trip(tmp_path):
     metadata = json.loads(target.with_suffix(".metadata.json").read_text(encoding="utf-8"))
     assert metadata["dataset_type"] == "research_observations"
     assert metadata["project"] == "test"
+
+
+def test_source_provenance_round_trips_through_csv_and_xlsx(tmp_path):
+    post = PostRecord(
+        platform="mastodon",
+        native_id="42",
+        canonical_url="https://example.social/@analyst/42",
+        query="education",
+        query_matches=["education", "student"],
+        source_mode="mastodon_api",
+        source_host="example.social",
+        source_url="https://example.social/api/v2/search",
+        published_at="2026-09-10T12:00:00Z",
+        collected_at="2026-09-10T12:01:00Z",
+        author_handle="analyst@example.social",
+        original_text="A public workshop announcement.",
+        engagement={"likes": 4},
+        raw_stats={"favourite_count": 4, "access_mode": "anonymous"},
+    )
+    observation = observation_from_post(post)
+    target = tmp_path / "provenance.csv"
+    save_observations([observation], target)
+
+    for restored in (load_observations(target)[0], load_observations(target.with_suffix(".xlsx"))[0]):
+        source = restored.provenance[0]
+        assert source.platform == "mastodon"
+        assert source.native_id == "42"
+        assert source.query_matches == ["education", "student"]
+        assert source.access_mode == "anonymous"
+        assert source.raw["raw_stats"]["favourite_count"] == 4
+        assert source.metrics["likes"] == 4
 
 
 def test_observation_jsonl_loading_preserves_nested_evidence(tmp_path):

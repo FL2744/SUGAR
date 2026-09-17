@@ -180,6 +180,7 @@ def _mark_weibo_access(records: list[PostRecord], cookie: str) -> list[PostRecor
     for record in records:
         record.raw_stats = dict(record.raw_stats)
         record.raw_stats["access_mode"] = mode
+        record.access_mode = mode
         if mode == "session" and record.source_mode.startswith("weibo_public_"):
             record.source_mode = record.source_mode.replace("weibo_public_", "weibo_session_", 1)
     return records

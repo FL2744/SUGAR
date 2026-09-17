@@ -6,9 +6,47 @@ from sugar_core.weibo_seed_harvest import SeedHarvestConfig, SeedHarvestStore, r
 
 
 def investigation(seed: str, **kwargs) -> WeiboInvestigation:
-    root = PostRecord(platform="weibo", native_id=seed, canonical_url=f"https://m.weibo.cn/detail/{seed}", query="", source_mode="weibo_public_status", source_url=f"https://m.weibo.cn/statuses/show?id={seed}", published_at="2026-09-01T12:00:00Z", author_name="seed-author", original_text=f"seed {seed}", engagement={"likes": 1, "replies": 1, "reposts": 0})
-    comment = PostRecord(platform="weibo", native_id=f"c{seed}", canonical_url=f"https://m.weibo.cn/detail/{seed}#comment-c{seed}", query="", content_type="comment", parent_record_key=root.record_key, thread_root_key=root.record_key, conversation_id=root.native_id, source_mode="weibo_public_comments", source_url=f"https://m.weibo.cn/api/comments/show?id={seed}", published_at="2026-09-01T13:00:00Z", author_name="commenter", original_text="public comment")
-    return WeiboInvestigation(seed=root, comments=[comment], reposts=[], author_posts=[], original=None, surface_status={"seed": {"status": "ok"}, "comments": {"status": "ok"}, "reposts": {"status": "not_requested"}, "author_timeline": {"status": "not_requested"}}, insights={})
+    root = PostRecord(
+        platform="weibo",
+        native_id=seed,
+        canonical_url=f"https://m.weibo.cn/detail/{seed}",
+        query="",
+        source_mode="weibo_public_status",
+        source_url=f"https://m.weibo.cn/statuses/show?id={seed}",
+        published_at="2026-09-01T12:00:00Z",
+        author_name="seed-author",
+        original_text=f"seed {seed}",
+        engagement={"likes": 1, "replies": 1, "reposts": 0},
+    )
+    comment = PostRecord(
+        platform="weibo",
+        native_id=f"c{seed}",
+        canonical_url=f"https://m.weibo.cn/detail/{seed}#comment-c{seed}",
+        query="",
+        content_type="comment",
+        parent_record_key=root.record_key,
+        thread_root_key=root.record_key,
+        conversation_id=root.native_id,
+        source_mode="weibo_public_comments",
+        source_url=f"https://m.weibo.cn/api/comments/show?id={seed}",
+        published_at="2026-09-01T13:00:00Z",
+        author_name="commenter",
+        original_text="public comment",
+    )
+    return WeiboInvestigation(
+        seed=root,
+        comments=[comment],
+        reposts=[],
+        author_posts=[],
+        original=None,
+        surface_status={
+            "seed": {"status": "ok"},
+            "comments": {"status": "ok"},
+            "reposts": {"status": "not_requested"},
+            "author_timeline": {"status": "not_requested"},
+        },
+        insights={},
+    )
 
 
 def test_thousand_seed_run_persists_and_resumes_without_recollection(tmp_path: Path):
@@ -40,7 +78,9 @@ def test_plan_change_and_access_mode_are_guarded(tmp_path: Path):
     config = SeedHarvestConfig(seeds=("5320265912291527",), name="guard", inter_seed_delay_seconds=0)
     run_weibo_seed_harvest(config, tmp_path, investigator=investigation, sleeper=lambda _: None)
 
-    changed = SeedHarvestConfig(seeds=("5320265912291527", "5320265912291528"), name="guard", inter_seed_delay_seconds=0)
+    changed = SeedHarvestConfig(
+        seeds=("5320265912291527", "5320265912291528"), name="guard", inter_seed_delay_seconds=0
+    )
     try:
         run_weibo_seed_harvest(changed, tmp_path, investigator=investigation, sleeper=lambda _: None)
     except ValueError as exc:
@@ -49,7 +89,9 @@ def test_plan_change_and_access_mode_are_guarded(tmp_path: Path):
         raise AssertionError("changed seed plan must not reuse checkpoint")
 
     try:
-        run_weibo_seed_harvest(config, tmp_path, cookie="legitimate-existing-session", investigator=investigation, sleeper=lambda _: None)
+        run_weibo_seed_harvest(
+            config, tmp_path, cookie="legitimate-existing-session", investigator=investigation, sleeper=lambda _: None
+        )
     except ValueError as exc:
         assert "cannot resume" in str(exc)
         assert "anonymous" in str(exc) and "session" in str(exc)

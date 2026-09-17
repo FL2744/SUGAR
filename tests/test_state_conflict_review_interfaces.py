@@ -9,10 +9,10 @@ from sugar_core.desktop_ops import run_desktop_analytic_operation
 from sugar_core.observation_storage import save_observations
 from sugar_core.observations import EvidenceReference, ResearchObservation
 from sugar_core.source_conflicts import SourceClaim, SourceConflict, load_source_conflicts, save_source_conflicts
-from sugar_core.state_cli import build_parser, main as state_main
+from sugar_core.state_cli import build_parser
+from sugar_core.state_cli import main as state_main
 from sugar_core.state_schema import StateAssessment
 from sugar_core.state_workflow import save_state_assessments
-
 
 STATE_URL = "https://educationusa.state.gov/node/421"
 OPERATOR_URL = "https://kyrgyzstan.americancouncils.org/edusa"
@@ -119,31 +119,37 @@ def test_cli_review_round_trip_applies_conflict_adjudication(tmp_path):
     reviewed_assessments = tmp_path / "reviewed.jsonl"
     reviewed_conflicts = tmp_path / "reviewed-conflicts.json"
 
-    assert state_main(
-        [
-            "review-export",
-            str(observations),
-            str(assessments),
-            "--source-conflicts",
-            str(conflicts),
-            "--output",
-            str(workbook),
-        ]
-    ) == 0
+    assert (
+        state_main(
+            [
+                "review-export",
+                str(observations),
+                str(assessments),
+                "--source-conflicts",
+                str(conflicts),
+                "--output",
+                str(workbook),
+            ]
+        )
+        == 0
+    )
     _adjudicate(workbook, conflict)
-    assert state_main(
-        [
-            "review-apply",
-            str(assessments),
-            str(workbook),
-            "--source-conflicts",
-            str(conflicts),
-            "--source-conflicts-output",
-            str(reviewed_conflicts),
-            "--output",
-            str(reviewed_assessments),
-        ]
-    ) == 0
+    assert (
+        state_main(
+            [
+                "review-apply",
+                str(assessments),
+                str(workbook),
+                "--source-conflicts",
+                str(conflicts),
+                "--source-conflicts-output",
+                str(reviewed_conflicts),
+                "--output",
+                str(reviewed_assessments),
+            ]
+        )
+        == 0
+    )
 
     assert reviewed_assessments.is_file()
     reviewed = load_source_conflicts(reviewed_conflicts)

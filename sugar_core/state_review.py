@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -124,14 +123,38 @@ def export_review_workbook(
 
     instructions = _formula_safe_frame(
         [
-            {"rule": "Purpose", "guidance": "This workbook records human analytic decisions. It does not edit raw source evidence."},
-            {"rule": "Evidence", "guidance": "Do not verify a claim unless its evidence_refs identify source evidence attached to the observation."},
-            {"rule": "PRC support", "guidance": "Confirmed support requires explicit evidence and support_review_decision=human_verified with a named reviewer."},
-            {"rule": "Influence", "guidance": "Do not verify an influence claim from views, likes, comments, attendance, repetition, or proximity alone. Causal influence requires outcome/causal evidence and will still be audited."},
-            {"rule": "Anti-U.S./coordination", "guidance": "Use these labels only when the content or relationship is explicit and source-supported."},
-            {"rule": "Decision", "guidance": "Use human_verified, rejected, needs_followup, ai_triaged, or unreviewed. A reviewer is required for human_verified/rejected."},
-            {"rule": "Taxonomy edits", "guidance": "Semicolon-separated audience/domain/narrative values may be corrected; unknown taxonomy values will fail import rather than silently enter the dataset."},
-            {"rule": "Spreadsheet safety", "guidance": "Source-derived text is exported formula-safe so untrusted content cannot execute as an Excel formula when the workbook opens."},
+            {
+                "rule": "Purpose",
+                "guidance": "This workbook records human analytic decisions. It does not edit raw source evidence.",
+            },
+            {
+                "rule": "Evidence",
+                "guidance": "Do not verify a claim unless its evidence_refs identify source evidence attached to the observation.",
+            },
+            {
+                "rule": "PRC support",
+                "guidance": "Confirmed support requires explicit evidence and support_review_decision=human_verified with a named reviewer.",
+            },
+            {
+                "rule": "Influence",
+                "guidance": "Do not verify an influence claim from views, likes, comments, attendance, repetition, or proximity alone. Causal influence requires outcome/causal evidence and will still be audited.",
+            },
+            {
+                "rule": "Anti-U.S./coordination",
+                "guidance": "Use these labels only when the content or relationship is explicit and source-supported.",
+            },
+            {
+                "rule": "Decision",
+                "guidance": "Use human_verified, rejected, needs_followup, ai_triaged, or unreviewed. A reviewer is required for human_verified/rejected.",
+            },
+            {
+                "rule": "Taxonomy edits",
+                "guidance": "Semicolon-separated audience/domain/narrative values may be corrected; unknown taxonomy values will fail import rather than silently enter the dataset.",
+            },
+            {
+                "rule": "Spreadsheet safety",
+                "guidance": "Source-derived text is exported formula-safe so untrusted content cannot execute as an Excel formula when the workbook opens.",
+            },
         ]
     )
 
@@ -158,11 +181,27 @@ def export_review_workbook(
         for column_cells in ws.columns:
             header = str(column_cells[0].value or "")
             width = 18
-            if header in {"summary", "statement", "review_note", "support_rationale", "support_evidence_refs", "evidence_refs"}:
+            if header in {
+                "summary",
+                "statement",
+                "review_note",
+                "support_rationale",
+                "support_evidence_refs",
+                "evidence_refs",
+            }:
                 width = 55
             elif header in {"primary_source_url"}:
                 width = 42
-            elif header in {"strategic_audiences", "program_domains", "narrative_tags", "sponsor_entities", "host_entities", "partner_entities", "policy_relevance", "us_overlap"}:
+            elif header in {
+                "strategic_audiences",
+                "program_domains",
+                "narrative_tags",
+                "sponsor_entities",
+                "host_entities",
+                "partner_entities",
+                "policy_relevance",
+                "us_overlap",
+            }:
                 width = 32
             ws.column_dimensions[column_cells[0].column_letter].width = width
 
@@ -301,7 +340,11 @@ def apply_review_workbook(
                 raise ValueError(f"Unsupported claim decision: {decision}")
             if decision in {"human_verified", "rejected"} and not reviewer:
                 raise ValueError(f"Claim {claim_id} decision {decision} requires a reviewer.")
-            if claim.claim_type == "influence" and decision == "human_verified" and assessment.observability_level != "causal_influence_evidence":
+            if (
+                claim.claim_type == "influence"
+                and decision == "human_verified"
+                and assessment.observability_level != "causal_influence_evidence"
+            ):
                 raise ValueError(
                     f"Influence claim {claim_id} cannot be human-verified unless observability_level is causal_influence_evidence."
                 )

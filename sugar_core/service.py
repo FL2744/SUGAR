@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from .collector_registry import CollectorRequest, COLLECTORS, collect_registered_source
+from .collector_registry import COLLECTORS, CollectorRequest, collect_registered_source
 from .enrichment import enrich_records
 from .harvest import run_harvest as _run_harvest
 from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
@@ -51,7 +51,10 @@ def _llm_config(config: dict[str, Any], secrets: dict[str, str]) -> LLMConfig:
 
 
 def _translated_terms(
-    terms: list[str], languages: list[str], llm: LLMConfig, cache_dir: Path,
+    terms: list[str],
+    languages: list[str],
+    llm: LLMConfig,
+    cache_dir: Path,
     progress: ProgressCallback | None = None,
 ) -> list[str]:
     terms = [str(x).strip() for x in terms if str(x).strip()]
@@ -76,7 +79,8 @@ def _translated_terms(
 
 
 def run_search(
-    config: dict[str, Any], secrets: dict[str, str] | None = None,
+    config: dict[str, Any],
+    secrets: dict[str, str] | None = None,
     progress: ProgressCallback | None = None,
 ) -> list[str]:
     secrets = secrets or {}
@@ -157,7 +161,9 @@ def _harvest_access_modes(config: dict[str, Any], secrets: dict[str, str]) -> di
         if source == "x":
             modes[source] = "authorized_api" if secrets.get("x_bearer_token", "").strip() else "missing_credential"
         elif source == "bluesky":
-            authenticated = bool(secrets.get("bluesky_identifier", "").strip() and secrets.get("bluesky_app_password", "").strip())
+            authenticated = bool(
+                secrets.get("bluesky_identifier", "").strip() and secrets.get("bluesky_app_password", "").strip()
+            )
             modes[source] = "authenticated" if authenticated else "public_appview"
         elif source == "mastodon":
             modes[source] = "authenticated" if secrets.get("mastodon_token", "").strip() else "anonymous_instance"
@@ -241,6 +247,7 @@ def _map_options(config: dict[str, Any]) -> MapOptions:
         heat_windows=windows,
         default_heat_window=int(raw.get("default_heat_window", 90)),
         max_popup_chars=max(300, int(raw.get("max_popup_chars", 2200))),
+        max_markers=max(1, int(raw.get("max_markers", 10_000))),
         cluster_disable_at_zoom=max(1, int(raw.get("cluster_disable_at_zoom", 11))),
         show_minimap=bool(raw.get("show_minimap", True)),
         show_measure_control=bool(raw.get("show_measure_control", True)),
@@ -328,7 +335,13 @@ def run_overlap(config: dict[str, Any], progress: ProgressCallback | None = None
         frame = load_map_frame(path)
         reference_layers.append((name, frame))
         map_layers.append(ReferenceLayer(name=name, frame=frame, color=color, show=show))
-    _notify(progress, "spatial_matching", observations=len(observations), reference_layers=len(reference_layers), max_distance_km=overlap_config.max_distance_km)
+    _notify(
+        progress,
+        "spatial_matching",
+        observations=len(observations),
+        reference_layers=len(reference_layers),
+        max_distance_km=overlap_config.max_distance_km,
+    )
     enriched, matches, summary = analyze_spatial_overlap(observations, reference_layers, config=overlap_config)
 
     explicit_output = config.get("output_file") or raw.get("output_file")
@@ -355,11 +368,19 @@ def run_overlap(config: dict[str, Any], progress: ProgressCallback | None = None
             map_output = output_stem.with_name(output_stem.name + "_map.html")
         map_config = dict(config)
         map_config["map"] = {**(config.get("map") or {}), "reference_layers": []}
-        create_map(observations_to_frame(enriched), map_output, options=_map_options(map_config), reference_layers=map_layers)
+        create_map(
+            observations_to_frame(enriched), map_output, options=_map_options(map_config), reference_layers=map_layers
+        )
         outputs.append(str(map_output.expanduser().resolve()))
 
     register_workspace_outputs(workspace, outputs, operation="overlap")
-    _notify(progress, "spatial_complete", observations_matched=summary["observations_matched"], pair_matches=summary["retained_pair_matches"], outputs=outputs)
+    _notify(
+        progress,
+        "spatial_complete",
+        observations_matched=summary["observations_matched"],
+        pair_matches=summary["retained_pair_matches"],
+        outputs=outputs,
+    )
     return outputs
 
 

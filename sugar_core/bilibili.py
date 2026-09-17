@@ -66,7 +66,9 @@ def _iso_from_unix(value: Any) -> str:
     if timestamp <= 0:
         return ""
     try:
-        return datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        return (
+            datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        )
     except (OverflowError, OSError, ValueError):
         return ""
 
@@ -159,6 +161,7 @@ def _search_item_to_record(item: dict[str, Any], *, query: str, source_url: str)
         query_matches=[query],
         content_type="video",
         source_mode="bilibili_public_search",
+        access_mode="anonymous",
         source_host="api.bilibili.com",
         source_url=source_url,
         published_at=published,
@@ -200,6 +203,7 @@ def _detail_to_record(data: dict[str, Any], *, query: str, source_url: str) -> P
         query_matches=[query] if query else [],
         content_type="video",
         source_mode="bilibili_public_video",
+        access_mode="anonymous",
         source_host="api.bilibili.com",
         source_url=source_url,
         published_at=_iso_from_unix(data.get("pubdate", data.get("ctime"))),
@@ -347,6 +351,7 @@ def _comment_record(
         query_matches=[query] if query else [],
         content_type="comment",
         source_mode="bilibili_public_comment",
+        access_mode="anonymous",
         source_host="api.bilibili.com",
         source_url=source_url,
         published_at=_iso_from_unix(reply.get("ctime")),

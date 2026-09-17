@@ -173,7 +173,11 @@ See [`docs/architecture.md`](docs/architecture.md) for module boundaries, fronte
 - [`docs/architecture.md`](docs/architecture.md) — current system architecture and engineering rules
 - [`docs/project-workspaces.md`](docs/project-workspaces.md) — persistent project-workspace contract
 - [`docs/collector-interface.md`](docs/collector-interface.md) — collector capabilities and normalization contract
+- [`docs/collector-capability-matrix.md`](docs/collector-capability-matrix.md) — visible access/capability matrix and coverage semantics
 - [`docs/high-volume-harvest.md`](docs/high-volume-harvest.md) — durable large-scale collection
+- [`docs/stress-testing.md`](docs/stress-testing.md) — offline scale probes and stress-test plan
+- [`docs/legal-and-data-handling.md`](docs/legal-and-data-handling.md) — public/authorized access definitions and data-handling boundaries
+- [`docs/release-readiness.md`](docs/release-readiness.md) — tracked hardening ledger and candidate gate
 - [`docs/bilibili-public.md`](docs/bilibili-public.md) — Bilibili public collector
 - [`docs/weibo-public.md`](docs/weibo-public.md) — Weibo public collector
 - [`docs/weibo-investigation.md`](docs/weibo-investigation.md) — known-post investigation workflow
@@ -194,6 +198,6 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-CI runs the Python suite on Ubuntu, macOS, and Windows with Python 3.11–3.13 and separately builds/smoke-tests the packaged macOS and Windows applications. Schema, collector, bridge, workspace, or methodology changes should include regression tests and documentation in the same pull request.
+CI runs the Python suite on Ubuntu, macOS, and Windows with Python 3.11–3.13, runs lint/type/dependency/security gates, verifies wheel/sdist installation, and separately builds/smoke-tests the packaged macOS and Windows applications. Schema, collector, bridge, workspace, or methodology changes should include regression tests and documentation in the same pull request.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), and [`CHANGELOG.md`](CHANGELOG.md).

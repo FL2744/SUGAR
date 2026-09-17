@@ -191,7 +191,9 @@ def assessment_from_triage_payload(
     support_refs = _valid_refs(support_raw.get("evidence_refs") or [], allowed_refs)
     if requested_level == "probable" and not support_refs:
         requested_level = "possible"
-        downgrade_note = (downgrade_note + " High-confidence support label lacked an attached evidence reference and was downgraded.").strip()
+        downgrade_note = (
+            downgrade_note + " High-confidence support label lacked an attached evidence reference and was downgraded."
+        ).strip()
     support = SupportAssessment(
         level=requested_level,
         bases=_allowed_values(support_raw.get("bases") or [], SUPPORT_BASES),
@@ -255,7 +257,9 @@ def assessment_from_triage_payload(
 
     note_parts = [str(payload.get("review_note", "")).strip(), downgrade_note]
     if needs_followup:
-        note_parts.append("Potential influence/outcome language requires human follow-up; AI cannot establish causal influence.")
+        note_parts.append(
+            "Potential influence/outcome language requires human follow-up; AI cannot establish causal influence."
+        )
 
     priority = str(payload.get("analytic_priority", "normal")).strip().casefold()
     if priority not in {"low", "normal", "high", "urgent"}:
@@ -319,7 +323,9 @@ def triage_observations(
     result: list[StateAssessment] = []
     total = len(rows)
     for index, observation in enumerate(rows, 1):
-        _notify(progress, "state_triage_item_start", current=index, total=total, observation_id=observation.observation_id)
+        _notify(
+            progress, "state_triage_item_start", current=index, total=total, observation_id=observation.observation_id
+        )
         try:
             assessment = triage_observation(observation, llm=llm, client=client, cache=cache)
         except Exception as exc:

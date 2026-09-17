@@ -213,8 +213,21 @@ def save_entity_registry(registry: EntityRegistry, path: str | Path) -> str:
     if target.suffix.lower() != ".csv":
         target = target.with_suffix(".csv")
     fields = [
-        "entity_id", "canonical_name", "entity_type", "aliases", "native_names", "country", "city",
-        "parent_entity_id", "official_urls", "social_urls", "languages", "query_terms", "priority", "active", "notes",
+        "entity_id",
+        "canonical_name",
+        "entity_type",
+        "aliases",
+        "native_names",
+        "country",
+        "city",
+        "parent_entity_id",
+        "official_urls",
+        "social_urls",
+        "languages",
+        "query_terms",
+        "priority",
+        "active",
+        "notes",
     ]
     with target.open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)

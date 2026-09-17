@@ -132,6 +132,59 @@ class EvidenceReference:
 
 
 @dataclass
+class ObservationProvenance:
+    """Round-trip source lineage for an observation derived from one or more records."""
+
+    platform: str = ""
+    native_id: str = ""
+    source_url: str = ""
+    author_handle: str = ""
+    published_at: str = ""
+    collected_at: str = ""
+    collection_method: str = ""
+    query: str = ""
+    query_matches: list[str] = field(default_factory=list)
+    collector_version: str = ""
+    access_mode: str = ""
+    raw: dict[str, Any] = field(default_factory=dict)
+    normalized: dict[str, Any] = field(default_factory=dict)
+    history: list[dict[str, Any]] = field(default_factory=list)
+    metrics: dict[str, Any] = field(default_factory=dict)
+    confidence: dict[str, Any] = field(default_factory=dict)
+    evidence: list[str] = field(default_factory=list)
+    review: dict[str, Any] = field(default_factory=dict)
+    ai: dict[str, Any] = field(default_factory=dict)
+    conflict_history: list[dict[str, Any]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        for attr in (
+            "platform",
+            "native_id",
+            "source_url",
+            "author_handle",
+            "published_at",
+            "collected_at",
+            "collection_method",
+            "query",
+            "collector_version",
+            "access_mode",
+        ):
+            setattr(self, attr, _clean(getattr(self, attr)))
+        self.query_matches = _clean_list(self.query_matches)
+        self.evidence = _clean_list(self.evidence)
+        for attr in ("raw", "normalized", "metrics", "confidence", "review", "ai"):
+            value = getattr(self, attr)
+            if not isinstance(value, dict):
+                raise TypeError(f"provenance {attr} must be a dictionary.")
+            setattr(self, attr, dict(value))
+        for attr in ("history", "conflict_history"):
+            value = getattr(self, attr)
+            if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+                raise TypeError(f"provenance {attr} must be a list of dictionaries.")
+            setattr(self, attr, [dict(item) for item in value])
+
+
+@dataclass
 class ObservationLocation:
     """One evidenced or explicitly qualified location for a single research activity.
 
@@ -257,6 +310,7 @@ class ResearchObservation:
 
     evidence: list[EvidenceReference] = field(default_factory=list)
     source_record_keys: list[str] = field(default_factory=list)
+    provenance: list[ObservationProvenance] = field(default_factory=list)
 
     relevance: str = "unknown"
     relevance_confidence: float | None = None
@@ -284,9 +338,25 @@ class ResearchObservation:
             raise ValueError("Observation summary is required.")
 
         for attr in (
-            "title", "observed_at", "activity_status", "location_label", "country", "region", "city",
-            "location_basis", "institution_name", "program_name", "overlap_note", "ai_model", "ai_reason",
-            "reviewer", "reviewed_at", "verification_notes", "created_at", "updated_at", "schema_version",
+            "title",
+            "observed_at",
+            "activity_status",
+            "location_label",
+            "country",
+            "region",
+            "city",
+            "location_basis",
+            "institution_name",
+            "program_name",
+            "overlap_note",
+            "ai_model",
+            "ai_reason",
+            "reviewer",
+            "reviewed_at",
+            "verification_notes",
+            "created_at",
+            "updated_at",
+            "schema_version",
         ):
             setattr(self, attr, _clean(getattr(self, attr)))
 
@@ -310,14 +380,14 @@ class ResearchObservation:
         seen_location_ids: set[str] = set()
         for item in self.locations:
             if isinstance(item, ObservationLocation):
-                location = item
+                normalized_location = item
             elif isinstance(item, dict):
-                location = ObservationLocation(**item)
+                normalized_location = ObservationLocation(**item)
             else:
                 raise TypeError("locations entries must be ObservationLocation objects or dictionaries.")
-            if location.location_id not in seen_location_ids:
-                normalized_locations.append(location)
-                seen_location_ids.add(location.location_id)
+            if normalized_location.location_id not in seen_location_ids:
+                normalized_locations.append(normalized_location)
+                seen_location_ids.add(normalized_location.location_id)
         self.locations = normalized_locations
 
         self.relevance = _clean(self.relevance).casefold() or "unknown"
@@ -325,11 +395,11 @@ class ResearchObservation:
             raise ValueError(f"Unsupported relevance: {self.relevance}")
 
         normalized_matches: list[SpatialMatch] = []
-        for item in self.spatial_matches:
-            if isinstance(item, SpatialMatch):
-                normalized_matches.append(item)
-            elif isinstance(item, dict):
-                normalized_matches.append(SpatialMatch(**item))
+        for match_item in self.spatial_matches:
+            if isinstance(match_item, SpatialMatch):
+                normalized_matches.append(match_item)
+            elif isinstance(match_item, dict):
+                normalized_matches.append(SpatialMatch(**match_item))
             else:
                 raise TypeError("spatial_matches entries must be SpatialMatch objects or dictionaries.")
         self.spatial_matches = sorted(
@@ -338,14 +408,24 @@ class ResearchObservation:
         )
 
         normalized_evidence: list[EvidenceReference] = []
-        for item in self.evidence:
-            if isinstance(item, EvidenceReference):
-                normalized_evidence.append(item)
-            elif isinstance(item, dict):
-                normalized_evidence.append(EvidenceReference(**item))
+        for evidence_item in self.evidence:
+            if isinstance(evidence_item, EvidenceReference):
+                normalized_evidence.append(evidence_item)
+            elif isinstance(evidence_item, dict):
+                normalized_evidence.append(EvidenceReference(**evidence_item))
             else:
                 raise TypeError("evidence entries must be EvidenceReference objects or dictionaries.")
         self.evidence = normalized_evidence
+
+        normalized_provenance: list[ObservationProvenance] = []
+        for provenance_item in self.provenance:
+            if isinstance(provenance_item, ObservationProvenance):
+                normalized_provenance.append(provenance_item)
+            elif isinstance(provenance_item, dict):
+                normalized_provenance.append(ObservationProvenance(**provenance_item))
+            else:
+                raise TypeError("provenance entries must be ObservationProvenance objects or dictionaries.")
+        self.provenance = normalized_provenance
 
         self.verification_state = _clean(self.verification_state).casefold() or "unreviewed"
         if self.verification_state not in VERIFICATION_STATES:
@@ -416,6 +496,21 @@ class ResearchObservation:
         self.ai_reason = _clean(reason)
         if self.verification_state in {"unreviewed", "needs_followup"}:
             self.verification_state = "ai_triaged"
+        triage_at = _utc_now_iso()
+        triage_event = {
+            "event": "ai_triage",
+            "at": triage_at,
+            "model": self.ai_model,
+            "confidence": self.ai_confidence,
+            "relevance": self.relevance,
+            "relevance_confidence": self.relevance_confidence,
+            "labels": list(self.triage_labels),
+            "reason": self.ai_reason,
+            "evidence_spans": list(self.triage_evidence),
+        }
+        for provenance_item in self.provenance:
+            provenance_item.ai = dict(triage_event)
+            provenance_item.history.append(dict(triage_event))
         self.touch()
 
     def transition_verification(self, state: str, *, reviewer: str = "", notes: str = "") -> None:
@@ -431,22 +526,58 @@ class ResearchObservation:
         if target in {"human_verified", "rejected"} and not reviewer:
             raise ValueError(f"{target} requires a reviewer.")
 
+        previous_state = self.verification_state
         self.verification_state = target
         if reviewer:
             self.reviewer = reviewer
             self.reviewed_at = _utc_now_iso()
         self.verification_notes = _clean(notes)
+        review_at = _utc_now_iso()
+        review_event = {
+            "event": "verification",
+            "at": review_at,
+            "from_state": previous_state,
+            "to_state": self.verification_state,
+            "reviewer": self.reviewer,
+            "reviewed_at": self.reviewed_at,
+            "notes": self.verification_notes,
+        }
+        for provenance_item in self.provenance:
+            provenance_item.review = {
+                "state": self.verification_state,
+                "reviewer": self.reviewer,
+                "reviewed_at": self.reviewed_at,
+                "notes": self.verification_notes,
+            }
+            provenance_item.history.append(dict(review_event))
+            if target == "needs_followup" and previous_state in {"human_verified", "rejected"}:
+                provenance_item.conflict_history.append(
+                    {
+                        "event": "reopened_for_followup",
+                        "at": review_at,
+                        "from_state": previous_state,
+                        "reviewer": self.reviewer,
+                        "notes": self.verification_notes,
+                    }
+                )
         self.touch()
 
     def export_dict(self) -> dict[str, Any]:
         data = asdict(self)
         for key in (
-            "actors", "audiences", "themes", "us_overlap", "source_record_keys", "triage_labels", "triage_evidence"
+            "actors",
+            "audiences",
+            "themes",
+            "us_overlap",
+            "source_record_keys",
+            "triage_labels",
+            "triage_evidence",
         ):
             data[key] = json.dumps(data[key], ensure_ascii=False)
         data["locations"] = json.dumps(data["locations"], ensure_ascii=False, sort_keys=True)
         data["spatial_matches"] = json.dumps(data["spatial_matches"], ensure_ascii=False, sort_keys=True)
         data["evidence"] = json.dumps(data["evidence"], ensure_ascii=False, sort_keys=True)
+        data["provenance"] = json.dumps(data["provenance"], ensure_ascii=False, sort_keys=True)
         data["primary_source_url"] = self.primary_source_url
         return data
 
@@ -455,20 +586,24 @@ class ResearchObservation:
         data = dict(raw)
         data.pop("primary_source_url", None)
         for key in (
-            "actors", "audiences", "themes", "us_overlap", "source_record_keys", "triage_labels", "triage_evidence"
+            "actors",
+            "audiences",
+            "themes",
+            "us_overlap",
+            "source_record_keys",
+            "triage_labels",
+            "triage_evidence",
         ):
             value = data.get(key, [])
             if isinstance(value, str):
                 value = json.loads(value) if value.strip() else []
             data[key] = value
-        for key in ("evidence", "spatial_matches", "locations"):
+        for key in ("evidence", "spatial_matches", "locations", "provenance"):
             value = data.get(key, [])
             if isinstance(value, str):
                 value = json.loads(value) if value.strip() else []
             data[key] = value
-        for key in (
-            "latitude", "longitude", "location_confidence", "relevance_confidence", "ai_confidence"
-        ):
+        for key in ("latitude", "longitude", "location_confidence", "relevance_confidence", "ai_confidence"):
             data[key] = _optional_float(data.get(key))
         return cls(**data)
 
@@ -499,6 +634,36 @@ def observation_from_post(record: PostRecord, *, summary: str | None = None) -> 
         actors=[record.author_name or record.author_handle] if (record.author_name or record.author_handle) else [],
         evidence=[evidence],
         source_record_keys=[f"{record.platform}:{record.native_id}"],
+        provenance=[
+            ObservationProvenance(
+                platform=record.platform,
+                native_id=record.native_id,
+                source_url=source_url,
+                author_handle=record.author_handle,
+                published_at=record.published_at,
+                collected_at=record.collected_at,
+                collection_method=record.source_mode,
+                query=record.query,
+                query_matches=record.query_matches,
+                collector_version=record.collector_version,
+                access_mode=(
+                    record.access_mode
+                    if record.access_mode != "unknown"
+                    else str(record.raw_stats.get("access_mode") or record.source_mode)
+                ),
+                raw={"raw_stats": dict(record.raw_stats)},
+                normalized={
+                    "platform": record.platform,
+                    "native_id": record.native_id,
+                    "canonical_url": record.canonical_url,
+                    "original_text": record.original_text,
+                    "published_at": record.published_at,
+                },
+                metrics=dict(record.engagement),
+                confidence={"location": record.location_confidence},
+                evidence=[source_url] if source_url else [],
+            )
+        ],
     )
 
 

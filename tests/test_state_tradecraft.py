@@ -11,7 +11,8 @@ def _observation(*, title="Case", verification_state="human_verified", evidence=
         observed_at="2026-08-01T12:00:00Z",
         country="Kyrgyzstan",
         city="Bishkek",
-        evidence=evidence or [
+        evidence=evidence
+        or [
             EvidenceReference(
                 url="https://host.example/program",
                 source_type="official_host_source",

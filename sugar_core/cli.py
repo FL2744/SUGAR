@@ -4,8 +4,11 @@ import argparse
 import getpass
 import json
 import os
+import sys
 from pathlib import Path
 
+from . import __version__
+from .errors import error_payload
 from .llm import ARC_BASE_URL, LLMConfig
 from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from .triage import DEFAULT_PROJECT_CONTEXT
@@ -110,6 +113,7 @@ def _workspace_arg(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sugar", description="SUGAR stable research pipeline")
+    parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command", required=True)
 
     search = sub.add_parser("search", help="Run a normal bounded collection + optional enrichment.")
@@ -185,8 +189,15 @@ def build_parser() -> argparse.ArgumentParser:
         "weibo-seed-harvest",
         help="Durably expand hundreds/thousands of known public Weibo post URLs or IDs without relying on keyword search.",
     )
-    seed_harvest.add_argument("seeds", nargs="*", help="Inline public Weibo URLs/IDs. Can be combined with --seeds-file.")
-    seed_harvest.add_argument("--seeds-file", action="append", default=[], help="UTF-8 file with one public Weibo URL/ID per line. Repeatable.")
+    seed_harvest.add_argument(
+        "seeds", nargs="*", help="Inline public Weibo URLs/IDs. Can be combined with --seeds-file."
+    )
+    seed_harvest.add_argument(
+        "--seeds-file",
+        action="append",
+        default=[],
+        help="UTF-8 file with one public Weibo URL/ID per line. Repeatable.",
+    )
     seed_harvest.add_argument("--comments", type=int, default=20)
     seed_harvest.add_argument("--comment-pages", type=int, default=1)
     seed_harvest.add_argument("--reposts", type=int, default=0)
@@ -210,8 +221,15 @@ def build_parser() -> argparse.ArgumentParser:
     qualify.add_argument("--terms-file", action="append", default=[])
     qualify.add_argument("--seed", action="append", default=[], help="Real public Weibo post URL/ID. Repeatable.")
     qualify.add_argument("--seeds-file", action="append", default=[], help="UTF-8 seed file, one post URL/ID per line.")
-    qualify.add_argument("--replicates", type=int, default=2, help="Independent fresh harvest snapshots for stability measurement.")
-    qualify.add_argument("--target", type=int, default=1000, help="Minimum unique-record acceptance floor per fresh replicate; does not stop the query plan early.")
+    qualify.add_argument(
+        "--replicates", type=int, default=2, help="Independent fresh harvest snapshots for stability measurement."
+    )
+    qualify.add_argument(
+        "--target",
+        type=int,
+        default=1000,
+        help="Minimum unique-record acceptance floor per fresh replicate; does not stop the query plan early.",
+    )
     qualify.add_argument("--posts-per-task", type=int, default=250)
     qualify.add_argument("--pages-per-task", type=int, default=2)
     qualify.add_argument("--max-pages-per-query", type=int, default=25)
@@ -288,7 +306,7 @@ def _llm_from_cli(provider: str, model: str, base_url: str, api_key: str) -> LLM
     return LLMConfig(provider=provider, model=model, api_key=api_key, base_url=base)
 
 
-def main(argv=None) -> int:
+def _run(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -515,3 +533,22 @@ def main(argv=None) -> int:
     }
     print("\n".join(run_search(config, secrets)))
     return 0
+
+
+def main(argv=None) -> int:
+    try:
+        return _run(argv)
+    except Exception as exc:
+        secrets = {
+            key: os.environ.get(env, "")
+            for key, env in {
+                "x_bearer_token": "SUGAR_X_BEARER_TOKEN",
+                "llm_api_key": "SUGAR_LLM_API_KEY",
+                "bluesky_app_password": "SUGAR_BLUESKY_APP_PASSWORD",
+                "mastodon_token": "SUGAR_MASTODON_TOKEN",
+                "weibo_cookie": "SUGAR_WEIBO_COOKIE",
+            }.items()
+        }
+        payload = {"event": "error", **error_payload(exc, secrets=secrets)}
+        print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
+        return 1

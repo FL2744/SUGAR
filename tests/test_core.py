@@ -35,7 +35,14 @@ def test_formula_injection_guard_does_not_corrupt_numbers():
 
 
 def test_export_has_stable_and_legacy_fields():
-    record = PostRecord(platform="bluesky", native_id="abc", canonical_url="https://example.test/p/abc", query="q", query_matches=["q"], engagement={"likes": 1})
+    record = PostRecord(
+        platform="bluesky",
+        native_id="abc",
+        canonical_url="https://example.test/p/abc",
+        query="q",
+        query_matches=["q"],
+        engagement={"likes": 1},
+    )
     frame = records_to_frame([record])
     assert frame.loc[0, "native_id"] == "abc"
     assert frame.loc[0, "tweet_id"] == "abc"
@@ -43,12 +50,18 @@ def test_export_has_stable_and_legacy_fields():
 
 
 def test_analysis_counts_legacy_mastodon_metrics():
-    df = pd.DataFrame([{
-        "platform": "mastodon", "tweet_id": "1", "date_iso": "2026-09-10T10:00:00Z",
-        "detected_language": "en", "inferred_location": "", "raw_stats": json.dumps({
-            "favourite_count": 4, "reply_count": 1, "reblog_count": 2
-        })
-    }])
+    df = pd.DataFrame(
+        [
+            {
+                "platform": "mastodon",
+                "tweet_id": "1",
+                "date_iso": "2026-09-10T10:00:00Z",
+                "detected_language": "en",
+                "inferred_location": "",
+                "raw_stats": json.dumps({"favourite_count": 4, "reply_count": 1, "reblog_count": 2}),
+            }
+        ]
+    )
     work, metrics = _prepare(df)
     assert int(work.loc[0, "engagement_total"]) == 7
     assert metrics["engagement"] == 7

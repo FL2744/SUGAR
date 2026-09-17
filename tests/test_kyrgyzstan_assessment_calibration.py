@@ -4,7 +4,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-
 CASE_DIR = Path(__file__).resolve().parents[1] / "examples" / "cases" / "kyrgyzstan_2026"
 
 
@@ -26,22 +25,21 @@ def test_support_calibration_distinguishes_direct_and_weaker_support_evidence():
     assessments = CASE_DATA.build_assessments(observations)
     summary = CALIBRATION.calibrate_support_assessments(observations, assessments)
     by_title = {
-        observation.title: assessment
-        for observation, assessment in zip(observations, assessments, strict=True)
+        observation.title: assessment for observation, assessment in zip(observations, assessments, strict=True)
     }
 
     assert summary == {"probable": 9, "possible": 2}
     assert by_title["Chinese painting exhibition at the National Historical Museum"].prc_support.level == "probable"
     assert by_title["Chinese Bridge school competition Kyrgyzstan qualifier"].prc_support.level == "probable"
-    assert by_title["Kyrgyz and Chinese writers organizations sign cooperation agreement"].prc_support.level == "possible"
+    assert (
+        by_title["Kyrgyz and Chinese writers organizations sign cooperation agreement"].prc_support.level == "possible"
+    )
     assert by_title["Presentation of Xi Jinping's The Governance of China in Bishkek"].prc_support.level == "possible"
     assert all(assessment.prc_support.level != "confirmed" for assessment in assessments)
     assert all(assessment.prc_support.review_state == "ai_triaged" for assessment in assessments)
 
     language_titles = {
-        observation.title
-        for observation in observations
-        if "language_education" in observation.triage_labels
+        observation.title for observation in observations if "language_education" in observation.triage_labels
     }
     assert len(language_titles) == 4
     for title in language_titles:
@@ -55,8 +53,7 @@ def test_real_case_preserves_qualified_reach_without_false_exact_counts():
     assessments = CASE_DATA.build_assessments(observations)
     CALIBRATION.calibrate_support_assessments(observations, assessments)
     by_title = {
-        observation.title: assessment
-        for observation, assessment in zip(observations, assessments, strict=True)
+        observation.title: assessment for observation, assessment in zip(observations, assessments, strict=True)
     }
 
     governance = by_title["Presentation of Xi Jinping's The Governance of China in Bishkek"]

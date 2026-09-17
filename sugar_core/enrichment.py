@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from .llm import LLMConfig, create_client, parse_json_object, translate_text, cached_chat
+from .llm import LLMConfig, cached_chat, create_client, parse_json_object, translate_text
 from .models import PostRecord
 from .utils import JsonCache, normalize_whitespace, stable_hash
 
@@ -160,10 +160,15 @@ def geocode_location(
 
 
 def enrich_records(
-    records: Iterable[PostRecord], *, llm: LLMConfig | None = None,
-    translate: bool = True, infer_locations: bool = True,
-    target_language: str = "English", cache_dir: str | Path = ".sugar-cache",
-    geocode: bool = True, min_location_confidence: float = 0.45,
+    records: Iterable[PostRecord],
+    *,
+    llm: LLMConfig | None = None,
+    translate: bool = True,
+    infer_locations: bool = True,
+    target_language: str = "English",
+    cache_dir: str | Path = ".sugar-cache",
+    geocode: bool = True,
+    min_location_confidence: float = 0.45,
     progress: ProgressCallback | None = None,
 ) -> list[PostRecord]:
     records = list(records)
@@ -192,9 +197,7 @@ def enrich_records(
             if record.detected_language == "en" and target_language.casefold() == "english":
                 record.translated_text = record.original_text
             else:
-                record.translated_text = translate_text(
-                    client, llm, llm_cache, record.original_text, target_language
-                )
+                record.translated_text = translate_text(client, llm, llm_cache, record.original_text, target_language)
             _progress_tick(progress, "translation_progress", index, total)
 
     if infer_locations:
@@ -208,8 +211,7 @@ def enrich_records(
             _progress_tick(progress, "location_progress", index, total)
 
         candidates = [
-            r for r in records
-            if geocode and r.inferred_location and r.location_confidence >= min_location_confidence
+            r for r in records if geocode and r.inferred_location and r.location_confidence >= min_location_confidence
         ]
         if candidates:
             _notify(progress, "geocoding", total=len(candidates))

@@ -61,18 +61,22 @@ def test_access_gate_is_not_false_zero(tmp_path: Path):
 
 
 def test_replicate_jaccard():
-    result = compare_replicates([
-        {"record_keys": ["weibo:1", "weibo:2", "weibo:3"]},
-        {"record_keys": ["weibo:2", "weibo:3", "weibo:4"]},
-    ])
+    result = compare_replicates(
+        [
+            {"record_keys": ["weibo:1", "weibo:2", "weibo:3"]},
+            {"record_keys": ["weibo:2", "weibo:3", "weibo:4"]},
+        ]
+    )
     assert result["minimum_jaccard"] == 0.5
 
 
 def test_empty_replicates_are_not_perfect_reproducibility():
-    result = compare_replicates([
-        {"record_keys": []},
-        {"record_keys": []},
-    ])
+    result = compare_replicates(
+        [
+            {"record_keys": []},
+            {"record_keys": []},
+        ]
+    )
     assert result["pairwise_jaccard"][0]["jaccard"] is None
     assert result["minimum_jaccard"] is None
     assert result["mean_jaccard"] is None

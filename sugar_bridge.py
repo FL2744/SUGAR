@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Line-delimited JSON command bridge shared by the SUGAR desktop frontends."""
+
 from __future__ import annotations
 
 import argparse
@@ -8,6 +9,7 @@ import os
 import platform
 import sys
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 for stream in (sys.stdout, sys.stderr):
@@ -17,6 +19,7 @@ for stream in (sys.stdout, sys.stderr):
 import sugar_core
 from sugar_core.collector_registry import collector_capabilities
 from sugar_core.desktop_ops import DESKTOP_ANALYTIC_OPERATIONS, run_desktop_analytic_operation
+from sugar_core.errors import error_payload
 from sugar_core.service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from sugar_core.weibo_qualification import run_weibo_qualification
@@ -42,6 +45,8 @@ BASE_OPERATIONS = {
     "diagnostics",
 } | WORKSPACE_OPERATIONS
 ALL_OPERATIONS = BASE_OPERATIONS | DESKTOP_ANALYTIC_OPERATIONS
+MAX_CONFIG_BYTES = 2 * 1024 * 1024
+MAX_CONFIG_DEPTH = 24
 
 
 def emit(event: str, **values: Any) -> None:
@@ -49,11 +54,28 @@ def emit(event: str, **values: Any) -> None:
 
 
 def load_config(path: str) -> dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as stream:
+    config_path = Path(path).expanduser()
+    if not config_path.is_file():
+        raise FileNotFoundError(config_path)
+    if config_path.stat().st_size > MAX_CONFIG_BYTES:
+        raise ValueError(f"Desktop bridge configuration exceeds the {MAX_CONFIG_BYTES} byte limit.")
+    with config_path.open("r", encoding="utf-8") as stream:
         payload = json.load(stream)
     if not isinstance(payload, dict):
         raise ValueError("Desktop bridge configuration must be a JSON object.")
+    _validate_config_depth(payload)
     return payload
+
+
+def _validate_config_depth(value: Any, *, depth: int = 0) -> None:
+    if depth > MAX_CONFIG_DEPTH:
+        raise ValueError(f"Desktop bridge configuration exceeds the {MAX_CONFIG_DEPTH}-level nesting limit.")
+    if isinstance(value, dict):
+        for child in value.values():
+            _validate_config_depth(child, depth=depth + 1)
+    elif isinstance(value, list):
+        for child in value:
+            _validate_config_depth(child, depth=depth + 1)
 
 
 def secrets_from_environment() -> dict[str, str]:
@@ -68,6 +90,14 @@ def secrets_from_environment() -> dict[str, str]:
 
 
 def backend_info() -> dict[str, Any]:
+    credential_env = {
+        "x_bearer_token": "SUGAR_X_BEARER_TOKEN",
+        "llm_api_key": "SUGAR_LLM_API_KEY",
+        "bluesky_identifier": "SUGAR_BLUESKY_IDENTIFIER",
+        "bluesky_app_password": "SUGAR_BLUESKY_APP_PASSWORD",
+        "mastodon_token": "SUGAR_MASTODON_TOKEN",
+        "weibo_cookie": "SUGAR_WEIBO_COOKIE",
+    }
     return {
         "version": sugar_core.__version__,
         "bridge_protocol": BRIDGE_PROTOCOL_VERSION,
@@ -78,6 +108,14 @@ def backend_info() -> dict[str, Any]:
         "os": platform.system().lower(),
         "collectors": collector_capabilities(),
         "operations": sorted(ALL_OPERATIONS),
+        "diagnostics_schema": 1,
+        "config_limits": {"max_bytes": MAX_CONFIG_BYTES, "max_depth": MAX_CONFIG_DEPTH},
+        "credentials_configured": {key: bool(os.environ.get(env)) for key, env in credential_env.items()},
+        "redaction": {
+            "credential_values": "never included",
+            "config_contents": "never included",
+            "research_data": "never included",
+        },
     }
 
 
@@ -244,7 +282,7 @@ def main(argv=None) -> int:
         emit("complete", outputs=outputs)
         return 0
     except Exception as exc:
-        emit("error", message=str(exc), exception=type(exc).__name__)
+        emit("error", **error_payload(exc, secrets=secrets if "secrets" in locals() else None))
         return 1
 
 

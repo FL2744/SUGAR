@@ -7,7 +7,6 @@ from sugar_core.observations import EvidenceReference, ResearchObservation
 from sugar_core.state_review import apply_review_workbook, export_review_workbook
 from sugar_core.state_schema import AnalyticClaim, StateAssessment, SupportAssessment
 
-
 SOURCE = "https://example.org/evidence"
 
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import asdict
-from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .workspace import SugarWorkspace
 
 
@@ -29,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="sugar-project",
         description="Create and inspect persistent SUGAR research workspaces.",
     )
+    parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command", required=True)
 
     init = sub.add_parser("init", help="Create a new SUGAR project workspace.")

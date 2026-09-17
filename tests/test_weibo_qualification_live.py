@@ -7,11 +7,13 @@ import pytest
 
 from sugar_core.weibo_qualification import run_weibo_qualification
 
-
-pytestmark = pytest.mark.skipif(
-    os.environ.get("SUGAR_LIVE_WEIBO") != "1",
-    reason="set SUGAR_LIVE_WEIBO=1 to run the bounded public Weibo qualification smoke",
-)
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.skipif(
+        os.environ.get("SUGAR_LIVE_WEIBO") != "1",
+        reason="set SUGAR_LIVE_WEIBO=1 to run the bounded public Weibo qualification smoke",
+    ),
+]
 
 
 def test_live_weibo_qualification_exercises_search_and_real_seed(tmp_path):

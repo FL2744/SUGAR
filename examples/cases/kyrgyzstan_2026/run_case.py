@@ -31,6 +31,7 @@ from source_conflicts import (
     source_conflict_findings,
     source_conflict_manifest,
 )
+
 from sugar_core.observation_storage import save_observations
 from sugar_core.state_conflict_package import save_state_package_with_conflicts
 from sugar_core.state_map import create_state_map
@@ -80,28 +81,30 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
     assessment_by_id = {row.observation_id: row for row in assessments}
     language_records = [row for row in observations if "language_education" in row.triage_labels]
     language_fallback = [
-        row for row in language_records
+        row
+        for row in language_records
         if "other" in assessment_by_id[row.observation_id].program_domains
         or "language_education" not in assessment_by_id[row.observation_id].program_domains
     ]
     false_english_overlap = [
-        row for row in language_records
+        row
+        for row in language_records
         if "english_language" in assessment_by_id[row.observation_id].us_overlap.service_overlap
     ]
     higher_ed_assessments = [row for row in assessments if "higher_education" in row.program_domains]
     missed_virtual_educationusa = [
-        row for row in higher_ed_assessments
-        if "educationusa" not in row.us_overlap.service_overlap
-        or not _has_structured_educationusa_source(row)
+        row
+        for row in higher_ed_assessments
+        if "educationusa" not in row.us_overlap.service_overlap or not _has_structured_educationusa_source(row)
     ]
     physical_sites = [site for site in sites if site.is_spatial]
     unresolved_physical_sites = [
-        site for site in sites
-        if site.delivery_mode in {"physical", "hybrid"} and not site.is_spatial
+        site for site in sites if site.delivery_mode in {"physical", "hybrid"} and not site.is_spatial
     ]
     virtual_sites = [site for site in sites if site.delivery_mode == "virtual"]
     sites_missing_precision = [
-        site for site in physical_sites
+        site
+        for site in physical_sites
         if site.location_precision == "unknown"
         or site.location_confidence is None
         or site.location_uncertainty_km is None
@@ -109,8 +112,11 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
     ]
     us_site_reference_gaps = sites_missing_precision + unresolved_physical_sites
     approximate_reach_records = [
-        row for row in observations
-        if any(marker in row.summary.casefold() for marker in ("roughly 300", "roughly 200", "more than 1,000", "hundreds"))
+        row
+        for row in observations
+        if any(
+            marker in row.summary.casefold() for marker in ("roughly 300", "roughly 200", "more than 1,000", "hundreds")
+        )
     ]
     qualified_reach_missing = []
     for observation in approximate_reach_records:
@@ -128,7 +134,8 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
 
     multi_site_records = [row for row in observations if row.title == MULTI_SITE_TITLE]
     multi_site_missing = [
-        row for row in multi_site_records
+        row
+        for row in multi_site_records
         if len(row.locations) != 2
         or len({item.location_id for item in row.locations}) != 2
         or {item.precision for item in row.locations} != {"site", "city"}
@@ -142,32 +149,44 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
             "affected_records": len(language_records) if not language_fallback else len(language_fallback),
             "description": (
                 "Chinese-language education is represented by the generic language_education State domain without being equated to English-language programming."
-                if not language_fallback else
-                "Some Chinese-language education records still fall back to an undifferentiated domain instead of language_education."
+                if not language_fallback
+                else "Some Chinese-language education records still fall back to an undifferentiated domain instead of language_education."
             ),
-            "recommended_fix": "Preserve language_education as language-neutral." if not language_fallback else "Migrate remaining language records to language_education.",
+            "recommended_fix": "Preserve language_education as language-neutral."
+            if not language_fallback
+            else "Migrate remaining language records to language_education.",
         },
         {
-            "code": "direct_service_overlap_semantics_resolved" if not false_english_overlap else "direct_service_overlap_semantics_gap",
+            "code": "direct_service_overlap_semantics_resolved"
+            if not false_english_overlap
+            else "direct_service_overlap_semantics_gap",
             "severity": "resolved" if not false_english_overlap else "model_gap",
             "affected_records": len(language_records) if not false_english_overlap else len(false_english_overlap),
             "description": (
                 "Audience similarity no longer manufactures a direct English-language service overlap for Chinese-language activities; audience, thematic, and service overlap remain separate dimensions."
-                if not false_english_overlap else
-                "At least one Chinese-language record still receives a direct English-language service overlap from audience/service conflation."
+                if not false_english_overlap
+                else "At least one Chinese-language record still receives a direct English-language service overlap from audience/service conflation."
             ),
-            "recommended_fix": "No further fix required for this regression." if not false_english_overlap else "Restrict direct service overlap to program-domain-supported service tags.",
+            "recommended_fix": "No further fix required for this regression."
+            if not false_english_overlap
+            else "Restrict direct service overlap to program-domain-supported service tags.",
         },
         {
-            "code": "virtual_educationusa_service_resolved" if not missed_virtual_educationusa else "virtual_educationusa_service_gap",
+            "code": "virtual_educationusa_service_resolved"
+            if not missed_virtual_educationusa
+            else "virtual_educationusa_service_gap",
             "severity": "resolved" if not missed_virtual_educationusa else "model_gap",
-            "affected_records": len(higher_ed_assessments) if not missed_virtual_educationusa else len(missed_virtual_educationusa),
+            "affected_records": len(higher_ed_assessments)
+            if not missed_virtual_educationusa
+            else len(missed_virtual_educationusa),
             "description": (
                 "EducationUSA Kyrgyzstan remains a source-declared virtual, country-scoped service with structured State-directory provenance that contributes higher-education service availability independently of nearest physical-site geography."
-                if not missed_virtual_educationusa else
-                "At least one Kyrgyzstan higher-education assessment still misses the applicable country-scoped EducationUSA service or its structured source attribution."
+                if not missed_virtual_educationusa
+                else "At least one Kyrgyzstan higher-education assessment still misses the applicable country-scoped EducationUSA service or its structured source attribution."
             ),
-            "recommended_fix": "Preserve service availability, structured source attribution, and physical proximity as independent dimensions." if not missed_virtual_educationusa else "Aggregate U.S. service sources by declared delivery mode and coverage scope independently of nearest-site geography.",
+            "recommended_fix": "Preserve service availability, structured source attribution, and physical proximity as independent dimensions."
+            if not missed_virtual_educationusa
+            else "Aggregate U.S. service sources by declared delivery mode and coverage scope independently of nearest-site geography.",
         },
         {
             "code": "us_site_precision_resolved" if not us_site_reference_gaps else "us_site_precision_gap",
@@ -175,32 +194,42 @@ def _case_findings(observations, assessments, sites, location_summary: dict[str,
             "affected_records": len(physical_sites) if not us_site_reference_gaps else len(us_site_reference_gaps),
             "description": (
                 f"All physical/hybrid U.S. presence records are spatially resolved with explicit location precision, confidence, basis, and uncertainty. {location_summary['address_refined_physical_us_sites']} are site/address refined and {location_summary['city_centroid_physical_us_sites']} remain honestly labeled city-centroid references; no missing-coordinate physical record is reclassified as virtual."
-                if not us_site_reference_gaps else
-                "Some physical/hybrid U.S. presence records remain spatially unresolved or lack explicit precision/confidence/provenance/uncertainty."
+                if not us_site_reference_gaps
+                else "Some physical/hybrid U.S. presence records remain spatially unresolved or lack explicit precision/confidence/provenance/uncertainty."
             ),
-            "recommended_fix": "Continue improving individual reference quality when better source data appears; never infer virtual delivery from missing coordinates." if not us_site_reference_gaps else "Resolve spatial data separately from delivery/coverage semantics and keep unresolved physical/hybrid records non-mappable until supported.",
+            "recommended_fix": "Continue improving individual reference quality when better source data appears; never infer virtual delivery from missing coordinates."
+            if not us_site_reference_gaps
+            else "Resolve spatial data separately from delivery/coverage semantics and keep unresolved physical/hybrid records non-mappable until supported.",
         },
         {
             "code": "qualified_reach_metric_resolved" if not qualified_reach_missing else "qualified_reach_metric_gap",
             "severity": "resolved" if not qualified_reach_missing else "model_gap",
-            "affected_records": len(approximate_reach_records) if not qualified_reach_missing else len(qualified_reach_missing),
+            "affected_records": len(approximate_reach_records)
+            if not qualified_reach_missing
+            else len(qualified_reach_missing),
             "description": (
                 "Approximate and bounded attendance claims retain structured qualifiers and sources; none are silently promoted into bare exact integers or exact aggregate totals."
-                if not qualified_reach_missing else
-                "At least one approximate or bounded attendance claim lacks qualifier/source semantics or leaks into an exact reach field."
+                if not qualified_reach_missing
+                else "At least one approximate or bounded attendance claim lacks qualifier/source semantics or leaks into an exact reach field."
             ),
-            "recommended_fix": "Preserve source qualifiers for future reach observations." if not qualified_reach_missing else "Encode reported reach using exact/approximate/minimum/maximum/range semantics.",
+            "recommended_fix": "Preserve source qualifiers for future reach observations."
+            if not qualified_reach_missing
+            else "Encode reported reach using exact/approximate/minimum/maximum/range semantics.",
         },
         {
-            "code": "multi_site_observation_resolved" if multi_site_records and not multi_site_missing else "multi_site_observation_gap",
+            "code": "multi_site_observation_resolved"
+            if multi_site_records and not multi_site_missing
+            else "multi_site_observation_gap",
             "severity": "resolved" if multi_site_records and not multi_site_missing else "model_gap",
             "affected_records": len(multi_site_records) if not multi_site_missing else len(multi_site_missing),
             "description": (
                 "The International Chinese Language Day activity remains one research observation while carrying two independently sourced activity locations: Bishkek State University at site precision and International University of Kyrgyzstan at deliberately broader city precision because the event-specific campus is unresolved. Map density splits one total activity weight across both defensible locations instead of counting two activities."
-                if multi_site_records and not multi_site_missing else
-                "The multi-university Chinese Language Day source still collapses into one artificial location or lacks venue-specific precision/provenance."
+                if multi_site_records and not multi_site_missing
+                else "The multi-university Chinese Language Day source still collapses into one artificial location or lacks venue-specific precision/provenance."
             ),
-            "recommended_fix": "No further multi-site schema fix required for this case; keep venue provenance and activity counts separate." if multi_site_records and not multi_site_missing else "Represent all source-supported venues as structured locations without duplicating the observation.",
+            "recommended_fix": "No further multi-site schema fix required for this case; keep venue provenance and activity counts separate."
+            if multi_site_records and not multi_site_missing
+            else "Represent all source-supported venues as structured locations without duplicating the observation.",
         },
         {
             "code": "human_review_gate_working",
@@ -251,7 +280,11 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
             "location_enrichment": location_summary,
         },
     )
-    observation_outputs = [observation_csv, observation_csv.with_suffix(".xlsx"), observation_csv.with_suffix(".metadata.json")]
+    observation_outputs = [
+        observation_csv,
+        observation_csv.with_suffix(".xlsx"),
+        observation_csv.with_suffix(".metadata.json"),
+    ]
     workspace.register_outputs(observation_outputs, kind="observations", operation="kyrgyzstan-e2e")
 
     references_dir = workspace.path_for("references")
@@ -342,8 +375,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
     )
     higher_ed_assessments = [row for row in assessments if "higher_education" in row.program_domains]
     higher_ed_missing_educationusa = sum(
-        "educationusa" not in row.us_overlap.service_overlap
-        or not _has_structured_educationusa_source(row)
+        "educationusa" not in row.us_overlap.service_overlap or not _has_structured_educationusa_source(row)
         for row in higher_ed_assessments
     )
     sites_missing_precision = sum(
@@ -351,10 +383,12 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         or site.location_confidence is None
         or site.location_uncertainty_km is None
         or not site.location_basis
-        for site in sites if site.is_spatial
+        for site in sites
+        if site.is_spatial
     )
     qualified_reach_assessments = [
-        row for row in assessments
+        row
+        for row in assessments
         if row.reach.metric("attendance") is not None and row.reach.metric("attendance").qualifier != "exact"
     ]
     qualified_reach_missing = sum(
@@ -487,9 +521,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
 
     package_conflict_path = state_dir / f"{CASE_STEM}.source_conflicts.json"
     package_queue = pd.read_csv(state_dir / f"{CASE_STEM}.review_queue.csv")
-    affected_conflict_rows = package_queue[
-        package_queue["source_conflicts_requiring_human_review"] == 1
-    ]
+    affected_conflict_rows = package_queue[package_queue["source_conflicts_requiring_human_review"] == 1]
     package_workbook = pd.ExcelFile(state_dir / f"{CASE_STEM}.state.xlsx")
     package_brief = (state_dir / f"{CASE_STEM}.brief.md").read_text(encoding="utf-8")
     assert package_conflict_path.is_file()

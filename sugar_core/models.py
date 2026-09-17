@@ -48,6 +48,8 @@ class PostRecord:
     latitude: float | None = None
     longitude: float | None = None
     geocode_display_name: str = ""
+    # Appended after the legacy fields to preserve positional-constructor compatibility.
+    access_mode: str = "unknown"
 
     @property
     def record_key(self) -> str:
@@ -103,17 +105,19 @@ class PostRecord:
         data["query_matches"] = json.dumps(self.query_matches, ensure_ascii=False)
         data["engagement"] = json.dumps(self.engagement, sort_keys=True)
         data["raw_stats"] = json.dumps(self.raw_stats, ensure_ascii=False, sort_keys=True)
-        data.update({
-            "tweet_id": self.tweet_id,
-            "post_url": self.post_url,
-            "x_url": self.x_url,
-            "username": self.username,
-            "display_name": self.display_name,
-            "date_iso": self.date_iso,
-            "date_raw": self.date_raw,
-            "translated_en": self.translated_en,
-            "is_retweet": self.is_retweet,
-        })
+        data.update(
+            {
+                "tweet_id": self.tweet_id,
+                "post_url": self.post_url,
+                "x_url": self.x_url,
+                "username": self.username,
+                "display_name": self.display_name,
+                "date_iso": self.date_iso,
+                "date_raw": self.date_raw,
+                "translated_en": self.translated_en,
+                "is_retweet": self.is_retweet,
+            }
+        )
         return data
 
 
@@ -132,6 +136,8 @@ def merge_record(existing: PostRecord, incoming: PostRecord) -> PostRecord:
     ):
         if not getattr(existing, attr) and getattr(incoming, attr):
             setattr(existing, attr, getattr(incoming, attr))
+    if existing.access_mode == "unknown" and incoming.access_mode != "unknown":
+        existing.access_mode = incoming.access_mode
     if sum(incoming.engagement.values()) > sum(existing.engagement.values()):
         existing.engagement = dict(incoming.engagement)
         existing.raw_stats = dict(incoming.raw_stats)

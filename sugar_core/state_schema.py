@@ -305,10 +305,14 @@ class QualifiedReachValue:
                     raise ValueError("Maximum reach bound must equal the reported value.")
                 self.maximum = self.value
             elif self.qualifier == "approximate" and (self.minimum is not None or self.maximum is not None):
-                raise ValueError("Approximate reach should not invent numeric bounds; use range when bounds are reported.")
+                raise ValueError(
+                    "Approximate reach should not invent numeric bounds; use range when bounds are reported."
+                )
 
         if self.qualifier != "exact" and not (self.source_note or self.source_ref):
-            raise ValueError("Non-exact reach values require a source note or source reference preserving the qualifier.")
+            raise ValueError(
+                "Non-exact reach values require a source note or source reference preserving the qualifier."
+            )
 
     @property
     def is_exact(self) -> bool:
@@ -345,7 +349,9 @@ class ReachMetrics:
         normalized: dict[str, QualifiedReachValue] = {}
         for metric_name, raw_value in (self.qualified or {}).items():
             metric = _reach_metric_name(metric_name)
-            qualified = raw_value if isinstance(raw_value, QualifiedReachValue) else QualifiedReachValue(**dict(raw_value))
+            qualified = (
+                raw_value if isinstance(raw_value, QualifiedReachValue) else QualifiedReachValue(**dict(raw_value))
+            )
             exact_value = getattr(self, metric)
             if qualified.is_exact:
                 if exact_value is None:
@@ -353,9 +359,7 @@ class ReachMetrics:
                 elif exact_value != qualified.value:
                     raise ValueError(f"Exact qualified {metric} conflicts with the legacy exact value.")
             elif exact_value is not None:
-                raise ValueError(
-                    f"Non-exact qualified {metric} cannot also be stored as a bare exact integer."
-                )
+                raise ValueError(f"Non-exact qualified {metric} cannot also be stored as a bare exact integer.")
             normalized[metric] = qualified
         self.qualified = normalized
         self.source_note = _clean(self.source_note)
@@ -378,8 +382,7 @@ class ReachMetrics:
         # Preserve backward compatibility for exact integer data while deliberately excluding
         # approximate/bounded observations from a falsely precise aggregate.
         return sum(
-            value or 0
-            for value in (self.attendance, self.views, self.likes, self.comments, self.shares_reposts)
+            value or 0 for value in (self.attendance, self.views, self.likes, self.comments, self.shares_reposts)
         )
 
 
@@ -400,9 +403,7 @@ class AnalyticClaim:
         if not self.statement:
             raise ValueError("Analytic claims require a statement.")
         self.claim_type = _choice(self.claim_type, CLAIM_TYPES, "claim_type", "descriptive_fact")
-        self.epistemic_status = _choice(
-            self.epistemic_status, EPISTEMIC_STATUSES, "epistemic_status", "observed_fact"
-        )
+        self.epistemic_status = _choice(self.epistemic_status, EPISTEMIC_STATUSES, "epistemic_status", "observed_fact")
         self.review_state = _choice(self.review_state, REVIEW_STATES, "review_state", "unreviewed")
         self.confidence = _confidence(self.confidence)
         self.evidence_refs = _clean_list(self.evidence_refs)
@@ -485,9 +486,7 @@ class USPresenceSite:
             self.location_precision, US_LOCATION_PRECISIONS, "U.S. site location precision", "unknown"
         )
         self.location_confidence = _confidence(self.location_confidence, "location_confidence")
-        self.location_uncertainty_km = _nonnegative_float(
-            self.location_uncertainty_km, "location_uncertainty_km"
-        )
+        self.location_uncertainty_km = _nonnegative_float(self.location_uncertainty_km, "location_uncertainty_km")
         self.location_basis = _clean(self.location_basis)
         if not self.name or not self.country:
             raise ValueError("U.S. presence sites require name and country.")
@@ -513,9 +512,7 @@ class USPresenceSite:
     @property
     def is_spatial(self) -> bool:
         return bool(
-            self.delivery_mode in {"physical", "hybrid"}
-            and self.latitude is not None
-            and self.longitude is not None
+            self.delivery_mode in {"physical", "hybrid"} and self.latitude is not None and self.longitude is not None
         )
 
     def effective_location_uncertainty_km(self, default: float = 0.75) -> float:
@@ -588,25 +585,17 @@ class USOverlapAssessment:
             allowed_service_tags.update(_PROGRAM_DOMAIN_SERVICE_TAGS.get(domain.casefold(), set()))
         # Keep service overlap program-semantic. Audience similarity is already represented by
         # audience_overlap and must not manufacture a direct service/program equivalence.
-        self.service_overlap = [
-            value for value in raw_service_overlap if value.casefold() in allowed_service_tags
-        ]
+        self.service_overlap = [value for value in raw_service_overlap if value.casefold() in allowed_service_tags]
         self.service_sources = [
-            source
-            if isinstance(source, USServiceSourceAttribution)
-            else USServiceSourceAttribution(**dict(source))
+            source if isinstance(source, USServiceSourceAttribution) else USServiceSourceAttribution(**dict(source))
             for source in (self.service_sources or [])
         ]
         direct_services = {value.casefold() for value in self.service_overlap}
         for source in self.service_sources:
-            unmatched = [
-                value for value in source.program_service_matches
-                if value.casefold() not in direct_services
-            ]
+            unmatched = [value for value in source.program_service_matches if value.casefold() not in direct_services]
             if unmatched:
                 raise ValueError(
-                    "Program service-source matches must also appear in direct service_overlap: "
-                    + ", ".join(unmatched)
+                    "Program service-source matches must also appear in direct service_overlap: " + ", ".join(unmatched)
                 )
         self.note = _clean(self.note)
         if self.distance_km not in (None, ""):
@@ -661,12 +650,10 @@ class StateAssessment:
             for value in _clean_list(self.strategic_audiences)
         ]
         self.program_domains = [
-            _choice(value, PROGRAM_DOMAINS, "program domain", "other")
-            for value in _clean_list(self.program_domains)
+            _choice(value, PROGRAM_DOMAINS, "program domain", "other") for value in _clean_list(self.program_domains)
         ]
         self.narrative_tags = [
-            _choice(value, NARRATIVE_TAGS, "narrative tag", "other")
-            for value in _clean_list(self.narrative_tags)
+            _choice(value, NARRATIVE_TAGS, "narrative tag", "other") for value in _clean_list(self.narrative_tags)
         ]
         self.sponsor_entities = _clean_list(self.sponsor_entities)
         self.host_entities = _clean_list(self.host_entities)
@@ -702,7 +689,11 @@ class StateAssessment:
             return False
         if self.prc_support.level == "confirmed" and self.prc_support.review_state != "human_verified":
             return False
-        return all(claim.review_state == "human_verified" for claim in self.claims if claim.claim_type in {"support_relationship", "coordination", "influence"})
+        return all(
+            claim.review_state == "human_verified"
+            for claim in self.claims
+            if claim.claim_type in {"support_relationship", "coordination", "influence"}
+        )
 
     def export_dict(self) -> dict[str, Any]:
         return asdict(self)

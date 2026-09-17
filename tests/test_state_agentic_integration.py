@@ -62,5 +62,7 @@ def test_integrator_context_is_bounded_and_includes_specialist_cited_country_cas
         "high-priority baseline plus specialist-cited cases plus deterministic tradecraft tensions"
     )
     assert packet["integration_context"]["high_severity_tensions_injected"] == 1
-    assert any("confirmed_support_single_evidence_identity" in row["question"] for row in packet["collection_questions"])
+    assert any(
+        "confirmed_support_single_evidence_identity" in row["question"] for row in packet["collection_questions"]
+    )
     assert any("high-severity analytic tension" in value for value in packet["guardrails"])

@@ -33,7 +33,9 @@ def build_state_network(
         if node_id not in nodes:
             nodes[node_id] = {"node_id": node_id, "node_type": node_type, "label": label, **properties}
 
-    def add_edge(source: str, target: str, relationship: str, assessment: StateAssessment, observation: ResearchObservation) -> None:
+    def add_edge(
+        source: str, target: str, relationship: str, assessment: StateAssessment, observation: ResearchObservation
+    ) -> None:
         edge_id = stable_state_id("edge", source, relationship, target, assessment.assessment_id)
         if edge_id in edges:
             return
@@ -79,7 +81,13 @@ def build_state_network(
 
         if observation.institution_name:
             institution = _node_id("institution", observation.institution_name, observation.country)
-            add_node(institution, "institution", observation.institution_name, country=observation.country, city=observation.city)
+            add_node(
+                institution,
+                "institution",
+                observation.institution_name,
+                country=observation.country,
+                city=observation.city,
+            )
             add_edge(institution, obs_node, "institution_observed_in", assessment, observation)
         if observation.program_name:
             program = _node_id("program", observation.program_name, observation.country)

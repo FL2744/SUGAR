@@ -75,8 +75,21 @@ def test_structured_unresolved_location_does_not_erase_resolved_sibling():
         observation_type="event",
         summary="One activity with one resolved and one unresolved venue.",
         locations=[
-            ObservationLocation(label="Resolved", city="Bishkek", country="Kyrgyzstan", latitude=42.85, longitude=74.58, precision="site"),
-            ObservationLocation(label="Unresolved campus", city="Bishkek", country="Kyrgyzstan", precision="site", source_ref="https://example.org/source"),
+            ObservationLocation(
+                label="Resolved",
+                city="Bishkek",
+                country="Kyrgyzstan",
+                latitude=42.85,
+                longitude=74.58,
+                precision="site",
+            ),
+            ObservationLocation(
+                label="Unresolved campus",
+                city="Bishkek",
+                country="Kyrgyzstan",
+                precision="site",
+                source_ref="https://example.org/source",
+            ),
         ],
     )
     resolved = resolve_observation_locations(observation)

@@ -101,10 +101,7 @@ def haversine_km(latitude_a: float, longitude_a: float, latitude_b: float, longi
     lat2 = math.radians(float(latitude_b))
     delta_lat = math.radians(float(latitude_b) - float(latitude_a))
     delta_lon = math.radians(float(longitude_b) - float(longitude_a))
-    a = (
-        math.sin(delta_lat / 2.0) ** 2
-        + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2.0) ** 2
-    )
+    a = math.sin(delta_lat / 2.0) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2.0) ** 2
     return EARTH_RADIUS_KM * 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
 
 
@@ -129,8 +126,13 @@ def reference_points_from_frame(frame: pd.DataFrame, layer_name: str) -> list[Re
         if coords is None:
             continue
         latitude, longitude = coords
-        name = _first(row, "name", "title", "institution_name", "program_name", "location_label") or f"{layer} {index + 1}"
-        reference_id = _first(row, "id", "reference_id", "observation_id", "native_id") or f"{layer.casefold().replace(' ', '_')}:{index + 1}"
+        name = (
+            _first(row, "name", "title", "institution_name", "program_name", "location_label") or f"{layer} {index + 1}"
+        )
+        reference_id = (
+            _first(row, "id", "reference_id", "observation_id", "native_id")
+            or f"{layer.casefold().replace(' ', '_')}:{index + 1}"
+        )
         identity = (reference_id.casefold(), round(latitude, 7), round(longitude, 7))
         if identity in seen:
             continue
@@ -279,9 +281,7 @@ def analyze_spatial_overlap(
         "retained_pair_matches": len(matches),
         "nearest_band_counts": nearest_band_counts,
         "nearest_distance_km_median": (
-            round(float(pd.Series(nearest_distance_values).median()), 3)
-            if nearest_distance_values
-            else None
+            round(float(pd.Series(nearest_distance_values).median()), 3) if nearest_distance_values else None
         ),
         "interpretation": "Geographic proximity is a computed fact, not evidence of strategic overlap, influence, coordination, competition, or causation.",
     }

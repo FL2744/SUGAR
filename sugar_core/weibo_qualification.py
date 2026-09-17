@@ -15,7 +15,6 @@ from .models import PostRecord
 from .utils import utc_iso
 from .weibo_investigation import WeiboInvestigation, investigate_weibo_seed, save_weibo_investigation
 
-
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 
 
@@ -138,9 +137,7 @@ def _load_checkpoint(checkpoint: str | Path) -> tuple[list[PostRecord], list[dic
             ).fetchall()
         }
         raw_returned = int(
-            connection.execute(
-                "SELECT COALESCE(SUM(records_seen),0) FROM tasks WHERE status='completed'"
-            ).fetchone()[0]
+            connection.execute("SELECT COALESCE(SUM(records_seen),0) FROM tasks WHERE status='completed'").fetchone()[0]
         )
         return records, tasks, event_counts, raw_returned
     finally:
@@ -162,8 +159,7 @@ def inspect_weibo_checkpoint(
     failed = sum(task["status"] == "failed" for task in tasks)
     deferred = sum(task["status"] == "deferred" for task in tasks)
     access_limited = sum(
-        task["status"] in {"failed", "deferred"} and _looks_access_limited(task["last_error"])
-        for task in tasks
+        task["status"] in {"failed", "deferred"} and _looks_access_limited(task["last_error"]) for task in tasks
     )
     completed_rows = [task for task in tasks if task["status"] == "completed"]
     productive_tasks = sum(task["records_seen"] > 0 for task in completed_rows)
@@ -222,7 +218,9 @@ def inspect_weibo_checkpoint(
         "access_limited_task_rate": _safe_ratio(access_limited, task_total) or 0.0,
         "rate_limit_events": int(events.get("rate_limit", 0)),
         "transient_retry_events": int(events.get("transient_retry", 0)),
-        "query_coverage": _safe_ratio(sum(1 for term in terms if term in observed_terms), len(terms)) if terms else None,
+        "query_coverage": _safe_ratio(sum(1 for term in terms if term in observed_terms), len(terms))
+        if terms
+        else None,
         "queries_expected": len(terms),
         "queries_observed": sum(1 for term in terms if term in observed_terms) if terms else len(observed_terms),
         "zero_yield_queries": [term for term in terms if query_yield.get(term, 0) == 0],
@@ -262,7 +260,9 @@ def compare_replicates(metrics: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _investigation_summary(seed: str, result: WeiboInvestigation | None, error: Exception | None = None) -> dict[str, Any]:
+def _investigation_summary(
+    seed: str, result: WeiboInvestigation | None, error: Exception | None = None
+) -> dict[str, Any]:
     if error is not None:
         return {"seed": seed, "status": "failed", "error": f"{type(error).__name__}: {error}"}
     assert result is not None
@@ -374,7 +374,13 @@ def write_human_audit_sample(records: list[PostRecord], path: str | Path, *, siz
 
 def read_human_audit(path: str | Path | None) -> dict[str, Any]:
     if not path:
-        return {"provided": False, "labeled": 0, "provenance_labeled": 0, "relevance_rate": None, "provenance_ok_rate": None}
+        return {
+            "provided": False,
+            "labeled": 0,
+            "provenance_labeled": 0,
+            "relevance_rate": None,
+            "provenance_ok_rate": None,
+        }
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(path)
@@ -420,7 +426,10 @@ def _aggregate_runs(metrics: list[dict[str, Any]]) -> dict[str, Any]:
         "estimated_duplicate_fraction",
         "rate_limit_events",
     )
-    result: dict[str, Any] = {"replicate_count": len(metrics), "record_counts": [row["unique_records"] for row in metrics]}
+    result: dict[str, Any] = {
+        "replicate_count": len(metrics),
+        "record_counts": [row["unique_records"] for row in metrics],
+    }
     for key in numeric_min:
         values = [row.get(key) for row in metrics if row.get(key) is not None]
         result[key] = min(values) if values else None
@@ -450,39 +459,92 @@ def evaluate_qualification(
     minimum("unique_records", aggregate.get("unique_records"), thresholds.minimum_unique_records)
     minimum("task_completion_rate", aggregate.get("task_completion_rate"), thresholds.minimum_task_completion_rate)
     maximum("failed_task_rate", aggregate.get("failed_task_rate"), thresholds.maximum_failed_task_rate)
-    maximum("access_limited_task_rate", aggregate.get("access_limited_task_rate"), thresholds.maximum_access_limited_task_rate, severity="advisory")
+    maximum(
+        "access_limited_task_rate",
+        aggregate.get("access_limited_task_rate"),
+        thresholds.maximum_access_limited_task_rate,
+        severity="advisory",
+    )
     minimum("query_coverage", aggregate.get("query_coverage"), thresholds.minimum_query_coverage)
     minimum("identity_coverage", aggregate.get("identity_coverage"), thresholds.minimum_identity_coverage)
     minimum("provenance_coverage", aggregate.get("provenance_coverage"), thresholds.minimum_provenance_coverage)
     minimum("timestamp_coverage", aggregate.get("timestamp_coverage"), thresholds.minimum_timestamp_coverage)
     minimum("text_coverage", aggregate.get("text_coverage"), thresholds.minimum_text_coverage)
-    maximum("duplicate_fraction", aggregate.get("estimated_duplicate_fraction"), thresholds.maximum_duplicate_fraction, severity="advisory")
+    maximum(
+        "duplicate_fraction",
+        aggregate.get("estimated_duplicate_fraction"),
+        thresholds.maximum_duplicate_fraction,
+        severity="advisory",
+    )
 
     if investigations:
-        seed_success = sum(row.get("status") == "ok" and row.get("seed_surface") == "ok" for row in investigations) / len(investigations)
-        comment_candidates = [row for row in investigations if row.get("status") == "ok" and int(row.get("reported_comments", 0) or 0) > 0]
+        seed_success = sum(
+            row.get("status") == "ok" and row.get("seed_surface") == "ok" for row in investigations
+        ) / len(investigations)
+        comment_candidates = [
+            row for row in investigations if row.get("status") == "ok" and int(row.get("reported_comments", 0) or 0) > 0
+        ]
         comment_success = (
-            sum(row.get("comment_surface") == "ok" and int(row.get("comments_retrieved", 0) or 0) > 0 for row in comment_candidates) / len(comment_candidates)
+            sum(
+                row.get("comment_surface") == "ok" and int(row.get("comments_retrieved", 0) or 0) > 0
+                for row in comment_candidates
+            )
+            / len(comment_candidates)
             if comment_candidates
             else 1.0
         )
         minimum("seed_investigation_success_rate", round(seed_success, 4), thresholds.minimum_seed_success_rate)
-        minimum("comment_surface_success_rate", round(comment_success, 4), thresholds.minimum_comment_surface_success_rate)
+        minimum(
+            "comment_surface_success_rate", round(comment_success, 4), thresholds.minimum_comment_surface_success_rate
+        )
     else:
-        checks.append(QualificationCheck("seed_investigation_success_rate", None, thresholds.minimum_seed_success_rate, False, "required", "No real-post seeds were supplied."))
-        checks.append(QualificationCheck("comment_surface_success_rate", None, thresholds.minimum_comment_surface_success_rate, False, "required", "No real-post seeds were supplied."))
+        checks.append(
+            QualificationCheck(
+                "seed_investigation_success_rate",
+                None,
+                thresholds.minimum_seed_success_rate,
+                False,
+                "required",
+                "No real-post seeds were supplied.",
+            )
+        )
+        checks.append(
+            QualificationCheck(
+                "comment_surface_success_rate",
+                None,
+                thresholds.minimum_comment_surface_success_rate,
+                False,
+                "required",
+                "No real-post seeds were supplied.",
+            )
+        )
 
     if reproducibility.get("replicates", 0) >= 2:
-        minimum("replicate_minimum_jaccard", reproducibility.get("minimum_jaccard"), thresholds.minimum_replicate_jaccard, severity="advisory")
+        minimum(
+            "replicate_minimum_jaccard",
+            reproducibility.get("minimum_jaccard"),
+            thresholds.minimum_replicate_jaccard,
+            severity="advisory",
+        )
 
     audit_labels = int(audit.get("labeled", 0) or 0)
     provenance_labels = int(audit.get("provenance_labeled", 0) or 0)
     minimum("human_audit_labels", audit_labels, thresholds.minimum_human_audit_labels, severity="human")
     minimum("human_provenance_labels", provenance_labels, thresholds.minimum_human_audit_labels, severity="human")
     if audit_labels:
-        minimum("human_relevance_rate", audit.get("relevance_rate"), thresholds.minimum_human_relevance_rate, severity="human")
+        minimum(
+            "human_relevance_rate",
+            audit.get("relevance_rate"),
+            thresholds.minimum_human_relevance_rate,
+            severity="human",
+        )
     if provenance_labels:
-        minimum("human_provenance_ok_rate", audit.get("provenance_ok_rate"), thresholds.minimum_human_provenance_ok_rate, severity="human")
+        minimum(
+            "human_provenance_ok_rate",
+            audit.get("provenance_ok_rate"),
+            thresholds.minimum_human_provenance_ok_rate,
+            severity="human",
+        )
 
     required_failures = [check for check in checks if check.severity == "required" and not check.passed]
     human_failures = [check for check in checks if check.severity == "human" and not check.passed]
@@ -520,7 +582,19 @@ def _markdown_report(result: QualificationResult) -> str:
     for raw in result.checks:
         mark = "PASS" if raw["passed"] else "FAIL"
         lines.append(f"| {raw['name']} | {raw['value']} | {raw['threshold']} | {mark} | {raw['severity']} |")
-    lines.extend(["", "## Aggregate collection metrics", "", "```json", json.dumps(result.aggregate_metrics, ensure_ascii=False, indent=2, sort_keys=True), "```", "", "## Real-post investigations", ""])
+    lines.extend(
+        [
+            "",
+            "## Aggregate collection metrics",
+            "",
+            "```json",
+            json.dumps(result.aggregate_metrics, ensure_ascii=False, indent=2, sort_keys=True),
+            "```",
+            "",
+            "## Real-post investigations",
+            "",
+        ]
+    )
     if result.investigations:
         for row in result.investigations:
             lines.append(
@@ -576,7 +650,13 @@ def run_weibo_qualification(
         replicate_checkpoints.append(checkpoint)
         metrics = inspect_weibo_checkpoint(checkpoint, expected_terms=terms)
         replicate_metrics.append(metrics)
-        _notify(progress, "qualification_replicate_complete", replicate=replicate, unique_records=metrics["unique_records"], completion=metrics["task_completion_rate"])
+        _notify(
+            progress,
+            "qualification_replicate_complete",
+            replicate=replicate,
+            unique_records=metrics["unique_records"],
+            completion=metrics["task_completion_rate"],
+        )
 
     investigations: list[dict[str, Any]] = []
     investigation_dir = out_dir / f"{name}.investigations"
@@ -601,7 +681,13 @@ def run_weibo_qualification(
         except Exception as exc:
             summary = _investigation_summary(seed, None, exc)
         investigations.append(summary)
-        _notify(progress, "qualification_seed_complete", seed=seed, status=summary.get("status"), comments=summary.get("comments_retrieved", 0))
+        _notify(
+            progress,
+            "qualification_seed_complete",
+            seed=seed,
+            status=summary.get("status"),
+            comments=summary.get("comments_retrieved", 0),
+        )
 
     reproducibility = compare_replicates(replicate_metrics)
     aggregate = _aggregate_runs(replicate_metrics)
@@ -619,7 +705,9 @@ def run_weibo_qualification(
         generated_at=utc_iso(),
         thresholds=asdict(thresholds),
         aggregate_metrics=aggregate,
-        replicate_metrics=[{key: value for key, value in row.items() if key != "record_keys"} for row in replicate_metrics],
+        replicate_metrics=[
+            {key: value for key, value in row.items() if key != "record_keys"} for row in replicate_metrics
+        ],
         investigations=investigations,
         checks=[asdict(check) for check in checks],
         limitations=limitations,
@@ -629,7 +717,12 @@ def run_weibo_qualification(
     md_path = out_dir / f"{name}.qualification.md"
     json_path.write_text(json.dumps(asdict(result), ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     md_path.write_text(_markdown_report(result), encoding="utf-8")
-    outputs = [str(json_path.resolve()), str(md_path.resolve()), str(audit_sample_path.resolve()), *[str(path.resolve()) for path in replicate_checkpoints]]
+    outputs = [
+        str(json_path.resolve()),
+        str(md_path.resolve()),
+        str(audit_sample_path.resolve()),
+        *[str(path.resolve()) for path in replicate_checkpoints],
+    ]
     result.outputs = outputs
     json_path.write_text(json.dumps(asdict(result), ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     _notify(progress, "qualification_complete", status=status, outputs=outputs)

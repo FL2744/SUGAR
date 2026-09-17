@@ -20,7 +20,6 @@ from sugar_core.state_workflow import (
     state_geojson,
 )
 
-
 SOURCE = "https://example.org/verified-program"
 
 

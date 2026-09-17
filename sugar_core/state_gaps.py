@@ -50,7 +50,16 @@ def build_gap_report(
 
     gaps: list[dict[str, Any]] = []
 
-    def add(priority: int, category: str, subject_id: str, subject: str, country: str, city: str, reason: str, next_action: str) -> None:
+    def add(
+        priority: int,
+        category: str,
+        subject_id: str,
+        subject: str,
+        country: str,
+        city: str,
+        reason: str,
+        next_action: str,
+    ) -> None:
         gaps.append(
             {
                 "priority": priority,
@@ -155,9 +164,7 @@ def build_gap_report(
             and obs.city.casefold() == site.city.casefold()
         ]
         same_country = [
-            (obs, assessment)
-            for obs, assessment in verified_rows
-            if obs.country.casefold() == site.country.casefold()
+            (obs, assessment) for obs, assessment in verified_rows if obs.country.casefold() == site.country.casefold()
         ]
         if not same_city:
             add(

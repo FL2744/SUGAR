@@ -77,10 +77,13 @@ def _popup(
     source = observation.primary_source_url
     source_html = (
         f'<a href="{_safe(source)}" target="_blank" rel="noopener noreferrer">Primary source</a>'
-        if source else "No primary URL"
+        if source
+        else "No primary URL"
     )
-    resolved_name = location.display_name or location.label or ", ".join(
-        value for value in (location.city, location.region, location.country) if value
+    resolved_name = (
+        location.display_name
+        or location.label
+        or ", ".join(value for value in (location.city, location.region, location.country) if value)
     )
     location_query = f"<br>Resolution query: {_safe(location.query)}" if location.query else ""
     provider = ""
@@ -171,7 +174,9 @@ def _proximity_ledger(
     proximity_by_key: dict[tuple[str, str], StateProximity],
 ) -> list[dict[str, object]]:
     titles = {
-        (observation.observation_id, location.location_id): observation.title or observation.program_name or observation.institution_name
+        (observation.observation_id, location.location_id): observation.title
+        or observation.program_name
+        or observation.institution_name
         for observation, _, location in mapped
     }
     result: list[dict[str, object]] = []
@@ -257,7 +262,9 @@ def create_state_map(
 
     spatial_sites = [site for site in sites if site.is_spatial]
     site_coordinates = [(float(site.latitude), float(site.longitude)) for site in spatial_sites]
-    coordinates = [(float(loc.latitude), float(loc.longitude)) for _, _, loc in mapped if loc.resolved] + site_coordinates
+    coordinates = [
+        (float(loc.latitude), float(loc.longitude)) for _, _, loc in mapped if loc.resolved
+    ] + site_coordinates
     if coordinates:
         center = [
             sum(lat for lat, _ in coordinates) / len(coordinates),
@@ -338,7 +345,11 @@ def create_state_map(
         popup = (
             f"<b>{_safe(site.name)}</b><br>Network: {_safe(site.network)}<br>Subtype: {_safe(site.subtype)}<br>"
             f"Location: {_safe(site.city)}, {_safe(site.country)}<br>Services: {_safe(', '.join(site.service_tags))}<br>"
-            + (f'<a href="{_safe(site.source_url)}" target="_blank" rel="noopener noreferrer">Source</a>' if site.source_url else "")
+            + (
+                f'<a href="{_safe(site.source_url)}" target="_blank" rel="noopener noreferrer">Source</a>'
+                if site.source_url
+                else ""
+            )
         )
         folium.Marker(
             location=[site.latitude, site.longitude],
@@ -347,8 +358,7 @@ def create_state_map(
         ).add_to(group)
 
     mapped_location_by_key = {
-        (observation.observation_id, location.location_id): location
-        for observation, _, location in mapped
+        (observation.observation_id, location.location_id): location for observation, _, location in mapped
     }
     proximity_groups: dict[str, folium.FeatureGroup] = {}
     proximity_group_labels = {
@@ -392,20 +402,25 @@ def create_state_map(
     density_eligible_locations = sum(len(locations) for locations in density_by_observation.values())
     density_multi_location_observations = sum(len(locations) > 1 for locations in density_by_observation.values())
     density_total_weight = sum(row[2] for row in density_rows)
-    precision_text = ", ".join(
-        f"{_PRECISION_LABELS.get(key, key)}: {precision_counts[key]}"
-        for key in precision_order if precision_counts.get(key)
-    ) or "none"
+    precision_text = (
+        ", ".join(
+            f"{_PRECISION_LABELS.get(key, key)}: {precision_counts[key]}"
+            for key in precision_order
+            if precision_counts.get(key)
+        )
+        or "none"
+    )
     proximity_text = (
         f"within {proximity_threshold_km:g} km after uncertainty: {proximity_counts.get('within_threshold', 0)}; "
         f"threshold intersects uncertainty: {proximity_counts.get('uncertainty_intersects_threshold', 0)}; "
         f"outside: {proximity_counts.get('outside_threshold', 0)}"
-        if proximity_by_key else "no mapped U.S. reference proximity available"
+        if proximity_by_key
+        else "no mapped U.S. reference proximity available"
     )
     legend = f"""
     <div style="position: fixed; bottom: 20px; left: 20px; z-index: 9999; background: white; border: 1px solid #888; padding: 10px; max-width: 440px; font-size: 12px;">
       <b>SUGAR State research map</b><br>
-      Mapped {'verified ' if verified_only else ''}observations: {len(mapped_observation_ids)}; mapped activity locations: {len(mapped)}.<br>
+      Mapped {"verified " if verified_only else ""}observations: {len(mapped_observation_ids)}; mapped activity locations: {len(mapped)}.<br>
       Location precision: {_safe(precision_text)}.<br>
       Derived/geocoded locations: {derived_count}; unresolved activity locations: {len(unresolved)}.<br>
       U.S. presence sites: {len(site_coordinates)}.<br>
@@ -430,12 +445,16 @@ def create_state_map(
                 "eligible_observations": len(eligible_observation_ids),
                 "mapped_observations": len(mapped_observation_ids),
                 "mapped_locations": len(mapped),
-                "multi_location_observations": sum(1 for observation_id in mapped_observation_ids if sum(obs.observation_id == observation_id for obs, _, _ in mapped) > 1),
+                "multi_location_observations": sum(
+                    1
+                    for observation_id in mapped_observation_ids
+                    if sum(obs.observation_id == observation_id for obs, _, _ in mapped) > 1
+                ),
                 "derived_geocoded_observations": len({obs.observation_id for obs, _, loc in mapped if loc.derived}),
                 "derived_geocoded_locations": derived_count,
                 "precision_counts": dict(sorted(precision_counts.items())),
                 "resolved_locations": _resolution_ledger(mapped),
-                "unresolved_eligible_observations": len({row['observation_id'] for row in unresolved}),
+                "unresolved_eligible_observations": len({row["observation_id"] for row in unresolved}),
                 "unresolved_activity_locations": len(unresolved),
                 "unresolved": unresolved,
                 "mapped_us_sites": len(site_coordinates),

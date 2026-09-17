@@ -152,10 +152,7 @@ def parse_triage_result(raw: dict[str, Any], record: PostRecord) -> TriageResult
     evidence = _ground_evidence(raw.get("evidence"), record)
     grounded_labels = {item.label for item in evidence}
 
-    labels = [
-        label for label in labels
-        if label not in _STRICTLY_GROUNDED_LABELS or label in grounded_labels
-    ]
+    labels = [label for label in labels if label not in _STRICTLY_GROUNDED_LABELS or label in grounded_labels]
 
     if relevance == "relevant" and not evidence:
         relevance = "uncertain"

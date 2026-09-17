@@ -7,7 +7,6 @@ from sugar_core.source_conflicts import (
     source_conflicts_to_dicts,
 )
 
-
 EDUCATIONUSA_STATE_URL = "https://educationusa.state.gov/node/421"
 EDUCATIONUSA_OPERATOR_URL = "https://kyrgyzstan.americancouncils.org/edusa"
 

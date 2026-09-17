@@ -70,9 +70,7 @@ def test_supplied_cookie_is_forwarded_but_not_generated():
 
 
 def test_fetch_status_normalizes_text_time_metrics_and_thread_root():
-    session = QueueSession(
-        [FakeResponse({"ok": 1, "data": _status()}, url="https://m.weibo.cn/statuses/show?id=123")]
-    )
+    session = QueueSession([FakeResponse({"ok": 1, "data": _status()}, url="https://m.weibo.cn/statuses/show?id=123")])
 
     record = fetch_weibo_status("123", session=session)
 

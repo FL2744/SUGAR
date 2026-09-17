@@ -13,7 +13,6 @@ from sugar_core.state_cli import build_parser
 from sugar_core.state_schema import StateAssessment
 from sugar_core.state_workflow import save_state_assessments
 
-
 STATE_URL = "https://educationusa.state.gov/node/421"
 OPERATOR_URL = "https://kyrgyzstan.americancouncils.org/edusa"
 
@@ -73,9 +72,7 @@ def _inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
         treatment="Use the current State directory topology provisionally.",
         preference_rationale="The State directory supplies an explicit effective date.",
     )
-    conflicts_path = Path(
-        save_source_conflicts([conflict], tmp_path / "source-conflicts.json")
-    )
+    conflicts_path = Path(save_source_conflicts([conflict], tmp_path / "source-conflicts.json"))
     return observations_path, assessments_path, conflicts_path
 
 
@@ -121,15 +118,13 @@ def test_desktop_state_package_carries_explicit_source_conflicts(tmp_path):
     assert audit["status"] == "conditional"
     assert audit["source_conflicts"]["requiring_human_review"] == 1
 
-    snapshot = json.loads(
-        (out_dir / "desktop_case.snapshot.json").read_text(encoding="utf-8")
-    )
+    snapshot = json.loads((out_dir / "desktop_case.snapshot.json").read_text(encoding="utf-8"))
     assert snapshot["audit_status"] == "conditional"
     assert snapshot["source_conflicts"]["conflicts"] == 1
 
     review_path = out_dir / "desktop_case.review.xlsx"
-    review_workbook = pd.ExcelFile(review_path)
-    assert "source_conflicts" in review_workbook.sheet_names
+    with pd.ExcelFile(review_path) as review_workbook:
+        assert "source_conflicts" in review_workbook.sheet_names
     assessments = pd.read_excel(review_path, sheet_name="assessments")
     assert int(assessments.loc[0, "source_conflict_count"]) == 1
     assert int(assessments.loc[0, "source_conflicts_requiring_human_review"]) == 1

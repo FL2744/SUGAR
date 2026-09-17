@@ -41,11 +41,7 @@ def test_real_kyrgyzstan_package_carries_educationusa_conflict(tmp_path):
     conflict_path = tmp_path / "kyrgyzstan_conflict_regression.source_conflicts.json"
     assert str(conflict_path.resolve()) in outputs
 
-    audit = json.loads(
-        (tmp_path / "kyrgyzstan_conflict_regression.audit.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    audit = json.loads((tmp_path / "kyrgyzstan_conflict_regression.audit.json").read_text(encoding="utf-8"))
     assert audit["status"] == "conditional"
     assert audit["errors"] == 0
     assert audit["source_conflicts"] == {
@@ -61,13 +57,11 @@ def test_real_kyrgyzstan_package_carries_educationusa_conflict(tmp_path):
     queue = pd.read_csv(tmp_path / "kyrgyzstan_conflict_regression.review_queue.csv")
     affected = queue[queue["source_conflicts_requiring_human_review"] == 1]
     assert len(affected) == 2
-    assert set(affected["source_conflict_topics"]) == {
-        "EducationUSA Kyrgyzstan service topology"
-    }
+    assert set(affected["source_conflict_topics"]) == {"EducationUSA Kyrgyzstan service topology"}
     assert all("higher_education" in value for value in affected["program_domains"])
 
-    workbook = pd.ExcelFile(tmp_path / "kyrgyzstan_conflict_regression.state.xlsx")
-    assert "source_conflicts" in workbook.sheet_names
+    with pd.ExcelFile(tmp_path / "kyrgyzstan_conflict_regression.state.xlsx") as workbook:
+        assert "source_conflicts" in workbook.sheet_names
     conflicts_sheet = pd.read_excel(
         tmp_path / "kyrgyzstan_conflict_regression.state.xlsx",
         sheet_name="source_conflicts",
@@ -75,8 +69,6 @@ def test_real_kyrgyzstan_package_carries_educationusa_conflict(tmp_path):
     assert conflicts_sheet.loc[0, "status"] == "provisional_treatment"
     assert bool(conflicts_sheet.loc[0, "requires_human_review"]) is True
 
-    brief = (
-        tmp_path / "kyrgyzstan_conflict_regression.brief.md"
-    ).read_text(encoding="utf-8")
+    brief = (tmp_path / "kyrgyzstan_conflict_regression.brief.md").read_text(encoding="utf-8")
     assert "EducationUSA Kyrgyzstan service topology" in brief
     assert "not a human adjudication" in brief

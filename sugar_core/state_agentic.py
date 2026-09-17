@@ -113,17 +113,19 @@ def _refine_agents(
         if not neighborhood:
             passthrough[task.name] = first
             continue
-        refine_tasks.append(AgentTask(
-            name=f"{task.name}:refined",
-            role=task.role,
-            question=(
-                task.question
-                + " Reassess your first-pass conclusions against the retrieved evidence neighborhood. "
-                "Actively look for cases that weaken your original explanation, revise confidence when warranted, "
-                "and keep only judgments that survive the additional evidence."
-            ),
-            packet=neighborhood,
-        ))
+        refine_tasks.append(
+            AgentTask(
+                name=f"{task.name}:refined",
+                role=task.role,
+                question=(
+                    task.question
+                    + " Reassess your first-pass conclusions against the retrieved evidence neighborhood. "
+                    "Actively look for cases that weaken your original explanation, revise confidence when warranted, "
+                    "and keep only judgments that survive the additional evidence."
+                ),
+                packet=neighborhood,
+            )
+        )
     refined_outputs = _parallel_agents(client, llm, cache, refine_tasks, max_workers=max_workers)
     for refined in refined_outputs:
         base_name = str(refined.get("agent") or "").removesuffix(":refined")
@@ -145,16 +147,23 @@ def _roles(country: str, observation_id: str, depth: str) -> list[str]:
             ["system_pattern_analyst", "methodologist"]
             if depth == "quick"
             else [
-                "system_pattern_analyst", "network_mechanism_analyst", "public_diplomacy_analyst",
-                "trajectory_indicators_analyst", "methodologist",
+                "system_pattern_analyst",
+                "network_mechanism_analyst",
+                "public_diplomacy_analyst",
+                "trajectory_indicators_analyst",
+                "methodologist",
             ]
         )
     return (
         ["system_pattern_analyst", "methodologist"]
         if depth == "quick"
         else [
-            "system_pattern_analyst", "network_mechanism_analyst", "comparative_analyst",
-            "public_diplomacy_analyst", "trajectory_indicators_analyst", "methodologist",
+            "system_pattern_analyst",
+            "network_mechanism_analyst",
+            "comparative_analyst",
+            "public_diplomacy_analyst",
+            "trajectory_indicators_analyst",
+            "methodologist",
         ]
     )
 
@@ -235,12 +244,16 @@ def _integration_packet(
     tensions = list(audit.get("high_severity_tensions") or [])
     questions = list(base_packet.get("collection_questions") or [])
     for tension in tensions[:20]:
-        questions.append({
-            "question": f"Resolve high-severity analytic tension `{_clean(tension.get('type'))}`: {_clean(tension.get('explanation'))}",
-            "priority": "high",
-            "affected_observation_ids": [_clean(tension.get("observation_id"))] if _clean(tension.get("observation_id")) else [],
-            "next_step": _clean(tension.get("next_step")),
-        })
+        questions.append(
+            {
+                "question": f"Resolve high-severity analytic tension `{_clean(tension.get('type'))}`: {_clean(tension.get('explanation'))}",
+                "priority": "high",
+                "affected_observation_ids": [_clean(tension.get("observation_id"))]
+                if _clean(tension.get("observation_id"))
+                else [],
+                "next_step": _clean(tension.get("next_step")),
+            }
+        )
     packet["collection_questions"] = questions
 
     guardrails = list(base_packet.get("guardrails") or [])
@@ -302,21 +315,21 @@ def run_iterative_agentic_synthesis(
             country_packet = _packet_with_tradecraft(
                 observations, assessments, country=candidate, representative_case_limit=100
             )
-            tasks.append(AgentTask(
-                name=f"country:{candidate}",
-                role="country_analyst",
-                question=_role_question("country_analyst", f"country assessment: {candidate}"),
-                packet=country_packet,
-            ))
+            tasks.append(
+                AgentTask(
+                    name=f"country:{candidate}",
+                    role="country_analyst",
+                    question=_role_question("country_analyst", f"country assessment: {candidate}"),
+                    packet=country_packet,
+                )
+            )
 
     client = create_client(llm)
     cache = JsonCache(Path(cache_dir) / "state_agentic.json") if cache_dir else None
     first_pass = _parallel_agents(client, llm, cache, tasks, max_workers=max_workers)
     analysis_pass = first_pass
     if depth == "deep":
-        analysis_pass = _refine_agents(
-            client, llm, cache, base_packet, tasks, first_pass, max_workers=max_workers
-        )
+        analysis_pass = _refine_agents(client, llm, cache, base_packet, tasks, first_pass, max_workers=max_workers)
 
     integration_packet = _integration_packet(base_packet, tasks, analysis_pass)
     draft = _call_integrator(client, llm, cache, integration_packet, analysis_pass, stage="iterative-draft")
@@ -325,8 +338,13 @@ def run_iterative_agentic_synthesis(
     if depth != "quick":
         critique = _red_team(client, llm, cache, integration_packet, draft)
         final = _call_integrator(
-            client, llm, cache, integration_packet, analysis_pass,
-            stage="iterative-revised", critique=critique,
+            client,
+            llm,
+            cache,
+            integration_packet,
+            analysis_pass,
+            stage="iterative-revised",
+            critique=critique,
         )
 
     audit = base_packet.get("tradecraft_audit") or {}
@@ -384,8 +402,14 @@ def save_iterative_agentic_synthesis(
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = "_".join(_clean(name).split()) or "analytic_intelligence"
     payload = run_iterative_agentic_synthesis(
-        observations, assessments, llm=llm, country=country, observation_id=observation_id,
-        depth=depth, cache_dir=cache_dir, max_workers=max_workers,
+        observations,
+        assessments,
+        llm=llm,
+        country=country,
+        observation_id=observation_id,
+        depth=depth,
+        cache_dir=cache_dir,
+        max_workers=max_workers,
     )
     json_path = out_dir / f"{stem}.synthesis.json"
     markdown_path = out_dir / f"{stem}.synthesis.md"
@@ -398,14 +422,26 @@ def save_iterative_agentic_synthesis(
             for agent in payload.get(key) or []:
                 stream.write(json.dumps({"phase": phase, **agent}, ensure_ascii=False, sort_keys=True) + "\n")
         if payload.get("red_team"):
-            stream.write(json.dumps({"phase": "red_team", **payload["red_team"]}, ensure_ascii=False, sort_keys=True) + "\n")
-    manifest_path.write_text(json.dumps({
-        "generated_at": payload.get("generated_at"),
-        "synthesis_version": SYNTHESIS_VERSION,
-        "agentic_orchestration_version": AGENTIC_ORCHESTRATION_VERSION,
-        "scope": payload.get("scope"), "depth": depth,
-        "provider": llm.provider, "model": llm.model,
-        "outputs": [json_path.name, markdown_path.name, agents_path.name],
-        "human_verification_mutated": False,
-    }, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+            stream.write(
+                json.dumps({"phase": "red_team", **payload["red_team"]}, ensure_ascii=False, sort_keys=True) + "\n"
+            )
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": payload.get("generated_at"),
+                "synthesis_version": SYNTHESIS_VERSION,
+                "agentic_orchestration_version": AGENTIC_ORCHESTRATION_VERSION,
+                "scope": payload.get("scope"),
+                "depth": depth,
+                "provider": llm.provider,
+                "model": llm.model,
+                "outputs": [json_path.name, markdown_path.name, agents_path.name],
+                "human_verification_mutated": False,
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     return [str(json_path), str(markdown_path), str(agents_path), str(manifest_path)]

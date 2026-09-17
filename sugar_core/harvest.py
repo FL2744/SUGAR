@@ -15,7 +15,7 @@ import requests
 from .collector_registry import CollectorRequest, collect_registered_source, get_collector
 from .models import PostRecord, merge_record
 from .storage import save_records
-from .utils import utc_iso
+from .utils import atomic_path, atomic_write_text, utc_iso
 
 DEFAULT_TIME_SHARD_SOURCES = frozenset({"x", "bluesky"})
 NUMBERED_PAGE_SOURCES = frozenset({"bilibili", "weibo"})
@@ -126,7 +126,9 @@ class HarvestConfig:
             raise ValueError("max_inline_wait_seconds cannot be negative.")
         object.__setattr__(self, "sources", sources)
         object.__setattr__(self, "terms", terms)
-        object.__setattr__(self, "target_records", int(self.target_records) if self.target_records is not None else None)
+        object.__setattr__(
+            self, "target_records", int(self.target_records) if self.target_records is not None else None
+        )
         object.__setattr__(self, "shard_days", int(self.shard_days))
         object.__setattr__(self, "posts_per_task", int(self.posts_per_task))
         object.__setattr__(self, "pages_per_task", int(self.pages_per_task))
@@ -135,7 +137,9 @@ class HarvestConfig:
         object.__setattr__(self, "base_backoff_seconds", float(self.base_backoff_seconds))
         object.__setattr__(self, "max_inline_wait_seconds", float(self.max_inline_wait_seconds))
         object.__setattr__(self, "inter_task_delay_seconds", float(self.inter_task_delay_seconds))
-        object.__setattr__(self, "time_shard_sources", tuple(_clean(x).casefold() for x in self.time_shard_sources if _clean(x)))
+        object.__setattr__(
+            self, "time_shard_sources", tuple(_clean(x).casefold() for x in self.time_shard_sources if _clean(x))
+        )
 
 
 def _date_shards(since: str | None, until: str | None, days: int) -> list[tuple[str | None, str | None]]:
@@ -143,7 +147,7 @@ def _date_shards(since: str | None, until: str | None, days: int) -> list[tuple[
     end = _parse_date_only(until)
     if start is None or end is None or end < start:
         return [(since, until)]
-    shards: list[tuple[str, str]] = []
+    shards: list[tuple[str | None, str | None]] = []
     cursor = start
     while cursor <= end:
         shard_end = min(end, cursor + timedelta(days=days - 1))
@@ -270,6 +274,14 @@ class HarvestStore:
     def __exit__(self, exc_type, exc, tb) -> None:
         self.close()
 
+    def __del__(self) -> None:
+        # Tests and embedding callers may construct a store without a context manager.
+        # Closing during finalization prevents sqlite from reporting an unclosed connection.
+        try:
+            self.close()
+        except Exception:
+            pass
+
     def bind_plan(self, signature: str) -> None:
         row = self.connection.execute("SELECT value FROM meta WHERE key='plan_signature'").fetchone()
         if row is not None and row[0] != signature:
@@ -278,9 +290,7 @@ class HarvestStore:
                 "Use a different --name/output checkpoint for changed queries, windows, pages, or collector options."
             )
         with self.connection:
-            self.connection.execute(
-                "INSERT OR REPLACE INTO meta(key,value) VALUES('plan_signature',?)", (signature,)
-            )
+            self.connection.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('plan_signature',?)", (signature,))
 
     def register_tasks(self, tasks: Iterable[HarvestTask]) -> None:
         now = utc_iso()
@@ -391,9 +401,7 @@ class HarvestStore:
                 key = incoming.record_key
                 if not key:
                     continue
-                row = self.connection.execute(
-                    "SELECT payload_json FROM records WHERE record_key=?", (key,)
-                ).fetchone()
+                row = self.connection.execute("SELECT payload_json FROM records WHERE record_key=?", (key,)).fetchone()
                 if row is None:
                     self.connection.execute(
                         """
@@ -499,10 +507,10 @@ def _jsonl_path(output_csv: Path) -> Path:
 
 def write_jsonl(records: Iterable[PostRecord], path: str | Path) -> str:
     path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as stream:
-        for record in records:
-            stream.write(json.dumps(asdict(record), ensure_ascii=False, sort_keys=True) + "\n")
+    with atomic_path(path) as temporary:
+        with temporary.open("w", encoding="utf-8") as stream:
+            for record in records:
+                stream.write(json.dumps(asdict(record), ensure_ascii=False, sort_keys=True) + "\n")
     return str(path.resolve())
 
 
@@ -744,9 +752,7 @@ def run_harvest(
             ),
             "enrichment": "Raw normalized collection only. Run enrichment/triage separately after harvest.",
         }
-        manifest_path.write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
-        )
+        atomic_write_text(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
 
         outputs = [str(checkpoint.resolve()), str(manifest_path.resolve())]
         if records:

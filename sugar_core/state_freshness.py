@@ -57,11 +57,7 @@ def build_freshness_report(
             pre_period += 1
         if age_days is not None and age_days > collection_stale_days:
             stale_collection += 1
-        verified = bool(
-            assessment
-            and assessment.brief_eligible
-            and observation.verification_state == "human_verified"
-        )
+        verified = bool(assessment and assessment.brief_eligible and observation.verification_state == "human_verified")
         if verified and in_current_period:
             current_verified += 1
         rows.append(
@@ -72,7 +68,11 @@ def build_freshness_report(
                 "city": observation.city,
                 "observed_at": observation.observed_at,
                 "in_current_activity_period": in_current_period,
-                "latest_evidence_collected_at": latest_collection.replace(microsecond=0).isoformat().replace("+00:00", "Z") if latest_collection else "",
+                "latest_evidence_collected_at": latest_collection.replace(microsecond=0)
+                .isoformat()
+                .replace("+00:00", "Z")
+                if latest_collection
+                else "",
                 "collection_age_days": round(age_days, 1) if age_days is not None else None,
                 "collection_stale": bool(age_days is not None and age_days > collection_stale_days),
                 "brief_eligible": verified,
@@ -103,7 +103,9 @@ def save_freshness_report(
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        json.dumps(build_freshness_report(observations, assessments, **kwargs), ensure_ascii=False, indent=2, sort_keys=True),
+        json.dumps(
+            build_freshness_report(observations, assessments, **kwargs), ensure_ascii=False, indent=2, sort_keys=True
+        ),
         encoding="utf-8",
     )
     return str(target.resolve())

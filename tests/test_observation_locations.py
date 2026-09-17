@@ -82,8 +82,6 @@ def test_multi_site_locations_round_trip_through_csv_and_xlsx(tmp_path):
         assert restored.observation_id == observation.observation_id
         assert restored.schema_version == "1.2"
         assert len(restored.locations) == 2
-        assert [item.location_id for item in restored.locations] == [
-            item.location_id for item in observation.locations
-        ]
+        assert [item.location_id for item in restored.locations] == [item.location_id for item in observation.locations]
         assert restored.locations[0].precision == "site"
         assert restored.locations[1].uncertainty_km == 12

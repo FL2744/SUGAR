@@ -4,7 +4,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-
 CASE_DIR = Path(__file__).resolve().parents[1] / "examples" / "cases" / "kyrgyzstan_2026"
 
 
@@ -50,7 +49,9 @@ def test_location_enrichment_breaks_city_centroid_collision_with_bishkek_space()
 
     assert us_summary["address_refined_physical_us_sites"] == 2
     america_borboru = next(site for site in sites if site.name == "America Borboru Bishkek")
-    museum = next(row for row in observations if row.title == "Chinese painting exhibition at the National Historical Museum")
+    museum = next(
+        row for row in observations if row.title == "Chinese painting exhibition at the National Historical Museum"
+    )
     assert (museum.latitude, museum.longitude) != (america_borboru.latitude, america_borboru.longitude)
     assert museum.location_basis.startswith("source_named_site")
     assert america_borboru.delivery_mode == "physical"
@@ -88,7 +89,9 @@ def test_city_centroid_us_sites_are_labeled_broad_not_exact():
 def test_multi_site_language_day_record_preserves_two_venues_without_guessing_iuk_campus():
     observations = CASE_DATA.build_observations()
     LOCATION.apply_observation_location_enrichment(observations)
-    row = next(obs for obs in observations if obs.title == "International Chinese Language Day events at Bishkek universities")
+    row = next(
+        obs for obs in observations if obs.title == "International Chinese Language Day events at Bishkek universities"
+    )
 
     assert row.location_basis == "multi_site_summary_city"
     assert row.location_confidence == 0.75

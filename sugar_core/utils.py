@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import tempfile
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 def normalize_whitespace(text: str) -> str:
@@ -52,6 +55,30 @@ def stable_hash(*parts: Any) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+@contextmanager
+def atomic_path(path: str | Path) -> Iterator[Path]:
+    """Yield a same-directory temporary path and publish it atomically on success."""
+
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        yield temporary
+        os.replace(temporary, target)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -> None:
+    with atomic_path(path) as temporary:
+        temporary.write_text(text, encoding=encoding)
+
+
 class JsonCache:
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -65,10 +92,7 @@ class JsonCache:
 
     def set(self, key: str, value: Any) -> None:
         self.data[key] = value
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        temp = self.path.with_suffix(self.path.suffix + ".tmp")
-        temp.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
-        temp.replace(self.path)
+        atomic_write_text(self.path, json.dumps(self.data, ensure_ascii=False, indent=2))
 
 
 def utc_iso(dt: datetime | None = None) -> str:

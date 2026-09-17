@@ -8,6 +8,8 @@ version = "1.2.0"
 description = "SUGAR: repeatable public-source collection, evidence management, spatial analysis, and research workflows"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
+authors = [{ name = "SUGAR contributors" }]
+maintainers = [{ name = "SUGAR maintainers" }]
 keywords = ["osint", "research", "social-media", "public-diplomacy", "data-provenance"]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -34,7 +36,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10"]
+dev = [
+  "pytest>=8,<10",
+  "pytest-cov>=7,<8",
+  "ruff>=0.16,<1",
+  "mypy>=1.15,<3",
+]
+security = ["pip-audit>=2.10,<3"]
 macos = ["pyinstaller>=6.10,<7"]
 windows = ["PySide6>=6.8,<7", "pyinstaller>=6.10,<7"]
 rtl = ["arabic-reshaper>=3,<4", "python-bidi>=0.6,<1"]
@@ -48,6 +56,9 @@ sugar-intel = "sugar_core.state_intel_cli:main"
 [project.urls]
 Repository = "https://github.com/FL2744/SUGAR"
 Issues = "https://github.com/FL2744/SUGAR/issues"
+Homepage = "https://github.com/FL2744/SUGAR"
+Documentation = "https://github.com/FL2744/SUGAR/tree/main/docs"
+Changelog = "https://github.com/FL2744/SUGAR/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 packages = ["sugar_core"]
@@ -55,3 +66,49 @@ packages = ["sugar_core"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "live: bounded live public-source integration test; requires explicit opt-in",
+  "stress: deterministic scale or resilience test; may take longer than the default suite",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = ["SUGAR-macOS/.build", "SUGAR-macOS/.build-native", "SUGAR-Windows/build", "SUGAR-Windows/dist"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+ignore = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.coverage.run]
+branch = true
+source = ["sugar_core", "sugar_bridge"]
+
+[tool.coverage.report]
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.:",
+  "raise NotImplementedError",
+]
+fail_under = 75
+show_missing = true
+
+[tool.mypy]
+python_version = "3.11"
+follow_imports = "skip"
+files = [
+  "sugar_core/models.py",
+  "sugar_core/observations.py",
+  "sugar_core/collector_registry.py",
+  "sugar_core/harvest.py",
+  "sugar_core/workspace.py",
+]
+check_untyped_defs = true
+ignore_missing_imports = true
+no_implicit_optional = true
+warn_unused_ignores = true

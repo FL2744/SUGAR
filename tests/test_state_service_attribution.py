@@ -117,9 +117,7 @@ def test_review_queue_exposes_service_source_ids_and_names_without_parsing_note(
     row = build_review_queue([obs], [assessment])[0]
 
     assert row["us_service_source_ids"] == "; ".join(assessment.us_overlap.service_source_ids)
-    assert row["us_service_source_names"] == "; ".join(
-        source.name for source in assessment.us_overlap.service_sources
-    )
+    assert row["us_service_source_names"] == "; ".join(source.name for source in assessment.us_overlap.service_sources)
 
 
 def test_geojson_carries_structured_service_source_attribution():
@@ -131,9 +129,10 @@ def test_geojson_carries_structured_service_source_attribution():
 
     sources = observation_feature["properties"]["us_service_sources"]
     assert {source["name"] for source in sources} == {"American Space Bishkek", "EducationUSA Kyrgyzstan"}
-    assert next(source for source in sources if source["name"] == "American Space Bishkek")[
-        "program_service_matches"
-    ] == []
+    assert (
+        next(source for source in sources if source["name"] == "American Space Bishkek")["program_service_matches"]
+        == []
+    )
 
 
 def test_snapshot_change_detection_marks_service_provenance_as_us_overlap():

@@ -204,18 +204,13 @@ def apply_source_conflict_review_workbook(
         if conflict is None:
             raise ValueError(f"Review workbook references unknown source conflict: {conflict_id}")
 
-        decision = {
-            key: _clean(raw.get(key))
-            for key in _CONFLICT_DECISION_COLUMNS
-        }
+        decision = {key: _clean(raw.get(key)) for key in _CONFLICT_DECISION_COLUMNS}
         if not any(decision.values()):
             continue
 
         status = decision["decision_status"].casefold()
         if not status:
-            raise ValueError(
-                f"Source conflict {conflict_id} has partial decision fields but no decision_status."
-            )
+            raise ValueError(f"Source conflict {conflict_id} has partial decision fields but no decision_status.")
         if status != _CONFLICT_DECISION_STATUS:
             raise ValueError(
                 f"Unsupported source-conflict review decision for {conflict_id}: {status}. "

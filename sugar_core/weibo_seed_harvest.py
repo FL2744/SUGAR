@@ -15,7 +15,6 @@ from .storage import save_records
 from .utils import utc_iso
 from .weibo_investigation import WeiboInvestigation, investigate_weibo_seed, parse_weibo_seed
 
-
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 Investigator = Callable[..., WeiboInvestigation]
 Sleeper = Callable[[float], None]
@@ -63,7 +62,15 @@ class SeedHarvestConfig:
         seeds = tuple(dict.fromkeys(_clean(seed) for seed in self.seeds if _clean(seed)))
         if not seeds:
             raise ValueError("Seed harvest requires at least one Weibo post URL or ID.")
-        for key in ("max_comments", "comment_pages", "max_reposts", "repost_pages", "author_posts", "author_pages", "max_retries"):
+        for key in (
+            "max_comments",
+            "comment_pages",
+            "max_reposts",
+            "repost_pages",
+            "author_posts",
+            "author_pages",
+            "max_retries",
+        ):
             if int(getattr(self, key)) < 0:
                 raise ValueError(f"{key} cannot be negative.")
         if self.comment_pages < 1 or self.repost_pages < 1 or self.author_pages < 1:
@@ -147,12 +154,20 @@ class SeedHarvestStore:
     def __exit__(self, exc_type, exc, tb) -> None:
         self.close()
 
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
     def get_meta(self, key: str) -> str | None:
         row = self.db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
         return str(row[0]) if row else None
 
     def set_meta(self, key: str, value: str) -> None:
-        self.db.execute("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
+        self.db.execute(
+            "INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value)
+        )
         self.db.commit()
 
     def register(self, seeds: Iterable[str]) -> None:
@@ -179,7 +194,15 @@ class SeedHarvestStore:
             (now,),
         ).fetchall()
         return [
-            {"seed_key": row[0], "seed_input": row[1], "identity": row[2], "status": row[3], "attempts": int(row[4]), "last_error": row[5], "not_before": row[6]}
+            {
+                "seed_key": row[0],
+                "seed_input": row[1],
+                "identity": row[2],
+                "status": row[3],
+                "attempts": int(row[4]),
+                "last_error": row[5],
+                "not_before": row[6],
+            }
             for row in rows
         ]
 
@@ -233,7 +256,9 @@ class SeedHarvestStore:
             key = incoming.record_key
             if not key:
                 continue
-            row = self.db.execute("SELECT payload_json,seed_matches_json FROM records WHERE record_key=?", (key,)).fetchone()
+            row = self.db.execute(
+                "SELECT payload_json,seed_matches_json FROM records WHERE record_key=?", (key,)
+            ).fetchone()
             if row:
                 existing = PostRecord(**json.loads(row[0]))
                 merge_record(existing, incoming)
@@ -241,13 +266,24 @@ class SeedHarvestStore:
                 matches.add(seed_key)
                 self.db.execute(
                     "UPDATE records SET payload_json=?,seed_matches_json=?,updated_at=? WHERE record_key=?",
-                    (json.dumps(asdict(existing), ensure_ascii=False, sort_keys=True), json.dumps(sorted(matches)), utc_iso(), key),
+                    (
+                        json.dumps(asdict(existing), ensure_ascii=False, sort_keys=True),
+                        json.dumps(sorted(matches)),
+                        utc_iso(),
+                        key,
+                    ),
                 )
                 updated += 1
             else:
                 self.db.execute(
                     "INSERT INTO records(record_key,payload_json,first_seed_key,seed_matches_json,updated_at) VALUES(?,?,?,?,?)",
-                    (key, json.dumps(asdict(incoming), ensure_ascii=False, sort_keys=True), seed_key, json.dumps([seed_key]), utc_iso()),
+                    (
+                        key,
+                        json.dumps(asdict(incoming), ensure_ascii=False, sort_keys=True),
+                        seed_key,
+                        json.dumps([seed_key]),
+                        utc_iso(),
+                    ),
                 )
                 inserted += 1
         self.db.commit()
@@ -261,7 +297,10 @@ class SeedHarvestStore:
         self.db.commit()
 
     def records(self) -> list[PostRecord]:
-        return [PostRecord(**json.loads(row[0])) for row in self.db.execute("SELECT payload_json FROM records ORDER BY rowid").fetchall()]
+        return [
+            PostRecord(**json.loads(row[0]))
+            for row in self.db.execute("SELECT payload_json FROM records ORDER BY rowid").fetchall()
+        ]
 
     def seed_rows(self) -> list[dict[str, Any]]:
         rows = self.db.execute(
@@ -269,15 +308,27 @@ class SeedHarvestStore:
         ).fetchall()
         return [
             {
-                "seed_key": row[0], "seed_input": row[1], "identity": row[2], "status": row[3], "attempts": int(row[4]),
-                "last_error": row[5], "not_before": row[6], "seed_record_key": row[7], "comments_retrieved": int(row[8]),
-                "reposts_retrieved": int(row[9]), "author_posts_retrieved": int(row[10]), "surface_status": json.loads(row[11] or "{}"),
+                "seed_key": row[0],
+                "seed_input": row[1],
+                "identity": row[2],
+                "status": row[3],
+                "attempts": int(row[4]),
+                "last_error": row[5],
+                "not_before": row[6],
+                "seed_record_key": row[7],
+                "comments_retrieved": int(row[8]),
+                "reposts_retrieved": int(row[9]),
+                "author_posts_retrieved": int(row[10]),
+                "surface_status": json.loads(row[11] or "{}"),
             }
             for row in rows
         ]
 
     def counts(self) -> dict[str, int]:
-        return {str(status): int(count) for status, count in self.db.execute("SELECT status,COUNT(*) FROM seeds GROUP BY status").fetchall()}
+        return {
+            str(status): int(count)
+            for status, count in self.db.execute("SELECT status,COUNT(*) FROM seeds GROUP BY status").fetchall()
+        }
 
 
 def _rate_limit_error(exc: Exception) -> bool:
@@ -287,7 +338,9 @@ def _rate_limit_error(exc: Exception) -> bool:
 
 def _retryable(exc: Exception) -> bool:
     text = str(exc).casefold()
-    return _rate_limit_error(exc) or any(token in text for token in ("timeout", "temporar", "connection", "502", "503", "504"))
+    return _rate_limit_error(exc) or any(
+        token in text for token in ("timeout", "temporar", "connection", "502", "503", "504")
+    )
 
 
 def _write_jsonl(records: Iterable[PostRecord], path: Path) -> str:
@@ -299,15 +352,27 @@ def _write_jsonl(records: Iterable[PostRecord], path: Path) -> str:
 
 def _write_seed_status(rows: list[dict[str, Any]], path: Path) -> str:
     fields = [
-        "seed_key", "seed_input", "identity", "status", "attempts", "last_error", "not_before", "seed_record_key",
-        "comments_retrieved", "reposts_retrieved", "author_posts_retrieved", "surface_status",
+        "seed_key",
+        "seed_input",
+        "identity",
+        "status",
+        "attempts",
+        "last_error",
+        "not_before",
+        "seed_record_key",
+        "comments_retrieved",
+        "reposts_retrieved",
+        "author_posts_retrieved",
+        "surface_status",
     ]
     with path.open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
         for row in rows:
             payload = dict(row)
-            payload["surface_status"] = json.dumps(payload.get("surface_status") or {}, ensure_ascii=False, sort_keys=True)
+            payload["surface_status"] = json.dumps(
+                payload.get("surface_status") or {}, ensure_ascii=False, sort_keys=True
+            )
             writer.writerow(payload)
     return str(path.resolve())
 
@@ -342,13 +407,22 @@ def run_weibo_seed_harvest(
         store.set_meta("plan_signature", config.plan_signature)
         store.set_meta("access_mode", access_mode)
         store.register(config.seeds)
-        _notify(progress, "seed_harvest_start", seeds=len(config.seeds), checkpoint=str(checkpoint), access_mode=access_mode)
+        _notify(
+            progress, "seed_harvest_start", seeds=len(config.seeds), checkpoint=str(checkpoint), access_mode=access_mode
+        )
 
         eligible = store.eligible()
         for index, task in enumerate(eligible, 1):
             seed_key = task["seed_key"]
             attempt = store.start(seed_key)
-            _notify(progress, "seed_harvest_item_start", index=index, total=len(eligible), seed=task["seed_input"], attempt=attempt)
+            _notify(
+                progress,
+                "seed_harvest_item_start",
+                index=index,
+                total=len(eligible),
+                seed=task["seed_input"],
+                attempt=attempt,
+            )
             try:
                 result = investigator(
                     task["seed_input"],
@@ -373,11 +447,22 @@ def run_weibo_seed_harvest(
                     author_posts=len(result.author_posts),
                     surface_status=result.surface_status,
                 )
-                _notify(progress, "seed_harvest_item_complete", seed=task["seed_input"], inserted=inserted, updated=updated, comments=len(result.comments))
+                _notify(
+                    progress,
+                    "seed_harvest_item_complete",
+                    seed=task["seed_input"],
+                    inserted=inserted,
+                    updated=updated,
+                    comments=len(result.comments),
+                )
             except Exception as exc:
                 wait = config.base_backoff_seconds * (2 ** max(0, attempt - 1))
                 if _retryable(exc) and attempt <= config.max_retries:
-                    wait = min(wait, config.max_inline_wait_seconds) if not _rate_limit_error(exc) else max(wait, min(120.0, config.max_inline_wait_seconds))
+                    wait = (
+                        min(wait, config.max_inline_wait_seconds)
+                        if not _rate_limit_error(exc)
+                        else max(wait, min(120.0, config.max_inline_wait_seconds))
+                    )
                     store.defer(seed_key, str(exc), wait)
                     event = "seed_rate_limit_deferred" if _rate_limit_error(exc) else "seed_retry_deferred"
                     store.add_event(event, seed_key, wait_seconds=wait, error=type(exc).__name__)
@@ -419,11 +504,13 @@ def run_weibo_seed_harvest(
         outputs = [str(checkpoint.resolve()), str(manifest_path.resolve()), str(status_path.resolve())]
         if records:
             save_records(records, records_path, metadata=manifest)
-            outputs.extend([
-                str(records_path.resolve()),
-                str(records_path.with_suffix(".xlsx").resolve()),
-                str(records_path.with_suffix(".metadata.json").resolve()),
-                _write_jsonl(records, jsonl_path),
-            ])
+            outputs.extend(
+                [
+                    str(records_path.resolve()),
+                    str(records_path.with_suffix(".xlsx").resolve()),
+                    str(records_path.with_suffix(".metadata.json").resolve()),
+                    _write_jsonl(records, jsonl_path),
+                ]
+            )
         _notify(progress, "seed_harvest_complete", seed_counts=counts, unique_records=len(records), outputs=outputs)
         return outputs

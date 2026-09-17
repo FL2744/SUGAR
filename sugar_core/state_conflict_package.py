@@ -42,19 +42,14 @@ def _stem(name: str) -> str:
 def _normalize_conflicts(
     conflicts: Iterable[SourceConflict | dict[str, Any]],
 ) -> list[SourceConflict]:
-    return [
-        row if isinstance(row, SourceConflict) else SourceConflict(**dict(row))
-        for row in conflicts
-    ]
+    return [row if isinstance(row, SourceConflict) else SourceConflict(**dict(row)) for row in conflicts]
 
 
 def _formula_safe_frame(rows: Iterable[dict[str, Any]]) -> pd.DataFrame:
     frame = pd.DataFrame(list(rows))
     if not frame.empty:
         for column in frame.columns:
-            frame[column] = frame[column].map(
-                lambda value: safe_cell(value, formula_safe=True)
-            )
+            frame[column] = frame[column].map(lambda value: safe_cell(value, formula_safe=True))
     return frame
 
 
@@ -63,9 +58,7 @@ def _observation_source_urls(observation: ResearchObservation | None) -> set[str
         return set()
     urls = {_clean(item.url) for item in observation.evidence if _clean(item.url)}
     urls.update(
-        _clean(value)
-        for value in observation.source_record_keys
-        if _clean(value).startswith(("http://", "https://"))
+        _clean(value) for value in observation.source_record_keys if _clean(value).startswith(("http://", "https://"))
     )
     return urls
 
@@ -125,11 +118,7 @@ def build_conflict_aware_review_queue(
         if assessment is None:
             continue
         observation = observation_map.get(assessment.observation_id)
-        matched = [
-            conflict
-            for conflict in conflicts
-            if _conflict_applies_to_record(conflict, observation, assessment)
-        ]
+        matched = [conflict for conflict in conflicts if _conflict_applies_to_record(conflict, observation, assessment)]
         unresolved = [conflict for conflict in matched if conflict.requires_human_review]
         row["source_conflict_count"] = len(matched)
         row["source_conflicts_requiring_human_review"] = len(unresolved)
@@ -138,11 +127,7 @@ def build_conflict_aware_review_queue(
         row["source_conflict_statuses"] = "; ".join(conflict.status for conflict in matched)
         if unresolved:
             row["review_priority"] = int(row.get("review_priority") or 0) + 4
-            reasons = [
-                value.strip()
-                for value in str(row.get("reasons") or "").split(";")
-                if value.strip()
-            ]
+            reasons = [value.strip() for value in str(row.get("reasons") or "").split(";") if value.strip()]
             reason = "source conflict affecting record requires human review"
             if reason not in reasons:
                 reasons.append(reason)
@@ -210,11 +195,7 @@ def render_source_conflict_section(
     ]
     for conflict in conflicts:
         preferred = conflict.preferred_claim
-        preferred_label = (
-            preferred.publisher or preferred.source_label or preferred.source_url
-            if preferred
-            else "none"
-        )
+        preferred_label = preferred.publisher or preferred.source_label or preferred.source_url if preferred else "none"
         review = "human review required" if conflict.requires_human_review else "resolved"
         treatment = f" Treatment: {conflict.treatment}" if conflict.treatment else ""
         lines.append(
@@ -310,9 +291,7 @@ def export_review_workbook_with_conflicts(
 
     assessment_id_column = headers["assessment_id"]
     for row_number in range(2, assessment_sheet.max_row + 1):
-        assessment_id = _clean(
-            assessment_sheet.cell(row=row_number, column=assessment_id_column).value
-        )
+        assessment_id = _clean(assessment_sheet.cell(row=row_number, column=assessment_id_column).value)
         assessment = assessment_map.get(assessment_id)
         if assessment is None:
             continue
@@ -453,16 +432,10 @@ def package_from_files_with_conflicts(
 ) -> list[str]:
     observations = load_observations(observations_file)
     assessments = (
-        load_state_assessments(assessments_file)
-        if assessments_file
-        else blank_state_assessments(observations)
+        load_state_assessments(assessments_file) if assessments_file else blank_state_assessments(observations)
     )
     sites = load_us_presence_sites(us_sites_file) if us_sites_file else []
-    previous = (
-        load_state_assessments(previous_assessments_file)
-        if previous_assessments_file
-        else None
-    )
+    previous = load_state_assessments(previous_assessments_file) if previous_assessments_file else None
     conflicts = load_source_conflicts(source_conflicts_file) if source_conflicts_file else []
     return save_state_package_with_conflicts(
         observations,

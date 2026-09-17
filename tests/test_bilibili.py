@@ -71,9 +71,7 @@ def _video_payload(*, bvid="BV1TEST123", aid=1001, pubdate=1789056000):
 
 
 def test_bilibili_metrics_do_not_mislabel_shares_as_reposts():
-    normalized = normalize_bilibili_engagement(
-        {"view": 1000, "like": 50, "favorite": 8, "reply": 6, "share": 20}
-    )
+    normalized = normalize_bilibili_engagement({"view": 1000, "like": 50, "favorite": 8, "reply": 6, "share": 20})
     assert normalized == {
         "likes": 50,
         "replies": 6,
@@ -161,9 +159,7 @@ def test_keyword_search_merges_duplicate_video_query_provenance_without_auth_sta
 
 
 def test_search_fails_closed_when_bilibili_returns_access_control_code():
-    session = FakeSession(
-        [FakeResponse({"code": -412, "message": "request blocked", "data": None})]
-    )
+    session = FakeSession([FakeResponse({"code": -412, "message": "request blocked", "data": None})])
     with pytest.raises(BilibiliAccessError, match="will not synthesize credentials"):
         collect_bilibili_public(
             search_terms=["孔子学院"],
