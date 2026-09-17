@@ -28,3 +28,19 @@ The release owner must also resolve before publishing:
 Never put signing keys, API credentials, cookies, private research data, or unsigned “production” claims
 in the repository. A release candidate may be built and tested without signing, but it must be labeled
 as such.
+
+## Dependency lock refresh
+
+`requirements/runtime.txt` is the universal, hash-pinned newest-compatible runtime lock used by the
+built-wheel CI smoke test. `requirements/runtime-min.txt` is a Python 3.11 lowest-direct compatibility
+track. Refresh both deliberately with the supported resolver and review the resulting dependency diff:
+
+```powershell
+uv pip compile pyproject.toml --universal --generate-hashes --python-version 3.11 --output-file requirements/runtime.txt
+uv pip compile pyproject.toml --universal --generate-hashes --resolution lowest-direct --python-version 3.11 --output-file requirements/runtime-min.txt
+```
+
+The newest lock covers the supported Python range through environment markers; the minimum lock is
+intentionally exercised on Python 3.11 because older scientific wheels are not all published for newer
+Python versions. Dependency updates still require the compatibility suite, security scan, and
+release-owner review.

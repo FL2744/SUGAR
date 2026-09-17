@@ -75,6 +75,24 @@ def test_workspace_registration_is_idempotent_and_updates_metadata(tmp_path: Pat
     assert second.metadata == {"revision": 2}
 
 
+def test_two_workspace_handles_can_write_through_sqlite_busy_timeout(tmp_path: Path) -> None:
+    workspace = SugarWorkspace.create(tmp_path / "project", name="Project")
+    first = SugarWorkspace.open(workspace.root)
+    second = SugarWorkspace.open(workspace.root)
+    first_file = workspace.path_for("references") / "first.txt"
+    second_file = workspace.path_for("references") / "second.txt"
+    first_file.write_text("first", encoding="utf-8")
+    second_file.write_text("second", encoding="utf-8")
+
+    first.register_artifact("reference", first_file)
+    second.register_artifact("reference", second_file)
+
+    assert {item.path for item in workspace.list_artifacts("reference")} == {
+        "references/first.txt",
+        "references/second.txt",
+    }
+
+
 def test_workspace_tracks_external_and_missing_artifacts(tmp_path: Path) -> None:
     workspace = SugarWorkspace.create(tmp_path / "project", name="Project")
     external = tmp_path / "american-spaces.csv"

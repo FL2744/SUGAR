@@ -213,7 +213,8 @@ class HarvestStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(self.path)
+        self.connection = sqlite3.connect(self.path, timeout=30)
+        self.connection.execute("PRAGMA busy_timeout = 30000")
         self.connection.execute("PRAGMA journal_mode=WAL")
         self.connection.execute("PRAGMA synchronous=NORMAL")
         self.connection.executescript(

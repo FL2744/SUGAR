@@ -168,6 +168,17 @@ def test_search_fails_closed_when_bilibili_returns_access_control_code():
         )
 
 
+def test_search_rejects_non_list_result_shape():
+    session = FakeSession([FakeResponse({"code": 0, "data": {"result": {"unexpected": True}}})])
+
+    with pytest.raises(RuntimeError, match="unexpected result shape"):
+        collect_bilibili_public(
+            search_terms=["test"],
+            initialize_session=False,
+            session=session,
+        )
+
+
 def test_search_date_filter_uses_inclusive_dates():
     result = {
         "code": 0,
@@ -267,4 +278,13 @@ def test_public_comment_access_gate_is_not_bypassed():
     session = FakeSession([detail, blocked])
 
     with pytest.raises(BilibiliAccessError, match="will not synthesize credentials"):
+        collect_bilibili_comments("BV1COMMENTS", session=session)
+
+
+def test_comments_reject_non_list_replies_shape():
+    detail = FakeResponse(_video_payload(bvid="BV1COMMENTS", aid=222))
+    malformed = FakeResponse({"code": 0, "data": {"replies": {"unexpected": True}}})
+    session = FakeSession([detail, malformed])
+
+    with pytest.raises(RuntimeError, match="unexpected replies shape"):
         collect_bilibili_comments("BV1COMMENTS", session=session)

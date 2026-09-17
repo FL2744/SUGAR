@@ -122,6 +122,46 @@ def test_bridge_reports_usage_error_without_config():
     assert exc_info.value.code == 2
 
 
+def test_bridge_persists_only_sanitized_error_metadata_for_workspace_diagnostics(monkeypatch, tmp_path: Path, capsys):
+    from sugar_core.workspace import SugarWorkspace
+
+    workspace = tmp_path / "workspace"
+    SugarWorkspace.create(workspace, name="Diagnostics test")
+    config = tmp_path / "failure.json"
+    config.write_text(
+        json.dumps({"workspace": str(workspace), "source_file": "missing.csv"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sugar_bridge, "run_analysis", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("Bearer secret-value"))
+    )
+
+    assert sugar_bridge.main(["analysis", "--config", str(config)]) == 1
+    assert _events(capsys.readouterr().out)[-1]["code"] == "internal_error"
+
+    assert sugar_bridge.main(["diagnostics", "--config", str(config)]) == 0
+    diagnostics = _events(capsys.readouterr().out)[-1]
+    assert diagnostics["event"] == "diagnostics"
+    assert diagnostics["recent_errors"][-1]["message"] == "Bearer [REDACTED]"
+    assert "secret-value" not in json.dumps(diagnostics)
+
+
+def test_bridge_redacts_credential_like_values_embedded_in_config(monkeypatch, tmp_path: Path, capsys):
+    config = tmp_path / "config-secret.json"
+    config.write_text(
+        json.dumps({"api_key": "config-secret", "workspace": str(tmp_path / "missing")}), encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        sugar_bridge,
+        "run_analysis",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("failed config-secret")),
+    )
+
+    assert sugar_bridge.main(["analysis", "--config", str(config)]) == 1
+    event = _events(capsys.readouterr().out)[-1]
+    assert event["message"] == "failed [REDACTED]"
+
+
 def test_bridge_workspace_register_validates_required_fields(tmp_path: Path):
     workspace = tmp_path / "workspace"
     from sugar_core.workspace import SugarWorkspace

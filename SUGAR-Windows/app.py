@@ -1398,6 +1398,8 @@ class ActivityDock(QDockWidget):
             return
         if event == "complete":
             message = "Completed successfully."
+        elif event == "cancelled":
+            message = "Cancelled by user."
         elif event == "error":
             message = f"ERROR: {payload.get('message', 'Unknown error')}"
         elif event == "backend_stderr":

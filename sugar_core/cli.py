@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .diagnostics import build_report, save_report
 from .errors import error_payload
 from .llm import ARC_BASE_URL, LLMConfig
 from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
@@ -111,9 +112,20 @@ def _workspace_arg(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _emit_outputs(outputs: list[str], *, json_output: bool) -> None:
+    values = [str(output) for output in outputs]
+    if json_output:
+        print(json.dumps({"event": "complete", "outputs": values}, ensure_ascii=False, sort_keys=True))
+    else:
+        print("\n".join(values))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sugar", description="SUGAR stable research pipeline")
     parser.add_argument("--version", action="version", version=__version__)
+    parser.add_argument(
+        "--json", dest="json_output", action="store_true", help="Emit machine-readable JSON completion output."
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     search = sub.add_parser("search", help="Run a normal bounded collection + optional enrichment.")
@@ -294,6 +306,21 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--output-stem")
     report.add_argument("--format", choices=["docx", "pdf", "both"], default="both")
     _workspace_arg(report)
+
+    diagnostics = sub.add_parser("diagnostics", help="Emit a redacted runtime and workspace health report.")
+    diagnostics.add_argument("--workspace", help="Optional SUGAR project directory to health-check.")
+    diagnostics.add_argument("--output", help="Optional path for a JSON diagnostic report.")
+
+    # Accept --json after the subcommand as well as before it. Suppressing the
+    # subparser default preserves a global --json value.
+    for command_parser in sub.choices.values():
+        command_parser.add_argument(
+            "--json",
+            dest="json_output",
+            action="store_true",
+            default=argparse.SUPPRESS,
+            help=argparse.SUPPRESS,
+        )
     return parser
 
 
@@ -310,9 +337,17 @@ def _run(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.command == "diagnostics":
+        report = build_report(args.workspace)
+        if args.output:
+            output = save_report(args.workspace, args.output)
+            report = {"report": output, **report}
+        print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+
     if args.command == "map":
         outputs = run_map({"source_file": args.source_file, "output_file": args.output, "workspace": args.workspace})
-        print("\n".join(outputs))
+        _emit_outputs(outputs, json_output=args.json_output)
         return 0
 
     if args.command == "overlap":
@@ -330,21 +365,20 @@ def _run(argv=None) -> int:
                 "map_output": args.map_output,
             },
         }
-        print("\n".join(run_overlap(config)))
+        _emit_outputs(run_overlap(config), json_output=args.json_output)
         return 0
 
     if args.command == "analysis":
-        print(
-            "\n".join(
-                run_analysis(
-                    {
-                        "source_file": args.source_file,
-                        "output_stem": args.output_stem,
-                        "output_format": args.format,
-                        "workspace": args.workspace,
-                    }
-                )
-            )
+        _emit_outputs(
+            run_analysis(
+                {
+                    "source_file": args.source_file,
+                    "output_stem": args.output_stem,
+                    "output_format": args.format,
+                    "workspace": args.workspace,
+                }
+            ),
+            json_output=args.json_output,
         )
         return 0
 
@@ -364,7 +398,7 @@ def _run(argv=None) -> int:
         )
         outputs = save_weibo_investigation(investigation, out_dir, name=args.name)
         register_workspace_outputs(workspace, outputs, operation="weibo-investigate")
-        print("\n".join(outputs))
+        _emit_outputs(outputs, json_output=args.json_output)
         return 0
 
     if args.command == "weibo-seed-harvest":
@@ -394,7 +428,7 @@ def _run(argv=None) -> int:
             cookie=os.environ.get("SUGAR_WEIBO_COOKIE", ""),
         )
         register_workspace_outputs(workspace, outputs, operation="weibo-seed-harvest", kind="harvest")
-        print("\n".join(outputs))
+        _emit_outputs(outputs, json_output=args.json_output)
         return 0
 
     if args.command == "weibo-qualify":
@@ -441,7 +475,7 @@ def _run(argv=None) -> int:
         secrets = {"weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", "")}
         outputs = run_weibo_qualification(config, secrets)
         register_workspace_outputs(workspace, outputs, operation="weibo-qualify")
-        print("\n".join(outputs))
+        _emit_outputs(outputs, json_output=args.json_output)
         return 0
 
     if args.command == "triage":
@@ -471,7 +505,7 @@ def _run(argv=None) -> int:
             continue_on_error=not args.fail_fast,
         )
         register_workspace_outputs(workspace, outputs, operation="triage", kind="observations")
-        print("\n".join(outputs))
+        _emit_outputs(outputs, json_output=args.json_output)
         return 0
 
     sources = _csv(args.sources)
@@ -509,7 +543,7 @@ def _run(argv=None) -> int:
                 "continue_on_error": not args.fail_fast,
             },
         }
-        print("\n".join(run_harvest(config, secrets)))
+        _emit_outputs(run_harvest(config, secrets), json_output=args.json_output)
         return 0
 
     if not (args.no_translate and args.no_location):
@@ -531,13 +565,26 @@ def _run(argv=None) -> int:
         "mastodon_url": args.mastodon_url,
         "llm": {"provider": args.provider, "model": args.model, "base_url": args.base_url},
     }
-    print("\n".join(run_search(config, secrets)))
+    _emit_outputs(run_search(config, secrets), json_output=args.json_output)
     return 0
 
 
 def main(argv=None) -> int:
     try:
         return _run(argv)
+    except KeyboardInterrupt as exc:
+        secrets = {
+            key: os.environ.get(env, "")
+            for key, env in {
+                "x_bearer_token": "SUGAR_X_BEARER_TOKEN",
+                "llm_api_key": "SUGAR_LLM_API_KEY",
+                "bluesky_app_password": "SUGAR_BLUESKY_APP_PASSWORD",
+                "mastodon_token": "SUGAR_MASTODON_TOKEN",
+                "weibo_cookie": "SUGAR_WEIBO_COOKIE",
+            }.items()
+        }
+        print(json.dumps({"event": "error", **error_payload(exc, secrets=secrets)}), file=sys.stderr)
+        return 130
     except Exception as exc:
         secrets = {
             key: os.environ.get(env, "")

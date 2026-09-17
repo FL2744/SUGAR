@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import sys
 
 from . import __version__
+from .errors import error_payload
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
 from .state_agentic import save_iterative_agentic_synthesis
@@ -81,7 +84,7 @@ def _llm(args) -> LLMConfig:
     return LLMConfig(provider=args.provider, model=args.model, api_key=api_key, base_url=base_url)
 
 
-def main(argv=None) -> int:
+def _run(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -143,5 +146,20 @@ def main(argv=None) -> int:
     return 2
 
 
+def main(argv=None) -> int:
+    return _run(argv)
+
+
+def console_main(argv=None) -> int:
+    try:
+        return _run(argv)
+    except KeyboardInterrupt as exc:
+        print(json.dumps({"event": "error", **error_payload(exc)}), file=sys.stderr)
+        return 130
+    except Exception as exc:
+        print(json.dumps({"event": "error", **error_payload(exc)}), file=sys.stderr)
+        return 1
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(console_main())

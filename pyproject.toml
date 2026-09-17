@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
   "beautifulsoup4>=4.12,<5",
   "certifi>=2024.2",
+  "chardet>=5.2,<6",
   "folium>=0.17,<1",
   "geopy>=2.4,<3",
   "langdetect>=1.0.9,<2",
@@ -49,9 +50,9 @@ rtl = ["arabic-reshaper>=3,<4", "python-bidi>=0.6,<1"]
 
 [project.scripts]
 sugar = "sugar_core.cli:main"
-sugar-project = "sugar_core.workspace_cli:main"
-sugar-state = "sugar_core.state_cli:main"
-sugar-intel = "sugar_core.state_intel_cli:main"
+sugar-project = "sugar_core.workspace_cli:console_main"
+sugar-state = "sugar_core.state_cli:console_main"
+sugar-intel = "sugar_core.state_intel_cli:console_main"
 
 [project.urls]
 Repository = "https://github.com/FL2744/SUGAR"

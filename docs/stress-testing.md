@@ -36,6 +36,19 @@ The JSON report records elapsed time, row counts, column counts, artifact sizes,
 fact that the probe was offline. Compare reports from the same machine and Python environment;
 wall-clock values are not portable performance guarantees.
 
+For bounded offline repetition and Python allocation sampling:
+
+```powershell
+.\.venv\Scripts\python.exe tools\soak_test.py --records 1000 --iterations 10 --output-dir .\soak-output-10
+.\.venv\Scripts\python.exe tools\soak_test.py --records 1000 --duration-seconds 21600 --output-dir .\soak-output-6h
+```
+
+The soak report is intentionally bounded: it records completed iterations, interruption state,
+per-iteration timings, and a capped ring of peak Python allocation samples. It is an offline
+reliability harness, not evidence that live collectors, network resets, or a particular host can
+run safely for six or 24 hours. Those qualification runs require the authorized source-specific
+environment, a retention plan, and operator review.
+
 Quality CI runs the same deterministic runner at 5,000 records with network access disabled. It
 also verifies the supported Python matrix, focused static typing, lint/format cleanliness,
 dependency audit, wheel/sdist installation in a fresh environment, and a 75% branch-coverage floor.

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import asdict
 from typing import Any
 
 from . import __version__
+from .errors import error_payload
 from .workspace import SugarWorkspace
 
 
@@ -67,7 +69,7 @@ def _open(path: str, *, discover: bool = False) -> SugarWorkspace:
     return SugarWorkspace.discover(path) if discover else SugarWorkspace.open(path)
 
 
-def main(argv=None) -> int:
+def _run(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -137,5 +139,20 @@ def main(argv=None) -> int:
     return 0
 
 
+def main(argv=None) -> int:
+    return _run(argv)
+
+
+def console_main(argv=None) -> int:
+    try:
+        return _run(argv)
+    except KeyboardInterrupt as exc:
+        print(json.dumps({"event": "error", **error_payload(exc)}), file=sys.stderr)
+        return 130
+    except Exception as exc:
+        print(json.dumps({"event": "error", **error_payload(exc)}), file=sys.stderr)
+        return 1
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(console_main())

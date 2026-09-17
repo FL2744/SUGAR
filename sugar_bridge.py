@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import platform
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -17,9 +16,9 @@ for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(line_buffering=True, write_through=True)
 
 import sugar_core
-from sugar_core.collector_registry import collector_capabilities
 from sugar_core.desktop_ops import DESKTOP_ANALYTIC_OPERATIONS, run_desktop_analytic_operation
-from sugar_core.errors import error_payload
+from sugar_core.diagnostics import build_report, record_error
+from sugar_core.errors import error_payload, sensitive_values
 from sugar_core.service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from sugar_core.weibo_qualification import run_weibo_qualification
@@ -89,7 +88,7 @@ def secrets_from_environment() -> dict[str, str]:
     }
 
 
-def backend_info() -> dict[str, Any]:
+def backend_info(workspace: str | None = None) -> dict[str, Any]:
     credential_env = {
         "x_bearer_token": "SUGAR_X_BEARER_TOKEN",
         "llm_api_key": "SUGAR_LLM_API_KEY",
@@ -98,25 +97,17 @@ def backend_info() -> dict[str, Any]:
         "mastodon_token": "SUGAR_MASTODON_TOKEN",
         "weibo_cookie": "SUGAR_WEIBO_COOKIE",
     }
-    return {
-        "version": sugar_core.__version__,
-        "bridge_protocol": BRIDGE_PROTOCOL_VERSION,
-        "architecture": platform.machine() or "unknown",
-        "python": platform.python_version(),
-        "runtime": "bundled" if getattr(sys, "frozen", False) else "python",
-        "system": platform.platform(),
-        "os": platform.system().lower(),
-        "collectors": collector_capabilities(),
-        "operations": sorted(ALL_OPERATIONS),
-        "diagnostics_schema": 1,
-        "config_limits": {"max_bytes": MAX_CONFIG_BYTES, "max_depth": MAX_CONFIG_DEPTH},
-        "credentials_configured": {key: bool(os.environ.get(env)) for key, env in credential_env.items()},
-        "redaction": {
-            "credential_values": "never included",
-            "config_contents": "never included",
-            "research_data": "never included",
-        },
-    }
+    report = build_report(workspace)
+    report.update(
+        {
+            "version": sugar_core.__version__,
+            "bridge_protocol": BRIDGE_PROTOCOL_VERSION,
+            "operations": sorted(ALL_OPERATIONS),
+            "config_limits": {"max_bytes": MAX_CONFIG_BYTES, "max_depth": MAX_CONFIG_DEPTH},
+            "credentials_configured": {key: bool(os.environ.get(env)) for key, env in credential_env.items()},
+        }
+    )
+    return report
 
 
 def progress_event(event: str, values: dict[str, Any]) -> None:
@@ -202,16 +193,20 @@ def main(argv=None) -> int:
     parser.add_argument("--config")
     args = parser.parse_args(argv)
 
-    if args.command == "diagnostics":
-        emit("diagnostics", **backend_info())
-        return 0
-    if not args.config:
-        parser.error(f"--config is required for {args.command}")
-
+    config: dict[str, Any] = {}
+    secrets: dict[str, str] = {}
     try:
+        if args.command == "diagnostics":
+            if args.config:
+                config = load_config(args.config)
+            emit("diagnostics", **backend_info(config.get("workspace") or config.get("workspace_path")))
+            return 0
+        if not args.config:
+            parser.error(f"--config is required for {args.command}")
+
         emit("backend", **backend_info())
         config = load_config(args.config)
-        secrets = secrets_from_environment()
+        secrets = {**secrets_from_environment(), **sensitive_values(config)}
         if args.command in WORKSPACE_OPERATIONS:
             outputs = _run_workspace_operation(args.command, config)
         elif args.command == "search":
@@ -281,8 +276,21 @@ def main(argv=None) -> int:
             )
         emit("complete", outputs=outputs)
         return 0
+    except KeyboardInterrupt as exc:
+        record_error(
+            config.get("workspace") or config.get("workspace_path"),
+            exc,
+            secrets=secrets,
+        )
+        emit("error", **error_payload(exc, secrets=secrets))
+        return 130
     except Exception as exc:
-        emit("error", **error_payload(exc, secrets=secrets if "secrets" in locals() else None))
+        record_error(
+            config.get("workspace") or config.get("workspace_path"),
+            exc,
+            secrets=secrets,
+        )
+        emit("error", **error_payload(exc, secrets=secrets))
         return 1
 
 

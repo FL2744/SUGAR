@@ -14,8 +14,9 @@ decision remains; `[ ]` means work remains.
 3. `[x]` CI quality: Ruff, formatting, focused mypy, coverage, pip-audit, package installation,
    deterministic stress smoke, CodeQL, Gitleaks, Dependabot, and dependency review are configured.
    Branch protection and required-review settings remain repository-admin work.
-4. `[~]` Dependencies: supported Python bounds and declared ranges are explicit; platform-specific
-   lock/constraint files and a formally approved update policy remain to be selected.
+4. `[~]` Dependencies: supported Python bounds and declared ranges are explicit, universal newest and
+   Python 3.11 lowest-direct hash-pinned runtime locks are checked in, and CI exercises both tracks;
+   a formally approved update policy remains to be selected.
 5. `[~]` Collectors: capability/access matrix, malformed-payload guards, pagination/duplicate
    coverage, and bounded live separation are present; full per-platform adversarial and authorized
    live qualification still needs execution.
@@ -40,16 +41,18 @@ decision remains; `[ ]` means work remains.
 14. `[x]` Diagnostics: bridge diagnostics report protocol/runtime/capabilities and credential
     presence booleans without including credential values, config contents, or research data.
 15. `[~]` CLI: public entry points expose `--help`/`--version`, live tests are separately marked,
-    and major exports are atomic; cancellation, universal JSON mode, config precedence, and full
-    output-manifest semantics need a dedicated product pass.
+    major exports are atomic, cancellation has a stable exit/event contract, and JSON mode works
+    before or after subcommands; config precedence, full output-manifest semantics, and a product
+    usability pass remain.
 16. `[~]` Desktop UX: backend protocol and packaged smoke tests exist; interactive usability,
     accessibility, long-run cancellation, and signed-install testing require Windows/macOS hosts.
 17. `[~]` Exports: CSV/XLSX/JSONL plus PDF/DOCX/HTML paths and formula/HTML safety exist; exhaustive
     Unicode/RTL/emoji/long-field workbook and document rendering QA remains.
 18. `[x]` Performance harness: deterministic storage/export/map probes and a CI 5k smoke are
     checked in; 1k/10k/100k/1M targets still need measured budgets on representative hardware.
-19. `[ ]` Long-running reliability: six-hour/24-hour collector, memory, retry, checkpoint, and
-    network-reset soak runs have not been completed.
+19. `[~]` Long-running reliability: a bounded offline repetition/memory harness is checked in;
+    six-hour/24-hour collector, retry, checkpoint, and network-reset qualification runs have not
+    been completed.
 20. `[~]` Documentation: architecture, collector, workspace, access, stress, and release docs are
     present; final operator runbooks and deployment-specific data-retention guidance remain.
 21. `[~]` Canonical demo: the deterministic Kyrgyzstan case is in CI; a polished clean-room demo

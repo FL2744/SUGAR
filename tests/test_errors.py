@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from sugar_core.errors import classify_error, error_payload, redacted_path
+from sugar_core.errors import classify_error, error_payload, redacted_path, sensitive_values
 from sugar_core.utils import atomic_path
 
 
@@ -36,6 +36,18 @@ def test_error_classification_uses_http_status_and_access_name():
 def test_error_payload_truncates_untrusted_messages():
     payload = error_payload(RuntimeError("x" * 3000))
     assert len(payload["message"]) == 2000
+
+
+def test_sensitive_config_values_are_found_without_retaining_config_shape():
+    values = sensitive_values({"llm": {"api_key": "config-secret"}, "terms": ["token is a topic"]})
+    assert values == {"config.llm.api_key": "config-secret"}
+
+
+def test_keyboard_interrupt_has_a_stable_cancellation_contract():
+    payload = error_payload(KeyboardInterrupt())
+    assert payload["code"] == "cancelled"
+    assert payload["retryable"] is False
+    assert payload["message"] == "Operation cancelled by user."
 
 
 def test_redacted_path_hides_home_prefix():

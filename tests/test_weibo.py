@@ -109,6 +109,13 @@ def test_login_required_fails_closed():
         fetch_weibo_status("123", session=session)
 
 
+def test_fetch_status_rejects_payload_without_stable_identifier():
+    session = QueueSession([FakeResponse({"ok": 1, "data": {"text": "missing id"}})])
+
+    with pytest.raises(RuntimeError, match="stable status identifier"):
+        fetch_weibo_status("123", session=session)
+
+
 def test_search_preserves_multi_query_provenance_without_hydration():
     card = {"card_type": 9, "mblog": _status()}
     session = QueueSession(
@@ -142,6 +149,12 @@ def test_search_login_gate_is_not_retried_or_bypassed():
         )
 
     assert len(session.calls) == 1
+
+
+def test_search_ignores_malformed_cards_without_synthesizing_records():
+    session = QueueSession([FakeResponse({"ok": 1, "data": {"cards": {"not": "a list"}}})])
+
+    assert collect_weibo_public(search_terms=["test"], hydrate_details=False, session=session) == []
 
 
 def test_comments_link_to_status_and_direct_reply_parent():

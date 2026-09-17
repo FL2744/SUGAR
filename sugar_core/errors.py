@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 ERROR_CODES = {
+    "cancelled",
     "config_invalid",
     "input_missing",
     "input_invalid",
@@ -22,6 +23,26 @@ _SECRET_PATTERNS = (
     re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+"),
     re.compile(r"(?i)((?:token|cookie|password|api[_ -]?key|secret)\s*[:=]\s*)[^\s,;]+"),
 )
+_SENSITIVE_KEY_PATTERN = re.compile(r"(?i)(?:api[_ -]?key|token|cookie|password|secret|authorization)")
+
+
+def sensitive_values(value: Any, *, _prefix: str = "config") -> dict[str, str]:
+    """Collect credential-like config values solely for redaction; never serialize the config."""
+
+    found: dict[str, str] = {}
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            name = str(key)
+            path = f"{_prefix}.{name}"
+            if _SENSITIVE_KEY_PATTERN.search(name) and isinstance(child, (str, int, float)):
+                found[path] = str(child)
+            elif isinstance(child, (Mapping, list, tuple)):
+                found.update(sensitive_values(child, _prefix=path))
+    elif isinstance(value, (list, tuple)):
+        for index, child in enumerate(value):
+            if isinstance(child, (Mapping, list, tuple)):
+                found.update(sensitive_values(child, _prefix=f"{_prefix}[{index}]"))
+    return found
 
 
 def redact_text(value: Any, secrets: Mapping[str, str] | None = None) -> str:
@@ -48,6 +69,8 @@ def classify_error(error: BaseException) -> tuple[str, bool, str]:
     status = _status_code(error)
     name = type(error).__name__.casefold()
     text = str(error).casefold()
+    if isinstance(error, KeyboardInterrupt):
+        return "cancelled", False, "The operation was cancelled; keep any checkpoint and retry when ready."
     if status == 429 or "rate limit" in text or "rate-limited" in text:
         return "rate_limited", True, "Wait and retry later; preserve the checkpoint if this is a harvest."
     if status in {401, 403} or "access" in name or "credential" in text or "login" in text:
@@ -81,9 +104,12 @@ def json_error_types() -> tuple[type[BaseException], ...]:
 
 def error_payload(error: BaseException, *, secrets: Mapping[str, str] | None = None) -> dict[str, Any]:
     code, retryable, remediation = classify_error(error)
+    message = redact_text(error, secrets)
+    if code == "cancelled" and not message:
+        message = "Operation cancelled by user."
     return {
         "code": code,
-        "message": redact_text(error, secrets),
+        "message": message,
         "exception": type(error).__name__,
         "retryable": retryable,
         "remediation": remediation,

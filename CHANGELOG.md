@@ -6,6 +6,9 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Changed
 
+- added redacted runtime/workspace diagnostics, bounded persisted error history, universal JSON completion output, explicit cancellation contracts, and fresh-environment lock smoke checks;
+- checked in newest-compatible and Python 3.11 lowest-direct hash-pinned runtime locks, with CI compatibility and Ubuntu/macOS/Windows offline smoke jobs;
+- synchronized native package metadata with the canonical Python version and bridge protocol;
 - normal `sugar` and `sugar-state` workflows now auto-discover project workspaces, route outputs to canonical project directories when no explicit destination is supplied, and register generated artifacts automatically;
 - desktop State/intelligence operations can resolve the latest registered observations and assessment artifacts from a workspace instead of requiring every file path to be reselected;
 - added a typed `state-map` desktop operation;

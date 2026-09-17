@@ -56,6 +56,50 @@ jobs:
           path: coverage.xml
           if-no-files-found: error
 
+  dependency-compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.11"
+            track: minimum
+            lock-file: requirements/runtime-min.txt
+          - python-version: "3.13"
+            track: latest
+            lock-file: requirements/runtime.txt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - name: Install ${{ matrix.track }} runtime lock
+        run: python -m pip install --require-hashes -r "${{ matrix.lock-file }}"
+      - run: python -m pip install --no-deps -e . pytest
+      - name: Run compatibility suite
+        run: python -m pytest -m "not live"
+
+  platform-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install --require-hashes -r requirements/runtime.txt
+      - run: python -m pip install --no-deps -e . pytest
+      - name: Run cross-platform offline suite
+        shell: bash
+        run: python -m pytest --basetemp "${RUNNER_TEMP}/sugar-pytest" -m "not live"
+
   package:
     runs-on: ubuntu-latest
     steps:
@@ -71,7 +115,8 @@ jobs:
         run: |
           python -m venv "$RUNNER_TEMP/sugar-wheel-venv"
           "$RUNNER_TEMP/sugar-wheel-venv/bin/python" -m pip install --upgrade pip
-          "$RUNNER_TEMP/sugar-wheel-venv/bin/python" -m pip install dist/*.whl
+          "$RUNNER_TEMP/sugar-wheel-venv/bin/python" -m pip install --require-hashes -r requirements/runtime.txt
+          "$RUNNER_TEMP/sugar-wheel-venv/bin/python" -m pip install --no-deps dist/*.whl
           "$RUNNER_TEMP/sugar-wheel-venv/bin/python" -c "import sugar_core; print(sugar_core.__version__)"
           "$RUNNER_TEMP/sugar-wheel-venv/bin/sugar" --help
       - name: Verify source archive contains package metadata
