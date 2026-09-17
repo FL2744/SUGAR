@@ -8,13 +8,14 @@ import json
 import os
 import platform
 import sys
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
 from .collector_registry import collector_capabilities
 from .errors import error_payload, redacted_path
-from .utils import atomic_write_text
+from .utils import atomic_path, atomic_write_text
 from .workspace import SugarWorkspace
 
 DIAGNOSTICS_SCHEMA_VERSION = 1
@@ -184,4 +185,21 @@ def _package_version() -> str:
 def save_report(workspace: str | Path | None, output: str | Path) -> str:
     path = Path(output).expanduser().resolve()
     atomic_write_text(path, json.dumps(build_report(workspace), ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    return str(path)
+
+
+def save_bundle(workspace: str | Path | None, output: str | Path) -> str:
+    """Write an atomic, redacted diagnostic bundle for support handoff."""
+    path = Path(output).expanduser().resolve()
+    report = json.dumps(build_report(workspace), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    handling_note = (
+        "SUGAR diagnostic bundle\n\n"
+        "This archive contains runtime metadata, collector capabilities, workspace health summaries, "
+        "and sanitized recent errors. It intentionally excludes credentials, configuration contents, "
+        "and research data. Review the files before sharing them with a third party.\n"
+    )
+    with atomic_path(path, suffix=".zip") as temporary:
+        with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("diagnostics.json", report)
+            archive.writestr("README.txt", handling_note)
     return str(path)

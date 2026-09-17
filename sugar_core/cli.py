@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .diagnostics import build_report, save_report
+from .diagnostics import build_report, save_bundle, save_report
 from .errors import error_payload
 from .llm import ARC_BASE_URL, LLMConfig
 from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
@@ -312,6 +312,7 @@ def build_parser() -> argparse.ArgumentParser:
     diagnostics = sub.add_parser("diagnostics", help="Emit a redacted runtime and workspace health report.")
     diagnostics.add_argument("--workspace", help="Optional SUGAR project directory to health-check.")
     diagnostics.add_argument("--output", help="Optional path for a JSON diagnostic report.")
+    diagnostics.add_argument("--bundle", help="Optional path for an atomic redacted diagnostic ZIP bundle.")
 
     # Accept --json after the subcommand as well as before it. Suppressing the
     # subparser default preserves a global --json value.
@@ -378,6 +379,9 @@ def _run(argv=None) -> int:
         if args.output:
             output = save_report(args.workspace, args.output)
             report = {"report": output, **report}
+        if args.bundle:
+            bundle = save_bundle(args.workspace, args.bundle)
+            report = {"bundle": bundle, **report}
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
 

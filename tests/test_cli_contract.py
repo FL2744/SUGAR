@@ -1,4 +1,5 @@
 import json
+import zipfile
 
 import pytest
 
@@ -68,8 +69,10 @@ def test_primary_cli_supports_machine_readable_completion(monkeypatch, capsys, a
     assert json.loads(capsys.readouterr().out) == {"event": "complete", "outputs": ["map.html"]}
 
 
-def test_diagnostics_command_is_redacted_and_can_write_a_report(tmp_path, capsys):
+def test_diagnostics_command_is_redacted_and_can_write_a_report(tmp_path, capsys, monkeypatch):
     output = tmp_path / "diagnostics.json"
+    bundle = tmp_path / "diagnostics.zip"
+    monkeypatch.setenv("SUGAR_LLM_API_KEY", "diagnostic-secret")
     assert main(["diagnostics", "--output", str(output)]) == 0
     payload = json.loads(capsys.readouterr().out)
     report = json.loads(output.read_text(encoding="utf-8"))
@@ -85,3 +88,12 @@ def test_diagnostics_command_is_redacted_and_can_write_a_report(tmp_path, capsys
     }
     assert payload["redaction"]["credential_values"] == "never included"
     assert report["diagnostics_schema"] == 1
+
+    assert main(["diagnostics", "--bundle", str(bundle)]) == 0
+    bundle_payload = json.loads(capsys.readouterr().out)["bundle"]
+    assert bundle_payload == str(bundle.resolve())
+    with zipfile.ZipFile(bundle) as archive:
+        assert archive.testzip() is None
+        assert set(archive.namelist()) == {"README.txt", "diagnostics.json"}
+        contents = archive.read("diagnostics.json") + archive.read("README.txt")
+    assert b"diagnostic-secret" not in contents
