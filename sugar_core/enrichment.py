@@ -123,7 +123,9 @@ def geocode_location(
     key = stable_hash("geocode", location.casefold())
     cached = cache.get(key)
     if isinstance(cached, dict):
-        return cached
+        # Older cache entries may contain the query; expose it for compatibility
+        # without adding it to any newly persisted provider metadata.
+        return {**cached, "query": location}
 
     delay = max(0.0, float(min_delay_seconds))
     with _NOMINATIM_LOCK:
@@ -142,11 +144,10 @@ def geocode_location(
         importance = float(raw.get("importance")) if raw.get("importance") is not None else None
     except (TypeError, ValueError):
         importance = None
-    data = {
+    provider_data = {
         "latitude": float(result.latitude) if result else None,
         "longitude": float(result.longitude) if result else None,
         "display_name": str(result.address) if result else "",
-        "query": location,
         "category": str(raw.get("category") or raw.get("class") or ""),
         "type": str(raw.get("type") or ""),
         "addresstype": str(raw.get("addresstype") or ""),
@@ -155,8 +156,8 @@ def geocode_location(
         "osm_type": str(raw.get("osm_type") or ""),
         "osm_id": str(raw.get("osm_id") or ""),
     }
-    cache.set(key, data)
-    return data
+    cache.set(key, provider_data)
+    return {**provider_data, "query": location}
 
 
 def enrich_records(
