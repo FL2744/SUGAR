@@ -206,7 +206,7 @@
       "priority": "P0",
       "category": "reproducibility",
       "title": "Portable reproducible projects",
-      "status": "partially_met",
+      "status": "met",
       "requirement": "A project must remain inspectable, moveable, and rerunnable across machines without hidden local state being required for its evidentiary record.",
       "acceptance": [
         "Research requirement, query/search plan, evidence, assessments, limitations, and outputs are registered in the workspace.",

@@ -15,6 +15,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - executable plan collection and feedback commands that reuse the shared collector registry, join triaged observations back to query branches, track uncertainty separately from decisive relevance evidence, and apply deterministic continue/retire/review rules.
 - portable research handoff directories/ZIPs with canonical JSONL evidence, requirement/search-plan context, generated or analyst-supplied limitations, optional review/analytic outputs, schema/software metadata, per-artifact SHA-256 hashes, and standalone verification.
 - durable per-source collection coverage that distinguishes success, successful zero-result searches, partial collection, unavailable access, and collector failure; adaptive branches pause when every requested source is inaccessible, and coverage limitations propagate into State briefs and handoff packages.
+- portable root-level `sugar-artifacts.json` workspace catalogs now preserve registered evidence, requirements/search plans, review state, limitations, and outputs independently of the local SQLite index; moved projects can rebuild `.sugar/workspace.sqlite3` from the catalog while retaining missing/external artifact state, and handoff components are registered individually.
 
 ### Changed
 

@@ -56,6 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
     list_p.add_argument("--kind")
     list_p.add_argument("--json", action="store_true", dest="as_json")
 
+    catalog = sub.add_parser("catalog", help="Show the portable artifact catalog used to rebuild local workspace state.")
+    catalog.add_argument("workspace")
+    catalog.add_argument("--json", action="store_true", dest="as_json")
+
     path_p = sub.add_parser("path", help="Print a canonical workspace directory.")
     path_p.add_argument("workspace")
     path_p.add_argument("key")
@@ -127,6 +131,15 @@ def main(argv=None) -> int:
             portable = "external" if artifact.external else "project"
             label = f" — {artifact.label}" if artifact.label else ""
             print(f"{artifact.kind}\t{artifact.path}\t{state}\t{portable}{label}")
+        return 0
+
+    if args.command == "catalog":
+        workspace = SugarWorkspace.open(args.workspace)
+        payload = workspace.export_catalog()
+        if args.as_json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+        else:
+            print(workspace.catalog_path)
         return 0
 
     workspace = SugarWorkspace.open(args.workspace)

@@ -65,7 +65,7 @@ High-volume collection is checkpointed and resumable. It must not become a mecha
 
 ### Workspace layer
 
-`workspace.py` defines the persistent project contract. Research data remains in ordinary files while `sugar-project.json` defines portable project identity/layout and `.sugar/workspace.sqlite3` indexes project artifacts. See `project-workspaces.md`.
+`workspace.py` defines the persistent project contract. Research data remains in ordinary files while `sugar-project.json` defines portable project identity/layout, root-level `sugar-artifacts.json` preserves the portable evidentiary catalog with software/schema metadata, and `.sugar/workspace.sqlite3` serves as a rebuildable local index. If SQLite is absent after a project move, SUGAR restores it from the portable catalog. See `project-workspaces.md`.
 
 `handoff.py` is the application-independent outbound boundary. It packages canonical records/observations, the research requirement/search plan, coverage limitations, review state, provenance sidecars, and existing analytic products into a relative-path manifest with per-artifact SHA-256 verification. Sponsor-specific package builders remain responsible for their own analytic products; the handoff layer transports them without reimplementing their methodology.
 

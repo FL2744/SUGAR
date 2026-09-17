@@ -32,6 +32,7 @@ from .weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
 from .workspace_runtime import (
     choose_output_directory,
     optional_workspace,
+    register_handoff_bundle,
     register_workspace_outputs,
 )
 
@@ -666,10 +667,7 @@ def main(argv=None) -> int:
             create_zip=not args.no_zip,
         )
         if workspace is not None:
-            registered = [result.manifest]
-            if result.archive:
-                registered.append(result.archive)
-            register_workspace_outputs(workspace, registered, operation="handoff", kind="export")
+            register_handoff_bundle(workspace, result.manifest, archive_file=result.archive)
         print(json.dumps({
             "directory": result.directory,
             "manifest": result.manifest,
