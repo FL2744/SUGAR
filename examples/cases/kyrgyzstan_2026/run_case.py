@@ -36,6 +36,7 @@ from sugar_core.observation_storage import save_observations
 from sugar_core.state_conflict_package import save_state_package_with_conflicts
 from sugar_core.state_map import create_state_map
 from sugar_core.state_workflow import audit_state_records, save_state_assessments
+from sugar_core.utils import atomic_path, atomic_write_text
 from sugar_core.workspace import SugarWorkspace
 
 CASE_NAME = "Kyrgyzstan 2026 Public Diplomacy E2E"
@@ -48,10 +49,12 @@ def _write_us_sites(sites, output_csv: Path) -> list[Path]:
     rows = [asdict(site) for site in sites]
     frame = pd.DataFrame(rows)
     output_csv.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(output_csv, index=False, encoding="utf-8-sig")
+    with atomic_path(output_csv, suffix=".csv") as temporary:
+        frame.to_csv(temporary, index=False, encoding="utf-8-sig")
     output_xlsx = output_csv.with_suffix(".xlsx")
-    with pd.ExcelWriter(output_xlsx, engine="openpyxl") as writer:
-        frame.to_excel(writer, index=False, sheet_name="us_presence")
+    with atomic_path(output_xlsx, suffix=".xlsx") as temporary:
+        with pd.ExcelWriter(temporary, engine="openpyxl") as writer:
+            frame.to_excel(writer, index=False, sheet_name="us_presence")
     return [output_csv, output_xlsx]
 
 
@@ -61,7 +64,7 @@ def _read_json(path: Path) -> dict:
 
 def _write_json(path: Path, payload: dict | list) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     return path
 
 
@@ -471,7 +474,7 @@ def run_case(output_root: Path, *, clean: bool = False) -> dict:
         ]
     )
     note_path = reports_dir / "preliminary-analyst-note.md"
-    note_path.write_text("\n".join(preliminary), encoding="utf-8")
+    atomic_write_text(note_path, "\n".join(preliminary))
     report_outputs = [summary_json, findings_json, audit_json, record_audit_json, note_path]
     workspace.register_outputs(report_outputs, kind="report", operation="kyrgyzstan-e2e")
 
