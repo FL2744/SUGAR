@@ -73,7 +73,7 @@ $VersionInfo = @{
     built_at_utc = [DateTime]::UtcNow.ToString("o")
     python = (python --version 2>&1 | Out-String).Trim()
     architecture = $env:PROCESSOR_ARCHITECTURE
-    bridge_protocol = 2
+    bridge_protocol = 3
 } | ConvertTo-Json -Depth 3
 $VersionInfo | Set-Content -Encoding UTF8 (Join-Path $AppDir "build-info.json")
 

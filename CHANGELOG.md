@@ -4,6 +4,26 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ## Unreleased
 
+_No unreleased changes recorded after 1.2.6._
+
+## 1.2.6 — 2026-09-17
+
+### Fixed
+
+- OpenAI-compatible LLM calls now negotiate `max_tokens` / `max_completion_tokens` and unsupported deterministic-temperature parameters instead of repeatedly failing valid live searches;
+- frozen desktop geocoding uses the bundled verified CA store, and a geocoder outage no longer discards otherwise valid collection/enrichment results;
+- empty bounded searches are persisted as valid zero-record research outputs instead of surfacing as a generic desktop exit-code failure;
+- local HTML maps no longer default to the OpenStreetMap France HOT tile service, which could return a terms-of-use/403 tile error for local `file://` reports;
+- macOS Quick Search now exposes Bilibili and Weibo, uses the same bounded first-run defaults as Windows, and supports an authorized Weibo session from Keychain;
+- Bilibili Quick Search preserves valid search-result metadata when optional detail hydration is separately access-controlled;
+- Windows packaged build metadata now reports desktop bridge protocol 3 consistently with the bundled backend.
+
+### Release engineering
+
+- desktop CI now retains a validated macOS application archive as well as the Windows portable bundle;
+- tagged releases build and publish Windows x64, macOS Apple Silicon, macOS Intel, and Python distribution artifacts from the same reviewed commit;
+- package, backend, README, and desktop release versioning are re-synchronized at 1.2.6 after the interim classroom snapshot tags.
+
 ### Changed
 
 - Python 3.14 is now a first-class supported runtime across package metadata and the Ubuntu/macOS/Windows test matrix; Windows packaged-app validation runs on Python 3.14, while the macOS packaged backend intentionally remains on Python 3.12 to preserve the macOS 13 deployment floor;

@@ -49,3 +49,7 @@ archive/
 private-notes/
 outputs/
 scratch/
+work/
+stress-output-*/
+soak-output-*/
+.tmp-*.html

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,8 +34,23 @@ def _blocked_terms() -> list[str]:
 def test_public_tree_has_no_target_specific_mission_markers():
     findings: list[str] = []
     patterns = [re.compile(rf"(?i)(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])") for term in _blocked_terms()]
-    for path in ROOT.rglob("*"):
-        if not path.is_file() or ".git" in path.parts or path.suffix.lower() not in TEXT_EXTENSIONS:
+    try:
+        tracked = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+        )
+    except FileNotFoundError:
+        pytest.skip("git is required to identify the public repository tree")
+    if tracked.returncode != 0:
+        pytest.skip("could not enumerate Git-tracked public repository files")
+
+    for relative in tracked.stdout.decode("utf-8", errors="surrogateescape").split("\0"):
+        if not relative:
+            continue
+        path = ROOT / relative
+        if not path.is_file() or path.suffix.lower() not in TEXT_EXTENSIONS:
             continue
         try:
             text = path.read_text(encoding="utf-8")

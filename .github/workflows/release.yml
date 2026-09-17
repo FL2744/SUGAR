@@ -1,0 +1,183 @@
+name: Tagged cross-platform release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      - name: Verify tag and package version agree
+        shell: bash
+        run: |
+          version="$(python -c 'import sugar_core; print(sugar_core.__version__)')"
+          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${tag_version%%-*}"
+          test "$tag_version" = "$version" || {
+            echo "Release tag $GITHUB_REF_NAME does not match package version $version" >&2
+            exit 1
+          }
+      - name: Run deterministic suite
+        run: python -m pytest -q
+
+  windows-x64:
+    needs: validate-release
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev,windows]"
+      - name: Build portable Windows application
+        shell: pwsh
+        run: .\SUGAR-Windows\scripts\build.ps1
+      - name: Validate Windows bundle
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $line = & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe diagnostics
+          $payload = $line | ConvertFrom-Json
+          if ($payload.event -ne "diagnostics") { throw "Expected diagnostics event" }
+          if ($payload.bridge_protocol -ne 3) { throw "Unexpected desktop bridge protocol" }
+          & .\SUGAR-Windows\dist\SUGAR\SUGAR.exe --smoke-test
+          if (-not (Test-Path .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip)) { throw "Portable Windows ZIP missing" }
+          if ((Get-Item .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip).Length -lt 1000000) { throw "Portable Windows ZIP is unexpectedly small" }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-windows-x64
+          path: SUGAR-Windows/dist/SUGAR-Windows-x64.zip
+          if-no-files-found: error
+
+  macos-apple-silicon:
+    needs: validate-release
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build macOS Apple Silicon application
+        run: ./SUGAR-macOS/scripts/build_app.sh
+      - name: Validate and archive Apple Silicon app
+        run: |
+          test "$(uname -m)" = "arm64"
+          test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/MacOS/SUGAR
+          test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
+          SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge diagnostics
+          codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
+          ditto -c -k --sequesterRsrc --keepParent SUGAR-macOS/.build-native/SUGAR.app SUGAR-macOS-Apple-Silicon.zip
+          test -s SUGAR-macOS-Apple-Silicon.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-macos-apple-silicon
+          path: SUGAR-macOS-Apple-Silicon.zip
+          if-no-files-found: error
+
+  macos-intel:
+    needs: validate-release
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build macOS Intel application
+        run: ./SUGAR-macOS/scripts/build_app.sh
+      - name: Validate and archive Intel app
+        run: |
+          test "$(uname -m)" = "x86_64"
+          test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/MacOS/SUGAR
+          test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
+          SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge diagnostics
+          codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
+          ditto -c -k --sequesterRsrc --keepParent SUGAR-macOS/.build-native/SUGAR.app SUGAR-macOS-Intel.zip
+          test -s SUGAR-macOS-Intel.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-macos-intel
+          path: SUGAR-macOS-Intel.zip
+          if-no-files-found: error
+
+  python-distributions:
+    needs: validate-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: python -m pip install --upgrade pip build
+      - name: Build source and wheel distributions
+        run: python -m build --sdist --wheel
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-python
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  publish-release:
+    needs: [windows-x64, macos-apple-silicon, macos-intel, python-distributions]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify release payload and checksums
+        run: |
+          test -s release-assets/SUGAR-Windows-x64.zip
+          test -s release-assets/SUGAR-macOS-Apple-Silicon.zip
+          test -s release-assets/SUGAR-macOS-Intel.zip
+          ls release-assets/*.whl >/dev/null
+          ls release-assets/*.tar.gz >/dev/null
+          (cd release-assets && sha256sum * > SHA256SUMS)
+          (cd release-assets && sha256sum --check SHA256SUMS)
+      - name: Write release notes
+        run: |
+          cat > RELEASE_NOTES.md <<'EOF'
+          SUGAR cross-platform desktop release.
+
+          **Choose the file for your system:**
+          - Windows 10/11 x64: `SUGAR-Windows-x64.zip`
+          - Apple Silicon Mac: `SUGAR-macOS-Apple-Silicon.zip`
+          - Intel Mac: `SUGAR-macOS-Intel.zip`
+
+          macOS builds target macOS 13 or newer and are ad-hoc signed classroom/community builds rather than Apple-notarized distribution builds. The Python wheel/source archive are included for CLI and development use.
+
+          See `CHANGELOG.md` in the repository for release-specific fixes and methodology notes.
+          EOF
+      - name: Publish GitHub release
+        run: |
+          gh release create "$GITHUB_REF_NAME" release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "SUGAR $GITHUB_REF_NAME" \
+            --notes-file RELEASE_NOTES.md \
+            --latest
