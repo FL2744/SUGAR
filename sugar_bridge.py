@@ -146,6 +146,7 @@ def _run_llm_check(config: dict[str, Any], secrets: dict[str, str]) -> list[str]
         model=model,
         selected_model_available=(not model_ids or model in model_ids),
         available_model_count=len(model_ids),
+        available_models=model_ids,
     )
     return []
 

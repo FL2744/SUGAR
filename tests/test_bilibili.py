@@ -272,3 +272,32 @@ def test_public_comment_access_gate_is_not_bypassed():
 
     with pytest.raises(BilibiliAccessError, match="will not synthesize credentials"):
         collect_bilibili_comments("BV1COMMENTS", session=session)
+
+def test_detail_access_gate_keeps_valid_search_result() -> None:
+    search = {
+        "code": 0,
+        "data": {
+            "result": [{
+                "bvid": "BV1SAFEFALLBACK",
+                "aid": 123,
+                "title": "Public search result",
+                "description": "Search metadata remains usable",
+                "author": "Example",
+                "mid": 1,
+                "pubdate": 1789056000,
+            }]
+        },
+    }
+    blocked_detail = {"code": -412, "message": "request blocked", "data": None}
+    session = FakeSession([FakeResponse(search), FakeResponse(blocked_detail)])
+    records = collect_bilibili_public(
+        search_terms=["test"],
+        max_posts_per_query=1,
+        max_pages_per_query=1,
+        hydrate_details=True,
+        initialize_session=False,
+        session=session,
+    )
+    assert len(records) == 1
+    assert records[0].native_id == "BV1SAFEFALLBACK"
+    assert records[0].source_mode == "bilibili_public_search"

@@ -35,3 +35,7 @@ def test_mac_language_names_are_not_opsec_redacted():
 def test_bridge_exposes_llm_connection_check():
     import sugar_bridge
     assert "llm-check" in sugar_bridge.ALL_OPERATIONS
+
+def test_arc_check_emits_live_model_catalog() -> None:
+    bridge = Path("sugar_bridge.py").read_text(encoding="utf-8")
+    assert "available_models=model_ids" in bridge
