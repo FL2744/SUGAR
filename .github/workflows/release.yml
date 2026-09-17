@@ -16,11 +16,12 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: python -m pip install --upgrade pip build cyclonedx-bom
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install --require-hashes -r requirements/release.txt
       - name: Verify tag/version/changelog agreement
         run: python tools/check_release.py "${GITHUB_REF_NAME}"
       - name: Build tagged distributions
-        run: python -m build --sdist --wheel
+        run: python -m build --sdist --wheel --no-isolation
       - name: Generate checksums and SBOM
         run: |
           cyclonedx-py requirements requirements/runtime.txt --output-format json --output-file dist/SUGAR-sbom.json

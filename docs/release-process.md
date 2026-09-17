@@ -33,11 +33,14 @@ as such.
 
 `requirements/runtime.txt` is the universal, hash-pinned newest-compatible runtime lock used by the
 built-wheel CI smoke test. `requirements/runtime-min.txt` is a Python 3.11 lowest-direct compatibility
-track. Refresh both deliberately with the supported resolver and review the resulting dependency diff:
+track. `requirements/release.txt` pins the build and SBOM tooling used by the tagged release workflow.
+Refresh the application locks deliberately with the supported resolver and review the resulting
+dependency diff:
 
 ```powershell
 uv pip compile pyproject.toml --universal --generate-hashes --python-version 3.11 --output-file requirements/runtime.txt
 uv pip compile pyproject.toml --universal --generate-hashes --resolution lowest-direct --python-version 3.11 --output-file requirements/runtime-min.txt
+uv pip compile requirements/release.in --universal --generate-hashes --python-version 3.11 --output-file requirements/release.txt
 ```
 
 The newest lock covers the supported Python range through environment markers; the minimum lock is

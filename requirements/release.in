@@ -1,0 +1,4 @@
+build==1.6.1
+cyclonedx-bom==7.4.0
+setuptools>=75,<81
+wheel>=0.45,<1
