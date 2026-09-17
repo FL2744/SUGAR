@@ -14,6 +14,7 @@ import tempfile
 import time
 from contextlib import nullcontext
 from itertools import islice
+from math import isfinite
 from pathlib import Path
 from typing import Any, Callable
 
@@ -73,6 +74,35 @@ def _measure(name: str, operation: Callable[[], Any]) -> tuple[dict[str, Any], A
     value = operation()
     result = {"name": name, "seconds": round(time.perf_counter() - started, 6)}
     return result, value
+
+
+def _nonnegative_float(value: str) -> float:
+    parsed = float(value)
+    if not isfinite(parsed) or parsed < 0:
+        raise argparse.ArgumentTypeError("value must be a finite number at least 0")
+    return parsed
+
+
+def evaluate_budgets(
+    report: dict[str, Any],
+    *,
+    max_seconds: float | None = None,
+    max_disk_bytes: int | None = None,
+    max_peak_python_bytes: int | None = None,
+) -> list[str]:
+    """Return stable budget-failure descriptions for a completed stress report."""
+    failures: list[str] = []
+    if max_seconds is not None:
+        for result in report.get("results", []):
+            elapsed = float(result.get("seconds", 0.0))
+            if elapsed > max_seconds:
+                failures.append(f"{result.get('name', 'operation')} exceeded {max_seconds:g}s ({elapsed:.6f}s)")
+    if max_disk_bytes is not None and int(report.get("disk_bytes", 0)) > max_disk_bytes:
+        failures.append(f"disk usage exceeded {max_disk_bytes} bytes ({report.get('disk_bytes', 0)} bytes)")
+    peak = report.get("peak_python_bytes")
+    if max_peak_python_bytes is not None and peak is not None and int(peak) > max_peak_python_bytes:
+        failures.append(f"peak Python allocation exceeded {max_peak_python_bytes} bytes ({peak} bytes)")
+    return failures
 
 
 def run_probes(
@@ -176,6 +206,21 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_IN_MEMORY_SAMPLE,
         help="Maximum records materialized for frame/export/map probes; storage still processes all records.",
     )
+    parser.add_argument(
+        "--max-seconds",
+        type=_nonnegative_float,
+        help="Fail with exit code 2 when any measured operation exceeds this wall-time budget.",
+    )
+    parser.add_argument(
+        "--max-disk-mb",
+        type=_nonnegative_float,
+        help="Fail with exit code 2 when generated artifacts exceed this total disk budget.",
+    )
+    parser.add_argument(
+        "--max-peak-python-mb",
+        type=_nonnegative_float,
+        help="Fail with exit code 2 when a measured peak Python allocation exceeds this budget.",
+    )
     parser.add_argument("--skip-export", action="store_true", help="Skip CSV/XLSX export.")
     parser.add_argument("--skip-map", action="store_true", help="Skip interactive map export.")
     args = parser.parse_args(argv)
@@ -196,11 +241,20 @@ def main(argv: list[str] | None = None) -> int:
             map_output=not args.skip_map,
             in_memory_sample=args.in_memory_sample,
         )
+        limits = {
+            "max_seconds": args.max_seconds,
+            "max_disk_bytes": round(args.max_disk_mb * 1024 * 1024) if args.max_disk_mb is not None else None,
+            "max_peak_python_bytes": (
+                round(args.max_peak_python_mb * 1024 * 1024) if args.max_peak_python_mb is not None else None
+            ),
+        }
+        report["budget_limits"] = limits
+        report["budget_failures"] = evaluate_budgets(report, **limits)
         report_path = root / "stress-report.json"
         report["report"] = str(report_path.resolve())
         atomic_write_text(report_path, json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
-    return 0
+    return 2 if report["budget_failures"] else 0
 
 
 if __name__ == "__main__":

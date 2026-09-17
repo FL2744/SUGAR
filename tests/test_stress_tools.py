@@ -39,3 +39,20 @@ def test_stress_probe_streams_storage_and_bounds_in_memory_sample(tmp_path):
     read = next(item for item in report["results"] if item["name"] == "harvest_store_read")
     assert read["records"] == 25
     assert read["sample_records"] == 7
+
+
+def test_stress_budgets_report_wall_time_disk_and_peak_failures():
+    from tools.stress_test import evaluate_budgets
+
+    report = {
+        "results": [{"name": "storage", "seconds": 2.0}],
+        "disk_bytes": 20,
+        "peak_python_bytes": 30,
+    }
+    failures = evaluate_budgets(report, max_seconds=1, max_disk_bytes=10, max_peak_python_bytes=15)
+
+    assert failures == [
+        "storage exceeded 1s (2.000000s)",
+        "disk usage exceeded 10 bytes (20 bytes)",
+        "peak Python allocation exceeded 15 bytes (30 bytes)",
+    ]

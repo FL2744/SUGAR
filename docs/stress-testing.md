@@ -38,8 +38,11 @@ deliberately:
 ```
 
 The JSON report records elapsed time, row counts, column counts, artifact sizes, runtime, and the
-fact that the probe was offline. Compare reports from the same machine and Python environment;
-wall-clock values are not portable performance guarantees.
+fact that the probe was offline. Optional `--max-seconds`, `--max-disk-mb`, and
+`--max-peak-python-mb` limits are recorded in the report; exceeding a limit returns exit code `2`.
+The quality workflow applies conservative wall-time and disk limits to its 5,000-record smoke so a
+catastrophic regression becomes a required-check failure. Compare reports from the same machine and
+Python environment; wall-clock values are not portable performance guarantees.
 
 The latest local Windows/Python 3.13 storage-only qualification used 1,000,000 rows with a 10,000
 row in-memory sample. The normal run completed SQLite upsert in 46.518 s, sampled the restored

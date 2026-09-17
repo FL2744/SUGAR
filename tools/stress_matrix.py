@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Any, Iterable
 
 try:
-    from .stress_test import run_probes
+    from .stress_test import _nonnegative_float, evaluate_budgets, run_probes
 except ImportError:  # Direct ``python tools/stress_matrix.py`` execution.
-    from stress_test import run_probes
+    from stress_test import _nonnegative_float, evaluate_budgets, run_probes
 
 from sugar_core import __version__
 from sugar_core.utils import atomic_write_text
@@ -42,6 +42,9 @@ def run_matrix(
     map_output: bool = False,
     map_records: int = 500,
     in_memory_sample: int = 100_000,
+    max_seconds: float | None = None,
+    max_disk_bytes: int | None = None,
+    max_peak_python_bytes: int | None = None,
 ) -> dict[str, Any]:
     """Run one isolated stress probe per scale and persist each scale report."""
 
@@ -68,6 +71,12 @@ def run_matrix(
         finally:
             tracemalloc.stop()
         report["peak_python_bytes"] = peak_bytes
+        report["budget_failures"] = evaluate_budgets(
+            report,
+            max_seconds=max_seconds,
+            max_disk_bytes=max_disk_bytes,
+            max_peak_python_bytes=max_peak_python_bytes,
+        )
         report_path = scale_root / "stress-report.json"
         report["report"] = str(report_path.resolve())
         atomic_write_text(report_path, json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
@@ -93,6 +102,12 @@ def run_matrix(
         "export": export,
         "map_output": map_output,
         "map_records_requested": map_records,
+        "budget_limits": {
+            "max_seconds": max_seconds,
+            "max_disk_bytes": max_disk_bytes,
+            "max_peak_python_bytes": max_peak_python_bytes,
+        },
+        "budget_failures": [failure for run in runs for failure in run.get("budget_failures", [])],
         "runs": runs,
     }
 
@@ -113,6 +128,9 @@ def main(argv: list[str] | None = None) -> int:
         default=100_000,
         help="Maximum records materialized for frame/export/map probes; storage still processes all records.",
     )
+    parser.add_argument("--max-seconds", type=_nonnegative_float, help="Per-operation wall-time budget.")
+    parser.add_argument("--max-disk-mb", type=_nonnegative_float, help="Per-scale total disk budget.")
+    parser.add_argument("--max-peak-python-mb", type=_nonnegative_float, help="Per-scale peak Python budget.")
     parser.add_argument("--include-export", action="store_true", help="Include CSV/XLSX export at every scale.")
     parser.add_argument("--include-map", action="store_true", help="Include interactive map generation at every scale.")
     args = parser.parse_args(argv)
@@ -124,12 +142,17 @@ def main(argv: list[str] | None = None) -> int:
         map_output=args.include_map,
         map_records=args.map_records,
         in_memory_sample=args.in_memory_sample,
+        max_seconds=args.max_seconds,
+        max_disk_bytes=round(args.max_disk_mb * 1024 * 1024) if args.max_disk_mb is not None else None,
+        max_peak_python_bytes=(
+            round(args.max_peak_python_mb * 1024 * 1024) if args.max_peak_python_mb is not None else None
+        ),
     )
     report_path = args.output_dir.expanduser().resolve() / "stress-matrix-report.json"
     report["report"] = str(report_path)
     atomic_write_text(report_path, json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
-    return 0
+    return 2 if report["budget_failures"] else 0
 
 
 if __name__ == "__main__":

@@ -148,7 +148,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
       - name: Run deterministic 5k storage stress probe
-        run: python tools/stress_test.py --records 5000 --skip-map --output-dir "$RUNNER_TEMP/sugar-stress"
+        run: python tools/stress_test.py --records 5000 --skip-map --max-seconds 120 --max-disk-mb 100 --output-dir "$RUNNER_TEMP/sugar-stress"
       - name: Verify stress report
         run: |
           python - <<'PY'
@@ -158,5 +158,6 @@ jobs:
           report = json.loads((Path(os.environ["RUNNER_TEMP"]) / "sugar-stress/stress-report.json").read_text())
           assert report["network"] is False
           assert report["records"] == 5000
+          assert report["budget_failures"] == []
           assert {result["name"] for result in report["results"]} >= {"harvest_store_upsert", "harvest_store_read"}
           PY
