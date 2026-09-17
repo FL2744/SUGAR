@@ -7,7 +7,7 @@ from typing import Any, Callable, Iterable
 
 from .llm import LLMConfig, cached_chat, create_client, parse_json_object, translate_text
 from .models import PostRecord
-from .utils import JsonCache, normalize_whitespace, stable_hash
+from .utils import JsonCache, MemoryCache, normalize_whitespace, stable_hash
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 _NOMINATIM_LOCK = threading.Lock()
@@ -187,7 +187,9 @@ def enrich_records(
         raise ValueError("LLM configuration is required when translation or location inference is enabled.")
 
     cache_dir = Path(cache_dir)
-    llm_cache = JsonCache(cache_dir / "llm.json")
+    # LLM prompts/results may contain operator-supplied source text; do not
+    # persist either as cleartext cache data.
+    llm_cache = MemoryCache()
     geo_cache = JsonCache(cache_dir / "geocode.json")
     client = create_client(llm)
 

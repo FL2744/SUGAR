@@ -112,6 +112,19 @@ class JsonCache:
         atomic_write_text(self.path, json.dumps(self.data, ensure_ascii=False, indent=2))
 
 
+class MemoryCache:
+    """Process-local cache for derived or potentially sensitive research text."""
+
+    def __init__(self) -> None:
+        self.data: dict[str, Any] = {}
+
+    def get(self, key: str) -> Any:
+        return self.data.get(key)
+
+    def set(self, key: str, value: Any) -> None:
+        self.data[key] = value
+
+
 def utc_iso(dt: datetime | None = None) -> str:
     dt = dt or datetime.now(timezone.utc)
     if dt.tzinfo is None:

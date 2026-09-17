@@ -19,7 +19,7 @@ from .spatial import (
     save_spatial_summary,
 )
 from .storage import save_records
-from .utils import JsonCache, atomic_write_text, safe_artifact_stem
+from .utils import MemoryCache, atomic_write_text, safe_artifact_stem
 from .workspace_runtime import (
     choose_output_directory,
     register_workspace_outputs,
@@ -62,7 +62,9 @@ def _translated_terms(
         return terms
     _notify(progress, "translating_search_terms", terms=len(terms), languages=len(languages))
     client = create_client(llm)
-    cache = JsonCache(cache_dir / "llm.json")
+    # Search terms can be operator-provided and model responses are derived
+    # text; do not persist either as cleartext cache data.
+    cache = MemoryCache()
     result = list(terms)
     seen = {x.casefold() for x in result}
     total = len(terms) * len(languages)

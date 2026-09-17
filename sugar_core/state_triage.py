@@ -18,7 +18,7 @@ from .state_schema import (
     StateAssessment,
     SupportAssessment,
 )
-from .utils import JsonCache
+from .utils import JsonCache, MemoryCache
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 
@@ -318,7 +318,8 @@ def triage_observations(
     rows = list(observations)
     if limit is not None:
         rows = rows[: max(0, int(limit))]
-    cache = JsonCache(Path(cache_dir) / "state_triage.json") if cache_dir else None
+    # State-triage prompts include observation text; cache only in process memory.
+    cache = MemoryCache() if cache_dir else None
     client = create_client(llm)
     result: list[StateAssessment] = []
     total = len(rows)

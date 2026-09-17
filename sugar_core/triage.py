@@ -7,7 +7,7 @@ from typing import Any, Callable, Iterable
 from .llm import LLMConfig, cached_chat, create_client, parse_json_object
 from .models import PostRecord
 from .observations import ResearchObservation, observation_from_post
-from .utils import JsonCache, normalize_whitespace
+from .utils import JsonCache, MemoryCache, normalize_whitespace
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 
@@ -277,7 +277,8 @@ def triage_posts(
         return []
 
     client = create_client(llm)
-    cache = JsonCache(Path(cache_dir) / "triage.json")
+    # Triage prompts include source text and must not be persisted in cleartext.
+    cache = MemoryCache()
     observations: list[ResearchObservation] = []
     total = len(records)
     _notify(progress, "triaging", total=total)

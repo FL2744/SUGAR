@@ -45,7 +45,8 @@ The intent of each directory is stable:
 - `outputs/reports` — Word/PDF/briefing outputs.
 - `outputs/intelligence` — deterministic packets, synthesis, hypotheses, tradecraft audits, and longitudinal comparisons.
 - `outputs/exports` — other collaboration/export artifacts.
-- `.sugar/cache` — project-local caches that can be regenerated.
+- `.sugar/cache` — project-local public-provider caches that can be regenerated. LLM prompts and
+  responses are intentionally kept in process memory and are not written here.
 
 ## Command-line use
 

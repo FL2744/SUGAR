@@ -10,7 +10,7 @@ from .llm import LLMConfig, cached_chat, create_client, parse_json_object
 from .observations import ResearchObservation
 from .state_intelligence import build_intelligence_packet
 from .state_schema import StateAssessment
-from .utils import JsonCache, atomic_path, atomic_write_text, safe_artifact_stem, stable_hash, utc_iso
+from .utils import JsonCache, MemoryCache, atomic_path, atomic_write_text, safe_artifact_stem, stable_hash, utc_iso
 
 SYNTHESIS_VERSION = "1.0"
 LIKELIHOODS = {
@@ -513,7 +513,9 @@ def run_agentic_synthesis(
             )
 
     client = create_client(llm)
-    cache = JsonCache(Path(cache_dir) / "state_synthesis.json") if cache_dir else None
+    # Synthesis prompts include source-derived observations; never persist them
+    # as a cleartext JSON cache.
+    cache = MemoryCache() if cache_dir else None
     first_pass = _parallel_agents(client, llm, cache, tasks, max_workers=max_workers)
     draft = _call_integrator(client, llm, cache, base_packet, first_pass, stage="draft")
     critique = None

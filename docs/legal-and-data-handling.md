@@ -30,6 +30,10 @@ personal data, keep provenance and collection context with derived claims, and a
 credentials or unnecessary personal information. Workspace manifests and SQLite registries are not
 security boundaries or encryption at rest.
 
+LLM prompts and responses are cached only in process memory and are not written to the workspace.
+The on-disk cache is reserved for public geocoder provider metadata. Explicit output files remain
+research data and must be protected by the operator's approved storage controls.
+
 ## Product disclaimers
 
 SUGAR is a research tool. Density, engagement, reach, proximity, or platform presence do not by

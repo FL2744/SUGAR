@@ -19,7 +19,7 @@ from .state_synthesis import (
     render_synthesis_markdown,
 )
 from .state_tradecraft import build_tradecraft_audit
-from .utils import JsonCache, atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
+from .utils import JsonCache, MemoryCache, atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
 
 AGENTIC_ORCHESTRATION_VERSION = "1.4"
 
@@ -325,7 +325,8 @@ def run_iterative_agentic_synthesis(
             )
 
     client = create_client(llm)
-    cache = JsonCache(Path(cache_dir) / "state_agentic.json") if cache_dir else None
+    # Agent prompts include source-derived observations; keep cache process-local.
+    cache = MemoryCache() if cache_dir else None
     first_pass = _parallel_agents(client, llm, cache, tasks, max_workers=max_workers)
     analysis_pass = first_pass
     if depth == "deep":

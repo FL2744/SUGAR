@@ -30,7 +30,8 @@ decision remains; `[ ]` means work remains.
 9. `[~]` Spatial: coordinate/precision/proximity safeguards and map marker budgets exist; large
    browser-load and 100k/1M aggregation policy tests remain.
 10. `[x]` AI safety: source text is untrusted, prompt-injection behavior is tested, output is
-    evidence-grounded, AI provenance is retained, and credentials are runtime-only.
+   evidence-grounded, AI provenance is retained, and credentials are runtime-only.
+    LLM and triage caches are process-local; only public geocoder metadata may be persisted.
 11. `[~]` Workspaces: portable manifests, relative-path checks, missing-artifact health, migration
     guards, and atomic manifest writes exist; interruption/concurrency/OneDrive/migration recovery
     testing remains.
