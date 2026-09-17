@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from . import __version__
+from .collection_coverage import load_collection_coverage
 from .models import SCHEMA_VERSION as POST_SCHEMA_VERSION, PostRecord
 from .observation_storage import load_observations
 from .observations import OBSERVATION_SCHEMA_VERSION, ResearchObservation
@@ -86,6 +87,8 @@ def build_coverage_limitations(
     plan: SearchPlan,
     records: Iterable[PostRecord],
     observations: Iterable[ResearchObservation],
+    *,
+    collection_coverage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     records = list(records)
     observations = list(observations)
@@ -100,23 +103,62 @@ def build_coverage_limitations(
     )
     branch_statuses = Counter(branch.status for branch in plan.branches)
     published = sorted(record.published_at for record in records if record.published_at)
-    collected = sorted(record.collected_at for record in records if record.collected_at)
-    observed_platforms = {key.casefold() for key in platform_counts if key != "unknown"}
+    collected_times = sorted(record.collected_at for record in records if record.collected_at)
     preferred = [source for source in requirement.preferred_sources if source]
-    source_coverage = {
-        source: {
-            "status": "observed" if source.casefold() in observed_platforms else "no_records_or_not_run",
-            "records": platform_counts_folded.get(source.casefold(), 0),
-        }
-        for source in preferred
+    collected_sources = {
+        str(source).casefold(): dict(value)
+        for source, value in ((collection_coverage or {}).get("sources") or {}).items()
+        if isinstance(value, dict)
     }
+    coverage_names: list[str] = []
+    coverage_keys: set[str] = set()
+    for source in [*preferred, *platform_counts.keys(), *collected_sources.keys()]:
+        text = str(source or "").strip()
+        key = text.casefold()
+        if not text or key == "unknown" or key in coverage_keys:
+            continue
+        coverage_names.append(text)
+        coverage_keys.add(key)
+
+    source_coverage: dict[str, dict[str, Any]] = {}
+    for source in coverage_names:
+        key = source.casefold()
+        observed = platform_counts_folded.get(key, 0)
+        collected_source = collected_sources.get(key)
+        if collected_source:
+            status = str(collected_source.get("status") or "not_run")
+            entry = {
+                "status": status,
+                "records": int(collected_source.get("records") or observed),
+            }
+            for field_name in ("reason", "error_type", "access_mode", "attempted"):
+                if field_name in collected_source and collected_source[field_name] not in (None, ""):
+                    entry[field_name] = collected_source[field_name]
+        elif observed:
+            entry = {"status": "success", "records": observed}
+        else:
+            entry = {"status": "not_run", "records": 0}
+        source_coverage[source] = entry
     limitations = [
         "Counts describe the collected corpus, not the full population of online discussion.",
         "A source with no records is not evidence of zero real-world activity; it may be unrun, unavailable, filtered, or outside the query plan.",
         "Language, geography, and audience attributes are only as complete as the stored evidence and review state.",
     ]
-    if any(value["status"] != "observed" for value in source_coverage.values()):
-        limitations.append("One or more preferred sources have no observed records in this package; inspect collection events before drawing absence claims.")
+    unavailable = [source for source, value in source_coverage.items() if value["status"] == "unavailable"]
+    failed = [source for source, value in source_coverage.items() if value["status"] == "failed"]
+    partial = [source for source, value in source_coverage.items() if value["status"] == "partial"]
+    zero_result = [source for source, value in source_coverage.items() if value["status"] == "zero_result"]
+    not_run = [source for source, value in source_coverage.items() if value["status"] == "not_run"]
+    if unavailable:
+        limitations.append("Unavailable collection surfaces: " + ", ".join(sorted(unavailable)) + ".")
+    if failed:
+        limitations.append("Failed collection surfaces: " + ", ".join(sorted(failed)) + ".")
+    if partial:
+        limitations.append("Partially collected surfaces: " + ", ".join(sorted(partial)) + ".")
+    if zero_result:
+        limitations.append("Successful searches with zero retrieved records: " + ", ".join(sorted(zero_result)) + "; this is an observed zero-result search, not proof of zero real-world activity.")
+    if not_run:
+        limitations.append("Sources not demonstrated as run in the packaged collection evidence: " + ", ".join(sorted(not_run)) + ".")
     if language_counts.get("unknown", 0):
         limitations.append("Some records have no stored language identification.")
     if geography_counts.get("unresolved", 0):
@@ -132,11 +174,25 @@ def build_coverage_limitations(
             "language_counts": dict(sorted(language_counts.items())),
             "geography_counts": dict(sorted(geography_counts.items())),
             "published_time_range": [published[0], published[-1]] if published else [],
-            "collected_time_range": [collected[0], collected[-1]] if collected else [],
+            "collected_time_range": [collected_times[0], collected_times[-1]] if collected_times else [],
         },
         "search_plan": {
             "branches": len(plan.branches),
             "branch_status_counts": dict(sorted(branch_statuses.items())),
+            "branch_coverage": [
+                {
+                    "branch_id": branch.branch_id,
+                    "query": branch.query,
+                    "search_family": branch.search_family,
+                    "parent_concept": branch.parent_concept,
+                    "status": branch.status,
+                    "retrieved": branch.metrics.retrieved,
+                    "relevance_assessed": branch.metrics.relevance_assessed,
+                    "relevant": branch.metrics.relevant,
+                    "uncertain": branch.metrics.uncertain,
+                }
+                for branch in plan.branches
+            ],
             "collection_runs": sum(event.get("type") == "collection_run" for event in plan.events),
             "branch_evaluations": sum(event.get("type") == "branch_evaluation" for event in plan.events),
         },
@@ -239,7 +295,18 @@ def build_handoff_bundle(
             supplied = json.loads(Path(limitations_file).expanduser().resolve().read_text(encoding="utf-8"))
             _write_json(limitations_path, supplied)
         else:
-            _write_json(limitations_path, build_coverage_limitations(requirement, plan, records, observations))
+            records_source = Path(records_file).expanduser().resolve()
+            collection_coverage = load_collection_coverage(records_source)
+            _write_json(
+                limitations_path,
+                build_coverage_limitations(
+                    requirement,
+                    plan,
+                    records,
+                    observations,
+                    collection_coverage=collection_coverage,
+                ),
+            )
         artifacts.append(_artifact(staging_root, limitations_path, "coverage_and_limitations"))
 
         auto_provenance: list[Path] = []
@@ -247,6 +314,7 @@ def build_handoff_bundle(
         for candidate in (
             Path(f"{records_source.with_suffix('')}.import.json"),
             records_source.with_suffix(".metadata.json"),
+            records_source.with_suffix(".coverage.json"),
         ):
             if candidate.is_file():
                 auto_provenance.append(candidate)

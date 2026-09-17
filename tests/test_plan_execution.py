@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from sugar_core.models import PostRecord
@@ -51,6 +52,7 @@ def test_execute_search_plan_reuses_collection_service_and_records_observable_me
     )
 
     assert observed_config["terms"] == [first_query, second_query]
+    assert observed_config["continue_on_source_error"] is True
     assert observed_config["translate_posts"] is False
     assert observed_config["infer_locations"] is False
     assert result.records == 2
@@ -60,3 +62,34 @@ def test_execute_search_plan_reuses_collection_service_and_records_observable_me
     assert all(branch.status == "completed" for branch in plan.branches)
     assert plan.events[-1]["type"] == "collection_run"
     assert plan.events[-1]["relevance_assessed"] is False
+
+
+def test_execute_search_plan_pauses_branches_when_all_sources_are_unavailable(monkeypatch, tmp_path: Path):
+    requirement = ResearchRequirement(
+        question="Example requirement",
+        known_entities=["Example entity"],
+        preferred_sources=["bilibili"],
+    )
+    plan = build_initial_search_plan(requirement)
+    csv_path = tmp_path / "collected.csv"
+    csv_path.write_text("placeholder", encoding="utf-8")
+    coverage_path = tmp_path / "collected.coverage.json"
+    coverage_path.write_text(json.dumps({
+        "overall_status": "unavailable",
+        "sources": {
+            "bilibili": {"status": "unavailable", "records": 0, "reason": "access control"},
+        },
+    }), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "sugar_core.plan_execution.run_search",
+        lambda config, secrets, progress=None: [str(csv_path), str(coverage_path)],
+    )
+    monkeypatch.setattr("sugar_core.plan_execution.load_post_records", lambda path: [])
+
+    result = execute_search_plan(requirement, plan, config={"sources": ["bilibili"]})
+
+    assert result.coverage_status == "unavailable"
+    assert result.records == 0
+    assert all(branch.status == "paused" for branch in plan.branches)
+    assert all("not treated as evidence of absence" in event["reason"] for event in plan.events if event["type"] == "status_change" and event["to"] == "paused")

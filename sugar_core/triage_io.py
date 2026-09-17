@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 from typing import Any, Mapping
 
+from .collection_coverage import load_collection_coverage
 from .llm import LLMConfig
 from .models import SCHEMA_VERSION, PostRecord
 from .observation_storage import save_observations
@@ -146,15 +147,19 @@ def triage_dataset(
         progress=progress,
         continue_on_error=continue_on_error,
     )
+    metadata = {
+        "source_file": source_file.name,
+        "triage_provider": llm.provider,
+        "triage_model": llm.model,
+        "triage_project_context": project_context,
+    }
+    source_coverage = load_collection_coverage(source_file)
+    if source_coverage is not None:
+        metadata["source_coverage"] = source_coverage
     save_observations(
         observations,
         output_file,
-        metadata={
-            "source_file": source_file.name,
-            "triage_provider": llm.provider,
-            "triage_model": llm.model,
-            "triage_project_context": project_context,
-        },
+        metadata=metadata,
     )
     csv_path = output_file if output_file.suffix.lower() == ".csv" else output_file.with_suffix(".csv")
     return [

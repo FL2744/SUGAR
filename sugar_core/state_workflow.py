@@ -10,6 +10,7 @@ from typing import Any, Iterable
 
 import pandas as pd
 
+from .collection_coverage import load_collection_coverage
 from .observation_storage import load_observations
 from .observations import ResearchObservation
 from .state_schema import (
@@ -714,6 +715,7 @@ def render_state_bluf(
     assessments: Iterable[StateAssessment],
     *,
     title: str = "State-Supported Public Engagement Research Update",
+    collection_coverage: dict[str, Any] | None = None,
 ) -> str:
     observations = list(observations)
     assessments = list(assessments)
@@ -804,6 +806,37 @@ def render_state_bluf(
     no_location = sum(1 for obs in observations if not obs.country and obs.latitude is None and not obs.locations)
     no_evidence = sum(1 for obs in observations if not obs.evidence and not obs.source_record_keys)
     lines.append(f"Location remains unresolved for {no_location} observations; {no_evidence} observations lack an auditable evidence identity.")
+    coverage_sources = (collection_coverage or {}).get("sources") or {}
+    if isinstance(coverage_sources, dict) and coverage_sources:
+        coverage_parts: list[str] = []
+        limited_sources: list[str] = []
+        zero_sources: list[str] = []
+        for source, raw in sorted(coverage_sources.items()):
+            if not isinstance(raw, dict):
+                continue
+            status = _clean(raw.get("status", "unknown")) or "unknown"
+            records = int(raw.get("records") or 0)
+            part = f"{source}={status} ({records} records)"
+            reason = _clean(raw.get("reason", ""))
+            if reason and status in {"unavailable", "failed", "partial"}:
+                part += f": {reason[:180]}"
+            coverage_parts.append(part)
+            if status in {"unavailable", "failed", "partial"}:
+                limited_sources.append(str(source))
+            elif status == "zero_result":
+                zero_sources.append(str(source))
+        if coverage_parts:
+            lines.append("Collection surface status: " + "; ".join(coverage_parts) + ".")
+        if limited_sources:
+            lines.append(
+                "Material collection limitation: one or more requested surfaces were unavailable, failed, or partial. "
+                "Their missing records must not be interpreted as evidence of no activity."
+            )
+        if zero_sources:
+            lines.append(
+                "Zero-result searches were successfully executed for " + ", ".join(sorted(zero_sources))
+                + "; zero retrieved records remain a bounded search result, not proof of real-world absence."
+            )
 
     lines.extend(
         [
@@ -1043,6 +1076,7 @@ def save_state_package(
     us_sites: Iterable[USPresenceSite] = (),
     previous_assessments: Iterable[StateAssessment] | None = None,
     title: str = "State-Supported Public Engagement Research Update",
+    collection_coverage: dict[str, Any] | None = None,
 ) -> list[str]:
     observations = list(observations)
     assessments = list(assessments)
@@ -1074,7 +1108,10 @@ def save_state_package(
     audit = audit_state_records(observations, assessments)
     audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     pd.DataFrame(build_review_queue(observations, assessments)).to_csv(queue_path, index=False, encoding="utf-8-sig")
-    brief_path.write_text(render_state_bluf(observations, assessments, title=title), encoding="utf-8")
+    brief_path.write_text(
+        render_state_bluf(observations, assessments, title=title, collection_coverage=collection_coverage),
+        encoding="utf-8",
+    )
     geojson_path.write_text(json.dumps(state_geojson(observations, assessments, sites), ensure_ascii=False, indent=2), encoding="utf-8")
 
     snapshot: dict[str, Any] = {
@@ -1089,6 +1126,8 @@ def save_state_package(
     }
     if previous_assessments is not None:
         snapshot["change_detection"] = compare_state_snapshots(previous_assessments, assessments)
+    if collection_coverage is not None:
+        snapshot["collection_coverage"] = collection_coverage
     snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
     return [
@@ -1111,6 +1150,7 @@ def package_from_files(
     assessments = load_state_assessments(assessments_file) if assessments_file else blank_state_assessments(observations)
     sites = load_us_presence_sites(us_sites_file) if us_sites_file else []
     previous = load_state_assessments(previous_assessments_file) if previous_assessments_file else None
+    collection_coverage = load_collection_coverage(observations_file)
     return save_state_package(
         observations,
         assessments,
@@ -1119,4 +1159,5 @@ def package_from_files(
         us_sites=sites,
         previous_assessments=previous,
         title=title,
+        collection_coverage=collection_coverage,
     )

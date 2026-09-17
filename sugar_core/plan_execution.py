@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ class PlanExecutionResult:
     outputs: list[str]
     executed_branch_ids: list[str]
     records: int
+    coverage_status: str = "unrecorded"
 
 
 def execute_search_plan(
@@ -53,6 +55,7 @@ def execute_search_plan(
         "terms": [branch.query for branch in branches],
         "since": config.get("since") or requirement.timeframe.start or None,
         "until": config.get("until") or requirement.timeframe.end or None,
+        "continue_on_source_error": bool(config.get("continue_on_source_error", True)),
         "translate_posts": bool(config.get("translate_posts", False)),
         "infer_locations": bool(config.get("infer_locations", False)),
     })
@@ -61,6 +64,20 @@ def execute_search_plan(
     if csv_path is None:
         raise RuntimeError("Plan collection completed without a canonical CSV output.")
     records = load_post_records(csv_path)
+    coverage_path = next((Path(path) for path in outputs if path.endswith(".coverage.json")), None)
+    coverage_status = "legacy_unrecorded"
+    source_coverage: dict[str, Any] = {}
+    if coverage_path is not None and coverage_path.is_file():
+        raw_coverage = json.loads(coverage_path.read_text(encoding="utf-8"))
+        if isinstance(raw_coverage, dict):
+            coverage_status = str(raw_coverage.get("overall_status") or "unrecorded")
+            raw_sources = raw_coverage.get("sources") or {}
+            if isinstance(raw_sources, dict):
+                source_coverage = raw_sources
+    usable_source = not source_coverage or any(
+        isinstance(value, dict) and str(value.get("status") or "") in {"success", "zero_result", "partial"}
+        for value in source_coverage.values()
+    )
 
     for branch in branches:
         matching = [
@@ -71,12 +88,20 @@ def execute_search_plan(
         branch.metrics.retrieved = len(matching)
         branch.metrics.unique = len({record.record_key for record in matching})
         branch.metrics.distinct_sources = len({record.platform for record in matching if record.platform})
-        plan.set_status(
-            branch.branch_id,
-            "completed",
-            actor="controller",
-            reason=f"Collection completed with {branch.metrics.unique} unique matching records.",
-        )
+        if usable_source:
+            plan.set_status(
+                branch.branch_id,
+                "completed",
+                actor="controller",
+                reason=f"Collection completed with {branch.metrics.unique} unique matching records.",
+            )
+        else:
+            plan.set_status(
+                branch.branch_id,
+                "paused",
+                actor="controller",
+                reason="All requested collection surfaces failed or were unavailable; zero retrieved records are not treated as evidence of absence.",
+            )
 
     plan.add_event(
         "collection_run",
@@ -84,10 +109,13 @@ def execute_search_plan(
         branch_ids=[branch.branch_id for branch in branches],
         record_count=len(records),
         outputs=[Path(path).name for path in outputs],
+        coverage_status=coverage_status,
+        source_coverage=source_coverage,
         relevance_assessed=False,
     )
     return PlanExecutionResult(
         outputs=outputs,
         executed_branch_ids=[branch.branch_id for branch in branches],
         records=len(records),
+        coverage_status=coverage_status,
     )

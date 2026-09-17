@@ -12,6 +12,10 @@ It is a research methodology, not a Department of State certification, security 
 
 Keeping these layers separate prevents a later analytic judgment from silently rewriting raw source evidence.
 
+## Collection coverage and absence claims
+
+State package briefs preserve bounded-search coverage metadata when it is available. Successful zero-result searches are distinguished from unavailable, failed, partial, and not-run sources. Unavailable or failed surfaces are reported as collection limitations and must not be interpreted as evidence that no activity occurred. See [`collection-coverage.md`](collection-coverage.md).
+
 ## Core concepts
 
 Do not collapse these into one score:

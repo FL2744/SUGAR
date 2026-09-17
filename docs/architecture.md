@@ -47,6 +47,8 @@ The desktop applications are clients of the shared core. They may provide platfo
 
 High-volume collection is checkpointed and resumable. It must not become a mechanism for defeating platform controls; rate limits and access gates remain authoritative.
 
+`collection_coverage.py` keeps collection availability separate from corpus content. Bounded searches persist per-source success, zero-result, partial, unavailable, and failed states before downstream analysis. Adaptive plan execution pauses branches when all requested surfaces are inaccessible instead of interpreting an empty corpus as absence.
+
 ### Evidence layer
 
 `observations.py` and `observation_storage.py` convert normalized source material into `ResearchObservation`, which is the source-grounded evidence layer. This layer should remain independent from sponsor-specific analytical judgments.

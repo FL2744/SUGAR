@@ -161,7 +161,7 @@
       "priority": "P0",
       "category": "evidence",
       "title": "Coverage and limitation reporting",
-      "status": "partially_met",
+      "status": "met",
       "requirement": "SUGAR must distinguish observed absence from collection failure and explicitly report important coverage gaps.",
       "acceptance": [
         "Reports distinguish unavailable, failed, partial, and successful collection surfaces.",

@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
+from .collection_coverage import SourceCoverage, classify_collection_error, coverage_payload
 from .collector_registry import CollectorRequest, COLLECTORS, collect_registered_source
 from .enrichment import enrich_records
 from .harvest import run_harvest as _run_harvest
@@ -19,7 +20,7 @@ from .spatial import (
     save_spatial_summary,
 )
 from .storage import save_records
-from .utils import JsonCache
+from .utils import JsonCache, utc_iso
 from .workspace_runtime import (
     choose_output_directory,
     register_workspace_outputs,
@@ -32,6 +33,13 @@ ProgressCallback = Callable[[str, dict[str, Any]], None]
 def _notify(progress: ProgressCallback | None, event: str, **values: Any) -> None:
     if progress is not None:
         progress(event, values)
+
+
+def _write_coverage(path: Path, entries: list[SourceCoverage], *, terms: list[str], since: str | None, until: str | None) -> dict[str, Any]:
+    payload = coverage_payload(entries, terms=terms, since=since, until=until)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    return payload
 
 
 def _llm_config(config: dict[str, Any], secrets: dict[str, str]) -> LLMConfig:
@@ -96,6 +104,7 @@ def run_search(
     out_dir = choose_output_directory(config.get("output_directory"), workspace, "raw", fallback=Path.cwd())
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     csv_path = out_dir / f"social_search_posts_{stamp}.csv"
+    coverage_path = csv_path.with_suffix(".coverage.json")
     cache_dir = workspace.path_for("cache") if workspace is not None else out_dir / ".sugar-cache"
     llm = _llm_config(config, secrets)
 
@@ -115,11 +124,60 @@ def run_search(
     )
 
     records = []
+    coverage: list[SourceCoverage] = []
+    continue_on_source_error = bool(config.get("continue_on_source_error", False))
+    access_modes = _harvest_access_modes(config, secrets)
     for source in sources:
+        started_at = utc_iso()
         _notify(progress, "collecting", source=source)
-        rows = collect_registered_source(source, request)
+        try:
+            rows = collect_registered_source(source, request)
+        except Exception as exc:
+            partial_rows = list(getattr(exc, "partial_records", ()) or ())
+            if partial_rows:
+                records.extend(partial_rows)
+            status = classify_collection_error(exc, records=len(partial_rows))
+            entry = SourceCoverage(
+                source=source,
+                status=status,
+                records=len(partial_rows),
+                access_mode=access_modes.get(source, "collector_default"),
+                reason=str(exc),
+                error_type=type(exc).__name__,
+                started_at=started_at,
+                completed_at=utc_iso(),
+            )
+            coverage.append(entry)
+            _write_coverage(
+                coverage_path,
+                coverage,
+                terms=terms,
+                since=config.get("since") or None,
+                until=config.get("until") or None,
+            )
+            _notify(progress, "collection_failed", source=source, status=status, error_type=entry.error_type)
+            if not continue_on_source_error:
+                raise
+            continue
         records.extend(rows)
+        status = "success" if rows else "zero_result"
+        coverage.append(SourceCoverage(
+            source=source,
+            status=status,
+            records=len(rows),
+            access_mode=access_modes.get(source, "collector_default"),
+            started_at=started_at,
+            completed_at=utc_iso(),
+        ))
         _notify(progress, "collected", source=source, records=len(rows))
+
+    coverage_payload_data = _write_coverage(
+        coverage_path,
+        coverage,
+        terms=terms,
+        since=config.get("since") or None,
+        until=config.get("until") or None,
+    )
 
     _notify(progress, "enriching", records=len(records), translate=translate, infer_locations=infer)
     records = enrich_records(
@@ -138,13 +196,19 @@ def run_search(
         "since": config.get("since") or None,
         "until": config.get("until") or None,
         "collector_capabilities": {source: COLLECTORS[source].capabilities.as_dict() for source in sources},
+        "source_coverage": coverage_payload_data,
         "llm_provider": llm.provider if (translate or infer) else None,
         "llm_model": llm.model if (translate or infer) else None,
         "workspace_project_id": workspace.manifest.project_id if workspace is not None else None,
     }
     _notify(progress, "saving", records=len(records), output=str(csv_path))
     save_records(records, csv_path, metadata=metadata)
-    outputs = [str(csv_path), str(csv_path.with_suffix(".xlsx")), str(csv_path.with_suffix(".metadata.json"))]
+    outputs = [
+        str(csv_path),
+        str(csv_path.with_suffix(".xlsx")),
+        str(csv_path.with_suffix(".metadata.json")),
+        str(coverage_path),
+    ]
     register_workspace_outputs(workspace, outputs, operation="search", kind="raw_collection")
     _notify(progress, "saved", outputs=outputs)
     return outputs
