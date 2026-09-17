@@ -29,8 +29,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Exercise the supported Python range cheaply on Linux, then verify the
-          # two native operating systems on their packaged-runtime Python lines.
+          # Exercise the older supported Python range cheaply on Linux, then
+          # exercise 3.14 on both native desktop operating systems. The packaged
+          # macOS app is validated separately on Python 3.12 because its frozen
+          # runtime must retain the macOS 13 deployment floor.
           - os: ubuntu-latest
             python-version: "3.11"
           - os: ubuntu-latest
@@ -38,7 +40,7 @@ jobs:
           - os: ubuntu-latest
             python-version: "3.13"
           - os: macos-latest
-            python-version: "3.12"
+            python-version: "3.14"
           - os: windows-latest
             python-version: "3.14"
     runs-on: ${{ matrix.os }}
