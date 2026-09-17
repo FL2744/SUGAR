@@ -70,6 +70,8 @@ jobs:
               text = re.sub(r'(?i)(?<![A-Za-z0-9])confucius(?![A-Za-z0-9])', 'cultural-exchange', text)
               text = re.sub(r'(?i)(?<![A-Za-z0-9])luban(?![A-Za-z0-9])', 'technical-training', text)
               text = re.sub(r'(?i)(?<![A-Za-z0-9])kyrgyzstan(?![A-Za-z0-9])', 'example-host-country', text)
+              if path.parts and path.parts[0] == 'tests':
+                  text = text.replace('example host country', 'example_host_country')
               if text != original:
                   path.write_text(text, encoding='utf-8')
           PY
