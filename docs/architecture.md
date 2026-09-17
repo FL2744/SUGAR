@@ -96,7 +96,7 @@ Domain modules should not import desktop UI code. The core must remain usable on
 
 ## Tests and compatibility
 
-CI runs the Python suite on Ubuntu, macOS, and Windows across Python 3.11–3.13, then independently builds and smoke-tests packaged macOS and Windows applications. Live-network checks are bounded and kept separate from deterministic fixtures.
+CI runs the Python suite on Ubuntu, macOS, and Windows across Python 3.11–3.14, then independently builds and smoke-tests packaged macOS and Windows applications. Windows packaging uses Python 3.14. The macOS packaged backend remains pinned to Python 3.12 because the application promises a macOS 13 deployment floor and precompiled dependency deployment targets matter independently of SUGAR's supported Python API/runtime range. Live-network checks are bounded and kept separate from deterministic fixtures.
 
 Changes to schemas, collector semantics, workspace layout, bridge protocol, evidence rules, or exported columns require regression tests and documentation in the same pull request.
 

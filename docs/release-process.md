@@ -112,4 +112,15 @@ Historical docs should be clearly labeled historical rather than left looking cu
 
 Only tag a commit after required CI/review is complete. A release tag should point to the exact reviewed commit used for packaged artifacts.
 
-The repository currently does not declare a software license. Selecting and adding a license is a maintainer/project-owner decision and should be resolved before treating SUGAR as a generally redistributable open-source release.
+SUGAR is licensed under the Apache License, Version 2.0. Before publication, verify that:
+
+- root `LICENSE`, `NOTICE`, and `THIRD_PARTY_NOTICES.md` are present and current;
+- package metadata declares `Apache-2.0` and includes the legal files in the built distribution;
+- packaged Windows/macOS artifacts include SUGAR's legal files;
+- packaged Windows/macOS artifacts include a generated `licenses/manifest.json` and discovered dependency license files from the exact installed build environment;
+- third-party dependency licenses are reviewed against the exact versions resolved for that release;
+- Windows community builds using PySide6/Qt preserve the applicable Qt/PySide6 LGPL/GPL license materials and replacement/relinking rights required by those licenses;
+- every distributed Windows binary release retains or can supply the corresponding source for the exact LGPL-covered Qt/PySide6 version it ships, consistent with `third_party_licenses/qt/README.md`;
+- GPL-only Qt modules are not introduced into an Apache-2.0 SUGAR binary without a separate compatibility review;
+- any third-party datasets, platform content, logos, fonts, or other non-SUGAR assets are distributed only when their terms permit it;
+- the release does not describe SUGAR as an official Virginia Tech or U.S. Department of State product merely because it was developed in the Diplomacy Lab context.

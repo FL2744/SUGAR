@@ -6,6 +6,8 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Changed
 
+- Python 3.14 is now a first-class supported runtime across package metadata and the Ubuntu/macOS/Windows test matrix; Windows packaged-app validation runs on Python 3.14, while the macOS packaged backend intentionally remains on Python 3.12 to preserve the macOS 13 deployment floor;
+- SUGAR is now explicitly released under Apache License 2.0 with a copyright notice identifying Alejandro Grenier and contributors, repository/package legal metadata, third-party notices, contribution licensing terms, and legal files embedded into packaged desktop and Python distributions;
 - workspace runtime discovery now falls back to the most recent existing artifact when a newer registration is missing, and Weibo investigation/qualification outputs are classified consistently as raw-collection artifacts;
 - Weibo qualification now treats fewer than two fresh replicates as an unassessed reproducibility advisory rather than silently skipping the gate, and real-post investigation artifacts are included in the returned/registered qualification outputs;
 - hardened the evidence-constrained synthesis and LLM boundary with deterministic tests for retry/cache behavior, prompt-injection boundaries, JSON parsing, agent failure handling, integrator evidence allowlisting, orchestration, and persisted synthesis artifacts;

@@ -48,6 +48,13 @@ if (-not (Test-Path $BridgeExe)) { throw "PyInstaller did not create sugar-bridg
 Copy-Item -Force $BridgeExe (Join-Path $AppDir "sugar-bridge.exe")
 
 Copy-Item -Force (Join-Path $WindowsDir "README.md") (Join-Path $AppDir "README-Windows.md")
+Copy-Item -Force (Join-Path $RepoRoot "LICENSE") (Join-Path $AppDir "LICENSE")
+Copy-Item -Force (Join-Path $RepoRoot "NOTICE") (Join-Path $AppDir "NOTICE")
+Copy-Item -Force (Join-Path $RepoRoot "THIRD_PARTY_NOTICES.md") (Join-Path $AppDir "THIRD_PARTY_NOTICES.md")
+Copy-Item -Recurse -Force (Join-Path $RepoRoot "third_party_licenses") (Join-Path $AppDir "third_party_licenses")
+python (Join-Path $RepoRoot "tools\collect_third_party_licenses.py") `
+    --output (Join-Path $AppDir "licenses") `
+    --extra windows
 
 $VersionInfo = @{
     built_at_utc = [DateTime]::UtcNow.ToString("o")

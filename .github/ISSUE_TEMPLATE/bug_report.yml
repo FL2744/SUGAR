@@ -35,7 +35,7 @@ body:
     attributes:
       label: Environment
       description: Operating system, OS version, Python version, and architecture/chip when relevant.
-      placeholder: "Windows 11 24H2, Python 3.12, x86_64"
+      placeholder: "Windows 11 24H2, Python 3.14, x86_64"
     validations:
       required: true
   - type: textarea

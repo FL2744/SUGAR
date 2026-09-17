@@ -1,5 +1,7 @@
 # SUGAR for macOS
 
+SUGAR itself is licensed under Apache License 2.0. The packaged application includes `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, and a generated third-party license inventory in its Resources directory.
+
 This directory contains the native SwiftUI distribution of SUGAR. The app stores
 credentials in macOS Keychain and bundles the Python search, map, and analysis
 engine so recipients do not install Python or use Terminal.
@@ -44,7 +46,8 @@ are stored in macOS Keychain.
 
 ## macOS compatibility
 
-The deployment baseline is macOS 13 Ventura. Build the backend with Python 3.12
+The deployment baseline is macOS 13 Ventura. SUGAR itself supports Python
+3.11–3.14, but the packaged macOS application deliberately embeds Python 3.12
 whose runtime and libraries also support macOS 13 (for example, a compatible
 python.org distribution). Select it explicitly if necessary:
 

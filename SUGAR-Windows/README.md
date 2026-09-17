@@ -2,6 +2,8 @@
 
 SUGAR for Windows is the desktop research workbench for the SUGAR OSINT and State Department Diplomacy Lab workflow. It is a thin PySide6 application over the same `sugar_core` research logic and JSON bridge used by the rest of the project; collection, evidence rules, State assessment logic, and analytic intelligence are not reimplemented in the GUI.
 
+SUGAR itself is licensed under Apache License 2.0. The portable bundle includes `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, and a generated `licenses/` inventory for the exact third-party packages included in the build. Qt/PySide6 remains subject to its own applicable licensing terms.
+
 ## What the application exposes
 
 The Windows workbench has seven primary areas:
