@@ -12,6 +12,7 @@ import json
 import platform
 import tempfile
 import time
+import tracemalloc
 from contextlib import nullcontext
 from itertools import islice
 from math import isfinite
@@ -233,14 +234,24 @@ def main(argv: list[str] | None = None) -> int:
 
     with context as location:
         root = Path(location)
-        report = run_probes(
-            args.records,
-            args.map_records,
-            root,
-            export=not args.skip_export,
-            map_output=not args.skip_map,
-            in_memory_sample=args.in_memory_sample,
-        )
+        trace_memory = args.max_peak_python_mb is not None
+        if trace_memory:
+            tracemalloc.start()
+        try:
+            report = run_probes(
+                args.records,
+                args.map_records,
+                root,
+                export=not args.skip_export,
+                map_output=not args.skip_map,
+                in_memory_sample=args.in_memory_sample,
+            )
+            if trace_memory:
+                _current_bytes, peak_bytes = tracemalloc.get_traced_memory()
+                report["peak_python_bytes"] = peak_bytes
+        finally:
+            if trace_memory:
+                tracemalloc.stop()
         limits = {
             "max_seconds": args.max_seconds,
             "max_disk_bytes": round(args.max_disk_mb * 1024 * 1024) if args.max_disk_mb is not None else None,
