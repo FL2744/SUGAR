@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 WORKSPACE_SCHEMA_VERSION = "1.0"
 DATABASE_SCHEMA_VERSION = 1
@@ -383,10 +384,15 @@ class SugarWorkspace:
                 connection.execute(f"PRAGMA user_version = {DATABASE_SCHEMA_VERSION}")
             connection.commit()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
-        return connection
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
 
 def open_workspace(path: str | Path = ".", *, discover: bool = False) -> SugarWorkspace:

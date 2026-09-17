@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 
+from . import __version__
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
 from .state_aggregate import save_state_rollups
@@ -50,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="sugar-state",
         description="Evidence-first State Department research workflow for SUGAR observations.",
     )
+    parser.add_argument("--version", action="version", version=f"sugar-state {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     template = sub.add_parser("template-us-sites", help="Write a CSV template for American Spaces/EducationUSA/U.S. presence data.")

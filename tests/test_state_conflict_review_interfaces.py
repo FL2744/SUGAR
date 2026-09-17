@@ -79,6 +79,7 @@ def _adjudicate(workbook_path: Path, conflict: SourceConflict) -> None:
     sheet.cell(2, columns["decision_preference_rationale"], "Analyst reviewed both contradictory public sources.")
     sheet.cell(2, columns["decision_reviewer"], "Analyst One")
     workbook.save(workbook_path)
+    workbook.close()
 
 
 def test_review_cli_parser_accepts_source_conflict_inputs_and_outputs():

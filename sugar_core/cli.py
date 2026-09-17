@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 
+from . import __version__
 from .llm import ARC_BASE_URL, LLMConfig
 from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from .triage import DEFAULT_PROJECT_CONTEXT
@@ -110,6 +111,7 @@ def _workspace_arg(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sugar", description="SUGAR stable research pipeline")
+    parser.add_argument("--version", action="version", version=f"sugar {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     search = sub.add_parser("search", help="Run a normal bounded collection + optional enrichment.")

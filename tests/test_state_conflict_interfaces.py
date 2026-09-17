@@ -128,8 +128,8 @@ def test_desktop_state_package_carries_explicit_source_conflicts(tmp_path):
     assert snapshot["source_conflicts"]["conflicts"] == 1
 
     review_path = out_dir / "desktop_case.review.xlsx"
-    review_workbook = pd.ExcelFile(review_path)
-    assert "source_conflicts" in review_workbook.sheet_names
+    with pd.ExcelFile(review_path) as review_workbook:
+        assert "source_conflicts" in review_workbook.sheet_names
     assessments = pd.read_excel(review_path, sheet_name="assessments")
     assert int(assessments.loc[0, "source_conflict_count"]) == 1
     assert int(assessments.loc[0, "source_conflicts_requiring_human_review"]) == 1

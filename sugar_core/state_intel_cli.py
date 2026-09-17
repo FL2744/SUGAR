@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 
+from . import __version__
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
 from .state_agentic import save_iterative_agentic_synthesis
@@ -18,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="sugar-intel",
         description="Macro/micro analytic intelligence and evidence-constrained agentic synthesis for SUGAR State research.",
     )
+    parser.add_argument("--version", action="version", version=f"sugar-intel {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     packet = sub.add_parser("packet", help="Build deterministic macro/micro intelligence features without an LLM.")

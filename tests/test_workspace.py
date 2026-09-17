@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,16 @@ def test_workspace_create_builds_manifest_layout_and_database(tmp_path: Path) ->
     assert payload["layout"] == DEFAULT_LAYOUT
     for key in DEFAULT_LAYOUT:
         assert workspace.path_for(key).is_dir()
+
+
+def test_workspace_database_context_closes_connection(tmp_path: Path) -> None:
+    workspace = SugarWorkspace.create(tmp_path / "project", name="Project")
+
+    with workspace._connect() as connection:
+        assert connection.execute("SELECT 1").fetchone()[0] == 1
+
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        connection.execute("SELECT 1")
 
 
 def test_workspace_open_and_discover_from_nested_directory(tmp_path: Path) -> None:

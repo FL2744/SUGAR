@@ -101,7 +101,7 @@ jobs:
           print(json.dumps(summary, indent=2, sort_keys=True))
           PY
       - name: Publish reproducible Kyrgyzstan workspace
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SUGAR-Kyrgyzstan-2026-E2E
           path: ${{ runner.temp }}/sugar-kyrgyzstan-2026
@@ -212,7 +212,7 @@ jobs:
           if (-not (Test-Path .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip)) { throw "Portable Windows ZIP missing" }
           if ((Get-Item .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip).Length -lt 1000000) { throw "Portable Windows ZIP is unexpectedly small" }
       - name: Publish validated portable Windows bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SUGAR-Windows-x64
           path: SUGAR-Windows/dist/SUGAR-Windows-x64.zip

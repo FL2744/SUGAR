@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import json
 from pathlib import Path
 
 from sugar_core.observations import ObservationLocation, ResearchObservation
@@ -350,7 +349,8 @@ def test_us_presence_loader_reads_scope_and_precision_fields(tmp_path: Path):
 
 def test_us_presence_template_exposes_scope_and_precision_columns(tmp_path: Path):
     path = Path(write_us_presence_template(tmp_path / "us-presence.csv"))
-    rows = list(csv.DictReader(path.open("r", encoding="utf-8-sig", newline="")))
+    with path.open("r", encoding="utf-8-sig", newline="") as stream:
+        rows = list(csv.DictReader(stream))
     assert len(rows) == 2
     assert {row["delivery_mode"] for row in rows} == {"physical", "virtual"}
     assert {row["coverage_scope"] for row in rows} == {"site", "country"}

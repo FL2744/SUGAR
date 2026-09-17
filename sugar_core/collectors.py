@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections import OrderedDict
 from typing import Iterable
 from urllib.parse import urlparse

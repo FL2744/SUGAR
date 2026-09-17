@@ -13,7 +13,6 @@ import pandas as pd
 from .observation_storage import load_observations
 from .observations import ResearchObservation
 from .state_schema import (
-    PROGRAM_DOMAINS,
     StateAssessment,
     USOverlapAssessment,
     USPresenceSite,

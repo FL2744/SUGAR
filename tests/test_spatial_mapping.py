@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pandas as pd
 
 from sugar_core.mapping import _normalize_rows, _popup_html, create_map
 from sugar_core.observation_storage import observations_to_frame
