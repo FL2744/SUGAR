@@ -32,5 +32,5 @@ redacted structured errors. Run the offline gate from the repository root:
 .\.venv\Scripts\python.exe -m pytest --basetemp .\work\pytest-basetemp -m "not live"
 ```
 
-Live collection is intentionally excluded. The CI live smoke requires an explicit manual
-`workflow_dispatch` and a source-specific opt-in variable.
+Live collection is intentionally excluded. The isolated live-smoke workflow requires an explicit
+manual `workflow_dispatch` confirmation and a source-specific opt-in variable.

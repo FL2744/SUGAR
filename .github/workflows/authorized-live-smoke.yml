@@ -1,0 +1,35 @@
+name: Authorized live-source smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_authorized:
+        description: "Confirm that this bounded live run is authorized for the selected source"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: authorized-live-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  weibo-live-smoke:
+    if: inputs.confirm_authorized == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      - name: Bounded live public Weibo seed, qualification, and bulk-seed smoke
+        env:
+          SUGAR_LIVE_WEIBO: "1"
+        run: python -m pytest -q -s -m live tests/test_weibo_live.py tests/test_weibo_qualification_live.py tests/test_weibo_seed_harvest_live.py

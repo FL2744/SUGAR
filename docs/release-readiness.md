@@ -88,6 +88,6 @@ py -3.13 -m venv .venv
 ```
 
 Live collection is never part of this offline gate. It requires explicit authorization, a bounded
-test plan, and the source-specific environment variable documented by the live test. The CI live
-smoke is available only through an explicit manual `workflow_dispatch`; pull requests and ordinary
-pushes run the offline suite only.
+test plan, and the source-specific environment variable documented by the live test. The live
+smoke is isolated in `.github/workflows/authorized-live-smoke.yml` and requires a manual
+`workflow_dispatch` confirmation; pull requests and ordinary pushes run the offline suite only.
