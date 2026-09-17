@@ -42,6 +42,17 @@ jobs:
         run: |
           python -m py_compile SUGAR-Windows/app.py sugar_bridge.py sugar_core/bilibili.py
           python -m pytest
+          @'
+          from pathlib import Path
+          for name in (
+              "tests/test_windows_classroom_ux.py",
+              "tests/test_bilibili.py",
+              "tests/test_arc_classroom_ux.py",
+              "docs/classroom-quick-start.md",
+          ):
+              path = Path(name)
+              path.write_text(path.read_text(encoding="utf-8").rstrip() + "\n", encoding="utf-8")
+          '@ | python -
           git diff --check
 
       - name: Commit only durable hotfix files
