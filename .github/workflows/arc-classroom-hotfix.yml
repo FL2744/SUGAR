@@ -24,7 +24,9 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Apply hotfix migration
-        run: python tools/apply_arc_classroom_hotfix.py
+        run: |
+          python tools/fix_arc_hotfix_migration.py
+          python tools/apply_arc_classroom_hotfix.py
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
