@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from PySide6.QtCore import QSettings, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QAction, QDesktopServices, QIcon
+from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QPalette
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -48,6 +48,10 @@ SOURCES = ("bilibili", "weibo", "x", "bluesky", "mastodon")
 
 STYLE = """
 QMainWindow { background: #f5f7fb; color: #172033; }
+QDialog, QMessageBox { background: #ffffff; color: #172033; }
+QMessageBox QLabel, QMessageBox QCheckBox { background: transparent; color: #172033; }
+QToolTip { background: #ffffff; color: #172033; border: 1px solid #cfd8e6; padding: 4px; }
+QAbstractItemView { background: #ffffff; color: #172033; selection-background-color: #e8f0fb; selection-color: #172033; }
 QWidget { color: #172033; font-family: "Segoe UI"; font-size: 10pt; }
 QStackedWidget, QScrollArea { background: #f5f7fb; border: none; }
 QScrollArea > QWidget > QWidget { background: #f5f7fb; }
@@ -92,6 +96,44 @@ QLabel[tone="bad"] { background: #fde9e7; color: #9e302b; border-radius: 10px; p
 QLabel[tone="neutral"] { background: #e9eef6; color: #43536e; border-radius: 10px; padding: 4px 10px; font-weight: 600; }
 QDockWidget { font-weight: 600; }
 """
+
+
+def apply_light_palette(app: QApplication) -> None:
+    """Use a deterministic light palette instead of inheriting the OS dark palette."""
+    palette = QPalette()
+    normal = QPalette.ColorGroup.Normal
+    disabled = QPalette.ColorGroup.Disabled
+    role = QPalette.ColorRole
+
+    colors = {
+        role.Window: "#f5f7fb",
+        role.WindowText: "#172033",
+        role.Base: "#ffffff",
+        role.AlternateBase: "#f5f7fb",
+        role.ToolTipBase: "#ffffff",
+        role.ToolTipText: "#172033",
+        role.Text: "#172033",
+        role.Button: "#ffffff",
+        role.ButtonText: "#172033",
+        role.BrightText: "#ffffff",
+        role.Link: "#235fa8",
+        role.Highlight: "#2d6cc0",
+        role.HighlightedText: "#ffffff",
+        role.PlaceholderText: "#6e7b91",
+    }
+    for color_role, value in colors.items():
+        palette.setColor(normal, color_role, QColor(value))
+        palette.setColor(QPalette.ColorGroup.Active, color_role, QColor(value))
+        palette.setColor(QPalette.ColorGroup.Inactive, color_role, QColor(value))
+
+    palette.setColor(disabled, role.Window, QColor("#f5f7fb"))
+    palette.setColor(disabled, role.Base, QColor("#f2f4f8"))
+    palette.setColor(disabled, role.Button, QColor("#eef1f5"))
+    palette.setColor(disabled, role.WindowText, QColor("#7a8496"))
+    palette.setColor(disabled, role.Text, QColor("#7a8496"))
+    palette.setColor(disabled, role.ButtonText, QColor("#7a8496"))
+    palette.setColor(disabled, role.PlaceholderText, QColor("#9098a7"))
+    app.setPalette(palette)
 
 
 def resource_path(name: str) -> Path:
@@ -1045,7 +1087,7 @@ class MainWindow(QMainWindow):
 
 
 def main()->int:
-    app=QApplication(sys.argv); app.setApplicationName(APP_NAME); app.setOrganizationName(APP_ORGANIZATION); app.setStyle("Fusion"); app.setStyleSheet(STYLE)
+    app=QApplication(sys.argv); app.setApplicationName(APP_NAME); app.setOrganizationName(APP_ORGANIZATION); app.setStyle("Fusion"); apply_light_palette(app); app.setStyleSheet(STYLE)
     smoke="--smoke-test" in sys.argv
     window=MainWindow(smoke=smoke)
     if smoke:
