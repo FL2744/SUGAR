@@ -72,14 +72,38 @@ def _object_payload(value: object, operation: str) -> dict:
     return value
 
 
+def _record_key(record: PostRecord) -> tuple[str, str]:
+    return (record.platform, record.native_id or record.canonical_url)
+
+
 def _merge(records: OrderedDict[tuple[str, str], PostRecord], record: PostRecord) -> None:
-    key = (record.platform, record.native_id or record.canonical_url)
+    key = _record_key(record)
     if key in records:
         merge_record(records[key], record)
     else:
         for query in record.query_matches or [record.query]:
             record.add_query_match(query)
         records[key] = record
+
+
+def _merge_for_query(
+    records: OrderedDict[tuple[str, str], PostRecord],
+    record: PostRecord,
+    seen_query_keys: set[tuple[str, str]],
+) -> bool:
+    """Merge a record and report whether it is new for the current query.
+
+    A record can legitimately appear on more than one page or match more than one query. It
+    must still be merged so query matches and later fields are retained, but duplicates must not
+    consume the caller's per-query collection budget.
+    """
+
+    key = _record_key(record)
+    _merge(records, record)
+    if key in seen_query_keys:
+        return False
+    seen_query_keys.add(key)
+    return True
 
 
 def _platform_key(platform: str, native_id: str) -> str:
@@ -140,6 +164,8 @@ def collect_x(
             query += " -is:retweet"
         next_token = None
         collected = 0
+        seen_query_keys: set[tuple[str, str]] = set()
+        seen_tokens: set[str] = set()
         for _ in range(max_pages_per_query):
             remaining = max_posts_per_query - collected
             if remaining <= 0:
@@ -156,6 +182,11 @@ def collect_x(
             if until:
                 params["end_time"] = until + "T23:59:59Z" if len(until) == 10 else until
             if next_token:
+                if not isinstance(next_token, str):
+                    raise RuntimeError("X search returned an unexpected next_token shape.")
+                if next_token in seen_tokens:
+                    break
+                seen_tokens.add(next_token)
                 params["next_token"] = next_token
             response = session.get(
                 endpoint, params=params, headers={"Authorization": f"Bearer {bearer_token}"}, timeout=60
@@ -210,36 +241,38 @@ def collect_x(
                     if handle
                     else f"https://x.com/i/web/status/{native_id}"
                 )
-                _merge(
-                    records,
-                    PostRecord(
-                        platform="x",
-                        native_id=native_id,
-                        canonical_url=url,
-                        query=original_query,
-                        query_matches=[original_query],
-                        parent_record_key=_platform_key("x", replied_to),
-                        thread_root_key=_platform_key("x", conversation_id),
-                        conversation_id=conversation_id,
-                        source_mode=f"x_api_{search_mode}",
-                        access_mode="authenticated",
-                        source_host="api.x.com",
-                        source_url=response.url,
-                        published_at=str(item.get("created_at", "")),
-                        author_handle=handle,
-                        author_name=str(author.get("name", "")),
-                        author_location=str(author.get("location", "")),
-                        platform_language=str(item.get("lang", "")),
-                        original_text=str(item.get("text", "")),
-                        raw_stats=raw,
-                        engagement=normalize_engagement("x", raw),
-                        is_repost=repost,
-                    ),
+                record = PostRecord(
+                    platform="x",
+                    native_id=native_id,
+                    canonical_url=url,
+                    query=original_query,
+                    query_matches=[original_query],
+                    parent_record_key=_platform_key("x", replied_to),
+                    thread_root_key=_platform_key("x", conversation_id),
+                    conversation_id=conversation_id,
+                    source_mode=f"x_api_{search_mode}",
+                    access_mode="authenticated",
+                    source_host="api.x.com",
+                    source_url=response.url,
+                    published_at=str(item.get("created_at", "")),
+                    author_handle=handle,
+                    author_name=str(author.get("name", "")),
+                    author_location=str(author.get("location", "")),
+                    platform_language=str(item.get("lang", "")),
+                    original_text=str(item.get("text", "")),
+                    raw_stats=raw,
+                    engagement=normalize_engagement("x", raw),
+                    is_repost=repost,
                 )
-                collected += 1
+                if not in_inclusive_date_range(record.published_at, since, until):
+                    continue
+                if _merge_for_query(records, record, seen_query_keys):
+                    collected += 1
                 if collected >= max_posts_per_query:
                     break
             next_token = meta.get("next_token")
+            if next_token is not None and not isinstance(next_token, str):
+                raise RuntimeError("X search returned an unexpected next_token shape.")
             if not next_token or collected >= max_posts_per_query:
                 break
     return list(records.values())
@@ -271,6 +304,8 @@ def collect_bluesky(
             continue
         cursor = None
         collected = 0
+        seen_query_keys: set[tuple[str, str]] = set()
+        seen_cursors: set[str] = set()
         for _ in range(max_pages_per_query):
             remaining = max_posts_per_query - collected
             if remaining <= 0:
@@ -281,6 +316,11 @@ def collect_bluesky(
             if until:
                 params["until"] = until
             if cursor:
+                if not isinstance(cursor, str):
+                    raise RuntimeError("Bluesky search returned an unexpected cursor shape.")
+                if cursor in seen_cursors:
+                    break
+                seen_cursors.add(cursor)
                 params["cursor"] = cursor
             response = session.get(endpoint, params=params, headers=headers, timeout=60)
             response.raise_for_status()
@@ -318,33 +358,35 @@ def collect_bluesky(
                 }
                 langs = record.get("langs") or []
                 url = f"https://bsky.app/profile/{handle}/post/{native_id}" if handle and native_id else ""
-                _merge(
-                    records,
-                    PostRecord(
-                        platform="bluesky",
-                        native_id=native_id or uri,
-                        canonical_url=url,
-                        query=query,
-                        query_matches=[query],
-                        parent_record_key=_platform_key("bluesky", parent_id),
-                        thread_root_key=_platform_key("bluesky", root_id),
-                        conversation_id=root_uri,
-                        access_mode="session" if access_jwt else "anonymous",
-                        source_host=urlparse(endpoint).netloc,
-                        source_url=response.url,
-                        published_at=str(record.get("createdAt", item.get("indexedAt", ""))),
-                        author_handle=handle,
-                        author_name=str(author.get("displayName", "")),
-                        platform_language=",".join(map(str, langs)),
-                        original_text=str(record.get("text", "")),
-                        raw_stats=raw,
-                        engagement=normalize_engagement("bluesky", raw),
-                    ),
+                post = PostRecord(
+                    platform="bluesky",
+                    native_id=native_id or uri,
+                    canonical_url=url,
+                    query=query,
+                    query_matches=[query],
+                    parent_record_key=_platform_key("bluesky", parent_id),
+                    thread_root_key=_platform_key("bluesky", root_id),
+                    conversation_id=root_uri,
+                    access_mode="session" if access_jwt else "anonymous",
+                    source_host=urlparse(endpoint).netloc,
+                    source_url=response.url,
+                    published_at=str(record.get("createdAt", item.get("indexedAt", ""))),
+                    author_handle=handle,
+                    author_name=str(author.get("displayName", "")),
+                    platform_language=",".join(map(str, langs)),
+                    original_text=str(record.get("text", "")),
+                    raw_stats=raw,
+                    engagement=normalize_engagement("bluesky", raw),
                 )
-                collected += 1
+                if not in_inclusive_date_range(post.published_at, since, until):
+                    continue
+                if _merge_for_query(records, post, seen_query_keys):
+                    collected += 1
                 if collected >= max_posts_per_query:
                     break
             cursor = payload.get("cursor")
+            if cursor is not None and not isinstance(cursor, str):
+                raise RuntimeError("Bluesky search returned an unexpected cursor shape.")
             if not cursor or collected >= max_posts_per_query:
                 break
     return list(records.values())
@@ -379,6 +421,7 @@ def collect_mastodon(
             continue
         offset = 0
         collected = 0
+        seen_query_keys: set[tuple[str, str]] = set()
         for _ in range(max_pages_per_query):
             limit = max(1, min(40, max_posts_per_query - collected))
             if limit <= 0:
@@ -418,31 +461,29 @@ def collect_mastodon(
                 # Mastodon search results expose the direct parent but not necessarily the thread root.
                 root_key = "" if parent_id else _platform_key("mastodon", native_id)
                 conversation_id = "" if parent_id else native_id
-                _merge(
-                    records,
-                    PostRecord(
-                        platform="mastodon",
-                        native_id=native_id,
-                        canonical_url=str(content.get("url", status.get("url", ""))),
-                        query=query,
-                        query_matches=[query],
-                        parent_record_key=_platform_key("mastodon", parent_id),
-                        thread_root_key=root_key,
-                        conversation_id=conversation_id,
-                        access_mode="session" if access_token else "anonymous",
-                        source_host=urlparse(instance_url).netloc,
-                        source_url=response.url,
-                        published_at=published,
-                        author_handle=str(account.get("acct", account.get("username", ""))),
-                        author_name=_plain_html(str(account.get("display_name", ""))),
-                        platform_language=str(content.get("language", "") or ""),
-                        original_text=_plain_html(str(content.get("content", ""))),
-                        raw_stats=raw,
-                        engagement=normalize_engagement("mastodon", raw),
-                        is_repost=repost,
-                    ),
+                post = PostRecord(
+                    platform="mastodon",
+                    native_id=native_id,
+                    canonical_url=str(content.get("url", status.get("url", ""))),
+                    query=query,
+                    query_matches=[query],
+                    parent_record_key=_platform_key("mastodon", parent_id),
+                    thread_root_key=root_key,
+                    conversation_id=conversation_id,
+                    access_mode="session" if access_token else "anonymous",
+                    source_host=urlparse(instance_url).netloc,
+                    source_url=response.url,
+                    published_at=published,
+                    author_handle=str(account.get("acct", account.get("username", ""))),
+                    author_name=_plain_html(str(account.get("display_name", ""))),
+                    platform_language=str(content.get("language", "") or ""),
+                    original_text=_plain_html(str(content.get("content", ""))),
+                    raw_stats=raw,
+                    engagement=normalize_engagement("mastodon", raw),
+                    is_repost=repost,
                 )
-                collected += 1
+                if _merge_for_query(records, post, seen_query_keys):
+                    collected += 1
                 if collected >= max_posts_per_query:
                     break
             if not access_token or len(statuses) < limit or collected >= max_posts_per_query:

@@ -24,6 +24,13 @@ SUGAR does not rotate proxies, accounts, cookies, device identities, user agents
 
 This makes a 10,000-record project fundamentally a persistence/planning problem rather than a single fragile HTTP loop.
 
+Collection quotas count unique stable record identities within each query. If a source repeats a
+record across pages, SUGAR merges the later payload (including any new provenance or metrics) but
+does not let the duplicate consume the query's unique-record budget. X and Bluesky stop when a
+pagination token repeats; numbered-page collectors continue through duplicate or locally
+out-of-range pages only within the explicit page cap, so a transient repeated response cannot
+silently discard later pages.
+
 ## Source sharding
 
 Different sources expose different pagination semantics, so SUGAR does not force one sharding strategy onto every platform.

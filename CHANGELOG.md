@@ -20,6 +20,8 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - boundary validation now rejects non-finite analytic coordinates/confidence values, normalizes malformed
   imported metrics safely, and adds a deterministic seeded JSON/import fuzz corpus;
 - release-tooling locks now require a fixed setuptools line (83+).
+- collector quotas now count unique stable records per query, merge repeated-page payloads without
+  consuming the quota, enforce local date bounds, and bound repeated X/Bluesky pagination tokens.
 
 ### Research integrity
 

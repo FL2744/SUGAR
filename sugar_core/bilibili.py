@@ -128,6 +128,19 @@ def _merge_record(records: OrderedDict[tuple[str, str], PostRecord], record: Pos
     records[key] = record
 
 
+def _merge_record_for_query(
+    records: OrderedDict[tuple[str, str], PostRecord],
+    record: PostRecord,
+    seen_query_keys: set[tuple[str, str]],
+) -> bool:
+    key = (record.platform, record.native_id or record.canonical_url)
+    _merge_record(records, record)
+    if key in seen_query_keys:
+        return False
+    seen_query_keys.add(key)
+    return True
+
+
 def _video_url(bvid: str, fallback: str = "") -> str:
     bvid = normalize_whitespace(bvid)
     return f"{BILIBILI_WEB_BASE_URL}/video/{bvid}" if bvid else normalize_whitespace(fallback)
@@ -274,6 +287,7 @@ def collect_bilibili_public(
         if not query:
             continue
         collected = 0
+        seen_query_keys: set[tuple[str, str]] = set()
         for page in range(1, max_pages_per_query + 1):
             remaining = max_posts_per_query - collected
             if remaining <= 0:
@@ -314,8 +328,8 @@ def collect_bilibili_public(
                         record = search_record
                 if not in_inclusive_date_range(record.published_at, since, until):
                     continue
-                _merge_record(records, record)
-                collected += 1
+                if _merge_record_for_query(records, record, seen_query_keys):
+                    collected += 1
                 if collected >= max_posts_per_query:
                     break
 

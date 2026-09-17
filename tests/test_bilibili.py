@@ -158,6 +158,38 @@ def test_keyword_search_merges_duplicate_video_query_provenance_without_auth_sta
     assert "<em" not in records[0].original_text
 
 
+def test_keyword_search_duplicate_pages_do_not_consume_unique_query_budget():
+    def item(bvid: str) -> dict:
+        return {
+            "bvid": bvid,
+            "aid": bvid,
+            "title": bvid,
+            "description": "Public program",
+            "pubdate": 1789056000,
+        }
+
+    repeated_page = [item("BVONE"), item("BVTWO"), item("BVONE"), item("BVTWO")]
+    session = FakeSession(
+        [
+            FakeResponse({"code": 0, "data": {"result": repeated_page}}),
+            FakeResponse({"code": 0, "data": {"result": repeated_page}}),
+            FakeResponse({"code": 0, "data": {"result": [item("BVTHREE"), item("BVFOUR")] * 2}}),
+        ]
+    )
+
+    records = collect_bilibili_public(
+        search_terms=["test"],
+        max_posts_per_query=4,
+        max_pages_per_query=3,
+        hydrate_details=False,
+        initialize_session=False,
+        session=session,
+    )
+
+    assert [record.native_id for record in records] == ["BVONE", "BVTWO", "BVTHREE", "BVFOUR"]
+    assert len(session.calls) == 3
+
+
 def test_search_fails_closed_when_bilibili_returns_access_control_code():
     session = FakeSession([FakeResponse({"code": -412, "message": "request blocked", "data": None})])
     with pytest.raises(BilibiliAccessError, match="will not synthesize credentials"):

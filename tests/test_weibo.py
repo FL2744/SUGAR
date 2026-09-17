@@ -138,6 +138,30 @@ def test_search_preserves_multi_query_provenance_without_hydration():
     assert rows[0].source_mode == "weibo_public_search"
 
 
+def test_search_duplicate_pages_do_not_hide_later_unique_records():
+    def card(status_id: str) -> dict:
+        return {"card_type": 9, "mblog": _status(status_id=status_id)}
+
+    session = QueueSession(
+        [
+            FakeResponse({"ok": 1, "data": {"cards": [card("one")]}}),
+            FakeResponse({"ok": 1, "data": {"cards": [card("one")]}}),
+            FakeResponse({"ok": 1, "data": {"cards": [card("two")]}}),
+        ]
+    )
+
+    rows = collect_weibo_public(
+        search_terms=["q"],
+        max_posts_per_query=2,
+        max_pages_per_query=3,
+        hydrate_details=False,
+        session=session,
+    )
+
+    assert [row.native_id for row in rows] == ["one", "two"]
+    assert len(session.calls) == 3
+
+
 def test_search_login_gate_is_not_retried_or_bypassed():
     session = QueueSession([FakeResponse({"ok": -100, "msg": "未登录"})])
 

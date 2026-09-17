@@ -129,6 +129,202 @@ def test_x_duplicate_across_queries_preserves_both_queries():
     assert rows[0].access_mode == "authenticated"
 
 
+def test_x_duplicate_pages_do_not_consume_unique_query_budget():
+    def payload(native_id: str, token: str | None):
+        body = {
+            "data": [
+                {
+                    "id": native_id,
+                    "text": native_id,
+                    "author_id": "u1",
+                    "created_at": "2026-09-10T10:00:00Z",
+                    "public_metrics": {},
+                }
+            ],
+            "includes": {"users": [{"id": "u1", "username": "a"}]},
+            "meta": {},
+        }
+        if token:
+            body["meta"]["next_token"] = token
+        return body
+
+    session = FakeSession(
+        [
+            FakeResponse(payload("one", "cursor-1")),
+            FakeResponse(payload("one", "cursor-2")),
+            FakeResponse(payload("two", None)),
+        ]
+    )
+    rows = collect_x(
+        bearer_token="t",
+        search_terms=["q"],
+        max_posts_per_query=2,
+        max_pages_per_query=3,
+        session=session,
+    )
+
+    assert [row.native_id for row in rows] == ["one", "two"]
+    assert len(session.calls) == 3
+
+
+def test_x_repeated_pagination_token_is_bounded():
+    payload = {
+        "data": [
+            {
+                "id": "one",
+                "text": "one",
+                "author_id": "u1",
+                "created_at": "2026-09-10T10:00:00Z",
+                "public_metrics": {},
+            }
+        ],
+        "includes": {"users": [{"id": "u1", "username": "a"}]},
+        "meta": {"next_token": "same-cursor"},
+    }
+    session = FakeSession([FakeResponse(payload), FakeResponse(payload), FakeResponse(payload)])
+
+    rows = collect_x(
+        bearer_token="t",
+        search_terms=["q"],
+        max_posts_per_query=5,
+        max_pages_per_query=5,
+        session=session,
+    )
+
+    assert [row.native_id for row in rows] == ["one"]
+    assert len(session.calls) == 2
+
+
+def _bluesky_post(native_id: str) -> dict:
+    return {
+        "uri": f"at://did:plc:author/app.bsky.feed.post/{native_id}",
+        "author": {"handle": "person.test", "displayName": "Person"},
+        "record": {"text": native_id, "createdAt": "2026-09-10T10:00:00Z", "langs": ["en"]},
+        "replyCount": 0,
+        "repostCount": 0,
+        "likeCount": 0,
+        "quoteCount": 0,
+    }
+
+
+def test_bluesky_duplicate_pages_do_not_consume_unique_query_budget():
+    session = FakeSession(
+        [
+            FakeResponse({"posts": [_bluesky_post("one")], "cursor": "cursor-1"}),
+            FakeResponse({"posts": [_bluesky_post("one")], "cursor": "cursor-2"}),
+            FakeResponse({"posts": [_bluesky_post("two")]}),
+        ]
+    )
+    rows = collect_bluesky(
+        search_terms=["q"],
+        max_posts_per_query=2,
+        max_pages_per_query=3,
+        session=session,
+    )
+
+    assert [row.native_id for row in rows] == ["one", "two"]
+    assert len(session.calls) == 3
+
+
+def test_bluesky_repeated_cursor_is_bounded():
+    payload = {"posts": [_bluesky_post("one")], "cursor": "same-cursor"}
+    session = FakeSession([FakeResponse(payload), FakeResponse(payload), FakeResponse(payload)])
+
+    rows = collect_bluesky(search_terms=["q"], max_posts_per_query=5, max_pages_per_query=5, session=session)
+
+    assert [row.native_id for row in rows] == ["one"]
+    assert len(session.calls) == 2
+
+
+def _mastodon_status(native_id: str) -> dict:
+    return {
+        "id": native_id,
+        "created_at": "2026-09-10T20:00:00Z",
+        "url": f"https://m.example/@a/{native_id}",
+        "content": f"<p>{native_id}</p>",
+        "replies_count": 0,
+        "reblogs_count": 0,
+        "favourites_count": 0,
+        "account": {"acct": "a", "display_name": "A"},
+    }
+
+
+def test_mastodon_duplicate_pages_do_not_consume_unique_query_budget():
+    page = [_mastodon_status("one"), _mastodon_status("two"), _mastodon_status("one"), _mastodon_status("two")]
+    session = FakeSession(
+        [
+            FakeResponse({"statuses": page}),
+            FakeResponse({"statuses": page}),
+            FakeResponse({"statuses": [_mastodon_status("three"), _mastodon_status("four")] * 2}),
+        ]
+    )
+    rows = collect_mastodon(
+        instance_url="https://m.example",
+        search_terms=["q"],
+        access_token="token",
+        max_posts_per_query=4,
+        max_pages_per_query=3,
+        session=session,
+    )
+
+    assert [row.native_id for row in rows] == ["one", "two", "three", "four"]
+    assert len(session.calls) == 3
+
+
+@pytest.mark.parametrize(
+    ("collector", "kwargs", "payload"),
+    [
+        (
+            collect_x,
+            {"bearer_token": "token"},
+            {
+                "data": [
+                    {
+                        "id": "outside",
+                        "text": "outside",
+                        "created_at": "2025-01-01T10:00:00Z",
+                        "public_metrics": {},
+                    },
+                    {
+                        "id": "inside",
+                        "text": "inside",
+                        "created_at": "2026-06-01T10:00:00Z",
+                        "public_metrics": {},
+                    },
+                ],
+                "meta": {},
+            },
+        ),
+        (
+            collect_bluesky,
+            {},
+            {"posts": [_bluesky_post("outside"), _bluesky_post("inside")]},
+        ),
+        (
+            collect_mastodon,
+            {"instance_url": "https://example.social"},
+            {"statuses": [_mastodon_status("outside"), _mastodon_status("inside")]},
+        ),
+    ],
+)
+def test_collectors_apply_date_bounds_locally(collector, kwargs, payload):
+    if collector is collect_bluesky:
+        payload["posts"][0]["record"]["createdAt"] = "2025-01-01T10:00:00Z"
+        payload["posts"][1]["record"]["createdAt"] = "2026-06-01T10:00:00Z"
+    elif collector is collect_mastodon:
+        payload["statuses"][0]["created_at"] = "2025-01-01T10:00:00Z"
+        payload["statuses"][1]["created_at"] = "2026-06-01T10:00:00Z"
+    rows = collector(
+        search_terms=["q"],
+        since="2026-01-01",
+        until="2026-12-31",
+        session=FakeSession([FakeResponse(payload)]),
+        **kwargs,
+    )
+
+    assert [row.native_id for row in rows] == ["inside"]
+
+
 def test_x_reply_preserves_parent_and_conversation():
     payload = {
         "data": [

@@ -349,7 +349,6 @@ def collect_weibo_public(
             if not mblogs:
                 break
 
-            new_on_page = 0
             for status in mblogs:
                 native_id, _ = _status_identity(status)
                 if not native_id or native_id in seen_page_ids:
@@ -376,11 +375,10 @@ def collect_weibo_public(
                     continue
                 _merge_record(records, record)
                 collected += 1
-                new_on_page += 1
                 if collected >= max_posts_per_query:
                     break
 
-            if collected >= max_posts_per_query or new_on_page == 0:
+            if collected >= max_posts_per_query:
                 break
 
     return list(records.values())
