@@ -4,12 +4,12 @@ import json
 import sqlite3
 import uuid
 from contextlib import closing
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from .utils import atomic_path, atomic_write_text
+from .utils import atomic_path, atomic_write_text, runtime_metadata
 
 WORKSPACE_SCHEMA_VERSION = "1.0"
 DATABASE_SCHEMA_VERSION = 1
@@ -44,6 +44,7 @@ class WorkspaceManifest:
     created_at: str
     updated_at: str
     layout: dict[str, str]
+    runtime: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -113,6 +114,7 @@ class SugarWorkspace:
             created_at=now,
             updated_at=now,
             layout=dict(DEFAULT_LAYOUT),
+            runtime=runtime_metadata(),
         )
         workspace = cls(target, manifest)
         workspace._validate_layout()
@@ -142,6 +144,9 @@ class SugarWorkspace:
         layout = payload.get("layout") or {}
         if not isinstance(layout, dict):
             raise ValueError("Workspace manifest layout must be a JSON object.")
+        runtime = payload.get("runtime") or {}
+        if not isinstance(runtime, dict):
+            raise ValueError("Workspace manifest runtime must be a JSON object.")
 
         manifest = WorkspaceManifest(
             schema_version=schema_version,
@@ -151,6 +156,7 @@ class SugarWorkspace:
             created_at=str(payload.get("created_at") or ""),
             updated_at=str(payload.get("updated_at") or ""),
             layout={str(key): str(value) for key, value in layout.items()},
+            runtime=dict(runtime),
         )
         if not manifest.project_id:
             raise ValueError("Workspace manifest is missing project_id.")

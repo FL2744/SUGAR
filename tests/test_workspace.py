@@ -28,6 +28,7 @@ def test_workspace_create_builds_manifest_layout_and_database(tmp_path: Path) ->
     assert payload["description"] == "Diplomacy Lab"
     assert payload["project_id"]
     assert payload["layout"] == DEFAULT_LAYOUT
+    assert payload["runtime"]["dependencies"]["requests"]
     for key in DEFAULT_LAYOUT:
         assert workspace.path_for(key).is_dir()
 
