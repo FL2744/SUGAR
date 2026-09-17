@@ -113,6 +113,45 @@ def test_rate_limit_retries_after_conservative_wait(tmp_path: Path):
         assert store.event_count("rate_limit") == 1
 
 
+def test_connection_failures_retry_with_durable_event(tmp_path: Path):
+    calls = 0
+    sleeps: list[float] = []
+
+    def collector(source, request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise requests.ConnectionError("connection reset by peer")
+        return [_record(source, "1", request.search_terms[0])]
+
+    outputs = run_harvest(
+        {
+            "sources": ["x"],
+            "terms": ["test"],
+            "output_directory": str(tmp_path),
+            "harvest": {
+                "name": "connection_retry",
+                "target_records": 1,
+                "pages_per_task": 1,
+                "posts_per_task": 10,
+                "max_retries": 2,
+                "base_backoff_seconds": 0.25,
+                "inter_task_delay_seconds": 0,
+            },
+        },
+        collector=collector,
+        sleeper=sleeps.append,
+    )
+
+    assert calls == 2
+    assert sleeps == [0.25]
+    assert any(path.endswith("connection_retry.csv") for path in outputs)
+    with HarvestStore(tmp_path / "connection_retry.harvest.sqlite3") as store:
+        assert store.count_records() == 1
+        assert store.task_counts() == {"completed": 1}
+        assert store.event_count("transient_retry") == 1
+
+
 def test_long_rate_limit_is_checkpointed_as_deferred_not_bypassed(tmp_path: Path):
     sleeps: list[float] = []
 
