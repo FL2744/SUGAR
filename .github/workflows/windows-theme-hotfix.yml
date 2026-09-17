@@ -62,7 +62,7 @@ jobs:
           test_text = test_path.read_text(encoding='utf-8')
           static_test = '''\n\ndef test_windows_ui_uses_deterministic_light_palette() -> None:\n    source = Path("SUGAR-Windows/app.py").read_text(encoding="utf-8")\n    assert "def apply_light_palette(" in source\n    assert "QPalette.ColorRole.WindowText" not in source  # roles are intentionally aliased locally\n    assert 'role.WindowText: "#172033"' in source\n    assert 'role.Window: "#f5f7fb"' in source\n    assert "QDialog, QMessageBox { background: #ffffff; color: #172033; }" in source\n    assert "apply_light_palette(app)" in source\n'''
           if 'test_windows_ui_uses_deterministic_light_palette' not in test_text:
-              test_path.write_text(test_text.rstrip() + static_test + '\n', encoding='utf-8')
+              test_path.write_text(test_text.rstrip() + static_test.rstrip() + '\n', encoding='utf-8')
           '@ | python -
 
       - name: Install development and Windows dependencies
