@@ -14,6 +14,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - map heat-window construction no longer relies on pandas' deprecated generic NumPy timedelta conversion;
 - workspace SQLite connections now close deterministically after each transaction instead of waiting for garbage collection;
 - test runs now treat leaked files, database handles, and other unraisable resource warnings as failures;
+- GitHub Actions artifact uploads now use the current Node 24-based action generation;
 - normal `sugar` and `sugar-state` workflows now auto-discover project workspaces, route outputs to canonical project directories when no explicit destination is supplied, and register generated artifacts automatically;
 - desktop State/intelligence operations can resolve the latest registered observations and assessment artifacts from a workspace instead of requiring every file path to be reselected;
 - added a typed `state-map` desktop operation;
