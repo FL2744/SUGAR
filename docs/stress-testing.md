@@ -83,9 +83,9 @@ host has enough memory and disk:
 ```
 
 Add `--include-export` or `--include-map` only after the storage-only matrix is stable. Each scale
-gets its own `stress-report.json`, and the root gets `stress-matrix-report.json`. Compare runs on
-the same host and Python environment; these measurements are qualification inputs, not universal
-performance guarantees.
+gets its own `stress-report.json` with elapsed-time and peak Python-allocation measurements, and
+the root gets `stress-matrix-report.json`. Compare runs on the same host and Python environment;
+these measurements are qualification inputs, not universal performance guarantees.
 
 ## Test matrix
 

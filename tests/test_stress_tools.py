@@ -20,5 +20,6 @@ def test_offline_stress_matrix_writes_isolated_reports(tmp_path):
 
     assert report["network"] is False
     assert [run["records"] for run in report["runs"]] == [5, 3]
+    assert all(run["peak_python_bytes"] > 0 for run in report["runs"])
     assert all((tmp_path / f"records-{count}" / "stress-report.json").is_file() for count in (5, 3))
     assert parse_scales("1000, 1000, 5000") == [1000, 5000]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+import tracemalloc
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -52,13 +53,19 @@ def run_matrix(
     runs: list[dict[str, Any]] = []
     for records in normalized_scales:
         scale_root = root / f"records-{records}"
-        report = run_probes(
-            records,
-            map_records,
-            scale_root,
-            export=export,
-            map_output=map_output,
-        )
+        tracemalloc.start()
+        try:
+            report = run_probes(
+                records,
+                map_records,
+                scale_root,
+                export=export,
+                map_output=map_output,
+            )
+            _current_bytes, peak_bytes = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        report["peak_python_bytes"] = peak_bytes
         report_path = scale_root / "stress-report.json"
         report["report"] = str(report_path.resolve())
         atomic_write_text(report_path, json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
@@ -66,6 +73,7 @@ def run_matrix(
             {
                 "records": records,
                 "map_records": report["map_records"],
+                "peak_python_bytes": report["peak_python_bytes"],
                 "results": report["results"],
                 "artifacts": report["artifacts"],
                 "report": str(report_path.resolve()),
