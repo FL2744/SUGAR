@@ -6,6 +6,14 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Changed
 
+- release hardening now validates package builds, dependency vulnerabilities, correctness linting, and test coverage in dedicated CI;
+- branch-aware core coverage now has a 70% regression floor, below the current measured suite coverage;
+- developer dependencies now include reproducible local quality/build tooling, with a separate dependency-audit extra;
+- all installed SUGAR command-line entry points expose a top-level `--version` flag;
+- runtime dependency declarations in `requirements.txt` are regression-tested against authoritative `pyproject.toml` metadata;
+- map heat-window construction no longer relies on pandas' deprecated generic NumPy timedelta conversion;
+- workspace SQLite connections now close deterministically after each transaction instead of waiting for garbage collection;
+- test runs now treat leaked files, database handles, and other unraisable resource warnings as failures;
 - normal `sugar` and `sugar-state` workflows now auto-discover project workspaces, route outputs to canonical project directories when no explicit destination is supplied, and register generated artifacts automatically;
 - desktop State/intelligence operations can resolve the latest registered observations and assessment artifacts from a workspace instead of requiring every file path to be reselected;
 - added a typed `state-map` desktop operation;

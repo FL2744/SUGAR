@@ -66,8 +66,8 @@ def test_real_kyrgyzstan_package_carries_educationusa_conflict(tmp_path):
     }
     assert all("higher_education" in value for value in affected["program_domains"])
 
-    workbook = pd.ExcelFile(tmp_path / "kyrgyzstan_conflict_regression.state.xlsx")
-    assert "source_conflicts" in workbook.sheet_names
+    with pd.ExcelFile(tmp_path / "kyrgyzstan_conflict_regression.state.xlsx") as workbook:
+        assert "source_conflicts" in workbook.sheet_names
     conflicts_sheet = pd.read_excel(
         tmp_path / "kyrgyzstan_conflict_regression.state.xlsx",
         sheet_name="source_conflicts",

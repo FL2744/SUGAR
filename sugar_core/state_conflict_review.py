@@ -128,6 +128,7 @@ def _decorate_conflict_review_sheet(
         ]
     )
     workbook.save(target)
+    workbook.close()
     return str(target)
 
 
@@ -186,7 +187,8 @@ def apply_source_conflict_review_workbook(
         raise FileNotFoundError(path)
 
     try:
-        frame = pd.read_excel(path, sheet_name="source_conflicts")
+        with pd.ExcelFile(path) as workbook:
+            frame = workbook.parse(sheet_name="source_conflicts")
     except ValueError as exc:
         raise ValueError("Review workbook is missing the source_conflicts sheet.") from exc
 

@@ -1,0 +1,48 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install quality and audit tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,audit]"
+      - name: Verify installed dependency consistency
+        run: python -m pip check
+      - name: Correctness lint
+        run: ruff check sugar_core sugar_bridge.py tests
+      - name: Test with branch coverage
+        run: python -m pytest --cov=sugar_core --cov-branch --cov-report=term-missing
+      - name: Audit installed dependencies
+        run: pip-audit --progress-spinner off
+      - name: Build source and wheel distributions
+        run: python -m build
+      - name: Smoke-test the built wheel in a clean environment
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/sugar-wheel"
+          "$RUNNER_TEMP/sugar-wheel/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/sugar-wheel/bin/python" -m pip install dist/*.whl
+          "$RUNNER_TEMP/sugar-wheel/bin/sugar" --version
+          "$RUNNER_TEMP/sugar-wheel/bin/sugar-project" --version
+          "$RUNNER_TEMP/sugar-wheel/bin/sugar-state" --version
+          "$RUNNER_TEMP/sugar-wheel/bin/sugar-intel" --version
+          "$RUNNER_TEMP/sugar-wheel/bin/python" -c "import sugar_core; print(sugar_core.__version__)"

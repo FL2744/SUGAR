@@ -347,6 +347,7 @@ def export_review_workbook_with_conflicts(
         ]
     )
     workbook.save(output)
+    workbook.close()
     return str(Path(output).resolve())
 
 

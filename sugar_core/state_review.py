@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -194,6 +193,7 @@ def export_review_workbook(
             for cell in ws[col][1:]:
                 cell.fill = decision_fill
     workbook.save(target)
+    workbook.close()
     return str(target.resolve())
 
 
@@ -213,8 +213,9 @@ def apply_review_workbook(
     path = Path(workbook_file)
     if not path.is_file():
         raise FileNotFoundError(path)
-    assessment_frame = pd.read_excel(path, sheet_name="assessments")
-    claim_frame = pd.read_excel(path, sheet_name="claims")
+    with pd.ExcelFile(path) as workbook:
+        assessment_frame = workbook.parse(sheet_name="assessments")
+        claim_frame = workbook.parse(sheet_name="claims")
     by_id = {row.assessment_id: row for row in assessments}
 
     for raw in assessment_frame.to_dict(orient="records"):

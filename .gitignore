@@ -16,6 +16,10 @@ secrets.*
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 .sugar-cache/
 .sugar/
 *.egg-info/

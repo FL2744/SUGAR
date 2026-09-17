@@ -68,6 +68,7 @@ def test_review_workbook_can_promote_assessment_support_and_claim_with_named_rev
     _set_cell(claims, 2, "decision", "human_verified")
     _set_cell(claims, 2, "reviewer", "Alice Analyst")
     workbook.save(path)
+    workbook.close()
 
     reviewed = apply_review_workbook([original], path)[0]
     assert reviewed.review_state == "human_verified"
@@ -84,6 +85,7 @@ def test_review_workbook_rejects_verification_without_reviewer(tmp_path: Path):
     workbook = load_workbook(path)
     _set_cell(workbook["assessments"], 2, "decision", "human_verified")
     workbook.save(path)
+    workbook.close()
     with pytest.raises(ValueError, match="requires a reviewer"):
         apply_review_workbook([original], path)
 
@@ -109,6 +111,7 @@ def test_review_workbook_will_not_verify_influence_without_causal_evidence(tmp_p
     _set_cell(workbook["claims"], 2, "decision", "human_verified")
     _set_cell(workbook["claims"], 2, "reviewer", "Alice Analyst")
     workbook.save(path)
+    workbook.close()
     with pytest.raises(ValueError, match="causal_influence_evidence"):
         apply_review_workbook([original], path)
 
@@ -120,5 +123,6 @@ def test_review_workbook_rejects_unknown_taxonomy_edit(tmp_path: Path):
     workbook = load_workbook(path)
     _set_cell(workbook["assessments"], 2, "strategic_audiences", "students; invented_group")
     workbook.save(path)
+    workbook.close()
     with pytest.raises(ValueError, match="Unsupported strategic_audience"):
         apply_review_workbook([original], path)

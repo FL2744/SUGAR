@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -38,7 +37,6 @@ from .state_workflow import (
 )
 from .workspace import SugarWorkspace
 from .workspace_runtime import (
-    choose_output_directory,
     latest_workspace_artifact_path,
     register_workspace_outputs,
     workspace_from_config,

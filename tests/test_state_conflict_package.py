@@ -208,9 +208,9 @@ def test_state_package_persists_provisional_conflict_across_analyst_surfaces(tmp
     assert int(queue.loc[0, "source_conflicts_requiring_human_review"]) == 1
     assert queue.loc[0, "source_conflict_ids"] == conflict.conflict_id
 
-    workbook = pd.ExcelFile(tmp_path / "case.state.xlsx")
-    assert "source_conflicts" in workbook.sheet_names
-    assert "review_queue" in workbook.sheet_names
+    with pd.ExcelFile(tmp_path / "case.state.xlsx") as workbook:
+        assert "source_conflicts" in workbook.sheet_names
+        assert "review_queue" in workbook.sheet_names
     conflict_sheet = pd.read_excel(tmp_path / "case.state.xlsx", sheet_name="source_conflicts")
     assert conflict_sheet.loc[0, "conflict_id"] == conflict.conflict_id
     assert bool(conflict_sheet.loc[0, "requires_human_review"]) is True

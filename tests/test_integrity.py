@@ -18,6 +18,18 @@ def test_package_version_matches_pyproject():
     assert metadata["project"]["version"] == sugar_core.__version__
 
 
+def test_requirements_match_pyproject_runtime_dependencies():
+    root = Path(__file__).resolve().parents[1]
+    metadata = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    declared = set(metadata["project"]["dependencies"])
+    requirements = {
+        line.strip()
+        for line in (root / "requirements.txt").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    assert requirements == declared
+
+
 def test_language_detection_sets_deterministic_seed():
     DetectorFactory.seed = None
     first = detect_language("This is a short piece of English research text.")

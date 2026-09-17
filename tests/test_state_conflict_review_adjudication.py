@@ -127,6 +127,7 @@ def _write_human_decision(
         value="Human adjudication regression test.",
     )
     workbook.save(workbook_path)
+    workbook.close()
 
 
 def test_conflict_review_export_has_explicit_blank_decision_contract(tmp_path):
@@ -149,6 +150,7 @@ def test_conflict_review_export_has_explicit_blank_decision_contract(tmp_path):
         assert name in columns
         assert sheet.cell(row=2, column=columns[name]).value is None
 
+    workbook.close()
     assert workbook_has_source_conflict_decisions(workbook_path) is False
 
 
@@ -160,6 +162,7 @@ def test_human_adjudication_requires_explicit_decision_fields(tmp_path):
     sheet.cell(row=2, column=columns["decision_status"], value="human_adjudicated")
     sheet.cell(row=2, column=columns["decision_reviewer"], value="Analyst One")
     workbook.save(workbook_path)
+    workbook.close()
 
     assert workbook_has_source_conflict_decisions(workbook_path) is True
     with pytest.raises(ValueError, match="requires explicit values"):

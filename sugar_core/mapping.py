@@ -157,13 +157,13 @@ def load_map_frame(path: str | Path) -> pd.DataFrame:
     if suffix == ".csv":
         return pd.read_csv(path)
     if suffix == ".xlsx":
-        workbook = pd.ExcelFile(path)
-        for preferred in ("observations", "posts"):
-            if preferred in workbook.sheet_names:
-                return pd.read_excel(path, sheet_name=preferred)
-        if workbook.sheet_names:
-            return pd.read_excel(path, sheet_name=workbook.sheet_names[0])
-        raise ValueError("Workbook contains no readable sheets.")
+        with pd.ExcelFile(path) as workbook:
+            for preferred in ("observations", "posts"):
+                if preferred in workbook.sheet_names:
+                    return workbook.parse(sheet_name=preferred)
+            if workbook.sheet_names:
+                return workbook.parse(sheet_name=workbook.sheet_names[0])
+            raise ValueError("Workbook contains no readable sheets.")
     raise ValueError("Map source must be CSV or XLSX.")
 
 
@@ -896,7 +896,7 @@ def create_map(
         if analysis_work["_date"].notna().any():
             for days in options.heat_windows:
                 mask = (
-                    analysis_work["_date"].ge(now - pd.Timedelta(days=days))
+                    analysis_work["_date"].ge(now - pd.Timedelta(days, unit="D"))
                     & analysis_work["_date"].le(now)
                 )
                 points = _heat_points(analysis_work, mask)
