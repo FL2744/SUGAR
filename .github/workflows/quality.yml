@@ -2,7 +2,7 @@ name: Quality and reproducibility
 
 on:
   push:
-    branches: [main, "stabilize/**", "fix/**", "codex/**"]
+    branches: [main, "stabilize/**", "fix/**"]
   pull_request:
 
 permissions:
