@@ -56,3 +56,22 @@ def test_windows_exposes_generic_public_item_ingestion_without_fake_wechat_searc
     assert 'self.run_operation(\n            "ingest"' in app
     assert "mp.weixin.qq.com" in app
     assert 'SourceSelector(SOURCES)' in app
+
+
+def test_windows_state_workflow_starts_with_research_question_and_portable_handoff() -> None:
+    app = (ROOT / "SUGAR-Windows" / "app.py").read_text(encoding="utf-8")
+    assert 'tabs.addTab(self._research_project_tab(), "Research Project")' in app
+    assert 'Card("1. Project workspace"' in app
+    assert 'Card("2. Research question"' in app
+    assert 'Card("3. Gather evidence"' in app
+    assert 'Card("4. Review and hand off"' in app
+    for operation in (
+        "research-requirement",
+        "research-plan",
+        "research-import",
+        "research-collect",
+        "research-triage",
+        "research-feedback",
+        "research-handoff",
+    ):
+        assert f'"{operation}"' in app

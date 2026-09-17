@@ -19,6 +19,16 @@ from sugar_core.collector_registry import collector_capabilities
 from sugar_core.desktop_ops import DESKTOP_ANALYTIC_OPERATIONS, run_desktop_analytic_operation
 from sugar_core.llm import ARC_BASE_URL, LLMConfig, create_client
 from sugar_core.service import run_analysis, run_harvest, run_ingest, run_map, run_overlap, run_search
+from sugar_core.research_service import (
+    apply_research_feedback,
+    collect_research_plan,
+    create_research_plan,
+    create_research_requirement,
+    export_research_handoff,
+    import_research_dataset,
+    triage_research_records,
+    verify_research_handoff,
+)
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
 from sugar_core.weibo_qualification import run_weibo_qualification
 from sugar_core.weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
@@ -34,6 +44,14 @@ WORKSPACE_OPERATIONS = {"workspace-init", "workspace-status", "workspace-registe
 BASE_OPERATIONS = {
     "search",
     "ingest",
+    "research-requirement",
+    "research-plan",
+    "research-import",
+    "research-collect",
+    "research-triage",
+    "research-feedback",
+    "research-handoff",
+    "research-handoff-verify",
     "harvest",
     "weibo-investigate",
     "weibo-seed-harvest",
@@ -231,6 +249,22 @@ def main(argv=None) -> int:
             outputs = run_search(config, secrets, progress=progress_event)
         elif args.command == "ingest":
             outputs = run_ingest(config, secrets, progress=progress_event)
+        elif args.command == "research-requirement":
+            outputs = create_research_requirement(config, progress=progress_event)
+        elif args.command == "research-plan":
+            outputs = create_research_plan(config, secrets, progress=progress_event)
+        elif args.command == "research-import":
+            outputs = import_research_dataset(config, progress=progress_event)
+        elif args.command == "research-collect":
+            outputs = collect_research_plan(config, secrets, progress=progress_event)
+        elif args.command == "research-triage":
+            outputs = triage_research_records(config, secrets, progress=progress_event)
+        elif args.command == "research-feedback":
+            outputs = apply_research_feedback(config, progress=progress_event)
+        elif args.command == "research-handoff":
+            outputs = export_research_handoff(config, progress=progress_event)
+        elif args.command == "research-handoff-verify":
+            outputs = verify_research_handoff(config, progress=progress_event)
         elif args.command == "harvest":
             emit("starting", operation="harvest")
             outputs = run_harvest(config, secrets, progress=progress_event)

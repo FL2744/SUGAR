@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import sys
 from pathlib import Path
@@ -14,7 +13,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDockWidget,
     QDoubleSpinBox,
-    QFormLayout,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -28,13 +26,9 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
-    QSpinBox,
-    QSplitter,
     QStackedWidget,
     QTabWidget,
     QTextEdit,
-    QToolBar,
     QVBoxLayout,
     QWidget,
 )
@@ -837,14 +831,125 @@ class StatePage(QWidget):
         self.settings = settings
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 20, 24, 24)
-        root.addWidget(page_header("State Department Workflow", "Turn ResearchObservations into auditable assessments, human review artifacts, American Spaces/EducationUSA comparisons, maps, networks and briefing outputs."))
+        root.addWidget(page_header("State Department Workflow", "Start with the research question, keep collection limits visible, review evidence, and export a portable auditable handoff. Expert assessment and monitoring tools remain available in the later tabs."))
         tabs = QTabWidget()
+        tabs.addTab(self._research_project_tab(), "Research Project")
         tabs.addTab(self._package_tab(), "State Package")
         tabs.addTab(self._triage_tab(), "AI Triage")
         tabs.addTab(self._review_tab(), "Human Review")
         tabs.addTab(self._audit_tab(), "Audit & Changes")
         tabs.addTab(self._templates_tab(), "Monitoring Templates")
         root.addWidget(tabs, 1)
+
+    def _research_project_tab(self) -> QWidget:
+        page = QWidget(); layout = QVBoxLayout(page); layout.setContentsMargins(16,16,16,16); layout.setSpacing(14)
+
+        project = Card("1. Project workspace", "One portable project folder keeps the question, search plan, evidence, review artifacts and handoff together. You can copy the folder to another machine and rebuild its artifact index.")
+        self.research_workspace = PathField(mode="directory", placeholder="Choose or create a SUGAR project folder")
+        self.research_project_name = QLineEdit("State Research Project")
+        project_grid = QGridLayout(); project_grid.addWidget(LabeledRow("Project folder", self.research_workspace),0,0,1,2); project_grid.addWidget(LabeledRow("Project name", self.research_project_name),1,0)
+        project.layout.addLayout(project_grid)
+        project_actions = QHBoxLayout(); project_actions.addWidget(primary_button("Create / Open Project", self._research_workspace_open)); project_actions.addStretch(1); project.layout.addLayout(project_actions)
+        layout.addWidget(project)
+
+        question = Card("2. Research question", "Define what you are trying to answer before collecting. SUGAR turns this into a versioned requirement and an inspectable bounded search plan.")
+        self.research_question = QTextEdit(); self.research_question.setPlaceholderText("Example: How are public-facing cultural and educational programs expanding across the target geography, and what evidence supports that assessment?"); self.research_question.setMaximumHeight(92)
+        self.research_geographies = QLineEdit(); self.research_geographies.setPlaceholderText("Comma separated, e.g. Country A, Capital City")
+        self.research_entities = QLineEdit(); self.research_entities.setPlaceholderText("Known institutions, programs, organizations…")
+        self.research_languages = QLineEdit("auto")
+        self.research_since = QLineEdit(); self.research_since.setPlaceholderText("YYYY-MM-DD (optional)")
+        self.research_until = QLineEdit(); self.research_until.setPlaceholderText("YYYY-MM-DD (optional)")
+        self.research_mode = EnumCombo((("Quick reconnaissance","quick"),("Standard research","standard"),("Deep bounded research","deep"))); self.research_mode.setCurrentIndex(1)
+        self.research_sources = SourceSelector(SOURCES); self.research_sources.boxes["bilibili"].setChecked(True)
+        qgrid=QGridLayout(); qgrid.addWidget(LabeledRow("Research question",self.research_question),0,0,1,2); qgrid.addWidget(LabeledRow("Geographies",self.research_geographies),1,0); qgrid.addWidget(LabeledRow("Known entities",self.research_entities),1,1); qgrid.addWidget(LabeledRow("Languages",self.research_languages),2,0); qgrid.addWidget(LabeledRow("Depth",self.research_mode),2,1); qgrid.addWidget(LabeledRow("Since",self.research_since),3,0); qgrid.addWidget(LabeledRow("Until",self.research_until),3,1); qgrid.addWidget(LabeledRow("Preferred searchable sources",self.research_sources,"These are preferences, not proof of coverage. Source failures and zero-result searches are recorded separately."),4,0,1,2)
+        question.layout.addLayout(qgrid)
+        qactions=QHBoxLayout(); qactions.addWidget(primary_button("Save Research Question",self._research_requirement)); qactions.addWidget(QPushButton("Build Inspectable Search Plan",clicked=self._research_plan)); qactions.addStretch(1); question.layout.addLayout(qactions)
+        layout.addWidget(question)
+
+        evidence = Card("3. Gather evidence", "Either execute the approved search plan or import an existing partner/Department export. Both routes normalize into the same evidence model with provenance.")
+        self.research_import_file = PathField(mode="file", extensions=("csv","jsonl"))
+        self.research_import_system = QLineEdit("external")
+        self.research_posts = NumberField(1,1000,20); self.research_pages = NumberField(1,100,1)
+        egrid=QGridLayout(); egrid.addWidget(LabeledRow("Existing CSV / JSONL",self.research_import_file,"Optional. Import lets SUGAR start from data collected in another authorized system without recollecting it."),0,0,1,2); egrid.addWidget(LabeledRow("Source system",self.research_import_system),1,0); egrid.addWidget(LabeledRow("Posts per query",self.research_posts),1,1); egrid.addWidget(LabeledRow("Pages per query",self.research_pages),2,1); evidence.layout.addLayout(egrid)
+        eactions=QHBoxLayout(); eactions.addWidget(primary_button("Run Search Plan",self._research_collect)); eactions.addWidget(QPushButton("Import Existing Dataset",clicked=self._research_import)); eactions.addWidget(QPushButton("Triage into ResearchObservations",clicked=self._research_triage)); eactions.addStretch(1); evidence.layout.addLayout(eactions)
+        layout.addWidget(evidence)
+
+        finish = Card("4. Review and hand off", "After triage/human review, feed relevance judgments back into the plan and export a hash-verified portable bundle containing the requirement, plan, evidence, observations, limitations and provenance.")
+        self.research_handoff_name = QLineEdit("sugar-handoff")
+        self.research_handoff_output = PathField(mode="directory", placeholder="Optional; defaults to the project exports folder")
+        finish.layout.addWidget(LabeledRow("Handoff name",self.research_handoff_name))
+        finish.layout.addWidget(LabeledRow("Handoff parent folder",self.research_handoff_output))
+        factions=QHBoxLayout(); factions.addWidget(QPushButton("Apply Evidence Feedback to Plan",clicked=self._research_feedback)); factions.addWidget(primary_button("Export Verified Handoff",self._research_handoff)); factions.addStretch(1); finish.layout.addLayout(factions)
+        layout.addWidget(finish); layout.addStretch(1)
+        return page
+
+    def _research_workspace_value(self) -> str:
+        return self.research_workspace.text().strip()
+
+    def _require_research_workspace(self) -> str | None:
+        workspace = self._research_workspace_value()
+        if not workspace:
+            QMessageBox.warning(self,"Missing project","Choose a project workspace folder first.")
+            return None
+        return workspace
+
+    def _research_workspace_open(self) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace: return
+        manifest = Path(workspace).expanduser() / "sugar-project.json"
+        if manifest.is_file():
+            self.run_operation("workspace-status",{"workspace":workspace},False)
+        else:
+            self.run_operation("workspace-init",{"workspace":workspace,"name":self.research_project_name.text().strip() or "State Research Project","exist_ok":True},False)
+
+    def _research_requirement(self) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace: return
+        question = self.research_question.toPlainText().strip()
+        if not question:
+            QMessageBox.warning(self,"Missing question","Write the research question before creating the requirement.")
+            return
+        self.run_operation("research-requirement",{
+            "workspace":workspace,"question":question,"geographies":self.research_geographies.text(),"known_entities":self.research_entities.text(),
+            "languages":self.research_languages.text(),"since":self.research_since.text().strip(),"until":self.research_until.text().strip(),
+            "collection_mode":self.research_mode.value(),"preferred_sources":self.research_sources.selected(),
+        },False)
+
+    def _research_plan(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace: self.run_operation("research-plan",{"workspace":workspace},False)
+
+    def _research_collect(self) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace: return
+        sources=self.research_sources.selected()
+        if not sources:
+            QMessageBox.warning(self,"Missing sources","Select at least one searchable source.")
+            return
+        self.run_operation("research-collect",{"workspace":workspace,"sources":sources,"max_posts_per_query":self.research_posts.value(),"max_pages_per_query":self.research_pages.value(),"continue_on_source_error":True},False)
+
+    def _research_import(self) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace: return
+        if not self.research_import_file.text():
+            QMessageBox.warning(self,"Missing dataset","Choose an existing CSV or JSONL dataset to import.")
+            return
+        self.run_operation("research-import",{"workspace":workspace,"source_file":self.research_import_file.text(),"source_system":self.research_import_system.text().strip() or "external"},False)
+
+    def _research_triage(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace: self.run_operation("research-triage",{"workspace":workspace,"llm":self.settings.llm_config()},True)
+
+    def _research_feedback(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace: self.run_operation("research-feedback",{"workspace":workspace},False)
+
+    def _research_handoff(self) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace: return
+        config={"workspace":workspace,"name":self.research_handoff_name.text().strip() or "sugar-handoff","create_zip":True}
+        if self.research_handoff_output.text(): config["output_directory"]=self.research_handoff_output.text()
+        self.run_operation("research-handoff",config,False)
 
     def _package_tab(self) -> QWidget:
         page = QWidget(); layout = QVBoxLayout(page); layout.setContentsMargins(16,16,16,16)
