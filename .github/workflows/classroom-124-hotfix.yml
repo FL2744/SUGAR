@@ -1,0 +1,109 @@
+name: Classroom 1.2.4 hotfix
+
+on:
+  push:
+    branches:
+      - fix/windows-dialog-palette
+
+permissions:
+  contents: write
+
+jobs:
+  test-build-release:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v1.2.4-classroom.1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/windows-dialog-palette
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+          cache: pip
+
+      - name: Apply classroom reliability patch
+        shell: pwsh
+        run: python tools/apply_classroom_124_hotfix.py
+
+      - name: Install development and Windows dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,windows]"
+
+      - name: Validate source and tests
+        shell: pwsh
+        run: |
+          python -m py_compile SUGAR-Windows/app.py sugar_bridge.py sugar_core/bilibili.py
+          python -m pytest
+          git diff --check
+
+      - name: Commit only durable hotfix files
+        shell: pwsh
+        run: |
+          git config user.name "Alejandro Grenier"
+          git config user.email "53024346+Jandro22@users.noreply.github.com"
+          git rm -f tools/apply_classroom_124_hotfix.py .github/workflows/classroom-124-hotfix.yml
+          git add SUGAR-Windows/app.py sugar_core/bilibili.py sugar_bridge.py docs/classroom-quick-start.md tests/test_windows_classroom_ux.py tests/test_bilibili.py tests/test_arc_classroom_ux.py
+          git commit -m "Make classroom quick search bounded and source-aware"
+          git push origin HEAD:fix/windows-dialog-palette
+
+      - name: Build portable Windows application
+        shell: pwsh
+        run: .\SUGAR-Windows\scripts\build.ps1
+
+      - name: Validate packaged GUI and CLI
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          .\SUGAR-Windows\dist\SUGAR\SUGAR.exe --smoke-test
+          & .\SUGAR-Windows\dist\SUGAR\sugar.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar.cmd --help failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar-project.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar-project.cmd --help failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar-state.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar-state.cmd --help failed" }
+          & .\SUGAR-Windows\dist\SUGAR\sugar-intel.cmd --help
+          if ($LASTEXITCODE -ne 0) { throw "sugar-intel.cmd --help failed" }
+
+      - name: Prepare release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          Copy-Item .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip .\release-assets\SUGAR-Windows-x64.zip
+          gh release download v1.2.3-classroom.1 --repo $env:GITHUB_REPOSITORY --pattern "SUGAR-macOS-*" --dir release-assets
+
+      - name: Publish classroom reliability release
+        shell: pwsh
+        run: |
+          $target = git rev-parse HEAD
+          @"
+          # SUGAR v1.2.4 Classroom Release — Quick Search Reliability
+
+          Classroom reliability hotfix based on live first-run testing.
+
+          ## Windows changes
+          - Quick Search now defaults to Bilibili only, 20 posts, and 1 page.
+          - Quick Search disables per-result Bilibili detail hydration to avoid turning a small classroom query into hundreds of requests.
+          - Weibo keyword search is no longer presented as anonymous: it requires an existing authorized session.
+          - AI enrichment is off by default for the first collection so source collection can be tested independently from ARC.
+          - If optional Bilibili detail hydration is access-controlled, valid search-result metadata is retained instead of failing the whole run.
+          - ARC fallback catalog now matches the current official model names and reasoning variants.
+          - Saved `DeepSeek-V4-Flash` and `GLM-5.2` selections migrate to `DeepSeek-V4.1-Flash` and `GLM-5.3`.
+          - Includes the deterministic Windows light-palette fix from v1.2.3.
+
+          The macOS binaries are unchanged from v1.2.3; their primary ARC model names were already current.
+          "@ | Set-Content -Encoding UTF8 RELEASE_NOTES.md
+
+          gh release create $env:TAG release-assets/* `
+            --repo $env:GITHUB_REPOSITORY `
+            --target $target `
+            --title "SUGAR v1.2.4 Classroom Release — Quick Search Reliability" `
+            --notes-file RELEASE_NOTES.md
