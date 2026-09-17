@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   python-distributions:
@@ -29,6 +31,10 @@ jobs:
       - name: Verify generated checksums
         working-directory: dist
         run: sha256sum --check SHA256SUMS
+      - name: Attest exact release artifacts
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*
       - name: Publish tagged release
         uses: softprops/action-gh-release@v2
         with:

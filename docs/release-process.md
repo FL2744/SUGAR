@@ -9,6 +9,7 @@ The tagged workflow produces:
 - Python wheel and source distribution;
 - `SHA256SUMS` checksums for every generated file;
 - a CycloneDX SBOM generated from the exact hash-pinned runtime lock;
+- GitHub artifact attestations for the exact distributions, SBOM, and checksum file;
 - a GitHub Release containing the immutable build outputs.
 
 The workflow does not claim platform signing. Production desktop distribution remains blocked until
