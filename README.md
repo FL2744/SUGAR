@@ -6,7 +6,7 @@
 
 SUGAR is a cross-platform public-source research system for collecting social-media material, preserving provenance, organizing evidence, conducting spatial and structured analysis, and producing reviewable research products. The public engine is target-neutral; project-specific targets, query plans, and case data belong in non-public project configuration.
 
-Current package version: **1.2.0**.
+Current package version: **1.2.1**.
 
 License: **Apache License 2.0**. Copyright 2026 Alejandro Grenier and contributors.
 
@@ -157,6 +157,18 @@ LLM enrichment and triage are optional. Source text is treated as untrusted data
 For State-specific analysis, AI cannot self-verify evidence, confirm sponsor support, invent acceptable evidence references, or establish causal influence. High-consequence claims remain subject to explicit evidence and human review.
 
 Supported LLM configuration includes OpenAI-compatible providers and Virginia Tech ARC. Credentials are supplied at runtime; they must not be committed to the repository or inserted into project manifests.
+
+## Virginia Tech ARC quick start
+
+SUGAR can use Virginia Tech ARC's shared hosted-model API for translation and AI-assisted analysis while the desktop application itself runs locally. For the shared API, Virginia Tech students, faculty, and staff do not need a separate ARC HPC account.
+
+1. Open **Settings** in SUGAR and choose **Get ARC API Key**, or visit `https://llm.arc.vt.edu`.
+2. Sign in with Virginia Tech credentials and open **User profile → Settings → Account → API keys**.
+3. Create a personal key and paste it into SUGAR's ARC/API-key field. Never share the key.
+4. Choose **Virginia Tech ARC** and use **Test ARC Connection**.
+5. Use an ARC model in an AI-assisted workflow. The classroom defaults are `gpt-oss-120b`, `DeepSeek-V4.1-Flash`, `GLM-5.3`, and `Kimi-K3`.
+
+ARC's shared API endpoint is `https://llm-api.arc.vt.edu/api/v1`. Dedicated Open OnDemand LLM sessions are a separate ARC workflow and require an ARC account/allocation.
 
 ## Research and access boundaries
 

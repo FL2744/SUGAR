@@ -132,6 +132,7 @@ def primary_button(label: str, callback: Callable[[], None]) -> QPushButton:
 
 class SettingsPage(QWidget):
     diagnostics_requested = Signal()
+    arc_test_requested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -154,6 +155,25 @@ class SettingsPage(QWidget):
         grid.addWidget(LabeledRow("Base URL", self.base_url), 1, 0)
         grid.addWidget(LabeledRow("API key", self.llm_key, "If blank, SUGAR_LLM_API_KEY from the environment is used."), 1, 1)
         llm.layout.addLayout(grid)
+        arc_help = QLabel(
+            "Virginia Tech ARC quick setup — available to VT students, faculty, and staff without a separate ARC HPC account. "
+            "1) Get a personal key from llm.arc.vt.edu (User profile → Settings → Account → API keys). "
+            "2) Paste it above and choose Virginia Tech ARC. 3) Test the connection."
+        )
+        arc_help.setWordWrap(True)
+        arc_help.setObjectName("muted")
+        llm.layout.addWidget(arc_help)
+        arc_row = QHBoxLayout()
+        get_arc_key = QPushButton("1. Get ARC API Key")
+        get_arc_key.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://llm.arc.vt.edu")))
+        test_arc = QPushButton("3. Test ARC Connection")
+        test_arc.clicked.connect(lambda: self.arc_test_requested.emit())
+        self.arc_status = StatusPill("ARC not tested", "neutral")
+        arc_row.addWidget(get_arc_key)
+        arc_row.addWidget(test_arc)
+        arc_row.addWidget(self.arc_status)
+        arc_row.addStretch(1)
+        llm.layout.addLayout(arc_row)
         root.addWidget(llm)
 
         sources = Card("Source credentials", "Only use legitimate credentials or sessions you are authorized to use. SUGAR does not automate login or manufacture browser/session identities.")
@@ -219,7 +239,7 @@ class SettingsPage(QWidget):
             models = ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
             default = "gpt-5.6-luna"
         elif provider == "arc":
-            models = ["gpt-oss-120b", "DeepSeek-V4-Flash", "GLM-5.2", "Kimi-K3"]
+            models = ["gpt-oss-120b", "DeepSeek-V4.1-Flash", "GLM-5.3", "Kimi-K3"]
             default = "gpt-oss-120b"
         else:
             models = []
@@ -892,7 +912,7 @@ class MainWindow(QMainWindow):
             self.pages[name]=self.stack.count(); self.nav.addItem(QListWidgetItem(name)); self.stack.addWidget(scroll_page(page))
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex); self.nav.setCurrentRow(0); self.home.navigate.connect(self.navigate)
         self.activity=ActivityDock(self); self.addDockWidget(Qt.BottomDockWidgetArea,self.activity); self.activity.cancel_requested.connect(self.runner.cancel)
-        self.runner.event.connect(self._event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.settings_page.diagnostics_requested.connect(self._diagnostics_run)
+        self.runner.event.connect(self._event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.settings_page.diagnostics_requested.connect(self._diagnostics_run); self.settings_page.arc_test_requested.connect(self._arc_test_run)
         self._build_menu()
         if not smoke: QTimer.singleShot(150,self._diagnostics_run)
 
@@ -914,6 +934,21 @@ class MainWindow(QMainWindow):
             self.runner.run(command,config,secrets)
         except Exception as exc: self._error(str(exc))
 
+    def _arc_test_run(self)->None:
+        if self.runner.is_running: return
+        arc_index=self.settings_page.provider.findData("arc")
+        if arc_index>=0: self.settings_page.provider.setCurrentIndex(arc_index)
+        secrets=self.settings_page.secrets()
+        if not secrets.get("llm_api_key"):
+            QMessageBox.warning(self,"ARC API key required","Click 'Get ARC API Key', create your personal key, paste it into the API key field, then test again.")
+            return
+        self.settings_page.arc_status.setText("Testing ARC…"); self.settings_page.arc_status.set_tone("neutral")
+        model=self.settings_page.model.currentText().strip() or "gpt-oss-120b"
+        try:
+            self.runner.run("llm-check",{"llm":{"provider":"arc","model":model,"base_url":""}},secrets)
+        except Exception as exc:
+            self.settings_page.arc_status.setText("ARC test failed"); self.settings_page.arc_status.set_tone("bad"); self._error(str(exc))
+
     def _diagnostics_run(self)->None:
         if self.runner.is_running: return
         try: self.runner.diagnostics()
@@ -923,6 +958,11 @@ class MainWindow(QMainWindow):
         event=payload.get("event");
         if event in {"diagnostics","backend"}:
             self._diagnostics=payload; self.home.update_diagnostics(payload)
+        if event=="llm_connection":
+            available=bool(payload.get("selected_model_available",True)); model=str(payload.get("model") or "ARC model")
+            self.settings_page.arc_status.setText("ARC connected" if available else "ARC connected · model unavailable"); self.settings_page.arc_status.set_tone("good" if available else "warn")
+            message=f"Connected to Virginia Tech ARC. {model} is available." if available else f"Connected to Virginia Tech ARC, but {model} was not listed by the service. Choose another ARC model."
+            QMessageBox.information(self,"ARC connection",message) if available else QMessageBox.warning(self,"ARC connection",message)
         self.activity.append_event(payload)
 
     def _error(self,message:str)->None:
