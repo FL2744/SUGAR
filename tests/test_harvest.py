@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import requests
 
+from sugar_core import __version__
 from sugar_core.harvest import (
     HarvestConfig,
     HarvestStore,
@@ -110,6 +111,83 @@ def test_rate_limit_retries_after_conservative_wait(tmp_path: Path):
     with HarvestStore(tmp_path / "retry.harvest.sqlite3") as store:
         assert store.count_records() == 1
         assert store.event_count("rate_limit") == 1
+
+
+def test_connection_failures_retry_with_durable_event(tmp_path: Path):
+    calls = 0
+    sleeps: list[float] = []
+
+    def collector(source, request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise requests.ConnectionError("connection reset by peer")
+        return [_record(source, "1", request.search_terms[0])]
+
+    outputs = run_harvest(
+        {
+            "sources": ["x"],
+            "terms": ["test"],
+            "output_directory": str(tmp_path),
+            "harvest": {
+                "name": "connection_retry",
+                "target_records": 1,
+                "pages_per_task": 1,
+                "posts_per_task": 10,
+                "max_retries": 2,
+                "base_backoff_seconds": 0.25,
+                "inter_task_delay_seconds": 0,
+            },
+        },
+        collector=collector,
+        sleeper=sleeps.append,
+    )
+
+    assert calls == 2
+    assert sleeps == [0.25]
+    assert any(path.endswith("connection_retry.csv") for path in outputs)
+    with HarvestStore(tmp_path / "connection_retry.harvest.sqlite3") as store:
+        assert store.count_records() == 1
+        assert store.task_counts() == {"completed": 1}
+        assert store.event_count("transient_retry") == 1
+
+
+def test_timeout_failures_retry_with_durable_event(tmp_path: Path):
+    calls = 0
+    sleeps: list[float] = []
+
+    def collector(source, request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise requests.Timeout("response timed out")
+        return [_record(source, "1", request.search_terms[0])]
+
+    run_harvest(
+        {
+            "sources": ["x"],
+            "terms": ["test"],
+            "output_directory": str(tmp_path),
+            "harvest": {
+                "name": "timeout_retry",
+                "target_records": 1,
+                "pages_per_task": 1,
+                "posts_per_task": 10,
+                "max_retries": 2,
+                "base_backoff_seconds": 0.25,
+                "inter_task_delay_seconds": 0,
+            },
+        },
+        collector=collector,
+        sleeper=sleeps.append,
+    )
+
+    assert calls == 2
+    assert sleeps == [0.25]
+    with HarvestStore(tmp_path / "timeout_retry.harvest.sqlite3") as store:
+        assert store.count_records() == 1
+        assert store.task_counts() == {"completed": 1}
+        assert store.event_count("transient_retry") == 1
 
 
 def test_long_rate_limit_is_checkpointed_as_deferred_not_bypassed(tmp_path: Path):
@@ -246,8 +324,11 @@ def test_full_harvest_scales_to_five_thousand_and_resumes_without_recollection(
     assert len(calls) == 20
     assert any(path.endswith("scale5000.jsonl") for path in outputs)
     jsonl = tmp_path / "scale5000.jsonl"
-    assert sum(1 for _ in jsonl.open("r", encoding="utf-8")) == 5000
+    with jsonl.open("r", encoding="utf-8") as stream:
+        assert sum(1 for _ in stream) == 5000
     manifest = json.loads((tmp_path / "scale5000.harvest.json").read_text(encoding="utf-8"))
+    assert manifest["sugar_version"] == __version__
+    assert manifest["runtime"]["dependencies"]["requests"]
     assert manifest["unique_records"] == 5000
     assert manifest["task_counts"] == {"completed": 20}
 

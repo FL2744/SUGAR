@@ -14,7 +14,6 @@ from sugar_core.state_conflict_package import (
 from sugar_core.state_schema import StateAssessment, USPresenceSite
 from sugar_core.state_workflow import build_review_queue
 
-
 STATE_URL = "https://educationusa.state.gov/node/421"
 OPERATOR_URL = "https://kyrgyzstan.americancouncils.org/edusa"
 OBSERVATION_URL = "https://example.org/observation"
@@ -146,9 +145,7 @@ def test_service_topology_conflict_ignores_audience_only_service_association():
     )
     _apply_overlap(obs, row)
 
-    source = next(
-        item for item in row.us_overlap.service_sources if item.source_url == STATE_URL
-    )
+    source = next(item for item in row.us_overlap.service_sources if item.source_url == STATE_URL)
     assert source.program_service_matches == []
     assert source.audience_service_matches
     assert source_conflicts_for_record(obs, row, [provisional_conflict()]) == []
@@ -208,9 +205,9 @@ def test_state_package_persists_provisional_conflict_across_analyst_surfaces(tmp
     assert int(queue.loc[0, "source_conflicts_requiring_human_review"]) == 1
     assert queue.loc[0, "source_conflict_ids"] == conflict.conflict_id
 
-    workbook = pd.ExcelFile(tmp_path / "case.state.xlsx")
-    assert "source_conflicts" in workbook.sheet_names
-    assert "review_queue" in workbook.sheet_names
+    with pd.ExcelFile(tmp_path / "case.state.xlsx") as workbook:
+        assert "source_conflicts" in workbook.sheet_names
+        assert "review_queue" in workbook.sheet_names
     conflict_sheet = pd.read_excel(tmp_path / "case.state.xlsx", sheet_name="source_conflicts")
     assert conflict_sheet.loc[0, "conflict_id"] == conflict.conflict_id
     assert bool(conflict_sheet.loc[0, "requires_human_review"]) is True

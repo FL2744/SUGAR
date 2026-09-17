@@ -5,11 +5,18 @@ import math
 from pathlib import Path
 from typing import Any, Mapping
 
-from .llm import LLMConfig
+from .llm import LLMBudget, LLMConfig
 from .models import PostRecord
 from .observation_storage import save_observations
 from .storage import load_results
 from .triage import DEFAULT_PROJECT_CONTEXT, ProgressCallback, triage_posts
+
+
+def _safe_metric(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError, OverflowError):
+        return 0
 
 
 def _missing(value: Any) -> bool:
@@ -86,6 +93,7 @@ def post_record_from_mapping(row: Mapping[str, Any]) -> PostRecord:
         query_matches=query_matches,
         content_type=str(_first(row, "content_type", default="post")),
         source_mode=str(_first(row, "source_mode", default="api")),
+        access_mode=str(_first(row, "access_mode", default="unknown")),
         source_host=str(_first(row, "source_host")),
         source_url=str(_first(row, "source_url")),
         collected_at=str(_first(row, "collected_at")),
@@ -99,7 +107,9 @@ def post_record_from_mapping(row: Mapping[str, Any]) -> PostRecord:
         detected_language=str(_first(row, "detected_language")),
         original_text=str(_first(row, "original_text")),
         translated_text=str(_first(row, "translated_text", "translated_en")),
-        engagement={key: int(value or 0) for key, value in _json_dict(_first(row, "engagement", default={})).items()},
+        engagement={
+            key: _safe_metric(value) for key, value in _json_dict(_first(row, "engagement", default={})).items()
+        },
         raw_stats=_json_dict(_first(row, "raw_stats", default={})),
         is_repost=_bool(_first(row, "is_repost", "is_retweet", default=False)),
         inferred_location=str(_first(row, "inferred_location")),
@@ -135,6 +145,7 @@ def triage_dataset(
     if not records:
         raise ValueError("The selected post dataset contains no records.")
 
+    budget = LLMBudget.from_config(llm)
     observations = triage_posts(
         records,
         llm=llm,
@@ -142,6 +153,7 @@ def triage_dataset(
         project_context=project_context,
         progress=progress,
         continue_on_error=continue_on_error,
+        budget=budget,
     )
     save_observations(
         observations,
@@ -151,6 +163,7 @@ def triage_dataset(
             "triage_provider": llm.provider,
             "triage_model": llm.model,
             "triage_project_context": project_context,
+            "triage_budget": budget.as_dict() if budget else None,
         },
     )
     csv_path = output_file if output_file.suffix.lower() == ".csv" else output_file.with_suffix(".csv")

@@ -28,9 +28,7 @@ def test_evidence_neighborhood_retrieves_cited_case_and_comparable_neighbors():
         ],
     }
     output = {
-        "judgments": [
-            {"supporting_refs": ["obs_a"], "contrary_refs": []}
-        ],
+        "judgments": [{"supporting_refs": ["obs_a"], "contrary_refs": []}],
         "findings": [],
         "alternatives": [],
     }

@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from sugar_core import __version__
 from sugar_core.observations import EvidenceReference, ObservationLocation, ResearchObservation
 from sugar_core.state_map import create_state_map
 from sugar_core.state_schema import StateAssessment, USPresenceSite
@@ -49,6 +50,8 @@ def test_state_map_labels_density_and_proximity_without_implying_influence(tmp_p
     assert "uncertainty range within threshold" in html
 
     metadata = json.loads((tmp_path / "map.html.metadata.json").read_text(encoding="utf-8"))
+    assert metadata["sugar_version"] == __version__
+    assert metadata["runtime"]["dependencies"]["requests"]
     assert metadata["mapped_observations"] == 1
     assert metadata["mapped_locations"] == 1
     assert metadata["precision_counts"] == {"city": 1}

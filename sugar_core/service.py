@@ -5,10 +5,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from .collector_registry import CollectorRequest, COLLECTORS, collect_registered_source
+from .collector_registry import COLLECTORS, CollectorRequest, collect_registered_source
 from .enrichment import enrich_records
 from .harvest import run_harvest as _run_harvest
-from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
+from .llm import ARC_BASE_URL, LLMBudget, LLMConfig, create_client, translate_search_term
 from .mapping import MapOptions, ReferenceLayer, create_map, load_map_frame
 from .observation_storage import load_observations, observations_to_frame, save_observations
 from .reporting import create_analysis_report
@@ -19,7 +19,7 @@ from .spatial import (
     save_spatial_summary,
 )
 from .storage import save_records
-from .utils import JsonCache
+from .utils import MemoryCache, atomic_write_text, safe_artifact_stem
 from .workspace_runtime import (
     choose_output_directory,
     register_workspace_outputs,
@@ -47,26 +47,48 @@ def _llm_config(config: dict[str, Any], secrets: dict[str, str]) -> LLMConfig:
         model=str(raw.get("model", "gpt-5.6-luna")),
         api_key=secrets.get("llm_api_key", ""),
         base_url=base,
+        max_total_tokens=_optional_int(raw.get("max_total_tokens")),
+        max_cost_usd=_optional_float(raw.get("max_cost_usd")),
+        input_cost_per_1k_tokens=_optional_float(raw.get("input_cost_per_1k_tokens")),
+        output_cost_per_1k_tokens=_optional_float(raw.get("output_cost_per_1k_tokens")),
     )
 
 
+def _optional_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    return int(value)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    return float(value)
+
+
 def _translated_terms(
-    terms: list[str], languages: list[str], llm: LLMConfig, cache_dir: Path,
+    terms: list[str],
+    languages: list[str],
+    llm: LLMConfig,
+    cache_dir: Path,
     progress: ProgressCallback | None = None,
+    budget: LLMBudget | None = None,
 ) -> list[str]:
     terms = [str(x).strip() for x in terms if str(x).strip()]
     if not languages:
         return terms
     _notify(progress, "translating_search_terms", terms=len(terms), languages=len(languages))
     client = create_client(llm)
-    cache = JsonCache(cache_dir / "llm.json")
+    # Search terms can be operator-provided and model responses are derived
+    # text; do not persist either as cleartext cache data.
+    cache = MemoryCache()
     result = list(terms)
     seen = {x.casefold() for x in result}
     total = len(terms) * len(languages)
     completed = 0
     for term in terms:
         for language in languages:
-            value = translate_search_term(client, llm, cache, term, language)
+            value = translate_search_term(client, llm, cache, term, language, budget=budget)
             completed += 1
             if value and value.casefold() not in seen:
                 result.append(value)
@@ -76,7 +98,8 @@ def _translated_terms(
 
 
 def run_search(
-    config: dict[str, Any], secrets: dict[str, str] | None = None,
+    config: dict[str, Any],
+    secrets: dict[str, str] | None = None,
     progress: ProgressCallback | None = None,
 ) -> list[str]:
     secrets = secrets or {}
@@ -98,9 +121,12 @@ def run_search(
     csv_path = out_dir / f"social_search_posts_{stamp}.csv"
     cache_dir = workspace.path_for("cache") if workspace is not None else out_dir / ".sugar-cache"
     llm = _llm_config(config, secrets)
+    budget = LLMBudget.from_config(llm) if ai_needed else None
 
     _notify(progress, "starting", operation="search", sources=sources)
-    terms = _translated_terms(config.get("terms") or [], translated_languages, llm, cache_dir, progress=progress)
+    terms = _translated_terms(
+        config.get("terms") or [], translated_languages, llm, cache_dir, progress=progress, budget=budget
+    )
     if not terms:
         raise ValueError("Enter at least one search term.")
 
@@ -130,6 +156,7 @@ def run_search(
         target_language=config.get("target_language", "English"),
         cache_dir=cache_dir,
         progress=progress,
+        budget=budget,
     )
 
     metadata = {
@@ -140,6 +167,7 @@ def run_search(
         "collector_capabilities": {source: COLLECTORS[source].capabilities.as_dict() for source in sources},
         "llm_provider": llm.provider if (translate or infer) else None,
         "llm_model": llm.model if (translate or infer) else None,
+        "llm_budget": budget.as_dict() if budget else None,
         "workspace_project_id": workspace.manifest.project_id if workspace is not None else None,
     }
     _notify(progress, "saving", records=len(records), output=str(csv_path))
@@ -157,7 +185,9 @@ def _harvest_access_modes(config: dict[str, Any], secrets: dict[str, str]) -> di
         if source == "x":
             modes[source] = "authorized_api" if secrets.get("x_bearer_token", "").strip() else "missing_credential"
         elif source == "bluesky":
-            authenticated = bool(secrets.get("bluesky_identifier", "").strip() and secrets.get("bluesky_app_password", "").strip())
+            authenticated = bool(
+                secrets.get("bluesky_identifier", "").strip() and secrets.get("bluesky_app_password", "").strip()
+            )
             modes[source] = "authenticated" if authenticated else "public_appview"
         elif source == "mastodon":
             modes[source] = "authenticated" if secrets.get("mastodon_token", "").strip() else "anonymous_instance"
@@ -173,7 +203,7 @@ def _harvest_access_modes(config: dict[str, Any], secrets: dict[str, str]) -> di
 def _harvest_access_marker(config: dict[str, Any]) -> Path:
     raw = config.get("harvest") or {}
     out_dir = Path(config.get("output_directory") or raw.get("output_directory") or Path.cwd()).expanduser().resolve()
-    name = "_".join(str(raw.get("name") or config.get("name") or "sugar_harvest").split())
+    name = safe_artifact_stem(raw.get("name") or config.get("name"), "sugar_harvest")
     return out_dir / f"{name}.harvest.access.json"
 
 
@@ -199,7 +229,8 @@ def run_harvest(
                 "Use a new harvest --name instead of mixing anonymous and authenticated coverage."
             )
     else:
-        marker.write_text(
+        atomic_write_text(
+            marker,
             json.dumps(
                 {
                     "access_modes": modes,
@@ -209,20 +240,19 @@ def run_harvest(
                 indent=2,
                 sort_keys=True,
             ),
-            encoding="utf-8",
         )
 
     outputs = _run_harvest(effective, secrets, progress=progress)
     raw = effective.get("harvest") or {}
     out_dir = Path(effective["output_directory"]).expanduser().resolve()
-    name = "_".join(str(raw.get("name") or effective.get("name") or "sugar_harvest").split())
+    name = safe_artifact_stem(raw.get("name") or effective.get("name"), "sugar_harvest")
     manifest = out_dir / f"{name}.harvest.json"
     if manifest.is_file():
         payload = json.loads(manifest.read_text(encoding="utf-8"))
         payload["access_modes"] = modes
         if workspace is not None:
             payload["workspace_project_id"] = workspace.manifest.project_id
-        manifest.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+        atomic_write_text(manifest, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     if str(marker.resolve()) not in outputs:
         outputs.append(str(marker.resolve()))
     register_workspace_outputs(workspace, outputs, operation="harvest", kind="harvest")
@@ -241,6 +271,7 @@ def _map_options(config: dict[str, Any]) -> MapOptions:
         heat_windows=windows,
         default_heat_window=int(raw.get("default_heat_window", 90)),
         max_popup_chars=max(300, int(raw.get("max_popup_chars", 2200))),
+        max_markers=max(1, int(raw.get("max_markers", 10_000))),
         cluster_disable_at_zoom=max(1, int(raw.get("cluster_disable_at_zoom", 11))),
         show_minimap=bool(raw.get("show_minimap", True)),
         show_measure_control=bool(raw.get("show_measure_control", True)),
@@ -328,7 +359,13 @@ def run_overlap(config: dict[str, Any], progress: ProgressCallback | None = None
         frame = load_map_frame(path)
         reference_layers.append((name, frame))
         map_layers.append(ReferenceLayer(name=name, frame=frame, color=color, show=show))
-    _notify(progress, "spatial_matching", observations=len(observations), reference_layers=len(reference_layers), max_distance_km=overlap_config.max_distance_km)
+    _notify(
+        progress,
+        "spatial_matching",
+        observations=len(observations),
+        reference_layers=len(reference_layers),
+        max_distance_km=overlap_config.max_distance_km,
+    )
     enriched, matches, summary = analyze_spatial_overlap(observations, reference_layers, config=overlap_config)
 
     explicit_output = config.get("output_file") or raw.get("output_file")
@@ -355,11 +392,19 @@ def run_overlap(config: dict[str, Any], progress: ProgressCallback | None = None
             map_output = output_stem.with_name(output_stem.name + "_map.html")
         map_config = dict(config)
         map_config["map"] = {**(config.get("map") or {}), "reference_layers": []}
-        create_map(observations_to_frame(enriched), map_output, options=_map_options(map_config), reference_layers=map_layers)
+        create_map(
+            observations_to_frame(enriched), map_output, options=_map_options(map_config), reference_layers=map_layers
+        )
         outputs.append(str(map_output.expanduser().resolve()))
 
     register_workspace_outputs(workspace, outputs, operation="overlap")
-    _notify(progress, "spatial_complete", observations_matched=summary["observations_matched"], pair_matches=summary["retained_pair_matches"], outputs=outputs)
+    _notify(
+        progress,
+        "spatial_complete",
+        observations_matched=summary["observations_matched"],
+        pair_matches=summary["retained_pair_matches"],
+        outputs=outputs,
+    )
     return outputs
 
 

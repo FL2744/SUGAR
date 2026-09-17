@@ -62,7 +62,10 @@ def test_packet_comparison_marks_corpus_distribution_change_as_descriptive():
         "corpus": {"observations": 20, "assessments": 20, "verified_brief_eligible": 12},
         "macro_structure": {
             "countries": [{"value": "A", "share": 0.5}, {"value": "B", "share": 0.5}],
-            "program_domains": [{"value": "higher_education", "share": 0.6}, {"value": "stem_technology", "share": 0.4}],
+            "program_domains": [
+                {"value": "higher_education", "share": 0.6},
+                {"value": "stem_technology", "share": 0.4},
+            ],
         },
         "temporal": {"signals": [{"signal": "observed_geographic_broadening_candidate"}]},
     }

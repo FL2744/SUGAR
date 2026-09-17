@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -17,7 +18,7 @@ from .source_conflicts import (
 )
 from .state_conflict_package import export_review_workbook_with_conflicts
 from .state_schema import StateAssessment
-from .utils import safe_cell
+from .utils import atomic_path, safe_cell
 
 _CONFLICT_DECISION_STATUS = "human_adjudicated"
 _CONFLICT_DECISION_COLUMNS = (
@@ -127,7 +128,9 @@ def _decorate_conflict_review_sheet(
             ),
         ]
     )
-    workbook.save(target)
+    with atomic_path(target, suffix=".xlsx") as temporary:
+        shutil.copyfile(target, temporary)
+        workbook.save(temporary)
     return str(target)
 
 
@@ -186,7 +189,7 @@ def apply_source_conflict_review_workbook(
         raise FileNotFoundError(path)
 
     try:
-        frame = pd.read_excel(path, sheet_name="source_conflicts")
+        frame = pd.read_excel(path, sheet_name="source_conflicts", dtype={"conflict_id": str})
     except ValueError as exc:
         raise ValueError("Review workbook is missing the source_conflicts sheet.") from exc
 
@@ -204,18 +207,13 @@ def apply_source_conflict_review_workbook(
         if conflict is None:
             raise ValueError(f"Review workbook references unknown source conflict: {conflict_id}")
 
-        decision = {
-            key: _clean(raw.get(key))
-            for key in _CONFLICT_DECISION_COLUMNS
-        }
+        decision = {key: _clean(raw.get(key)) for key in _CONFLICT_DECISION_COLUMNS}
         if not any(decision.values()):
             continue
 
         status = decision["decision_status"].casefold()
         if not status:
-            raise ValueError(
-                f"Source conflict {conflict_id} has partial decision fields but no decision_status."
-            )
+            raise ValueError(f"Source conflict {conflict_id} has partial decision fields but no decision_status.")
         if status != _CONFLICT_DECISION_STATUS:
             raise ValueError(
                 f"Unsupported source-conflict review decision for {conflict_id}: {status}. "

@@ -19,6 +19,19 @@ def _merge(records: OrderedDict[tuple[str, str], PostRecord], record: PostRecord
         records[key] = record
 
 
+def _merge_for_query(
+    records: OrderedDict[tuple[str, str], PostRecord],
+    record: PostRecord,
+    seen_query_keys: set[tuple[str, str]],
+) -> bool:
+    key = (record.platform, record.native_id or record.canonical_url)
+    _merge(records, record)
+    if key in seen_query_keys:
+        return False
+    seen_query_keys.add(key)
+    return True
+
+
 def collect_bilibili_page_range(request: Any) -> list[PostRecord]:
     """Collect a bounded Bilibili page range using the same fail-closed public primitives.
 
@@ -53,6 +66,7 @@ def collect_bilibili_page_range(request: Any) -> list[PostRecord]:
         if not query:
             continue
         collected = 0
+        seen_query_keys: set[tuple[str, str]] = set()
         for page in range(start_page, end_page + 1):
             remaining = request.max_posts_per_query - collected
             if remaining <= 0:
@@ -91,8 +105,8 @@ def collect_bilibili_page_range(request: Any) -> list[PostRecord]:
                         record = search_record
                 if not in_inclusive_date_range(record.published_at, request.since, request.until):
                     continue
-                _merge(records, record)
-                collected += 1
+                if _merge_for_query(records, record, seen_query_keys):
+                    collected += 1
                 if collected >= request.max_posts_per_query:
                     break
 
@@ -148,14 +162,11 @@ def collect_weibo_page_range(request: Any) -> list[PostRecord]:
             if not mblogs:
                 break
 
-            unseen_on_page = 0
-            accepted_on_page = 0
             for status in mblogs:
                 native_id, _ = _status_identity(status)
                 if not native_id or native_id in seen_page_ids:
                     continue
                 seen_page_ids.add(native_id)
-                unseen_on_page += 1
                 record = _status_to_record(
                     status,
                     query=query,
@@ -176,16 +187,12 @@ def collect_weibo_page_range(request: Any) -> list[PostRecord]:
                     continue
                 _merge(records, record)
                 collected += 1
-                accepted_on_page += 1
                 if collected >= request.max_posts_per_query:
                     break
 
             if collected >= request.max_posts_per_query:
                 break
-            # Stop only if the server repeated/emptied the page. A page with new records that are
-            # merely outside the requested date range is not evidence that later pages are useless.
-            if unseen_on_page == 0:
-                break
-            _ = accepted_on_page
+            # Page ranges are already bounded by the harvest plan. Continue past duplicate or
+            # out-of-range pages so a transient repeated response cannot hide later pages.
 
     return list(records.values())

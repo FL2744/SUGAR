@@ -1,6 +1,7 @@
+import json
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
-import tomllib
 
 import pandas as pd
 from langdetect import DetectorFactory
@@ -27,11 +28,13 @@ def test_language_detection_sets_deterministic_seed():
 
 
 def test_unique_ids_are_scoped_by_platform():
-    frame = pd.DataFrame([
-        {"platform": "x", "native_id": "123", "published_at": "2026-09-10T10:00:00Z", "engagement": "{}"},
-        {"platform": "bluesky", "native_id": "123", "published_at": "2026-09-10T10:01:00Z", "engagement": "{}"},
-        {"platform": "x", "native_id": "123", "published_at": "2026-09-10T10:02:00Z", "engagement": "{}"},
-    ])
+    frame = pd.DataFrame(
+        [
+            {"platform": "x", "native_id": "123", "published_at": "2026-09-10T10:00:00Z", "engagement": "{}"},
+            {"platform": "bluesky", "native_id": "123", "published_at": "2026-09-10T10:01:00Z", "engagement": "{}"},
+            {"platform": "x", "native_id": "123", "published_at": "2026-09-10T10:02:00Z", "engagement": "{}"},
+        ]
+    )
     _, metrics = _prepare(frame)
     assert metrics["unique_ids"] == 2
 
@@ -78,3 +81,5 @@ def test_geocode_cache_hit_skips_network_and_throttle(monkeypatch, tmp_path):
     second = geocode_location("Blacksburg, Virginia", cache, min_delay_seconds=1.0)
 
     assert second == first
+    persisted = json.loads((tmp_path / "geo.json").read_text(encoding="utf-8"))
+    assert all("query" not in value for value in persisted.values())

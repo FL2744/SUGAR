@@ -5,9 +5,9 @@ import pytest
 from sugar_core import collector_registry
 from sugar_core.collector_registry import (
     CollectorRequest,
-    collector_capabilities,
     collect_registered_comments,
     collect_registered_source,
+    collector_capabilities,
     fetch_registered_item,
 )
 from sugar_core.models import PostRecord
@@ -69,6 +69,11 @@ def test_capabilities_advertise_partial_platform_surfaces():
     assert caps["bilibili"]["comments"] is True
     assert caps["x"]["keyword_search"] is True
     assert caps["x"]["comments"] is False
+    assert all(caps[source]["pagination"] for source in caps)
+    assert all(caps[source]["date_filtering"] for source in caps)
+    assert all(caps[source]["engagement_metrics"] for source in caps)
+    assert caps["x"]["location_data"] is True
+    assert caps["bluesky"]["location_data"] is False
 
 
 def test_required_credentials_are_validated_before_collection():

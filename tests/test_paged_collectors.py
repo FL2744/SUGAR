@@ -83,9 +83,7 @@ def test_weibo_page_adapter_starts_at_checkpointed_page(monkeypatch):
         "reposts_count": 0,
         "user": {"id": "42", "screen_name": "Example account", "location": "北京"},
     }
-    session = QueueSession(
-        [FakeResponse({"ok": 1, "data": {"cards": [{"card_type": 9, "mblog": status}]}})]
-    )
+    session = QueueSession([FakeResponse({"ok": 1, "data": {"cards": [{"card_type": 9, "mblog": status}]}})])
     monkeypatch.setattr("sugar_core.weibo.create_weibo_session", lambda cookie="": session)
 
     rows = collect_weibo_page_range(

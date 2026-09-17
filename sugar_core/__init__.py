@@ -1,5 +1,7 @@
 """Stable SUGAR core for repeatable public-source collection and analysis."""
 
+__version__ = "1.2.0"
+
 from .collector_registry import (
     COLLECTORS,
     CollectorCapabilities,
@@ -24,6 +26,7 @@ from .observations import (
     OBSERVATION_SCHEMA_VERSION,
     EvidenceReference,
     ObservationLocation,
+    ObservationProvenance,
     ResearchObservation,
     SpatialMatch,
     observation_from_post,
@@ -79,6 +82,7 @@ from .workspace import (
     WorkspaceManifest,
     open_workspace,
 )
+from .workspace_archive import create_workspace_archive, restore_workspace_archive
 
 __all__ = [
     "PostRecord",
@@ -101,6 +105,7 @@ __all__ = [
     "ResearchObservation",
     "ObservationLocation",
     "EvidenceReference",
+    "ObservationProvenance",
     "SpatialMatch",
     "OBSERVATION_SCHEMA_VERSION",
     "observation_from_post",
@@ -154,6 +159,6 @@ __all__ = [
     "ArtifactRecord",
     "SugarWorkspace",
     "open_workspace",
+    "create_workspace_archive",
+    "restore_workspace_archive",
 ]
-
-__version__ = "1.2.0"

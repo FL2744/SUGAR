@@ -3,8 +3,13 @@ from pathlib import Path
 
 from sugar_core.observations import EvidenceReference, ResearchObservation
 from sugar_core.state_network import build_state_network, save_state_network
-from sugar_core.state_schema import AnalyticClaim, StateAssessment, SupportAssessment, USOverlapAssessment, USPresenceSite
-
+from sugar_core.state_schema import (
+    AnalyticClaim,
+    StateAssessment,
+    SupportAssessment,
+    USOverlapAssessment,
+    USPresenceSite,
+)
 
 SOURCE = "https://example.org/source"
 
@@ -72,7 +77,15 @@ def test_network_uses_typed_relationships_with_source_evidence():
     observation, assessment, site = fixtures()
     nodes, edges = build_state_network([observation], [assessment], [site])
     relationships = {edge["relationship"] for edge in edges}
-    assert {"sponsors", "hosts", "partners", "targets_audience", "program_domain", "expresses_or_advances", "overlaps_us_public_diplomacy"} <= relationships
+    assert {
+        "sponsors",
+        "hosts",
+        "partners",
+        "targets_audience",
+        "program_domain",
+        "expresses_or_advances",
+        "overlaps_us_public_diplomacy",
+    } <= relationships
     assert all(SOURCE in edge["evidence_refs"] for edge in edges)
     assert any(node["node_type"] == "us_presence" and node["label"] == site.name for node in nodes)
 

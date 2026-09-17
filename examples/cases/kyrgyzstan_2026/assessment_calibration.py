@@ -8,7 +8,6 @@ from sugar_core.state_schema import (
     SupportAssessment,
 )
 
-
 # The case seed captures observable activities first. This calibration step prevents the real-case
 # assessment layer from treating every China-linked activity as equally strong evidence of PRC
 # state/institutional support. Because the case remains AI-triaged, no support judgment is allowed

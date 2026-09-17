@@ -10,7 +10,6 @@ from sugar_core.state_conflict_package import (
 )
 from sugar_core.state_schema import StateAssessment
 
-
 SOURCE_A = "https://example.gov/a"
 SOURCE_B = "https://example.org/b"
 
@@ -37,7 +36,7 @@ def _fixture():
         authority_type="official_operator",
     )
     conflict = SourceConflict(
-        topic="=HYPERLINK(\"https://example.invalid\",\"click\")",
+        topic='=HYPERLINK("https://example.invalid","click")',
         conflict_type="service_topology",
         status="provisional_treatment",
         claims=[first, second],

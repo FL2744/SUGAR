@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import sys
 
+from . import __version__
+from .errors import error_payload
 from .llm import ARC_BASE_URL, LLMConfig
 from .observation_storage import load_observations
 from .state_agentic import save_iterative_agentic_synthesis
@@ -18,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="sugar-intel",
         description="Macro/micro analytic intelligence and evidence-constrained agentic synthesis for SUGAR State research.",
     )
+    parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command", required=True)
 
     packet = sub.add_parser("packet", help="Build deterministic macro/micro intelligence features without an LLM.")
@@ -28,12 +33,17 @@ def build_parser() -> argparse.ArgumentParser:
     packet.add_argument("--observation-id", default="")
     packet.add_argument("--case-limit", type=int, default=20)
 
-    tradecraft = sub.add_parser("tradecraft", help="Audit source adequacy, analytic tensions, and epistemic debt without an LLM.")
+    tradecraft = sub.add_parser(
+        "tradecraft", help="Audit source adequacy, analytic tensions, and epistemic debt without an LLM."
+    )
     tradecraft.add_argument("observations")
     tradecraft.add_argument("assessments")
     tradecraft.add_argument("--output", required=True)
 
-    synthesize = sub.add_parser("synthesize", help="Run specialist agents, optional evidence-neighborhood refinement, integration, red-team critique, and revision.")
+    synthesize = sub.add_parser(
+        "synthesize",
+        help="Run specialist agents, optional evidence-neighborhood refinement, integration, red-team critique, and revision.",
+    )
     synthesize.add_argument("observations")
     synthesize.add_argument("assessments")
     synthesize.add_argument("--output", required=True)
@@ -46,8 +56,11 @@ def build_parser() -> argparse.ArgumentParser:
     synthesize.add_argument("--base-url", default="")
     synthesize.add_argument("--cache-dir", default=".sugar-cache")
     synthesize.add_argument("--workers", type=int, default=4)
+    _add_llm_budget_args(synthesize)
 
-    hypotheses = sub.add_parser("hypotheses", help="Turn synthesis alternatives into a competing-hypothesis evidence matrix.")
+    hypotheses = sub.add_parser(
+        "hypotheses", help="Turn synthesis alternatives into a competing-hypothesis evidence matrix."
+    )
     hypotheses.add_argument("synthesis")
     hypotheses.add_argument("--output", required=True)
     hypotheses.add_argument("--name", default="analytic_intelligence")
@@ -60,6 +73,17 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _add_llm_budget_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--max-llm-tokens", type=int, help="Hard upper bound for this AI run's tokens.")
+    parser.add_argument(
+        "--max-llm-cost-usd",
+        type=float,
+        help="Hard upper bound for estimated provider cost; requires both token-rate options.",
+    )
+    parser.add_argument("--llm-input-cost-per-1k", type=float, help="Input-token cost used for the run budget.")
+    parser.add_argument("--llm-output-cost-per-1k", type=float, help="Output-token cost used for the run budget.")
+
+
 def _llm(args) -> LLMConfig:
     api_key = os.environ.get("SUGAR_LLM_API_KEY", "").strip()
     if not api_key:
@@ -69,21 +93,35 @@ def _llm(args) -> LLMConfig:
         base_url = ARC_BASE_URL
     if args.provider == "custom" and not base_url:
         raise ValueError("--base-url is required for provider=custom")
-    return LLMConfig(provider=args.provider, model=args.model, api_key=api_key, base_url=base_url)
+    return LLMConfig(
+        provider=args.provider,
+        model=args.model,
+        api_key=api_key,
+        base_url=base_url,
+        max_total_tokens=args.max_llm_tokens,
+        max_cost_usd=args.max_llm_cost_usd,
+        input_cost_per_1k_tokens=args.llm_input_cost_per_1k,
+        output_cost_per_1k_tokens=args.llm_output_cost_per_1k,
+    )
 
 
-def main(argv=None) -> int:
+def _run(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
     if args.command == "packet":
         observations = load_observations(args.observations)
         assessments = load_state_assessments(args.assessments)
-        print(save_intelligence_packet(
-            observations, assessments, args.output,
-            country=args.country, observation_id=args.observation_id,
-            representative_case_limit=args.case_limit,
-        ))
+        print(
+            save_intelligence_packet(
+                observations,
+                assessments,
+                args.output,
+                country=args.country,
+                observation_id=args.observation_id,
+                representative_case_limit=args.case_limit,
+            )
+        )
         return 0
 
     if args.command == "tradecraft":
@@ -96,9 +134,16 @@ def main(argv=None) -> int:
         observations = load_observations(args.observations)
         assessments = load_state_assessments(args.assessments)
         outputs = save_iterative_agentic_synthesis(
-            observations, assessments, args.output,
-            llm=_llm(args), country=args.country, observation_id=args.observation_id,
-            depth=args.depth, cache_dir=args.cache_dir, max_workers=args.workers, name=args.name,
+            observations,
+            assessments,
+            args.output,
+            llm=_llm(args),
+            country=args.country,
+            observation_id=args.observation_id,
+            depth=args.depth,
+            cache_dir=args.cache_dir,
+            max_workers=args.workers,
+            name=args.name,
         )
         print("\n".join(outputs))
         return 0
@@ -108,14 +153,34 @@ def main(argv=None) -> int:
         return 0
 
     if args.command == "compare":
-        print(save_longitudinal_comparison(
-            args.previous, args.current, args.output, kind=args.kind,
-        ))
+        print(
+            save_longitudinal_comparison(
+                args.previous,
+                args.current,
+                args.output,
+                kind=args.kind,
+            )
+        )
         return 0
 
     parser.error("Unsupported command")
     return 2
 
 
+def main(argv=None) -> int:
+    return _run(argv)
+
+
+def console_main(argv=None) -> int:
+    try:
+        return _run(argv)
+    except KeyboardInterrupt as exc:
+        print(json.dumps({"event": "error", **error_payload(exc)}), file=sys.stderr)
+        return 130
+    except Exception as exc:
+        print(json.dumps({"event": "error", **error_payload(exc)}), file=sys.stderr)
+        return 1
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(console_main())

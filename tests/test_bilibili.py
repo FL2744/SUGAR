@@ -71,9 +71,7 @@ def _video_payload(*, bvid="BV1TEST123", aid=1001, pubdate=1789056000):
 
 
 def test_bilibili_metrics_do_not_mislabel_shares_as_reposts():
-    normalized = normalize_bilibili_engagement(
-        {"view": 1000, "like": 50, "favorite": 8, "reply": 6, "share": 20}
-    )
+    normalized = normalize_bilibili_engagement({"view": 1000, "like": 50, "favorite": 8, "reply": 6, "share": 20})
     assert normalized == {
         "likes": 50,
         "replies": 6,
@@ -160,13 +158,54 @@ def test_keyword_search_merges_duplicate_video_query_provenance_without_auth_sta
     assert "<em" not in records[0].original_text
 
 
-def test_search_fails_closed_when_bilibili_returns_access_control_code():
+def test_keyword_search_duplicate_pages_do_not_consume_unique_query_budget():
+    def item(bvid: str) -> dict:
+        return {
+            "bvid": bvid,
+            "aid": bvid,
+            "title": bvid,
+            "description": "Public program",
+            "pubdate": 1789056000,
+        }
+
+    repeated_page = [item("BVONE"), item("BVTWO"), item("BVONE"), item("BVTWO")]
     session = FakeSession(
-        [FakeResponse({"code": -412, "message": "request blocked", "data": None})]
+        [
+            FakeResponse({"code": 0, "data": {"result": repeated_page}}),
+            FakeResponse({"code": 0, "data": {"result": repeated_page}}),
+            FakeResponse({"code": 0, "data": {"result": [item("BVTHREE"), item("BVFOUR")] * 2}}),
+        ]
     )
+
+    records = collect_bilibili_public(
+        search_terms=["test"],
+        max_posts_per_query=4,
+        max_pages_per_query=3,
+        hydrate_details=False,
+        initialize_session=False,
+        session=session,
+    )
+
+    assert [record.native_id for record in records] == ["BVONE", "BVTWO", "BVTHREE", "BVFOUR"]
+    assert len(session.calls) == 3
+
+
+def test_search_fails_closed_when_bilibili_returns_access_control_code():
+    session = FakeSession([FakeResponse({"code": -412, "message": "request blocked", "data": None})])
     with pytest.raises(BilibiliAccessError, match="will not synthesize credentials"):
         collect_bilibili_public(
             search_terms=["孔子学院"],
+            initialize_session=False,
+            session=session,
+        )
+
+
+def test_search_rejects_non_list_result_shape():
+    session = FakeSession([FakeResponse({"code": 0, "data": {"result": {"unexpected": True}}})])
+
+    with pytest.raises(RuntimeError, match="unexpected result shape"):
+        collect_bilibili_public(
+            search_terms=["test"],
             initialize_session=False,
             session=session,
         )
@@ -271,4 +310,13 @@ def test_public_comment_access_gate_is_not_bypassed():
     session = FakeSession([detail, blocked])
 
     with pytest.raises(BilibiliAccessError, match="will not synthesize credentials"):
+        collect_bilibili_comments("BV1COMMENTS", session=session)
+
+
+def test_comments_reject_non_list_replies_shape():
+    detail = FakeResponse(_video_payload(bvid="BV1COMMENTS", aid=222))
+    malformed = FakeResponse({"code": 0, "data": {"replies": {"unexpected": True}}})
+    session = FakeSession([detail, malformed])
+
+    with pytest.raises(RuntimeError, match="unexpected replies shape"):
         collect_bilibili_comments("BV1COMMENTS", session=session)

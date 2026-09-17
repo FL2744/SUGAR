@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import asdict
-from pathlib import Path
 from typing import Any
 
+from . import __version__
+from .errors import error_payload
 from .workspace import SugarWorkspace
+from .workspace_archive import create_workspace_archive, restore_workspace_archive
 
 
 def _json_object(value: str | None) -> dict[str, Any]:
@@ -29,6 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="sugar-project",
         description="Create and inspect persistent SUGAR research workspaces.",
     )
+    parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command", required=True)
 
     init = sub.add_parser("init", help="Create a new SUGAR project workspace.")
@@ -59,6 +63,15 @@ def build_parser() -> argparse.ArgumentParser:
     path_p.add_argument("workspace")
     path_p.add_argument("key")
 
+    archive = sub.add_parser("archive", help="Create a validated portable archive of project-contained files.")
+    archive.add_argument("workspace")
+    archive.add_argument("output")
+    archive.add_argument("--discover", action="store_true")
+
+    restore = sub.add_parser("restore", help="Validate and restore a portable workspace archive.")
+    restore.add_argument("archive")
+    restore.add_argument("output")
+
     return parser
 
 
@@ -66,7 +79,7 @@ def _open(path: str, *, discover: bool = False) -> SugarWorkspace:
     return SugarWorkspace.discover(path) if discover else SugarWorkspace.open(path)
 
 
-def main(argv=None) -> int:
+def _run(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -128,6 +141,16 @@ def main(argv=None) -> int:
             print(f"{artifact.kind}\t{artifact.path}\t{state}\t{portable}{label}")
         return 0
 
+    if args.command == "archive":
+        workspace = _open(args.workspace, discover=args.discover)
+        print(create_workspace_archive(workspace, args.output))
+        return 0
+
+    if args.command == "restore":
+        workspace = restore_workspace_archive(args.archive, args.output)
+        print(workspace.manifest_path)
+        return 0
+
     workspace = SugarWorkspace.open(args.workspace)
     try:
         print(workspace.path_for(args.key))
@@ -136,5 +159,20 @@ def main(argv=None) -> int:
     return 0
 
 
+def main(argv=None) -> int:
+    return _run(argv)
+
+
+def console_main(argv=None) -> int:
+    try:
+        return _run(argv)
+    except KeyboardInterrupt as exc:
+        print(json.dumps({"event": "error", **error_payload(exc)}), file=sys.stderr)
+        return 130
+    except Exception as exc:
+        print(json.dumps({"event": "error", **error_payload(exc)}), file=sys.stderr)
+        return 1
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(console_main())

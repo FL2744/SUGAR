@@ -10,6 +10,18 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
+from .utils import atomic_path
+
+_IDENTIFIER_COLUMNS = {
+    "observation_id",
+    "native_id",
+    "record_key",
+    "reference_id",
+    "site_id",
+    "primary_source_url",
+    "source_url",
+    "url",
+}
 
 OBSERVATION_COLORS = {
     "institution": "#2563eb",
@@ -36,6 +48,7 @@ class MapOptions:
     heat_windows: tuple[int, ...] = (30, 90, 365)
     default_heat_window: int = 90
     max_popup_chars: int = 2200
+    max_markers: int = 10_000
     cluster_disable_at_zoom: int = 11
     show_minimap: bool = True
     show_measure_control: bool = True
@@ -154,16 +167,17 @@ def load_map_frame(path: str | Path) -> pd.DataFrame:
     if not path.is_file():
         raise FileNotFoundError(path)
     suffix = path.suffix.casefold()
+    dtype = {column: str for column in _IDENTIFIER_COLUMNS}
     if suffix == ".csv":
-        return pd.read_csv(path)
+        return pd.read_csv(path, dtype=dtype)
     if suffix == ".xlsx":
-        workbook = pd.ExcelFile(path)
-        for preferred in ("observations", "posts"):
-            if preferred in workbook.sheet_names:
-                return pd.read_excel(path, sheet_name=preferred)
-        if workbook.sheet_names:
-            return pd.read_excel(path, sheet_name=workbook.sheet_names[0])
-        raise ValueError("Workbook contains no readable sheets.")
+        with pd.ExcelFile(path) as workbook:
+            for preferred in ("observations", "posts"):
+                if preferred in workbook.sheet_names:
+                    return workbook.parse(preferred, dtype=dtype)
+            if workbook.sheet_names:
+                return workbook.parse(workbook.sheet_names[0], dtype=dtype)
+            raise ValueError("Workbook contains no readable sheets.")
     raise ValueError("Map source must be CSV or XLSX.")
 
 
@@ -178,8 +192,7 @@ def _coordinates(df: pd.DataFrame) -> pd.DataFrame:
         )
     work = work.dropna(subset=["latitude", "longitude"])
     return work[
-        work["latitude"].between(-90, 90, inclusive="both")
-        & work["longitude"].between(-180, 180, inclusive="both")
+        work["latitude"].between(-90, 90, inclusive="both") & work["longitude"].between(-180, 180, inclusive="both")
     ].copy()
 
 
@@ -215,7 +228,9 @@ def _normalize_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
             spatial_matches = _json_objects(row.get("spatial_matches", ""))
             spatial_matches.sort(
                 key=lambda item: (
-                    _numeric(item.get("distance_km")) if _numeric(item.get("distance_km")) is not None else float("inf"),
+                    _numeric(item.get("distance_km"))
+                    if _numeric(item.get("distance_km")) is not None
+                    else float("inf"),
                     _clean(item.get("reference_layer")).casefold(),
                     _clean(item.get("reference_id")).casefold(),
                 )
@@ -233,10 +248,7 @@ def _normalize_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
             kind = _first(row, "content_type") or "post"
             platform = _first(row, "platform") or "source"
             native_id = _first(row, "native_id", "tweet_id")
-            record_id = (
-                _first(row, "record_key")
-                or (f"{platform}:{native_id}" if native_id else f"row-{index}")
-            )
+            record_id = _first(row, "record_key") or (f"{platform}:{native_id}" if native_id else f"row-{index}")
             author = _first(row, "author_name", "display_name", "author_handle", "username")
             title = f"{platform.title()} {kind.replace('_', ' ')}"
             if author:
@@ -563,11 +575,7 @@ def _summary_stats(
 
 def _panel_html(stats: dict[str, Any], title: str, subtitle: str) -> str:
     coverage = 100.0 * stats["mapped_rows"] / max(1, stats["source_rows"])
-    dataset_label = (
-        "Research observations"
-        if stats["dataset_type"] == "research_observations"
-        else "Source records"
-    )
+    dataset_label = "Research observations" if stats["dataset_type"] == "research_observations" else "Source records"
     rows = [
         f"<div><b>{stats['mapped_rows']:,}</b> mapped of {stats['source_rows']:,} rows ({coverage:.1f}%)</div>",
         f"<div><b>{stats['dimensions']}</b> mapped {stats['dimension_label']}</div>",
@@ -581,7 +589,9 @@ def _panel_html(stats: dict[str, Any], title: str, subtitle: str) -> str:
     if stats["us_overlap_rows"]:
         rows.append(f"<div><b>{stats['us_overlap_rows']}</b> records tagged for U.S. overlap</div>")
     if stats["computed_proximity_rows"]:
-        rows.append(f"<div><b>{stats['computed_proximity_rows']}</b> observations with computed reference proximity</div>")
+        rows.append(
+            f"<div><b>{stats['computed_proximity_rows']}</b> observations with computed reference proximity</div>"
+        )
     if stats["reference_rows"]:
         rows.append(f"<div><b>{stats['reference_rows']}</b> external reference points</div>")
     if stats["earliest_date"] and stats["latest_date"]:
@@ -593,7 +603,7 @@ def _panel_html(stats: dict[str, Any], title: str, subtitle: str) -> str:
       <div class="sugar-panel-title">{html.escape(title)}</div>
       <div class="sugar-panel-subtitle">{html.escape(subtitle)}</div>
       <div class="sugar-panel-type">{html.escape(dataset_label)}</div>
-      {''.join(rows)}
+      {"".join(rows)}
       <div class="sugar-panel-note">Heat intensity represents mapped record density, not influence, sentiment, audience size, institutional strength, or causal effect. Computed proximity is distance only and is not a strategic-overlap finding.</div>
     </div>
     """
@@ -703,7 +713,14 @@ def create_map(
     from folium.plugins import Fullscreen, HeatMap, MarkerCluster, MeasureControl, MiniMap, MousePosition
 
     options = options or MapOptions()
+    if options.max_markers < 1:
+        raise ValueError("MapOptions.max_markers must be at least 1.")
     work, dataset_type = _normalize_rows(df)
+    if len(work) > options.max_markers:
+        raise ValueError(
+            f"Map input contains {len(work):,} mappable rows, exceeding the {options.max_markers:,} marker limit. "
+            "Aggregate or filter the dataset before creating an interactive map."
+        )
     if work.empty:
         raise ValueError("No valid coordinates are available to map.")
 
@@ -895,10 +912,9 @@ def create_map(
         now = pd.Timestamp.now(tz="UTC")
         if analysis_work["_date"].notna().any():
             for days in options.heat_windows:
-                mask = (
-                    analysis_work["_date"].ge(now - pd.Timedelta(days=days))
-                    & analysis_work["_date"].le(now)
-                )
+                mask = analysis_work["_date"].ge(now - pd.to_timedelta(int(days), unit="D")) & analysis_work[
+                    "_date"
+                ].le(now)
                 points = _heat_points(analysis_work, mask)
                 if not points:
                     continue
@@ -956,9 +972,7 @@ def create_map(
 
     bounds_frames = [work[["latitude", "longitude"]]]
     bounds_frames.extend(
-        normalized[["latitude", "longitude"]]
-        for _, normalized in normalized_references
-        if not normalized.empty
+        normalized[["latitude", "longitude"]] for _, normalized in normalized_references if not normalized.empty
     )
     endpoint_rows: list[dict[str, float]] = []
     for _, row in proximity_rows.iterrows():
@@ -986,6 +1000,8 @@ def create_map(
     folium.LayerControl(collapsed=False, position="topright").add_to(m)
 
     output_file = str(Path(output_file).expanduser().resolve())
-    Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-    m.save(output_file)
+    target = Path(output_file)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with atomic_path(target, suffix=target.suffix or ".html") as temporary:
+        m.save(str(temporary))
     return output_file

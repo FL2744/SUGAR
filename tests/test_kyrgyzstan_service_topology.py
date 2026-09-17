@@ -11,7 +11,6 @@ if str(CASE_DIR) not in sys.path:
 
 from location_enrichment import apply_us_site_location_enrichment
 
-
 EDUCATIONUSA_NAME = "EducationUSA Kyrgyzstan (fully online from April 1, 2026)"
 
 

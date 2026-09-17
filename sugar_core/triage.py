@@ -4,10 +4,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from .llm import LLMConfig, cached_chat, create_client, parse_json_object
+from .llm import LLMBudget, LLMConfig, cached_chat, create_client, parse_json_object
 from .models import PostRecord
 from .observations import ResearchObservation, observation_from_post
-from .utils import JsonCache, normalize_whitespace
+from .utils import MemoryCache, normalize_whitespace
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 
@@ -152,10 +152,7 @@ def parse_triage_result(raw: dict[str, Any], record: PostRecord) -> TriageResult
     evidence = _ground_evidence(raw.get("evidence"), record)
     grounded_labels = {item.label for item in evidence}
 
-    labels = [
-        label for label in labels
-        if label not in _STRICTLY_GROUNDED_LABELS or label in grounded_labels
-    ]
+    labels = [label for label in labels if label not in _STRICTLY_GROUNDED_LABELS or label in grounded_labels]
 
     if relevance == "relevant" and not evidence:
         relevance = "uncertain"
@@ -222,8 +219,9 @@ def triage_post(
     *,
     client: Any,
     llm: LLMConfig,
-    cache: JsonCache | None = None,
+    cache: MemoryCache | None = None,
     project_context: str = DEFAULT_PROJECT_CONTEXT,
+    budget: LLMBudget | None = None,
 ) -> TriageResult:
     system, user = _triage_prompt(record, project_context)
     response = cached_chat(
@@ -234,6 +232,7 @@ def triage_post(
         system,
         user,
         max_tokens=1800,
+        budget=budget,
     )
     return parse_triage_result(parse_json_object(response), record)
 
@@ -274,13 +273,16 @@ def triage_posts(
     project_context: str = DEFAULT_PROJECT_CONTEXT,
     progress: ProgressCallback | None = None,
     continue_on_error: bool = True,
+    budget: LLMBudget | None = None,
 ) -> list[ResearchObservation]:
     records = list(records)
     if not records:
         return []
 
     client = create_client(llm)
-    cache = JsonCache(Path(cache_dir) / "triage.json")
+    # Triage prompts include source text and must not be persisted in cleartext.
+    cache = MemoryCache()
+    budget = budget if budget is not None else LLMBudget.from_config(llm)
     observations: list[ResearchObservation] = []
     total = len(records)
     _notify(progress, "triaging", total=total)
@@ -293,6 +295,7 @@ def triage_posts(
                 llm=llm,
                 cache=cache,
                 project_context=project_context,
+                budget=budget,
             )
             observation = observation_from_triage(record, result, model=llm.model)
         except Exception as exc:

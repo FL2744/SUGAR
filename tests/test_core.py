@@ -2,11 +2,12 @@ import json
 
 import pandas as pd
 
+from sugar_core import __version__
 from sugar_core.collectors import normalize_engagement
 from sugar_core.models import PostRecord, merge_record
 from sugar_core.reporting import _prepare
-from sugar_core.storage import records_to_frame
-from sugar_core.utils import in_inclusive_date_range, safe_cell
+from sugar_core.storage import load_results, records_to_frame, save_records
+from sugar_core.utils import in_inclusive_date_range, runtime_metadata, safe_cell
 
 
 def test_mastodon_engagement_normalization():
@@ -35,20 +36,70 @@ def test_formula_injection_guard_does_not_corrupt_numbers():
 
 
 def test_export_has_stable_and_legacy_fields():
-    record = PostRecord(platform="bluesky", native_id="abc", canonical_url="https://example.test/p/abc", query="q", query_matches=["q"], engagement={"likes": 1})
+    record = PostRecord(
+        platform="bluesky",
+        native_id="abc",
+        canonical_url="https://example.test/p/abc",
+        query="q",
+        query_matches=["q"],
+        engagement={"likes": 1},
+    )
     frame = records_to_frame([record])
     assert frame.loc[0, "native_id"] == "abc"
     assert frame.loc[0, "tweet_id"] == "abc"
     assert json.loads(frame.loc[0, "query_matches"]) == ["q"]
 
 
+def test_new_records_advertise_the_current_collector_version():
+    record = PostRecord(platform="x", native_id="abc", canonical_url="u", query="q")
+    assert record.collector_version == f"sugar-core-{__version__}"
+
+
+def test_csv_and_xlsx_loaders_preserve_numeric_looking_native_ids(tmp_path):
+    record = PostRecord(
+        platform="x",
+        native_id="000123",
+        canonical_url="https://example.test/p/000123",
+        query="q",
+    )
+    save_records([record], tmp_path / "posts.csv")
+    metadata = json.loads((tmp_path / "posts.metadata.json").read_text(encoding="utf-8"))
+    assert metadata["sugar_version"] == __version__
+    assert metadata["runtime"]["python_version"]
+    assert metadata["runtime"]["dependencies"]["requests"]
+
+    for path in (tmp_path / "posts.csv", tmp_path / "posts.xlsx"):
+        loaded = load_results(path)
+        assert loaded.loc[0, "native_id"] == "000123"
+        assert isinstance(loaded.loc[0, "native_id"], str)
+
+
+def test_runtime_metadata_is_non_secret_and_structured():
+    metadata = runtime_metadata()
+    assert set(metadata) == {
+        "python_version",
+        "python_implementation",
+        "operating_system",
+        "architecture",
+        "dependencies",
+    }
+    assert metadata["dependencies"]["requests"]
+    assert all("key" not in key.casefold() and "token" not in key.casefold() for key in metadata["dependencies"])
+
+
 def test_analysis_counts_legacy_mastodon_metrics():
-    df = pd.DataFrame([{
-        "platform": "mastodon", "tweet_id": "1", "date_iso": "2026-09-10T10:00:00Z",
-        "detected_language": "en", "inferred_location": "", "raw_stats": json.dumps({
-            "favourite_count": 4, "reply_count": 1, "reblog_count": 2
-        })
-    }])
+    df = pd.DataFrame(
+        [
+            {
+                "platform": "mastodon",
+                "tweet_id": "1",
+                "date_iso": "2026-09-10T10:00:00Z",
+                "detected_language": "en",
+                "inferred_location": "",
+                "raw_stats": json.dumps({"favourite_count": 4, "reply_count": 1, "reblog_count": 2}),
+            }
+        ]
+    )
     work, metrics = _prepare(df)
     assert int(work.loc[0, "engagement_total"]) == 7
     assert metrics["engagement"] == 7

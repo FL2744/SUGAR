@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -23,7 +22,7 @@ from .state_schema import (
     SupportAssessment,
 )
 from .state_workflow import load_state_assessments, save_state_assessments
-from .utils import safe_cell
+from .utils import atomic_path, safe_cell
 
 
 def _clean(value: Any) -> str:
@@ -124,76 +123,117 @@ def export_review_workbook(
 
     instructions = _formula_safe_frame(
         [
-            {"rule": "Purpose", "guidance": "This workbook records human analytic decisions. It does not edit raw source evidence."},
-            {"rule": "Evidence", "guidance": "Do not verify a claim unless its evidence_refs identify source evidence attached to the observation."},
-            {"rule": "PRC support", "guidance": "Confirmed support requires explicit evidence and support_review_decision=human_verified with a named reviewer."},
-            {"rule": "Influence", "guidance": "Do not verify an influence claim from views, likes, comments, attendance, repetition, or proximity alone. Causal influence requires outcome/causal evidence and will still be audited."},
-            {"rule": "Anti-U.S./coordination", "guidance": "Use these labels only when the content or relationship is explicit and source-supported."},
-            {"rule": "Decision", "guidance": "Use human_verified, rejected, needs_followup, ai_triaged, or unreviewed. A reviewer is required for human_verified/rejected."},
-            {"rule": "Taxonomy edits", "guidance": "Semicolon-separated audience/domain/narrative values may be corrected; unknown taxonomy values will fail import rather than silently enter the dataset."},
-            {"rule": "Spreadsheet safety", "guidance": "Source-derived text is exported formula-safe so untrusted content cannot execute as an Excel formula when the workbook opens."},
+            {
+                "rule": "Purpose",
+                "guidance": "This workbook records human analytic decisions. It does not edit raw source evidence.",
+            },
+            {
+                "rule": "Evidence",
+                "guidance": "Do not verify a claim unless its evidence_refs identify source evidence attached to the observation.",
+            },
+            {
+                "rule": "PRC support",
+                "guidance": "Confirmed support requires explicit evidence and support_review_decision=human_verified with a named reviewer.",
+            },
+            {
+                "rule": "Influence",
+                "guidance": "Do not verify an influence claim from views, likes, comments, attendance, repetition, or proximity alone. Causal influence requires outcome/causal evidence and will still be audited.",
+            },
+            {
+                "rule": "Anti-U.S./coordination",
+                "guidance": "Use these labels only when the content or relationship is explicit and source-supported.",
+            },
+            {
+                "rule": "Decision",
+                "guidance": "Use human_verified, rejected, needs_followup, ai_triaged, or unreviewed. A reviewer is required for human_verified/rejected.",
+            },
+            {
+                "rule": "Taxonomy edits",
+                "guidance": "Semicolon-separated audience/domain/narrative values may be corrected; unknown taxonomy values will fail import rather than silently enter the dataset.",
+            },
+            {
+                "rule": "Spreadsheet safety",
+                "guidance": "Source-derived text is exported formula-safe so untrusted content cannot execute as an Excel formula when the workbook opens.",
+            },
         ]
     )
 
-    with pd.ExcelWriter(target, engine="openpyxl") as writer:
-        _formula_safe_frame(assessment_rows).to_excel(writer, index=False, sheet_name="assessments")
-        _formula_safe_frame(claim_rows).to_excel(writer, index=False, sheet_name="claims")
-        instructions.to_excel(writer, index=False, sheet_name="instructions")
+    with atomic_path(target, suffix=".xlsx") as temporary:
+        with pd.ExcelWriter(temporary, engine="openpyxl") as writer:
+            _formula_safe_frame(assessment_rows).to_excel(writer, index=False, sheet_name="assessments")
+            _formula_safe_frame(claim_rows).to_excel(writer, index=False, sheet_name="claims")
+            instructions.to_excel(writer, index=False, sheet_name="instructions")
 
-    workbook = load_workbook(target)
-    header_fill = PatternFill("solid", fgColor="D9EAF7")
-    decision_fill = PatternFill("solid", fgColor="FFF2CC")
-    for sheet_name in ("assessments", "claims", "instructions"):
-        ws = workbook[sheet_name]
-        ws.freeze_panes = "A2"
-        if ws.max_column:
-            ws.auto_filter.ref = ws.dimensions
-        for cell in ws[1]:
-            cell.font = Font(bold=True)
-            cell.fill = header_fill
-            cell.alignment = Alignment(vertical="top", wrap_text=True)
-        for row in ws.iter_rows(min_row=2):
-            for cell in row:
+        workbook = load_workbook(temporary)
+        header_fill = PatternFill("solid", fgColor="D9EAF7")
+        decision_fill = PatternFill("solid", fgColor="FFF2CC")
+        for sheet_name in ("assessments", "claims", "instructions"):
+            ws = workbook[sheet_name]
+            ws.freeze_panes = "A2"
+            if ws.max_column:
+                ws.auto_filter.ref = ws.dimensions
+            for cell in ws[1]:
+                cell.font = Font(bold=True)
+                cell.fill = header_fill
                 cell.alignment = Alignment(vertical="top", wrap_text=True)
-        for column_cells in ws.columns:
-            header = str(column_cells[0].value or "")
-            width = 18
-            if header in {"summary", "statement", "review_note", "support_rationale", "support_evidence_refs", "evidence_refs"}:
-                width = 55
-            elif header in {"primary_source_url"}:
-                width = 42
-            elif header in {"strategic_audiences", "program_domains", "narrative_tags", "sponsor_entities", "host_entities", "partner_entities", "policy_relevance", "us_overlap"}:
-                width = 32
-            ws.column_dimensions[column_cells[0].column_letter].width = width
+            for row in ws.iter_rows(min_row=2):
+                for cell in row:
+                    cell.alignment = Alignment(vertical="top", wrap_text=True)
+            for column_cells in ws.columns:
+                header = str(column_cells[0].value or "")
+                width = 18
+                if header in {
+                    "summary",
+                    "statement",
+                    "review_note",
+                    "support_rationale",
+                    "support_evidence_refs",
+                    "evidence_refs",
+                }:
+                    width = 55
+                elif header in {"primary_source_url"}:
+                    width = 42
+                elif header in {
+                    "strategic_audiences",
+                    "program_domains",
+                    "narrative_tags",
+                    "sponsor_entities",
+                    "host_entities",
+                    "partner_entities",
+                    "policy_relevance",
+                    "us_overlap",
+                }:
+                    width = 32
+                ws.column_dimensions[column_cells[0].column_letter].width = width
 
-    decision_values = '"' + ",".join(sorted(REVIEW_STATES)) + '"'
-    support_values = '"' + ",".join(sorted(SUPPORT_LEVELS)) + '"'
-    observability_values = '"' + ",".join(sorted(OBSERVABILITY_LEVELS)) + '"'
-    for sheet_name in ("assessments", "claims"):
-        ws = workbook[sheet_name]
+        decision_values = '"' + ",".join(sorted(REVIEW_STATES)) + '"'
+        support_values = '"' + ",".join(sorted(SUPPORT_LEVELS)) + '"'
+        observability_values = '"' + ",".join(sorted(OBSERVABILITY_LEVELS)) + '"'
+        for sheet_name in ("assessments", "claims"):
+            ws = workbook[sheet_name]
+            headers = {str(cell.value): cell.column for cell in ws[1]}
+            if "decision" in headers:
+                validation = DataValidation(type="list", formula1=decision_values, allow_blank=True)
+                ws.add_data_validation(validation)
+                col = ws.cell(row=1, column=headers["decision"]).column_letter
+                validation.add(f"{col}2:{col}{max(2, ws.max_row)}")
+                for cell in ws[col][1:]:
+                    cell.fill = decision_fill
+        ws = workbook["assessments"]
         headers = {str(cell.value): cell.column for cell in ws[1]}
-        if "decision" in headers:
-            validation = DataValidation(type="list", formula1=decision_values, allow_blank=True)
+        for header, values in (
+            ("support_level_decision", support_values),
+            ("support_review_decision", decision_values),
+            ("observability_level", observability_values),
+        ):
+            validation = DataValidation(type="list", formula1=values, allow_blank=True)
             ws.add_data_validation(validation)
-            col = ws.cell(row=1, column=headers["decision"]).column_letter
+            col = ws.cell(row=1, column=headers[header]).column_letter
             validation.add(f"{col}2:{col}{max(2, ws.max_row)}")
-            for cell in ws[col][1:]:
-                cell.fill = decision_fill
-    ws = workbook["assessments"]
-    headers = {str(cell.value): cell.column for cell in ws[1]}
-    for header, values in (
-        ("support_level_decision", support_values),
-        ("support_review_decision", decision_values),
-        ("observability_level", observability_values),
-    ):
-        validation = DataValidation(type="list", formula1=values, allow_blank=True)
-        ws.add_data_validation(validation)
-        col = ws.cell(row=1, column=headers[header]).column_letter
-        validation.add(f"{col}2:{col}{max(2, ws.max_row)}")
-        if header != "observability_level":
-            for cell in ws[col][1:]:
-                cell.fill = decision_fill
-    workbook.save(target)
+            if header != "observability_level":
+                for cell in ws[col][1:]:
+                    cell.fill = decision_fill
+        workbook.save(temporary)
     return str(target.resolve())
 
 
@@ -213,8 +253,9 @@ def apply_review_workbook(
     path = Path(workbook_file)
     if not path.is_file():
         raise FileNotFoundError(path)
-    assessment_frame = pd.read_excel(path, sheet_name="assessments")
-    claim_frame = pd.read_excel(path, sheet_name="claims")
+    dtype = {"assessment_id": str, "observation_id": str, "claim_id": str}
+    assessment_frame = pd.read_excel(path, sheet_name="assessments", dtype=dtype)
+    claim_frame = pd.read_excel(path, sheet_name="claims", dtype=dtype)
     by_id = {row.assessment_id: row for row in assessments}
 
     for raw in assessment_frame.to_dict(orient="records"):
@@ -301,7 +342,11 @@ def apply_review_workbook(
                 raise ValueError(f"Unsupported claim decision: {decision}")
             if decision in {"human_verified", "rejected"} and not reviewer:
                 raise ValueError(f"Claim {claim_id} decision {decision} requires a reviewer.")
-            if claim.claim_type == "influence" and decision == "human_verified" and assessment.observability_level != "causal_influence_evidence":
+            if (
+                claim.claim_type == "influence"
+                and decision == "human_verified"
+                and assessment.observability_level != "causal_influence_evidence"
+            ):
                 raise ValueError(
                     f"Influence claim {claim_id} cannot be human-verified unless observability_level is causal_influence_evidence."
                 )

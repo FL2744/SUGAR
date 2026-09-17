@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlparse
 
+from .utils import atomic_write_text
 
 SOURCE_AUTHORITY_TYPES = {
     "official_authority",
@@ -106,13 +107,9 @@ class SourceClaim:
         self.source_url = _source_url(self.source_url)
         self.source_label = _clean(self.source_label)
         self.publisher = _clean(self.publisher)
-        self.authority_type = _choice(
-            self.authority_type, SOURCE_AUTHORITY_TYPES, "source authority type", "other"
-        )
+        self.authority_type = _choice(self.authority_type, SOURCE_AUTHORITY_TYPES, "source authority type", "other")
         self.authority_scope = _clean(self.authority_scope)
-        self.freshness = _choice(
-            self.freshness, SOURCE_FRESHNESS_STATES, "source freshness", "unknown"
-        )
+        self.freshness = _choice(self.freshness, SOURCE_FRESHNESS_STATES, "source freshness", "unknown")
         self.published_at = _date_like(self.published_at, "published_at")
         self.updated_at = _date_like(self.updated_at, "updated_at")
         self.retrieved_at = _date_like(self.retrieved_at, "retrieved_at")
@@ -152,12 +149,8 @@ class SourceConflict:
         if len({claim.source_url for claim in self.claims}) < 2:
             raise ValueError("Source conflicts require at least two distinct source URLs.")
 
-        self.conflict_type = _choice(
-            self.conflict_type, SOURCE_CONFLICT_TYPES, "source conflict type", "other"
-        )
-        self.status = _choice(
-            self.status, SOURCE_CONFLICT_STATUSES, "source conflict status", "open"
-        )
+        self.conflict_type = _choice(self.conflict_type, SOURCE_CONFLICT_TYPES, "source conflict type", "other")
+        self.status = _choice(self.status, SOURCE_CONFLICT_STATUSES, "source conflict status", "open")
         self.preferred_claim_id = _clean(self.preferred_claim_id)
         self.treatment = _clean(self.treatment)
         self.preference_rationale = _clean(self.preference_rationale)
@@ -180,9 +173,7 @@ class SourceConflict:
             raise ValueError("Human-adjudicated source conflicts require a named reviewer.")
 
         if not self.conflict_id:
-            self.conflict_id = _stable_id(
-                "srcconflict", self.conflict_type, self.topic, *sorted(claim_ids)
-            )
+            self.conflict_id = _stable_id("srcconflict", self.conflict_type, self.topic, *sorted(claim_ids))
         else:
             self.conflict_id = _clean(self.conflict_id)
 
@@ -220,10 +211,7 @@ def save_source_conflicts(conflicts: Iterable[SourceConflict], path: str | Path)
     target = Path(path).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     payload = source_conflicts_to_dicts(conflicts)
-    target.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
+    atomic_write_text(target, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     return str(target)
 
 
@@ -234,7 +222,12 @@ def load_source_conflicts(path: str | Path) -> list[SourceConflict]:
     raw = json.loads(source.read_text(encoding="utf-8-sig"))
     if not isinstance(raw, list):
         raise ValueError("Source conflict files must contain a JSON list.")
-    return [SourceConflict(**dict(item)) for item in raw]
+    conflicts: list[SourceConflict] = []
+    for index, item in enumerate(raw, 1):
+        if not isinstance(item, dict):
+            raise ValueError(f"Source conflict record {index} must be a JSON object.")
+        conflicts.append(SourceConflict(**dict(item)))
+    return conflicts
 
 
 def source_conflict_summary(conflicts: Iterable[SourceConflict]) -> dict[str, Any]:

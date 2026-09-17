@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from .llm import LLMConfig, cached_chat, create_client, parse_json_object
+from .llm import LLMBudget, LLMConfig, cached_chat, create_client, parse_json_object
 from .observations import ResearchObservation
 from .state_schema import (
     CLAIM_TYPES,
@@ -18,7 +19,7 @@ from .state_schema import (
     StateAssessment,
     SupportAssessment,
 )
-from .utils import JsonCache
+from .utils import MemoryCache
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 
@@ -157,8 +158,8 @@ def _safe_confidence(value: Any) -> float | None:
         if value is None or value == "":
             return None
         number = float(value)
-        return number if 0.0 <= number <= 1.0 else None
-    except (TypeError, ValueError):
+        return number if math.isfinite(number) and 0.0 <= number <= 1.0 else None
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -167,8 +168,8 @@ def _safe_metric(value: Any) -> int | None:
         if value is None or value == "":
             return None
         number = int(float(value))
-        return number if number >= 0 else None
-    except (TypeError, ValueError):
+        return number if math.isfinite(number) and number >= 0 else None
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -191,7 +192,9 @@ def assessment_from_triage_payload(
     support_refs = _valid_refs(support_raw.get("evidence_refs") or [], allowed_refs)
     if requested_level == "probable" and not support_refs:
         requested_level = "possible"
-        downgrade_note = (downgrade_note + " High-confidence support label lacked an attached evidence reference and was downgraded.").strip()
+        downgrade_note = (
+            downgrade_note + " High-confidence support label lacked an attached evidence reference and was downgraded."
+        ).strip()
     support = SupportAssessment(
         level=requested_level,
         bases=_allowed_values(support_raw.get("bases") or [], SUPPORT_BASES),
@@ -255,7 +258,9 @@ def assessment_from_triage_payload(
 
     note_parts = [str(payload.get("review_note", "")).strip(), downgrade_note]
     if needs_followup:
-        note_parts.append("Potential influence/outcome language requires human follow-up; AI cannot establish causal influence.")
+        note_parts.append(
+            "Potential influence/outcome language requires human follow-up; AI cannot establish causal influence."
+        )
 
     priority = str(payload.get("analytic_priority", "normal")).strip().casefold()
     if priority not in {"low", "normal", "high", "urgent"}:
@@ -286,7 +291,8 @@ def triage_observation(
     *,
     llm: LLMConfig,
     client=None,
-    cache: JsonCache | None = None,
+    cache: MemoryCache | None = None,
+    budget: LLMBudget | None = None,
 ) -> StateAssessment:
     client = client or create_client(llm)
     response = cached_chat(
@@ -297,6 +303,7 @@ def triage_observation(
         _triage_system_prompt(),
         _triage_user_prompt(observation),
         max_tokens=3500,
+        budget=budget,
     )
     payload = parse_json_object(response)
     return assessment_from_triage_payload(observation, payload, model=llm.model)
@@ -310,18 +317,23 @@ def triage_observations(
     limit: int | None = None,
     progress: ProgressCallback | None = None,
     continue_on_error: bool = True,
+    budget: LLMBudget | None = None,
 ) -> list[StateAssessment]:
     rows = list(observations)
     if limit is not None:
         rows = rows[: max(0, int(limit))]
-    cache = JsonCache(Path(cache_dir) / "state_triage.json") if cache_dir else None
+    # State-triage prompts include observation text; cache only in process memory.
+    cache = MemoryCache() if cache_dir else None
+    budget = budget if budget is not None else LLMBudget.from_config(llm)
     client = create_client(llm)
     result: list[StateAssessment] = []
     total = len(rows)
     for index, observation in enumerate(rows, 1):
-        _notify(progress, "state_triage_item_start", current=index, total=total, observation_id=observation.observation_id)
+        _notify(
+            progress, "state_triage_item_start", current=index, total=total, observation_id=observation.observation_id
+        )
         try:
-            assessment = triage_observation(observation, llm=llm, client=client, cache=cache)
+            assessment = triage_observation(observation, llm=llm, client=client, cache=cache, budget=budget)
         except Exception as exc:
             if not continue_on_error:
                 raise

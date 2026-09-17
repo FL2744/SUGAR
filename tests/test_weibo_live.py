@@ -6,11 +6,13 @@ import pytest
 
 from sugar_core.weibo_investigation import investigate_weibo_seed
 
-
-pytestmark = pytest.mark.skipif(
-    os.environ.get("SUGAR_LIVE_WEIBO") != "1",
-    reason="set SUGAR_LIVE_WEIBO=1 to run the bounded public Weibo integration smoke test",
-)
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.skipif(
+        os.environ.get("SUGAR_LIVE_WEIBO") != "1",
+        reason="set SUGAR_LIVE_WEIBO=1 to run the bounded public Weibo integration smoke test",
+    ),
+]
 
 
 def test_live_public_weibo_seed_and_context_smoke():

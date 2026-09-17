@@ -32,6 +32,7 @@ class BackendRunner(QObject):
         self._stderr_buffer = ""
         self._config_path: Path | None = None
         self._active_command = ""
+        self._cancel_requested = False
 
     @property
     def is_running(self) -> bool:
@@ -65,6 +66,7 @@ class BackendRunner(QObject):
         self._stdout_buffer = ""
         self._stderr_buffer = ""
         self._active_command = command
+        self._cancel_requested = False
 
         program, prefix = self._bridge_location()
         arguments = [*prefix, command]
@@ -107,6 +109,7 @@ class BackendRunner(QObject):
     def cancel(self) -> None:
         if not self.is_running:
             return
+        self._cancel_requested = True
         self.event.emit({"event": "cancel_requested", "operation": self._active_command})
         self.process.terminate()
         if not self.process.waitForFinished(2500):
@@ -157,12 +160,21 @@ class BackendRunner(QObject):
             self._handle_stdout_line(self._stdout_buffer.strip())
         if self._stderr_buffer.strip():
             self.event.emit({"event": "backend_stderr", "message": self._stderr_buffer.strip()})
+        if self._cancel_requested:
+            self.event.emit(
+                {
+                    "event": "cancelled",
+                    "code": "cancelled",
+                    "message": "Operation cancelled by user.",
+                }
+            )
         self._stdout_buffer = ""
         self._stderr_buffer = ""
         self.running_changed.emit(False)
         self.finished.emit(int(exit_code))
         self._cleanup_config()
         self._active_command = ""
+        self._cancel_requested = False
 
     def _cleanup_config(self) -> None:
         if self._config_path is None:

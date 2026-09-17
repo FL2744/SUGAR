@@ -2,14 +2,52 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import platform
 import re
+import tempfile
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
+from importlib import metadata as importlib_metadata
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
+
+RUNTIME_PACKAGES = (
+    "beautifulsoup4",
+    "certifi",
+    "chardet",
+    "folium",
+    "geopy",
+    "langdetect",
+    "matplotlib",
+    "openai",
+    "openpyxl",
+    "pandas",
+    "python-docx",
+    "reportlab",
+    "requests",
+)
 
 
 def normalize_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
+def safe_artifact_stem(value: Any, default: str = "artifact", *, max_length: int = 96) -> str:
+    """Return a portable, single-component stem for generated artifact names."""
+
+    raw = normalize_whitespace(str(value or ""))
+    if not raw:
+        raw = normalize_whitespace(default)
+    if any(char in raw for char in ("/", "\\", ":")) or any(ord(char) < 32 for char in raw):
+        raise ValueError("artifact name must be a single file name, not a path")
+    stem = re.sub(r'[<>:"|?*]', "_", raw)
+    stem = re.sub(r"[^\w.-]+", "_", stem, flags=re.UNICODE).strip(" ._")
+    stem = re.sub(r"_+", "_", stem)
+    if not stem or stem in {".", ".."}:
+        stem = normalize_whitespace(default)
+    stem = stem[:max_length].rstrip(" ._")
+    return stem or "artifact"
 
 
 def safe_cell(value: Any, formula_safe: bool = True) -> Any:
@@ -34,7 +72,7 @@ def parse_date(value: str | None) -> date | None:
     except ValueError:
         try:
             return date.fromisoformat(value[:10])
-        except Exception:
+        except (TypeError, ValueError):
             return None
 
 
@@ -52,12 +90,69 @@ def stable_hash(*parts: Any) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def runtime_dependency_versions() -> dict[str, str]:
+    """Return the declared runtime dependency versions available in this process."""
+
+    versions: dict[str, str] = {}
+    for package in RUNTIME_PACKAGES:
+        try:
+            versions[package] = importlib_metadata.version(package)
+        except importlib_metadata.PackageNotFoundError:
+            versions[package] = "not-installed"
+    return versions
+
+
+def runtime_metadata() -> dict[str, Any]:
+    """Return non-secret runtime facts used to reproduce generated artifacts."""
+
+    return {
+        "python_version": platform.python_version(),
+        "python_implementation": platform.python_implementation(),
+        "operating_system": platform.system() or "unknown",
+        "architecture": platform.machine() or "unknown",
+        "dependencies": runtime_dependency_versions(),
+    }
+
+
+@contextmanager
+def atomic_path(path: str | Path, *, suffix: str | None = None) -> Iterator[Path]:
+    """Yield a same-directory temporary path and publish it atomically on success.
+
+    Pass a real file suffix when the producer selects a codec from the path
+    extension (for example, openpyxl requires a temporary ``.xlsx`` path).
+    """
+
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary_suffix = ".tmp" if suffix is None else suffix
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=temporary_suffix, dir=target.parent)
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        yield temporary
+        os.replace(temporary, target)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            # The producer may have moved or removed the temporary file.
+            return
+
+
+def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -> None:
+    with atomic_path(path) as temporary:
+        # This primitive is restricted to caller-sanitized, user-requested
+        # artifacts; credential-bearing configuration never reaches it.
+        # codeql[py/clear-text-storage-sensitive-data]
+        temporary.write_text(text, encoding=encoding)
+
+
 class JsonCache:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         try:
             self.data = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
-        except Exception:
+        except (OSError, TypeError, ValueError):
             self.data = {}
 
     def get(self, key: str):
@@ -65,10 +160,20 @@ class JsonCache:
 
     def set(self, key: str, value: Any) -> None:
         self.data[key] = value
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        temp = self.path.with_suffix(self.path.suffix + ".tmp")
-        temp.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
-        temp.replace(self.path)
+        atomic_write_text(self.path, json.dumps(self.data, ensure_ascii=False, indent=2))
+
+
+class MemoryCache:
+    """Process-local cache for derived or potentially sensitive research text."""
+
+    def __init__(self) -> None:
+        self.data: dict[str, Any] = {}
+
+    def get(self, key: str) -> Any:
+        return self.data.get(key)
+
+    def set(self, key: str, value: Any) -> None:
+        self.data[key] = value
 
 
 def utc_iso(dt: datetime | None = None) -> str:

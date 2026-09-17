@@ -7,6 +7,7 @@ from typing import Any, Iterable
 
 from .observations import ResearchObservation
 from .state_schema import StateAssessment, USPresenceSite, stable_state_id
+from .utils import atomic_path, atomic_write_text, safe_artifact_stem
 
 
 def _clean(value: Any) -> str:
@@ -33,7 +34,9 @@ def build_state_network(
         if node_id not in nodes:
             nodes[node_id] = {"node_id": node_id, "node_type": node_type, "label": label, **properties}
 
-    def add_edge(source: str, target: str, relationship: str, assessment: StateAssessment, observation: ResearchObservation) -> None:
+    def add_edge(
+        source: str, target: str, relationship: str, assessment: StateAssessment, observation: ResearchObservation
+    ) -> None:
         edge_id = stable_state_id("edge", source, relationship, target, assessment.assessment_id)
         if edge_id in edges:
             return
@@ -79,7 +82,13 @@ def build_state_network(
 
         if observation.institution_name:
             institution = _node_id("institution", observation.institution_name, observation.country)
-            add_node(institution, "institution", observation.institution_name, country=observation.country, city=observation.city)
+            add_node(
+                institution,
+                "institution",
+                observation.institution_name,
+                country=observation.country,
+                city=observation.city,
+            )
             add_edge(institution, obs_node, "institution_observed_in", assessment, observation)
         if observation.program_name:
             program = _node_id("program", observation.program_name, observation.country)
@@ -146,22 +155,25 @@ def save_state_network(
     nodes, edges = build_state_network(observations, assessments, us_sites, verified_only=verified_only)
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = "_".join(_clean(name).split()) or "state_network"
+    stem = safe_artifact_stem(name, "state_network")
     nodes_path = out_dir / f"{stem}.nodes.csv"
     edges_path = out_dir / f"{stem}.edges.csv"
     json_path = out_dir / f"{stem}.network.json"
 
     node_fields = sorted({key for row in nodes for key in row}) or ["node_id", "node_type", "label"]
     edge_fields = sorted({key for row in edges for key in row}) or ["edge_id", "source", "target", "relationship"]
-    with nodes_path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=node_fields, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(nodes)
-    with edges_path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=edge_fields, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(edges)
-    json_path.write_text(
+    with atomic_path(nodes_path) as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=node_fields, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(nodes)
+    with atomic_path(edges_path) as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=edge_fields, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(edges)
+    atomic_write_text(
+        json_path,
         json.dumps(
             {
                 "verified_only": verified_only,
@@ -173,6 +185,5 @@ def save_state_network(
             indent=2,
             sort_keys=True,
         ),
-        encoding="utf-8",
     )
     return [str(nodes_path), str(edges_path), str(json_path)]

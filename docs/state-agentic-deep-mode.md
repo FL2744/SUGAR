@@ -109,6 +109,11 @@ The audit does not force a conclusion. It changes the evidence context in which 
 
 SUGAR does not treat agreement among agents as independent confirmation. Agents may share the same model family, prompts, evidence packet, and blind spots.
 
+Agentic runs accept the same explicit token and cost ceilings as triage. A shared thread-safe budget
+covers parallel specialists, iterative retrieval, integration, red-team critique, and revision, so
+`--max-llm-tokens` and the explicit per-1k pricing options bound the whole synthesis rather than one
+worker. The final JSON includes the non-secret usage summary used for that run.
+
 The value of multiple agents is **functional decomposition**:
 
 - one looks for system patterns;

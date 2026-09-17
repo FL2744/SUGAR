@@ -49,9 +49,7 @@ def test_agent_output_discards_invented_refs_and_downgrades_uncited_judgment():
                     "supporting_refs": ["invented:only"],
                 },
             ],
-            "findings": [
-                {"statement": "Invented citation finding", "refs": ["invented:url"], "confidence": "high"}
-            ],
+            "findings": [{"statement": "Invented citation finding", "refs": ["invented:url"], "confidence": "high"}],
         },
         packet,
         agent="test_agent",

@@ -10,17 +10,16 @@ from typing import Any, Iterable
 
 import pandas as pd
 
+from . import __version__
 from .observation_storage import load_observations
 from .observations import ResearchObservation
 from .state_schema import (
-    PROGRAM_DOMAINS,
     StateAssessment,
     USOverlapAssessment,
     USPresenceSite,
     USServiceSourceAttribution,
 )
-from .utils import safe_cell, utc_iso
-
+from .utils import atomic_path, atomic_write_text, runtime_metadata, safe_artifact_stem, safe_cell, utc_iso
 
 DOMAIN_TO_US_SERVICES = {
     "higher_education": {"educationusa", "study_in_the_us", "higher_education"},
@@ -82,7 +81,9 @@ def _list_cell(value: Any) -> list[str]:
             if isinstance(raw, list):
                 return [_clean(item) for item in raw if _clean(item)]
         except json.JSONDecodeError:
-            pass
+            # Preserve the legacy delimiter form when a spreadsheet cell starts
+            # like JSON but contains an invalid list literal.
+            return [_clean(item) for item in text.replace("|", ";").split(";") if _clean(item)]
     return [_clean(item) for item in text.replace("|", ";").split(";") if _clean(item)]
 
 
@@ -104,10 +105,11 @@ def load_us_presence_sites(path: str | Path) -> list[USPresenceSite]:
     source = Path(path)
     if not source.is_file():
         raise FileNotFoundError(source)
+    dtype = {"site_id": str}
     if source.suffix.lower() == ".csv":
-        frame = pd.read_csv(source)
+        frame = pd.read_csv(source, dtype=dtype)
     elif source.suffix.lower() == ".xlsx":
-        frame = pd.read_excel(source)
+        frame = pd.read_excel(source, dtype=dtype)
     else:
         raise ValueError("U.S. presence site input must be CSV or XLSX.")
     sites: list[USPresenceSite] = []
@@ -140,51 +142,66 @@ def write_us_presence_template(path: str | Path) -> str:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     fields = [
-        "site_id", "name", "network", "subtype", "country", "city", "latitude", "longitude",
-        "service_tags", "source_url", "status", "delivery_mode", "coverage_scope",
-        "location_precision", "location_confidence", "location_uncertainty_km", "location_basis",
+        "site_id",
+        "name",
+        "network",
+        "subtype",
+        "country",
+        "city",
+        "latitude",
+        "longitude",
+        "service_tags",
+        "source_url",
+        "status",
+        "delivery_mode",
+        "coverage_scope",
+        "location_precision",
+        "location_confidence",
+        "location_uncertainty_km",
+        "location_basis",
     ]
-    with target.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        writer.writerow(
-            {
-                "name": "Example American Space",
-                "network": "american_space",
-                "subtype": "American Corner",
-                "country": "Example Country",
-                "city": "Example City",
-                "latitude": "",
-                "longitude": "",
-                "service_tags": "english_language;entrepreneurship;stem",
-                "source_url": "https://example.gov/source",
-                "status": "active",
-                "delivery_mode": "physical",
-                "coverage_scope": "site",
-                "location_precision": "city",
-                "location_confidence": "0.75",
-                "location_uncertainty_km": "12",
-                "location_basis": "city_reference_replace_with_verified_site_data_when_available",
-            }
-        )
-        writer.writerow(
-            {
-                "name": "Example virtual advising service",
-                "network": "educationusa",
-                "subtype": "Virtual advising",
-                "country": "Example Country",
-                "city": "",
-                "latitude": "",
-                "longitude": "",
-                "service_tags": "educationusa;study_in_the_us;higher_education",
-                "source_url": "https://example.gov/virtual-service",
-                "status": "active",
-                "delivery_mode": "virtual",
-                "coverage_scope": "country",
-                "location_precision": "unknown",
-                "location_basis": "official_service_directory_nonspatial",
-            }
-        )
+    with atomic_path(target, suffix=target.suffix or ".csv") as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fields)
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "name": "Example American Space",
+                    "network": "american_space",
+                    "subtype": "American Corner",
+                    "country": "Example Country",
+                    "city": "Example City",
+                    "latitude": "",
+                    "longitude": "",
+                    "service_tags": "english_language;entrepreneurship;stem",
+                    "source_url": "https://example.gov/source",
+                    "status": "active",
+                    "delivery_mode": "physical",
+                    "coverage_scope": "site",
+                    "location_precision": "city",
+                    "location_confidence": "0.75",
+                    "location_uncertainty_km": "12",
+                    "location_basis": "city_reference_replace_with_verified_site_data_when_available",
+                }
+            )
+            writer.writerow(
+                {
+                    "name": "Example virtual advising service",
+                    "network": "educationusa",
+                    "subtype": "Virtual advising",
+                    "country": "Example Country",
+                    "city": "",
+                    "latitude": "",
+                    "longitude": "",
+                    "service_tags": "educationusa;study_in_the_us;higher_education",
+                    "source_url": "https://example.gov/virtual-service",
+                    "status": "active",
+                    "delivery_mode": "virtual",
+                    "coverage_scope": "country",
+                    "location_precision": "unknown",
+                    "location_basis": "official_service_directory_nonspatial",
+                }
+            )
     return str(target.resolve())
 
 
@@ -323,11 +340,7 @@ def _nearest_physical_site(
     observation: ResearchObservation,
     sites: Iterable[USPresenceSite],
 ) -> tuple[USPresenceSite | None, float | None]:
-    spatial = [
-        site
-        for site in sites
-        if site.status not in {"closed", "inactive"} and site.is_spatial
-    ]
+    spatial = [site for site in sites if site.status not in {"closed", "inactive"} and site.is_spatial]
     if not spatial:
         return None, None
 
@@ -341,16 +354,10 @@ def _nearest_physical_site(
         return ranked[0][2], ranked[0][0]
 
     contexts = _observation_geo_contexts(observation)
-    same_city = [
-        site for site in spatial
-        if any(_context_same_city(context, site) for context in contexts)
-    ]
+    same_city = [site for site in spatial if any(_context_same_city(context, site) for context in contexts)]
     if same_city:
         return sorted(same_city, key=lambda site: site.site_id)[0], None
-    same_country = [
-        site for site in spatial
-        if any(_context_same_country(context, site) for context in contexts)
-    ]
+    same_country = [site for site in spatial if any(_context_same_country(context, site) for context in contexts)]
     if same_country:
         return sorted(same_country, key=lambda site: site.site_id)[0], None
     return sorted(spatial, key=lambda site: site.site_id)[0], None
@@ -365,22 +372,14 @@ def assess_us_overlap(
 ) -> USOverlapAssessment:
     sites = [site for site in sites if site.status not in {"closed", "inactive"}]
     contexts = _observation_geo_contexts(observation)
-    same_country_sites = [
-        site for site in sites
-        if any(_context_same_country(context, site) for context in contexts)
-    ]
+    same_country_sites = [site for site in sites if any(_context_same_country(context, site) for context in contexts)]
     same_city_sites = [
-        site for site in same_country_sites
-        if any(_context_same_city(context, site) for context in contexts)
+        site for site in same_country_sites if any(_context_same_city(context, site) for context in contexts)
     ]
 
     nearest, distance = _nearest_physical_site(observation, sites)
     service_sources = _applicable_service_sources(observation, sites, nearby_km=nearby_km)
-    available_services = {
-        tag.casefold()
-        for site in service_sources
-        for tag in site.service_tags
-    }
+    available_services = {tag.casefold() for site in service_sources for tag in site.service_tags}
 
     program_services = _program_services(assessment)
     audience_services = _audience_services(assessment)
@@ -399,9 +398,7 @@ def assess_us_overlap(
 
     relevant_services = program_services | audience_services
     contributing_sources = [
-        site
-        for site in service_sources
-        if {tag.casefold() for tag in site.service_tags} & relevant_services
+        site for site in service_sources if {tag.casefold() for tag in site.service_tags} & relevant_services
     ]
     structured_sources = [
         USServiceSourceAttribution(
@@ -411,19 +408,17 @@ def assess_us_overlap(
             delivery_mode=site.delivery_mode,
             coverage_scope=site.coverage_scope,
             source_url=site.source_url,
-            program_service_matches=sorted(
-                {tag.casefold() for tag in site.service_tags} & program_services
-            ),
-            audience_service_matches=sorted(
-                {tag.casefold() for tag in site.service_tags} & audience_services
-            ),
+            program_service_matches=sorted({tag.casefold() for tag in site.service_tags} & program_services),
+            audience_service_matches=sorted({tag.casefold() for tag in site.service_tags} & audience_services),
         )
         for site in contributing_sources
     ]
 
     note_parts: list[str] = []
     if len(observation.locations) > 1:
-        note_parts.append(f"service availability evaluated across {len(observation.locations)} structured activity locations")
+        note_parts.append(
+            f"service availability evaluated across {len(observation.locations)} structured activity locations"
+        )
     if same_city_sites:
         note_parts.append("same-city U.S. public-diplomacy presence")
     elif distance is not None and distance <= nearby_km:
@@ -437,10 +432,7 @@ def assess_us_overlap(
     if service_overlap:
         note_parts.append("direct service overlap: " + ", ".join(service_overlap))
     if structured_sources:
-        labels = [
-            f"{source.name} [{source.delivery_mode}/{source.coverage_scope}]"
-            for source in structured_sources
-        ]
+        labels = [f"{source.name} [{source.delivery_mode}/{source.coverage_scope}]" for source in structured_sources]
         note_parts.append("applicable U.S. service sources: " + "; ".join(labels))
 
     return USOverlapAssessment(
@@ -546,11 +538,21 @@ def audit_state_records(
     seen_observations: set[str] = set()
     for assessment in assessments:
         if assessment.observation_id in seen_observations:
-            finding("error", "duplicate_assessment", assessment, "Multiple State assessments reference the same observation.")
+            finding(
+                "error",
+                "duplicate_assessment",
+                assessment,
+                "Multiple State assessments reference the same observation.",
+            )
         seen_observations.add(assessment.observation_id)
         observation = observation_map.get(assessment.observation_id)
         if not observation:
-            finding("error", "missing_observation", assessment, "Assessment references an observation absent from the package.")
+            finding(
+                "error",
+                "missing_observation",
+                assessment,
+                "Assessment references an observation absent from the package.",
+            )
             continue
         evidence = _evidence_identities(observation)
         if not evidence:
@@ -565,28 +567,76 @@ def audit_state_records(
         if assessment.prc_support.level in {"probable", "confirmed"}:
             missing = [ref for ref in assessment.prc_support.evidence_refs if ref not in evidence]
             if missing:
-                finding("error", "support_evidence_not_in_observation", assessment, f"PRC-support evidence references are not attached to the observation: {missing}")
+                finding(
+                    "error",
+                    "support_evidence_not_in_observation",
+                    assessment,
+                    f"PRC-support evidence references are not attached to the observation: {missing}",
+                )
         if assessment.observability_level == "reach_observed" and not _has_reach_metric(assessment):
-            finding("warning", "reach_without_metric", assessment, "Reach is marked observed but no quantitative reach/engagement metric is stored.")
-        if assessment.observability_level == "engagement_observed" and not _has_reach_metric(assessment, _ENGAGEMENT_METRIC_NAMES):
-            finding("warning", "engagement_without_metric", assessment, "Engagement is marked observed but no likes/comments/shares metric is stored.")
+            finding(
+                "warning",
+                "reach_without_metric",
+                assessment,
+                "Reach is marked observed but no quantitative reach/engagement metric is stored.",
+            )
+        if assessment.observability_level == "engagement_observed" and not _has_reach_metric(
+            assessment, _ENGAGEMENT_METRIC_NAMES
+        ):
+            finding(
+                "warning",
+                "engagement_without_metric",
+                assessment,
+                "Engagement is marked observed but no likes/comments/shares metric is stored.",
+            )
         influence_claims = [claim for claim in assessment.claims if claim.claim_type == "influence"]
         if assessment.observability_level == "causal_influence_evidence" and not influence_claims:
-            finding("error", "causal_level_without_claim", assessment, "Causal influence evidence requires an explicit claim with evidence references.")
+            finding(
+                "error",
+                "causal_level_without_claim",
+                assessment,
+                "Causal influence evidence requires an explicit claim with evidence references.",
+            )
         for claim in assessment.claims:
             missing = [ref for ref in claim.evidence_refs if ref not in evidence]
             if missing:
-                finding("error", "claim_evidence_not_in_observation", assessment, f"Claim {claim.claim_id} cites evidence not attached to the observation: {missing}")
+                finding(
+                    "error",
+                    "claim_evidence_not_in_observation",
+                    assessment,
+                    f"Claim {claim.claim_id} cites evidence not attached to the observation: {missing}",
+                )
             if claim.claim_type == "influence":
                 if claim.review_state != "human_verified":
-                    finding("error", "unverified_influence_claim", assessment, "Influence claims cannot enter State-facing output without human verification.")
+                    finding(
+                        "error",
+                        "unverified_influence_claim",
+                        assessment,
+                        "Influence claims cannot enter State-facing output without human verification.",
+                    )
                 if assessment.observability_level != "causal_influence_evidence":
-                    finding("error", "influence_without_causal_evidence", assessment, "Influence claim exists without causal_influence_evidence observability level.")
-            if claim.claim_type == "support_relationship" and claim.review_state != "human_verified" and assessment.prc_support.level == "confirmed":
-                finding("error", "confirmed_support_unverified_claim", assessment, "Confirmed PRC support requires the supporting relationship claim to be human-verified.")
+                    finding(
+                        "error",
+                        "influence_without_causal_evidence",
+                        assessment,
+                        "Influence claim exists without causal_influence_evidence observability level.",
+                    )
+            if (
+                claim.claim_type == "support_relationship"
+                and claim.review_state != "human_verified"
+                and assessment.prc_support.level == "confirmed"
+            ):
+                finding(
+                    "error",
+                    "confirmed_support_unverified_claim",
+                    assessment,
+                    "Confirmed PRC support requires the supporting relationship claim to be human-verified.",
+                )
         sensitive = SENSITIVE_NARRATIVES & set(assessment.narrative_tags)
         if sensitive:
-            supported_types = {claim.claim_type for claim in assessment.claims if claim.review_state == "human_verified"}
+            supported_types = {
+                claim.claim_type for claim in assessment.claims if claim.review_state == "human_verified"
+            }
             if "narrative" not in supported_types and "coordination" not in supported_types:
                 finding(
                     "warning",
@@ -595,7 +645,12 @@ def audit_state_records(
                     "Sensitive narrative/coordination labels should be backed by a human-verified claim before briefing.",
                 )
         if assessment.brief_eligible and observation.verification_state != "human_verified":
-            finding("warning", "brief_eligible_unverified_observation", assessment, "Brief-eligible State assessment rests on an observation that still needs human verification.")
+            finding(
+                "warning",
+                "brief_eligible_unverified_observation",
+                assessment,
+                "Brief-eligible State assessment rests on an observation that still needs human verification.",
+            )
 
     missing_assessments = sorted(set(observation_map) - seen_observations)
     for observation_id in missing_assessments:
@@ -629,7 +684,9 @@ def audit_state_records(
     }
 
 
-def review_priority(assessment: StateAssessment, observation: ResearchObservation | None = None) -> tuple[int, list[str]]:
+def review_priority(
+    assessment: StateAssessment, observation: ResearchObservation | None = None
+) -> tuple[int, list[str]]:
     """Prioritize human review workload. This is not an influence score."""
     score = 0
     reasons: list[str] = []
@@ -651,7 +708,11 @@ def review_priority(assessment: StateAssessment, observation: ResearchObservatio
     if _reported_metric_meets_threshold(assessment.reach.metric("attendance"), 100):
         score += 2
         reasons.append("high reported/observed event attendance")
-    if any(claim.claim_type in {"support_relationship", "coordination", "influence"} and claim.review_state != "human_verified" for claim in assessment.claims):
+    if any(
+        claim.claim_type in {"support_relationship", "coordination", "influence"}
+        and claim.review_state != "human_verified"
+        for claim in assessment.claims
+    ):
         score += 4
         reasons.append("high-consequence claim awaiting verification")
     if observation is not None and len(observation.evidence) <= 1:
@@ -688,9 +749,7 @@ def build_review_queue(
                 "narrative_tags": "; ".join(assessment.narrative_tags),
                 "us_overlap": assessment.us_overlap.note,
                 "us_service_source_ids": "; ".join(assessment.us_overlap.service_source_ids),
-                "us_service_source_names": "; ".join(
-                    source.name for source in assessment.us_overlap.service_sources
-                ),
+                "us_service_source_names": "; ".join(source.name for source in assessment.us_overlap.service_sources),
                 "reasons": "; ".join(reasons),
                 "primary_source_url": observation.primary_source_url if observation else "",
             }
@@ -764,7 +823,11 @@ def render_state_bluf(
                 label = obs.title or obs.program_name or obs.institution_name or obs.observation_id
                 nearest = assessment.us_overlap.nearest_site_name or "U.S. presence"
                 examples.append(f"{label} ↔ {nearest}")
-            lines.append(f"- **U.S. overlap:** {len(overlaps)} verified observations have material overlap; examples include " + "; ".join(examples) + ".")
+            lines.append(
+                f"- **U.S. overlap:** {len(overlaps)} verified observations have material overlap; examples include "
+                + "; ".join(examples)
+                + "."
+            )
     else:
         lines.append("- No key judgment is released until evidence and human verification gates are satisfied.")
 
@@ -781,7 +844,9 @@ def render_state_bluf(
     )
     qualified_metrics: list[str] = []
     for observation, assessment in verified:
-        label = observation.title or observation.program_name or observation.institution_name or observation.observation_id
+        label = (
+            observation.title or observation.program_name or observation.institution_name or observation.observation_id
+        )
         for metric_name in _REACH_METRIC_NAMES:
             metric = assessment.reach.metric(metric_name)
             if metric is None or metric.is_exact:
@@ -789,7 +854,11 @@ def render_state_bluf(
             qualified_metrics.append(f"{label} — {metric_name}: {_qualified_reach_label(metric)}")
     if qualified_metrics:
         displayed = qualified_metrics[:8]
-        suffix = f"; plus {len(qualified_metrics) - len(displayed)} additional qualified metrics" if len(qualified_metrics) > len(displayed) else ""
+        suffix = (
+            f"; plus {len(qualified_metrics) - len(displayed)} additional qualified metrics"
+            if len(qualified_metrics) > len(displayed)
+            else ""
+        )
         lines.append(
             "Qualified source-reported metrics are retained separately and not summed into exact totals: "
             + "; ".join(displayed)
@@ -800,11 +869,17 @@ def render_state_bluf(
     lines.extend(["", "## Verification and Collection Gaps", ""])
     lines.append(
         f"The package contains {len(assessments) - len(verified)} State assessments that are not yet briefing-eligible. "
-        + ("Current review-state counts: " + ", ".join(f"{key}={value}" for key, value in sorted(gaps.items())) + "." if gaps else "")
+        + (
+            "Current review-state counts: " + ", ".join(f"{key}={value}" for key, value in sorted(gaps.items())) + "."
+            if gaps
+            else ""
+        )
     )
     no_location = sum(1 for obs in observations if not obs.country and obs.latitude is None and not obs.locations)
     no_evidence = sum(1 for obs in observations if not obs.evidence and not obs.source_record_keys)
-    lines.append(f"Location remains unresolved for {no_location} observations; {no_evidence} observations lack an auditable evidence identity.")
+    lines.append(
+        f"Location remains unresolved for {no_location} observations; {no_evidence} observations lack an auditable evidence identity."
+    )
 
     lines.extend(
         [
@@ -844,9 +919,7 @@ def _observation_geo_features(observation: ResearchObservation, assessment: Stat
         "program_domains": assessment.program_domains,
         "narrative_tags": assessment.narrative_tags,
         "us_overlap_material": assessment.us_overlap.material,
-        "us_service_sources": [
-            asdict(source) for source in assessment.us_overlap.service_sources
-        ],
+        "us_service_sources": [asdict(source) for source in assessment.us_overlap.service_sources],
         "primary_source_url": observation.primary_source_url,
     }
     if observation.locations:
@@ -950,9 +1023,10 @@ def state_geojson(
 def save_state_assessments(assessments: Iterable[StateAssessment], path: str | Path) -> str:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("w", encoding="utf-8") as stream:
-        for assessment in assessments:
-            stream.write(json.dumps(asdict(assessment), ensure_ascii=False, sort_keys=True) + "\n")
+    with atomic_path(target) as temporary:
+        with temporary.open("w", encoding="utf-8") as stream:
+            for assessment in assessments:
+                stream.write(json.dumps(asdict(assessment), ensure_ascii=False, sort_keys=True) + "\n")
     return str(target.resolve())
 
 
@@ -1023,8 +1097,18 @@ def _assessment_frame(assessments: Iterable[StateAssessment]) -> pd.DataFrame:
     for assessment in assessments:
         raw = asdict(assessment)
         for key in (
-            "strategic_audiences", "program_domains", "narrative_tags", "sponsor_entities", "host_entities",
-            "partner_entities", "delivery_modes", "policy_relevance", "prc_support", "reach", "us_overlap", "claims",
+            "strategic_audiences",
+            "program_domains",
+            "narrative_tags",
+            "sponsor_entities",
+            "host_entities",
+            "partner_entities",
+            "delivery_modes",
+            "policy_relevance",
+            "prc_support",
+            "reach",
+            "us_overlap",
+            "claims",
         ):
             raw[key] = json.dumps(raw[key], ensure_ascii=False, sort_keys=True)
         rows.append(raw)
@@ -1050,7 +1134,7 @@ def save_state_package(
     sites = list(us_sites)
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = "_".join(_clean(name).split()) or "state_research"
+    stem = safe_artifact_stem(name, "state_research")
 
     if sites:
         apply_us_overlaps(observations, assessments, sites)
@@ -1066,20 +1150,32 @@ def save_state_package(
 
     save_state_assessments(assessments, jsonl_path)
     frame = _assessment_frame(assessments)
-    frame.to_csv(csv_path, index=False, encoding="utf-8-sig", quoting=csv.QUOTE_ALL, lineterminator="\n")
-    with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
-        frame.to_excel(writer, index=False, sheet_name="state_assessments")
-        pd.DataFrame(build_review_queue(observations, assessments)).to_excel(writer, index=False, sheet_name="review_queue")
-        pd.DataFrame([asdict(site) for site in sites]).to_excel(writer, index=False, sheet_name="us_presence")
+    with atomic_path(csv_path) as temporary:
+        frame.to_csv(temporary, index=False, encoding="utf-8-sig", quoting=csv.QUOTE_ALL, lineterminator="\n")
+    with atomic_path(xlsx_path) as temporary:
+        with pd.ExcelWriter(temporary, engine="openpyxl") as writer:
+            frame.to_excel(writer, index=False, sheet_name="state_assessments")
+            pd.DataFrame(build_review_queue(observations, assessments)).to_excel(
+                writer, index=False, sheet_name="review_queue"
+            )
+            pd.DataFrame([asdict(site) for site in sites]).to_excel(writer, index=False, sheet_name="us_presence")
 
     audit = audit_state_records(observations, assessments)
-    audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    pd.DataFrame(build_review_queue(observations, assessments)).to_csv(queue_path, index=False, encoding="utf-8-sig")
-    brief_path.write_text(render_state_bluf(observations, assessments, title=title), encoding="utf-8")
-    geojson_path.write_text(json.dumps(state_geojson(observations, assessments, sites), ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(audit_path, json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True))
+    with atomic_path(queue_path) as temporary:
+        pd.DataFrame(build_review_queue(observations, assessments)).to_csv(temporary, index=False, encoding="utf-8-sig")
+    atomic_write_text(brief_path, render_state_bluf(observations, assessments, title=title))
+    geojson_payload = json.dumps(state_geojson(observations, assessments, sites), ensure_ascii=False, indent=2)
+    with atomic_path(geojson_path) as temporary:
+        # The map is an explicit operator-requested research export. Its point
+        # coordinates must remain plaintext for GeoJSON/map clients to render it.
+        # codeql[py/clear-text-storage-sensitive-data]
+        temporary.write_text(geojson_payload, encoding="utf-8")
 
     snapshot: dict[str, Any] = {
         "generated_at": utc_iso(),
+        "sugar_version": __version__,
+        "runtime": runtime_metadata(),
         "name": stem,
         "observations": len(observations),
         "assessments": len(assessments),
@@ -1090,11 +1186,17 @@ def save_state_package(
     }
     if previous_assessments is not None:
         snapshot["change_detection"] = compare_state_snapshots(previous_assessments, assessments)
-    snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(snapshot_path, json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True))
 
     return [
-        str(jsonl_path), str(csv_path), str(xlsx_path), str(audit_path), str(queue_path),
-        str(brief_path), str(geojson_path), str(snapshot_path),
+        str(jsonl_path),
+        str(csv_path),
+        str(xlsx_path),
+        str(audit_path),
+        str(queue_path),
+        str(brief_path),
+        str(geojson_path),
+        str(snapshot_path),
     ]
 
 
@@ -1109,7 +1211,9 @@ def package_from_files(
     title: str = "PRC Cultural Influence Network Research Update",
 ) -> list[str]:
     observations = load_observations(observations_file)
-    assessments = load_state_assessments(assessments_file) if assessments_file else blank_state_assessments(observations)
+    assessments = (
+        load_state_assessments(assessments_file) if assessments_file else blank_state_assessments(observations)
+    )
     sites = load_us_presence_sites(us_sites_file) if us_sites_file else []
     previous = load_state_assessments(previous_assessments_file) if previous_assessments_file else None
     return save_state_package(

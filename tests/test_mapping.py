@@ -79,9 +79,7 @@ def _observation_frame() -> pd.DataFrame:
 
 def test_detects_observation_and_source_record_datasets():
     assert detect_dataset_type(_observation_frame()) == "research_observations"
-    assert detect_dataset_type(
-        pd.DataFrame([{"platform": "weibo", "latitude": 1, "longitude": 2}])
-    ) == "source_records"
+    assert detect_dataset_type(pd.DataFrame([{"platform": "weibo", "latitude": 1, "longitude": 2}])) == "source_records"
 
 
 def test_normalization_filters_invalid_coordinates_and_parses_lists():
@@ -313,3 +311,14 @@ def test_run_map_supports_generic_reference_layers(tmp_path: Path):
 def test_create_map_rejects_dataset_without_coordinates(tmp_path: Path):
     with pytest.raises(ValueError, match="No valid coordinates"):
         create_map(pd.DataFrame([{"title": "unmapped"}]), tmp_path / "map.html")
+
+
+def test_create_map_enforces_an_explicit_marker_budget(tmp_path: Path):
+    frame = pd.DataFrame(
+        [
+            {"observation_id": "one", "observation_type": "event", "latitude": 1, "longitude": 1},
+            {"observation_id": "two", "observation_type": "event", "latitude": 2, "longitude": 2},
+        ]
+    )
+    with pytest.raises(ValueError, match="marker limit"):
+        create_map(frame, tmp_path / "map.html", options=MapOptions(max_markers=1))

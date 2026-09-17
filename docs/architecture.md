@@ -96,7 +96,9 @@ Domain modules should not import desktop UI code. The core must remain usable on
 
 ## Tests and compatibility
 
-CI runs the Python suite on Ubuntu, macOS, and Windows across Python 3.11–3.13, then independently builds and smoke-tests packaged macOS and Windows applications. Live-network checks are bounded and kept separate from deterministic fixtures.
+CI runs the Python suite on Ubuntu across Python 3.11–3.13, exercises the lowest-direct and newest
+hash-pinned runtime tracks, and runs the offline suite on Ubuntu, macOS, and Windows with Python 3.13.
+Live-network checks are bounded and kept separate from deterministic fixtures.
 
 Changes to schemas, collector semantics, workspace layout, bridge protocol, evidence rules, or exported columns require regression tests and documentation in the same pull request.
 

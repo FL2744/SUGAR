@@ -11,7 +11,7 @@ from .state_entities import EntityRegistry
 from .state_freshness import build_freshness_report
 from .state_schema import StateAssessment, USPresenceSite
 from .state_workflow import build_review_queue
-from .utils import utc_iso
+from .utils import atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
 
 
 def _clean(value: Any) -> str:
@@ -50,7 +50,16 @@ def build_gap_report(
 
     gaps: list[dict[str, Any]] = []
 
-    def add(priority: int, category: str, subject_id: str, subject: str, country: str, city: str, reason: str, next_action: str) -> None:
+    def add(
+        priority: int,
+        category: str,
+        subject_id: str,
+        subject: str,
+        country: str,
+        city: str,
+        reason: str,
+        next_action: str,
+    ) -> None:
         gaps.append(
             {
                 "priority": priority,
@@ -155,9 +164,7 @@ def build_gap_report(
             and obs.city.casefold() == site.city.casefold()
         ]
         same_country = [
-            (obs, assessment)
-            for obs, assessment in verified_rows
-            if obs.country.casefold() == site.country.casefold()
+            (obs, assessment) for obs, assessment in verified_rows if obs.country.casefold() == site.country.casefold()
         ]
         if not same_city:
             add(
@@ -199,13 +206,14 @@ def save_gap_report(
     payload = build_gap_report(observations, assessments, entities=entities, us_sites=us_sites, **kwargs)
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = "_".join(str(name or "state_research").split())
+    stem = safe_artifact_stem(name, "state_research")
     json_path = out_dir / f"{stem}.gaps.json"
     csv_path = out_dir / f"{stem}.gaps.csv"
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(json_path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     fields = ["priority", "category", "subject_id", "subject", "country", "city", "reason", "next_action"]
-    with csv_path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(payload["gaps"])
+    with atomic_path(csv_path) as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(payload["gaps"])
     return [str(json_path), str(csv_path)]

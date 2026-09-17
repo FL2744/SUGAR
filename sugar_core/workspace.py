@@ -3,16 +3,20 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
-from dataclasses import asdict, dataclass
+from contextlib import closing
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
+
+from .utils import atomic_path, atomic_write_text, runtime_metadata
 
 WORKSPACE_SCHEMA_VERSION = "1.0"
 DATABASE_SCHEMA_VERSION = 1
 MANIFEST_FILENAME = "sugar-project.json"
 INTERNAL_DIRECTORY = ".sugar"
 DATABASE_FILENAME = "workspace.sqlite3"
+DATABASE_BACKUP_DIRECTORY = "migration-backups"
 
 DEFAULT_LAYOUT: dict[str, str] = {
     "raw": "data/raw",
@@ -40,6 +44,7 @@ class WorkspaceManifest:
     created_at: str
     updated_at: str
     layout: dict[str, str]
+    runtime: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -78,6 +83,10 @@ class SugarWorkspace:
     def database_path(self) -> Path:
         return self.internal_path / DATABASE_FILENAME
 
+    @property
+    def database_backup_directory(self) -> Path:
+        return self.internal_path / DATABASE_BACKUP_DIRECTORY
+
     @classmethod
     def create(
         cls,
@@ -105,6 +114,7 @@ class SugarWorkspace:
             created_at=now,
             updated_at=now,
             layout=dict(DEFAULT_LAYOUT),
+            runtime=runtime_metadata(),
         )
         workspace = cls(target, manifest)
         workspace._validate_layout()
@@ -130,12 +140,13 @@ class SugarWorkspace:
             raise ValueError("Workspace manifest must contain a JSON object.")
         schema_version = str(payload.get("schema_version") or "")
         if schema_version != WORKSPACE_SCHEMA_VERSION:
-            raise ValueError(
-                f"Unsupported workspace schema {schema_version!r}; expected {WORKSPACE_SCHEMA_VERSION!r}."
-            )
+            raise ValueError(f"Unsupported workspace schema {schema_version!r}; expected {WORKSPACE_SCHEMA_VERSION!r}.")
         layout = payload.get("layout") or {}
         if not isinstance(layout, dict):
             raise ValueError("Workspace manifest layout must be a JSON object.")
+        runtime = payload.get("runtime") or {}
+        if not isinstance(runtime, dict):
+            raise ValueError("Workspace manifest runtime must be a JSON object.")
 
         manifest = WorkspaceManifest(
             schema_version=schema_version,
@@ -145,6 +156,7 @@ class SugarWorkspace:
             created_at=str(payload.get("created_at") or ""),
             updated_at=str(payload.get("updated_at") or ""),
             layout={str(key): str(value) for key, value in layout.items()},
+            runtime=dict(runtime),
         )
         if not manifest.project_id:
             raise ValueError("Workspace manifest is missing project_id.")
@@ -192,7 +204,7 @@ class SugarWorkspace:
         now = _utc_now()
         metadata_json = json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True)
 
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             connection.execute(
                 """
                 INSERT INTO artifacts(kind, path, label, registered_at, updated_at, metadata_json, external)
@@ -234,7 +246,7 @@ class SugarWorkspace:
 
     def list_artifacts(self, kind: str | None = None) -> list[ArtifactRecord]:
         select = "SELECT id, kind, path, label, registered_at, updated_at, metadata_json, external FROM artifacts"
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             if kind:
                 rows = connection.execute(
                     select + " WHERE kind = ? ORDER BY id DESC",
@@ -266,6 +278,7 @@ class SugarWorkspace:
             "root": str(self.root),
             "manifest": str(self.manifest_path),
             "database": str(self.database_path),
+            "database_backups": [str(path) for path in sorted(self.database_backup_directory.glob("*.sqlite3"))],
             "layout": {key: str(self.path_for(key)) for key in sorted(self.manifest.layout)},
             "artifact_count": len(artifacts),
             "artifact_counts": dict(sorted(counts.items())),
@@ -342,50 +355,78 @@ class SugarWorkspace:
 
     def _write_manifest(self, manifest: WorkspaceManifest) -> None:
         payload = asdict(manifest)
-        temporary = self.manifest_path.with_suffix(self.manifest_path.suffix + ".tmp")
-        temporary.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        temporary.replace(self.manifest_path)
+        atomic_write_text(self.manifest_path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
     def _initialize_database(self) -> None:
         self.internal_path.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
-            current_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
-            if current_version > DATABASE_SCHEMA_VERSION:
-                raise ValueError(
-                    f"Unsupported workspace database schema {current_version}; "
-                    f"maximum supported version is {DATABASE_SCHEMA_VERSION}."
+        try:
+            with closing(self._connect()) as connection:
+                current_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+                if current_version > DATABASE_SCHEMA_VERSION:
+                    raise ValueError(
+                        f"Unsupported workspace database schema {current_version}; "
+                        f"maximum supported version is {DATABASE_SCHEMA_VERSION}."
+                    )
+                table_names = {
+                    str(row[0])
+                    for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+                }
+                existing_columns = (
+                    {str(row[1]) for row in connection.execute("PRAGMA table_info(artifacts)").fetchall()}
+                    if "artifacts" in table_names
+                    else set()
                 )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS artifacts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    kind TEXT NOT NULL,
-                    path TEXT NOT NULL,
-                    label TEXT NOT NULL DEFAULT '',
-                    registered_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    metadata_json TEXT NOT NULL DEFAULT '{}',
-                    external INTEGER NOT NULL DEFAULT 0,
-                    UNIQUE(kind, path)
+                if "artifacts" in table_names and (
+                    current_version < DATABASE_SCHEMA_VERSION or "external" not in existing_columns
+                ):
+                    self._create_migration_backup(connection, current_version)
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS artifacts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        kind TEXT NOT NULL,
+                        path TEXT NOT NULL,
+                        label TEXT NOT NULL DEFAULT '',
+                        registered_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        metadata_json TEXT NOT NULL DEFAULT '{}',
+                        external INTEGER NOT NULL DEFAULT 0,
+                        UNIQUE(kind, path)
+                    )
+                    """
                 )
-                """
-            )
-            columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(artifacts)").fetchall()}
-            if "external" not in columns:
-                connection.execute("ALTER TABLE artifacts ADD COLUMN external INTEGER NOT NULL DEFAULT 0")
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS idx_artifacts_kind_id ON artifacts(kind, id DESC)"
-            )
-            if current_version < DATABASE_SCHEMA_VERSION:
-                connection.execute(f"PRAGMA user_version = {DATABASE_SCHEMA_VERSION}")
-            connection.commit()
+                columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(artifacts)").fetchall()}
+                if "external" not in columns:
+                    connection.execute("ALTER TABLE artifacts ADD COLUMN external INTEGER NOT NULL DEFAULT 0")
+                connection.execute("CREATE INDEX IF NOT EXISTS idx_artifacts_kind_id ON artifacts(kind, id DESC)")
+                if current_version < DATABASE_SCHEMA_VERSION:
+                    connection.execute(f"PRAGMA user_version = {DATABASE_SCHEMA_VERSION}")
+                connection.commit()
+        except sqlite3.DatabaseError as exc:
+            raise ValueError(
+                "Workspace database is corrupt or unreadable. Restore a project archive or recover the database backup."
+            ) from exc
+
+    def _create_migration_backup(self, connection: sqlite3.Connection, current_version: int) -> Path:
+        """Preserve the pre-migration database once before changing its schema."""
+
+        self.database_backup_directory.mkdir(parents=True, exist_ok=True)
+        backup_path = self.database_backup_directory / f"workspace-v{current_version}-pre-migration.sqlite3"
+        if backup_path.exists():
+            return backup_path
+        try:
+            with atomic_path(backup_path, suffix=".sqlite3") as temporary:
+                with closing(sqlite3.connect(temporary)) as destination:
+                    connection.backup(destination)
+                    destination.commit()
+        except (OSError, sqlite3.DatabaseError) as exc:
+            raise ValueError(f"Could not create workspace migration backup at {backup_path}.") from exc
+        return backup_path
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.database_path)
+        connection = sqlite3.connect(self.database_path, timeout=30)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA busy_timeout = 30000")
         return connection
 
 

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .utils import stable_hash, utc_iso
+from .utils import atomic_path, atomic_write_text, safe_artifact_stem, stable_hash, utc_iso
 
 
 def _clean(value: Any) -> str:
@@ -27,15 +27,17 @@ def _hypotheses(payload: dict[str, Any]) -> list[dict[str, Any]]:
         text = _clean(raw.get("hypothesis"))
         if not text:
             continue
-        candidates.append({
-            "hypothesis_id": "h_" + stable_hash(text)[:16],
-            "hypothesis": text,
-            "supporting_refs": sorted({_clean(x) for x in raw.get("supporting_refs") or [] if _clean(x)}),
-            "contradicting_refs": sorted({_clean(x) for x in raw.get("contradicting_refs") or [] if _clean(x)}),
-            "discriminators": [_clean(x) for x in raw.get("discriminators") or [] if _clean(x)],
-            "collection_needed": [_clean(x) for x in raw.get("collection_needed") or [] if _clean(x)],
-            "source": "final_synthesis",
-        })
+        candidates.append(
+            {
+                "hypothesis_id": "h_" + stable_hash(text)[:16],
+                "hypothesis": text,
+                "supporting_refs": sorted({_clean(x) for x in raw.get("supporting_refs") or [] if _clean(x)}),
+                "contradicting_refs": sorted({_clean(x) for x in raw.get("contradicting_refs") or [] if _clean(x)}),
+                "discriminators": [_clean(x) for x in raw.get("discriminators") or [] if _clean(x)],
+                "collection_needed": [_clean(x) for x in raw.get("collection_needed") or [] if _clean(x)],
+                "source": "final_synthesis",
+            }
+        )
     # Preserve distinct alternatives raised by specialist agents even when the integrator omits them.
     seen = {row["hypothesis"].casefold() for row in candidates}
     for agent in payload.get("agents") or []:
@@ -45,15 +47,17 @@ def _hypotheses(payload: dict[str, Any]) -> list[dict[str, Any]]:
             text = _clean(raw.get("hypothesis"))
             if not text or text.casefold() in seen:
                 continue
-            candidates.append({
-                "hypothesis_id": "h_" + stable_hash(text)[:16],
-                "hypothesis": text,
-                "supporting_refs": sorted({_clean(x) for x in raw.get("supporting_refs") or [] if _clean(x)}),
-                "contradicting_refs": sorted({_clean(x) for x in raw.get("contradicting_refs") or [] if _clean(x)}),
-                "discriminators": [_clean(x) for x in raw.get("discriminators") or [] if _clean(x)],
-                "collection_needed": [_clean(x) for x in raw.get("collection_needed") or [] if _clean(x)],
-                "source": str(agent.get("agent") or "specialist_agent"),
-            })
+            candidates.append(
+                {
+                    "hypothesis_id": "h_" + stable_hash(text)[:16],
+                    "hypothesis": text,
+                    "supporting_refs": sorted({_clean(x) for x in raw.get("supporting_refs") or [] if _clean(x)}),
+                    "contradicting_refs": sorted({_clean(x) for x in raw.get("contradicting_refs") or [] if _clean(x)}),
+                    "discriminators": [_clean(x) for x in raw.get("discriminators") or [] if _clean(x)],
+                    "collection_needed": [_clean(x) for x in raw.get("collection_needed") or [] if _clean(x)],
+                    "source": str(agent.get("agent") or "specialist_agent"),
+                }
+            )
             seen.add(text.casefold())
     return candidates
 
@@ -61,11 +65,9 @@ def _hypotheses(payload: dict[str, Any]) -> list[dict[str, Any]]:
 def build_hypothesis_matrix(payload: dict[str, Any] | str | Path) -> dict[str, Any]:
     payload = _load(payload)
     hypotheses = _hypotheses(payload)
-    evidence = sorted({
-        ref
-        for hypothesis in hypotheses
-        for ref in hypothesis["supporting_refs"] + hypothesis["contradicting_refs"]
-    })
+    evidence = sorted(
+        {ref for hypothesis in hypotheses for ref in hypothesis["supporting_refs"] + hypothesis["contradicting_refs"]}
+    )
     matrix: list[dict[str, Any]] = []
     for ref in evidence:
         row: dict[str, Any] = {"evidence_ref": ref}
@@ -84,11 +86,13 @@ def build_hypothesis_matrix(payload: dict[str, Any] | str | Path) -> dict[str, A
     for row in matrix:
         values = [row[h["hypothesis_id"]] for h in hypotheses]
         if "supports" in values and "contradicts" in values:
-            discriminating.append({
-                "evidence_ref": row["evidence_ref"],
-                "supports": [h["hypothesis_id"] for h in hypotheses if row[h["hypothesis_id"]] == "supports"],
-                "contradicts": [h["hypothesis_id"] for h in hypotheses if row[h["hypothesis_id"]] == "contradicts"],
-            })
+            discriminating.append(
+                {
+                    "evidence_ref": row["evidence_ref"],
+                    "supports": [h["hypothesis_id"] for h in hypotheses if row[h["hypothesis_id"]] == "supports"],
+                    "contradicts": [h["hypothesis_id"] for h in hypotheses if row[h["hypothesis_id"]] == "contradicts"],
+                }
+            )
 
     ranking: list[dict[str, Any]] = []
     for hypothesis in hypotheses:
@@ -96,20 +100,24 @@ def build_hypothesis_matrix(payload: dict[str, Any] | str | Path) -> dict[str, A
         contradiction_count = len(hypothesis["contradicting_refs"])
         assessed = support_count + contradiction_count
         inconsistency_rate = contradiction_count / assessed if assessed else None
-        ranking.append({
-            "hypothesis_id": hypothesis["hypothesis_id"],
-            "hypothesis": hypothesis["hypothesis"],
-            "supporting_evidence": support_count,
-            "contradicting_evidence": contradiction_count,
-            "assessed_evidence": assessed,
-            "inconsistency_rate": round(inconsistency_rate, 4) if inconsistency_rate is not None else None,
-            "least_inconsistent_rank_basis": "contradicting evidence count, then supporting evidence count; not a probability",
-        })
-    ranking.sort(key=lambda row: (
-        row["contradicting_evidence"],
-        -row["supporting_evidence"],
-        row["hypothesis"].casefold(),
-    ))
+        ranking.append(
+            {
+                "hypothesis_id": hypothesis["hypothesis_id"],
+                "hypothesis": hypothesis["hypothesis"],
+                "supporting_evidence": support_count,
+                "contradicting_evidence": contradiction_count,
+                "assessed_evidence": assessed,
+                "inconsistency_rate": round(inconsistency_rate, 4) if inconsistency_rate is not None else None,
+                "least_inconsistent_rank_basis": "contradicting evidence count, then supporting evidence count; not a probability",
+            }
+        )
+    ranking.sort(
+        key=lambda row: (
+            row["contradicting_evidence"],
+            -row["supporting_evidence"],
+            row["hypothesis"].casefold(),
+        )
+    )
     for index, row in enumerate(ranking, 1):
         row["least_inconsistent_rank"] = index
 
@@ -161,21 +169,30 @@ def save_hypothesis_matrix(
 ) -> list[str]:
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = "_".join(_clean(name).split()) or "analytic_intelligence"
+    stem = safe_artifact_stem(name, "analytic_intelligence")
     payload = build_hypothesis_matrix(synthesis)
     json_path = out_dir / f"{stem}.hypotheses.json"
     csv_path = out_dir / f"{stem}.hypotheses.csv"
     markdown_path = out_dir / f"{stem}.hypotheses.md"
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(json_path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     hypotheses = payload.get("hypotheses") or []
-    fields = ["hypothesis_id", "hypothesis", "source", "supporting_refs", "contradicting_refs", "discriminators", "collection_needed"]
-    with csv_path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        for row in hypotheses:
-            value = dict(row)
-            for key in ("supporting_refs", "contradicting_refs", "discriminators", "collection_needed"):
-                value[key] = json.dumps(value.get(key) or [], ensure_ascii=False)
-            writer.writerow({key: value.get(key, "") for key in fields})
-    markdown_path.write_text(render_hypothesis_markdown(payload), encoding="utf-8")
+    fields = [
+        "hypothesis_id",
+        "hypothesis",
+        "source",
+        "supporting_refs",
+        "contradicting_refs",
+        "discriminators",
+        "collection_needed",
+    ]
+    with atomic_path(csv_path) as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fields)
+            writer.writeheader()
+            for row in hypotheses:
+                value = dict(row)
+                for key in ("supporting_refs", "contradicting_refs", "discriminators", "collection_needed"):
+                    value[key] = json.dumps(value.get(key) or [], ensure_ascii=False)
+                writer.writerow({key: value.get(key, "") for key in fields})
+    atomic_write_text(markdown_path, render_hypothesis_markdown(payload))
     return [str(json_path), str(csv_path), str(markdown_path)]

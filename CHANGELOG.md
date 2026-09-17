@@ -6,6 +6,9 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Changed
 
+- added redacted runtime/workspace diagnostics, bounded persisted error history, universal JSON completion output, explicit cancellation contracts, and fresh-environment lock smoke checks;
+- checked in newest-compatible and Python 3.11 lowest-direct hash-pinned runtime locks, with CI compatibility and Ubuntu/macOS/Windows offline smoke jobs;
+- synchronized native package metadata with the canonical Python version and bridge protocol;
 - normal `sugar` and `sugar-state` workflows now auto-discover project workspaces, route outputs to canonical project directories when no explicit destination is supplied, and register generated artifacts automatically;
 - desktop State/intelligence operations can resolve the latest registered observations and assessment artifacts from a workspace instead of requiring every file path to be reselected;
 - added a typed `state-map` desktop operation;
@@ -13,6 +16,16 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - missing State-map coordinates can optionally be resolved from explicit site/city/region evidence through a cached public geocoder;
 - geocoder feature metadata and bounding boxes are preserved so site queries that resolve only to a city/region are automatically downgraded rather than presented with false precision;
 - country-only observations are not placed at artificial national centroids, and broad/low-confidence locations are excluded from activity-density rendering.
+- new records stamp the current package version in collector provenance and source User-Agent identifiers;
+- boundary validation now rejects non-finite analytic coordinates/confidence values, normalizes malformed
+  imported metrics safely, and adds a deterministic seeded JSON/import fuzz corpus;
+- release-tooling locks now require a fixed setuptools line (83+).
+- collector quotas now count unique stable records per query, merge repeated-page payloads without
+  consuming the quota, enforce local date bounds, and bound repeated X/Bluesky pagination tokens.
+- generated reproducibility metadata, workspace manifests, and workspace archives now record the
+  Python/runtime dependency versions used to produce them.
+- added a checked-in adversarial evidence corpus covering deleted, edited, reposted, contradictory,
+  and archived-source cases.
 
 ### Research integrity
 

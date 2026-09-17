@@ -1,0 +1,68 @@
+name: Security scans
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          packs: +codeql/python-queries:AlertSuppression.ql
+      - uses: github/codeql-action/autobuild@v4
+      - uses: github/codeql-action/analyze@v4
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check GitHub dependency graph availability
+        id: dependency-graph
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          status="$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.security_and_analysis.dependency_graph.status // "unknown"')"
+          echo "status=${status}" >> "${GITHUB_OUTPUT}"
+          echo "GitHub dependency graph status: ${status}"
+      - name: Run dependency review
+        if: steps.dependency-graph.outputs.status == 'enabled'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+      - name: Explain unavailable dependency review
+        if: steps.dependency-graph.outputs.status != 'enabled'
+        run: |
+          echo "::warning title=Dependency review unavailable::Enable the repository dependency graph in Settings > Security analysis to activate GitHub dependency review. pip-audit remains enforced by the quality gate."

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-from .llm import LLMConfig, create_client
+from .llm import LLMBudget, LLMConfig, create_client
 from .observations import ResearchObservation
 from .state_intelligence import build_intelligence_packet
 from .state_schema import StateAssessment
@@ -19,7 +19,7 @@ from .state_synthesis import (
     render_synthesis_markdown,
 )
 from .state_tradecraft import build_tradecraft_audit
-from .utils import JsonCache, utc_iso
+from .utils import MemoryCache, atomic_path, atomic_write_text, safe_artifact_stem, utc_iso
 
 AGENTIC_ORCHESTRATION_VERSION = "1.4"
 
@@ -97,12 +97,13 @@ def _evidence_neighborhood(packet: dict[str, Any], output: dict[str, Any], *, li
 def _refine_agents(
     client,
     llm: LLMConfig,
-    cache: JsonCache | None,
+    cache: MemoryCache | None,
     base_packet: dict[str, Any],
     tasks: list[AgentTask],
     first_pass: list[dict[str, Any]],
     *,
     max_workers: int,
+    budget: LLMBudget | None = None,
 ) -> list[dict[str, Any]]:
     by_name = {row.get("agent"): row for row in first_pass}
     refine_tasks: list[AgentTask] = []
@@ -113,18 +114,20 @@ def _refine_agents(
         if not neighborhood:
             passthrough[task.name] = first
             continue
-        refine_tasks.append(AgentTask(
-            name=f"{task.name}:refined",
-            role=task.role,
-            question=(
-                task.question
-                + " Reassess your first-pass conclusions against the retrieved evidence neighborhood. "
-                "Actively look for cases that weaken your original explanation, revise confidence when warranted, "
-                "and keep only judgments that survive the additional evidence."
-            ),
-            packet=neighborhood,
-        ))
-    refined_outputs = _parallel_agents(client, llm, cache, refine_tasks, max_workers=max_workers)
+        refine_tasks.append(
+            AgentTask(
+                name=f"{task.name}:refined",
+                role=task.role,
+                question=(
+                    task.question
+                    + " Reassess your first-pass conclusions against the retrieved evidence neighborhood. "
+                    "Actively look for cases that weaken your original explanation, revise confidence when warranted, "
+                    "and keep only judgments that survive the additional evidence."
+                ),
+                packet=neighborhood,
+            )
+        )
+    refined_outputs = _parallel_agents(client, llm, cache, refine_tasks, max_workers=max_workers, budget=budget)
     for refined in refined_outputs:
         base_name = str(refined.get("agent") or "").removesuffix(":refined")
         refined["agent"] = base_name
@@ -145,16 +148,23 @@ def _roles(country: str, observation_id: str, depth: str) -> list[str]:
             ["system_pattern_analyst", "methodologist"]
             if depth == "quick"
             else [
-                "system_pattern_analyst", "network_mechanism_analyst", "public_diplomacy_analyst",
-                "trajectory_indicators_analyst", "methodologist",
+                "system_pattern_analyst",
+                "network_mechanism_analyst",
+                "public_diplomacy_analyst",
+                "trajectory_indicators_analyst",
+                "methodologist",
             ]
         )
     return (
         ["system_pattern_analyst", "methodologist"]
         if depth == "quick"
         else [
-            "system_pattern_analyst", "network_mechanism_analyst", "comparative_analyst",
-            "public_diplomacy_analyst", "trajectory_indicators_analyst", "methodologist",
+            "system_pattern_analyst",
+            "network_mechanism_analyst",
+            "comparative_analyst",
+            "public_diplomacy_analyst",
+            "trajectory_indicators_analyst",
+            "methodologist",
         ]
     )
 
@@ -235,12 +245,16 @@ def _integration_packet(
     tensions = list(audit.get("high_severity_tensions") or [])
     questions = list(base_packet.get("collection_questions") or [])
     for tension in tensions[:20]:
-        questions.append({
-            "question": f"Resolve high-severity analytic tension `{_clean(tension.get('type'))}`: {_clean(tension.get('explanation'))}",
-            "priority": "high",
-            "affected_observation_ids": [_clean(tension.get("observation_id"))] if _clean(tension.get("observation_id")) else [],
-            "next_step": _clean(tension.get("next_step")),
-        })
+        questions.append(
+            {
+                "question": f"Resolve high-severity analytic tension `{_clean(tension.get('type'))}`: {_clean(tension.get('explanation'))}",
+                "priority": "high",
+                "affected_observation_ids": [_clean(tension.get("observation_id"))]
+                if _clean(tension.get("observation_id"))
+                else [],
+                "next_step": _clean(tension.get("next_step")),
+            }
+        )
     packet["collection_questions"] = questions
 
     guardrails = list(base_packet.get("guardrails") or [])
@@ -272,6 +286,7 @@ def run_iterative_agentic_synthesis(
     cache_dir: str | Path | None = None,
     max_workers: int = 4,
     max_country_agents: int = 6,
+    budget: LLMBudget | None = None,
 ) -> dict[str, Any]:
     observations, assessments = list(observations), list(assessments)
     if depth not in {"quick", "standard", "deep"}:
@@ -302,31 +317,43 @@ def run_iterative_agentic_synthesis(
             country_packet = _packet_with_tradecraft(
                 observations, assessments, country=candidate, representative_case_limit=100
             )
-            tasks.append(AgentTask(
-                name=f"country:{candidate}",
-                role="country_analyst",
-                question=_role_question("country_analyst", f"country assessment: {candidate}"),
-                packet=country_packet,
-            ))
+            tasks.append(
+                AgentTask(
+                    name=f"country:{candidate}",
+                    role="country_analyst",
+                    question=_role_question("country_analyst", f"country assessment: {candidate}"),
+                    packet=country_packet,
+                )
+            )
 
     client = create_client(llm)
-    cache = JsonCache(Path(cache_dir) / "state_agentic.json") if cache_dir else None
-    first_pass = _parallel_agents(client, llm, cache, tasks, max_workers=max_workers)
+    # Agent prompts include source-derived observations; keep cache process-local.
+    cache = MemoryCache() if cache_dir else None
+    budget = budget if budget is not None else LLMBudget.from_config(llm)
+    first_pass = _parallel_agents(client, llm, cache, tasks, max_workers=max_workers, budget=budget)
     analysis_pass = first_pass
     if depth == "deep":
         analysis_pass = _refine_agents(
-            client, llm, cache, base_packet, tasks, first_pass, max_workers=max_workers
+            client, llm, cache, base_packet, tasks, first_pass, max_workers=max_workers, budget=budget
         )
 
     integration_packet = _integration_packet(base_packet, tasks, analysis_pass)
-    draft = _call_integrator(client, llm, cache, integration_packet, analysis_pass, stage="iterative-draft")
+    draft = _call_integrator(
+        client, llm, cache, integration_packet, analysis_pass, stage="iterative-draft", budget=budget
+    )
     critique = None
     final = draft
     if depth != "quick":
-        critique = _red_team(client, llm, cache, integration_packet, draft)
+        critique = _red_team(client, llm, cache, integration_packet, draft, budget=budget)
         final = _call_integrator(
-            client, llm, cache, integration_packet, analysis_pass,
-            stage="iterative-revised", critique=critique,
+            client,
+            llm,
+            cache,
+            integration_packet,
+            analysis_pass,
+            stage="iterative-revised",
+            critique=critique,
+            budget=budget,
         )
 
     audit = base_packet.get("tradecraft_audit") or {}
@@ -336,7 +363,11 @@ def run_iterative_agentic_synthesis(
         "generated_at": utc_iso(),
         "scope": base_packet.get("scope"),
         "depth": depth,
-        "llm": {"provider": llm.provider, "model": llm.model},
+        "llm": {
+            "provider": llm.provider,
+            "model": llm.model,
+            "budget": budget.as_dict() if budget else None,
+        },
         "method": {
             "architecture": "deterministic full evidence index + tradecraft audit -> parallel specialists -> optional evidence-neighborhood refinement -> retrieved integration context -> integrator -> red team -> revised integrator",
             "specialist_prompt_window_is_bounded": True,
@@ -379,33 +410,55 @@ def save_iterative_agentic_synthesis(
     cache_dir: str | Path | None = None,
     max_workers: int = 4,
     name: str = "analytic_intelligence",
+    budget: LLMBudget | None = None,
 ) -> list[str]:
     out_dir = Path(output_directory).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = "_".join(_clean(name).split()) or "analytic_intelligence"
+    stem = safe_artifact_stem(name, "analytic_intelligence")
     payload = run_iterative_agentic_synthesis(
-        observations, assessments, llm=llm, country=country, observation_id=observation_id,
-        depth=depth, cache_dir=cache_dir, max_workers=max_workers,
+        observations,
+        assessments,
+        llm=llm,
+        country=country,
+        observation_id=observation_id,
+        depth=depth,
+        cache_dir=cache_dir,
+        max_workers=max_workers,
+        budget=budget,
     )
     json_path = out_dir / f"{stem}.synthesis.json"
     markdown_path = out_dir / f"{stem}.synthesis.md"
     agents_path = out_dir / f"{stem}.agents.jsonl"
     manifest_path = out_dir / f"{stem}.manifest.json"
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    markdown_path.write_text(render_synthesis_markdown(payload), encoding="utf-8")
-    with agents_path.open("w", encoding="utf-8") as stream:
-        for phase, key in (("first_pass", "first_pass_agents"), ("analysis_pass", "agents")):
-            for agent in payload.get(key) or []:
-                stream.write(json.dumps({"phase": phase, **agent}, ensure_ascii=False, sort_keys=True) + "\n")
-        if payload.get("red_team"):
-            stream.write(json.dumps({"phase": "red_team", **payload["red_team"]}, ensure_ascii=False, sort_keys=True) + "\n")
-    manifest_path.write_text(json.dumps({
-        "generated_at": payload.get("generated_at"),
-        "synthesis_version": SYNTHESIS_VERSION,
-        "agentic_orchestration_version": AGENTIC_ORCHESTRATION_VERSION,
-        "scope": payload.get("scope"), "depth": depth,
-        "provider": llm.provider, "model": llm.model,
-        "outputs": [json_path.name, markdown_path.name, agents_path.name],
-        "human_verification_mutated": False,
-    }, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(json_path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+    atomic_write_text(markdown_path, render_synthesis_markdown(payload))
+    with atomic_path(agents_path) as temporary:
+        with temporary.open("w", encoding="utf-8") as stream:
+            for phase, key in (("first_pass", "first_pass_agents"), ("analysis_pass", "agents")):
+                for agent in payload.get(key) or []:
+                    stream.write(json.dumps({"phase": phase, **agent}, ensure_ascii=False, sort_keys=True) + "\n")
+            if payload.get("red_team"):
+                stream.write(
+                    json.dumps({"phase": "red_team", **payload["red_team"]}, ensure_ascii=False, sort_keys=True) + "\n"
+                )
+    atomic_write_text(
+        manifest_path,
+        json.dumps(
+            {
+                "generated_at": payload.get("generated_at"),
+                "synthesis_version": SYNTHESIS_VERSION,
+                "agentic_orchestration_version": AGENTIC_ORCHESTRATION_VERSION,
+                "scope": payload.get("scope"),
+                "depth": depth,
+                "provider": llm.provider,
+                "model": llm.model,
+                "llm_budget": (payload.get("llm") or {}).get("budget"),
+                "outputs": [json_path.name, markdown_path.name, agents_path.name],
+                "human_verification_mutated": False,
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
+    )
     return [str(json_path), str(markdown_path), str(agents_path), str(manifest_path)]

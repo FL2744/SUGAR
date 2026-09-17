@@ -16,6 +16,9 @@ secrets.*
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
 .sugar-cache/
 .sugar/
 *.egg-info/
@@ -31,6 +34,8 @@ social_search_map_*.html
 social_search_posts_*_map.html
 social_search_posts_*_analysis.docx
 social_search_posts_*_analysis.pdf
+stress-output*/
+soak-output*/
 ~$*.xlsx
 geocode_cache.json
 
@@ -45,3 +50,4 @@ archive/
 private-notes/
 outputs/
 scratch/
+work/

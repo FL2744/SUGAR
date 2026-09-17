@@ -11,7 +11,7 @@ Read:
 - `SECURITY.md` for credential/security expectations;
 - the relevant methodology/platform document under `docs/`.
 
-New work should target `sugar_core/`. The historical `SUGAR.py` and `sugar_analysis.py` monoliths are retained for compatibility/reference and should not receive new platform or workflow architecture.
+New work should target `sugar_core/`. The former `SUGAR.py` and `sugar_analysis.py` monoliths are not part of the current checkout; use Git history only when project archaeology is required.
 
 ## Development setup
 

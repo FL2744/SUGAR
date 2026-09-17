@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 import pandas as pd
 
 from .observations import ResearchObservation, SpatialMatch
-from .utils import safe_cell, utc_iso
+from .utils import atomic_path, atomic_write_text, safe_cell, utc_iso
 
 EARTH_RADIUS_KM = 6371.0088
 DEFAULT_DISTANCE_BANDS_KM = (5.0, 25.0, 100.0, 250.0)
@@ -101,10 +101,7 @@ def haversine_km(latitude_a: float, longitude_a: float, latitude_b: float, longi
     lat2 = math.radians(float(latitude_b))
     delta_lat = math.radians(float(latitude_b) - float(latitude_a))
     delta_lon = math.radians(float(longitude_b) - float(longitude_a))
-    a = (
-        math.sin(delta_lat / 2.0) ** 2
-        + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2.0) ** 2
-    )
+    a = math.sin(delta_lat / 2.0) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2.0) ** 2
     return EARTH_RADIUS_KM * 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
 
 
@@ -129,8 +126,13 @@ def reference_points_from_frame(frame: pd.DataFrame, layer_name: str) -> list[Re
         if coords is None:
             continue
         latitude, longitude = coords
-        name = _first(row, "name", "title", "institution_name", "program_name", "location_label") or f"{layer} {index + 1}"
-        reference_id = _first(row, "id", "reference_id", "observation_id", "native_id") or f"{layer.casefold().replace(' ', '_')}:{index + 1}"
+        name = (
+            _first(row, "name", "title", "institution_name", "program_name", "location_label") or f"{layer} {index + 1}"
+        )
+        reference_id = (
+            _first(row, "id", "reference_id", "observation_id", "native_id")
+            or f"{layer.casefold().replace(' ', '_')}:{index + 1}"
+        )
         identity = (reference_id.casefold(), round(latitude, 7), round(longitude, 7))
         if identity in seen:
             continue
@@ -279,9 +281,7 @@ def analyze_spatial_overlap(
         "retained_pair_matches": len(matches),
         "nearest_band_counts": nearest_band_counts,
         "nearest_distance_km_median": (
-            round(float(pd.Series(nearest_distance_values).median()), 3)
-            if nearest_distance_values
-            else None
+            round(float(pd.Series(nearest_distance_values).median()), 3) if nearest_distance_values else None
         ),
         "interpretation": "Geographic proximity is a computed fact, not evidence of strategic overlap, influence, coordination, competition, or causation.",
     }
@@ -297,14 +297,16 @@ def save_spatial_matches(frame: pd.DataFrame, output_file: str | Path) -> list[s
     for column in export.columns:
         if column not in {"distance_km", "same_city", "same_country", "reference_latitude", "reference_longitude"}:
             export[column] = export[column].map(lambda value: safe_cell(value, formula_safe=True))
-    export.to_csv(csv_path, index=False, encoding="utf-8-sig")
-    with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
-        export.to_excel(writer, index=False, sheet_name="spatial_matches")
+    with atomic_path(csv_path) as temporary:
+        export.to_csv(temporary, index=False, encoding="utf-8-sig")
+    with atomic_path(xlsx_path) as temporary:
+        with pd.ExcelWriter(temporary, engine="openpyxl") as writer:
+            export.to_excel(writer, index=False, sheet_name="spatial_matches")
     return [str(csv_path.resolve()), str(xlsx_path.resolve())]
 
 
 def save_spatial_summary(summary: dict[str, Any], output_file: str | Path) -> str:
     path = Path(output_file)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_text(path, json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
     return str(path.resolve())

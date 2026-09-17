@@ -48,19 +48,54 @@ _REGION_BASIS_HINTS = {"region", "province", "state", "oblast", "prefecture"}
 _COUNTRY_BASIS_HINTS = {"country"}
 
 _PROVIDER_SITE_TYPES = {
-    "house", "building", "amenity", "university", "college", "school", "office",
-    "library", "museum", "theatre", "cinema", "stadium", "hotel", "hospital",
-    "station", "attraction", "campus", "facility", "commercial", "retail",
+    "house",
+    "building",
+    "amenity",
+    "university",
+    "college",
+    "school",
+    "office",
+    "library",
+    "museum",
+    "theatre",
+    "cinema",
+    "stadium",
+    "hotel",
+    "hospital",
+    "station",
+    "attraction",
+    "campus",
+    "facility",
+    "commercial",
+    "retail",
 }
 _PROVIDER_LOCALITY_TYPES = {
-    "suburb", "neighbourhood", "neighborhood", "quarter", "borough", "district",
-    "locality", "hamlet", "isolated_dwelling",
+    "suburb",
+    "neighbourhood",
+    "neighborhood",
+    "quarter",
+    "borough",
+    "district",
+    "locality",
+    "hamlet",
+    "isolated_dwelling",
 }
 _PROVIDER_CITY_TYPES = {
-    "city", "town", "village", "municipality", "municipal", "city_district",
+    "city",
+    "town",
+    "village",
+    "municipality",
+    "municipal",
+    "city_district",
 }
 _PROVIDER_REGION_TYPES = {
-    "state", "province", "region", "county", "oblast", "prefecture", "administrative",
+    "state",
+    "province",
+    "region",
+    "county",
+    "oblast",
+    "prefecture",
+    "administrative",
 }
 _PROVIDER_COUNTRY_TYPES = {"country"}
 
@@ -310,7 +345,11 @@ def _resolve_structured_location(
         raise ValueError("A geocode cache is required when resolve_missing=True.")
     candidates = _location_candidate_queries(location)
     if not candidates:
-        reason = "Country-only location is not plotted at a national centroid." if location.country else "No site, city, or region evidence is available."
+        reason = (
+            "Country-only location is not plotted at a national centroid."
+            if location.country
+            else "No site, city, or region evidence is available."
+        )
         return ResolvedLocation(
             **common,
             latitude=None,
@@ -344,7 +383,8 @@ def _resolve_structured_location(
                 _uncertainty_from_geocode(result, resolved_precision),
             ),
             derived=True,
-            density_eligible=resolved_precision in {"exact", "site", "locality", "city"} and derived_confidence >= minimum_confidence,
+            density_eligible=resolved_precision in {"exact", "site", "locality", "city"}
+            and derived_confidence >= minimum_confidence,
             provider_type=_clean(result.get("addresstype") or result.get("type")),
             provider_category=_clean(result.get("category")),
         )
@@ -370,15 +410,24 @@ def _resolve_legacy_location(
 ) -> ResolvedLocation:
     pair = _valid_coordinate_pair(observation.latitude, observation.longitude)
     precision = _precision_from_basis(observation)
-    label = _clean(observation.location_label) or _join_location(observation.city, observation.region, observation.country)
+    label = _clean(observation.location_label) or _join_location(
+        observation.city, observation.region, observation.country
+    )
     basis = _clean(observation.location_basis) or "unknown"
     if pair is not None:
         confidence = _confidence(observation, precision, derived=False)
         return ResolvedLocation(
             observation_id=observation.observation_id,
-            latitude=pair[0], longitude=pair[1], precision=precision, confidence=confidence,
-            basis=basis, label=label, source="recorded_coordinates",
-            country=observation.country, region=observation.region, city=observation.city,
+            latitude=pair[0],
+            longitude=pair[1],
+            precision=precision,
+            confidence=confidence,
+            basis=basis,
+            label=label,
+            source="recorded_coordinates",
+            country=observation.country,
+            region=observation.region,
+            city=observation.city,
             display_name=label,
             uncertainty_km=_PRECISION_DEFAULT_UNCERTAINTY_KM.get(precision, 100.0),
             derived=False,
@@ -402,21 +451,39 @@ def _resolve_legacy_location(
     if not resolve_missing:
         return ResolvedLocation(
             observation_id=observation.observation_id,
-            latitude=None, longitude=None, precision=precision,
-            confidence=_confidence(observation, precision, derived=True), basis=basis, label=label,
-            source="unresolved", country=observation.country, region=observation.region, city=observation.city,
+            latitude=None,
+            longitude=None,
+            precision=precision,
+            confidence=_confidence(observation, precision, derived=True),
+            basis=basis,
+            label=label,
+            source="unresolved",
+            country=observation.country,
+            region=observation.region,
+            city=observation.city,
             unresolved_reason="No recorded coordinate pair and location resolution is disabled.",
         )
     if cache is None:
         raise ValueError("A geocode cache is required when resolve_missing=True.")
     candidates = _candidate_queries(observation)
     if not candidates:
-        reason = "Country-only location is not plotted at a national centroid." if observation.country else "No site, city, or region evidence is available."
+        reason = (
+            "Country-only location is not plotted at a national centroid."
+            if observation.country
+            else "No site, city, or region evidence is available."
+        )
         return ResolvedLocation(
             observation_id=observation.observation_id,
-            latitude=None, longitude=None, precision=precision,
-            confidence=_confidence(observation, precision, derived=True), basis=basis, label=label,
-            source="unresolved", country=observation.country, region=observation.region, city=observation.city,
+            latitude=None,
+            longitude=None,
+            precision=precision,
+            confidence=_confidence(observation, precision, derived=True),
+            basis=basis,
+            label=label,
+            source="unresolved",
+            country=observation.country,
+            region=observation.region,
+            city=observation.city,
             unresolved_reason=reason,
         )
     for query, candidate_precision, source in candidates:
@@ -430,20 +497,37 @@ def _resolve_legacy_location(
         confidence = _confidence(observation, resolved_precision, derived=True)
         return ResolvedLocation(
             observation_id=observation.observation_id,
-            latitude=pair[0], longitude=pair[1], precision=resolved_precision, confidence=confidence,
-            basis=basis, label=label or query, source=f"geocoded_{source}", query=query,
-            country=observation.country, region=observation.region, city=observation.city,
+            latitude=pair[0],
+            longitude=pair[1],
+            precision=resolved_precision,
+            confidence=confidence,
+            basis=basis,
+            label=label or query,
+            source=f"geocoded_{source}",
+            query=query,
+            country=observation.country,
+            region=observation.region,
+            city=observation.city,
             display_name=_clean(result.get("display_name")) or query,
-            uncertainty_km=_uncertainty_from_geocode(result, resolved_precision), derived=True,
-            density_eligible=resolved_precision in {"exact", "site", "locality", "city"} and confidence >= minimum_confidence,
+            uncertainty_km=_uncertainty_from_geocode(result, resolved_precision),
+            derived=True,
+            density_eligible=resolved_precision in {"exact", "site", "locality", "city"}
+            and confidence >= minimum_confidence,
             provider_type=_clean(result.get("addresstype") or result.get("type")),
             provider_category=_clean(result.get("category")),
         )
     return ResolvedLocation(
         observation_id=observation.observation_id,
-        latitude=None, longitude=None, precision=precision,
-        confidence=_confidence(observation, precision, derived=True), basis=basis, label=label,
-        source="geocode_no_match", country=observation.country, region=observation.region, city=observation.city,
+        latitude=None,
+        longitude=None,
+        precision=precision,
+        confidence=_confidence(observation, precision, derived=True),
+        basis=basis,
+        label=label,
+        source="geocode_no_match",
+        country=observation.country,
+        region=observation.region,
+        city=observation.city,
         unresolved_reason="No site/city/region geocode candidate returned a defensible coordinate.",
     )
 

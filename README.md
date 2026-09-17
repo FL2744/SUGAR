@@ -64,6 +64,8 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
+For a first successful offline workspace, follow [`docs/quickstart.md`](docs/quickstart.md).
+
 SUGAR never installs or upgrades packages at runtime.
 
 ## Project workspaces
@@ -81,6 +83,10 @@ sugar-project register ./team4 observations data/observations/kyrgyzstan.xlsx
 ```
 
 Research files remain ordinary CSV/XLSX/JSONL/GeoJSON/HTML/Word/PDF files rather than being hidden inside the project database. Secrets are never stored in the workspace manifest or registry by SUGAR.
+
+Portable projects can be transferred with `sugar-project archive PROJECT ARCHIVE.sugar.zip` and
+validated into a new directory with `sugar-project restore ARCHIVE.sugar.zip NEW_PROJECT`. External
+artifact references remain explicit and are not silently copied.
 
 See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the workspace schema, layout, portability rules, Python API, and desktop bridge operations.
 
@@ -152,6 +158,10 @@ See [`docs/research-map.md`](docs/research-map.md) and [`docs/spatial-overlap.md
 
 LLM enrichment and triage are optional. Source text is treated as untrusted data and separated from model instructions. SUGAR does not infer a country from language alone and does not infer private/street-level locations.
 
+AI runs can be bounded with `--max-llm-tokens`. Add `--max-llm-cost-usd` plus explicit input/output
+cost rates when a provider-dollar ceiling is required; the shared budget covers retries and parallel
+State synthesis workers.
+
 For State-specific analysis, AI cannot self-verify evidence, confirm PRC support, invent acceptable evidence references, or establish causal influence. High-consequence claims remain subject to explicit evidence and human review.
 
 Supported LLM configuration includes OpenAI-compatible providers and Virginia Tech ARC. Credentials are supplied at runtime; they must not be committed to the repository or inserted into project manifests.
@@ -173,7 +183,12 @@ See [`docs/architecture.md`](docs/architecture.md) for module boundaries, fronte
 - [`docs/architecture.md`](docs/architecture.md) — current system architecture and engineering rules
 - [`docs/project-workspaces.md`](docs/project-workspaces.md) — persistent project-workspace contract
 - [`docs/collector-interface.md`](docs/collector-interface.md) — collector capabilities and normalization contract
+- [`docs/collector-capability-matrix.md`](docs/collector-capability-matrix.md) — visible access/capability matrix and coverage semantics
 - [`docs/high-volume-harvest.md`](docs/high-volume-harvest.md) — durable large-scale collection
+- [`docs/stress-testing.md`](docs/stress-testing.md) — offline scale probes and stress-test plan
+- [`docs/legal-and-data-handling.md`](docs/legal-and-data-handling.md) — public/authorized access definitions and data-handling boundaries
+- [`docs/release-readiness.md`](docs/release-readiness.md) — tracked hardening ledger and candidate gate
+- [`docs/reproducibility.md`](docs/reproducibility.md) — clean-install verification, offline demo, dependency tracks, and artifact checks
 - [`docs/bilibili-public.md`](docs/bilibili-public.md) — Bilibili public collector
 - [`docs/weibo-public.md`](docs/weibo-public.md) — Weibo public collector
 - [`docs/weibo-investigation.md`](docs/weibo-investigation.md) — known-post investigation workflow
@@ -194,6 +209,6 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-CI runs the Python suite on Ubuntu, macOS, and Windows with Python 3.11–3.13 and separately builds/smoke-tests the packaged macOS and Windows applications. Schema, collector, bridge, workspace, or methodology changes should include regression tests and documentation in the same pull request.
+CI runs the Python suite on Ubuntu, macOS, and Windows with Python 3.11–3.13, runs lint/type/dependency/security gates, verifies wheel/sdist installation, and separately builds/smoke-tests the packaged macOS and Windows applications. Schema, collector, bridge, workspace, or methodology changes should include regression tests and documentation in the same pull request.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), and [`CHANGELOG.md`](CHANGELOG.md).

@@ -14,6 +14,10 @@ A platform advertises the surfaces SUGAR actually implements:
 - `profile_timeline`
 - `authenticated_search`
 - `anonymous_search`
+- `pagination`
+- `date_filtering`
+- `location_data`
+- `engagement_metrics`
 
 A capability is a statement about the current SUGAR implementation, not a claim that the underlying platform can never expose anything else.
 
@@ -21,12 +25,13 @@ This matters for Chinese social-media sources because access surfaces differ sha
 
 Current registry examples:
 
-| Source | Keyword search | Known item | Comments | Anonymous search |
-| --- | --- | --- | --- | --- |
-| X | yes | no | no | no |
-| Bluesky | yes | no | no | yes |
-| Mastodon | yes | no | no | yes/instance-dependent |
-| Bilibili | yes/public-session-dependent | yes | yes/public-response-dependent | yes/fail-closed |
+| Source | Keyword search | Known item | Comments | Pagination | Date filtering | Location data | Engagement metrics | Anonymous search |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| X | yes | no | no | yes | yes | author profile only | yes | no |
+| Bluesky | yes | no | no | yes | yes | no normalized profile location | yes | yes |
+| Mastodon | yes | no | no | yes/authenticated offset | yes/local filter | no normalized profile location | yes | yes/instance-dependent |
+| Bilibili | yes/public-session-dependent | yes | yes/public-response-dependent | yes | yes/local filter | no | yes | yes/fail-closed |
+| Weibo | yes | yes | yes | yes | yes/local filter | author profile when supplied | yes | yes/partial |
 
 Future Weibo, WeChat, REDnote, Douyin, Zhihu, and Kuaishou adapters should advertise only the surfaces they can actually provide under the project's public/authorized-access rules.
 

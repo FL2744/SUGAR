@@ -6,7 +6,7 @@ SUGAR handles public-source research, API credentials, optional authenticated se
 
 Do not publish live credentials, session cookies, private research data, or a working exploit in a public GitHub issue.
 
-If the repository has a private security-reporting channel enabled, use it. Otherwise contact the project maintainer privately through the Virginia Tech project communication channel before posting technical details publicly. A public issue may be opened later with sensitive details removed.
+The designated private route for this repository is the [GitHub Security Advisory report form](https://github.com/FL2744/SUGAR/security/advisories/new). A repository administrator must verify that private vulnerability reporting is enabled before a production release. If the form is unavailable, do not disclose technical details publicly; contact the project maintainer through the institution-approved private project channel and request an enabled secure route. A public issue may be opened later with sensitive details removed.
 
 A useful report includes:
 

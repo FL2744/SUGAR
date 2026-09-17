@@ -48,6 +48,19 @@ The model is instructed to treat all collected source text as untrusted data rat
 
 SUGAR then checks those spans against the actual record. A model-generated span that cannot be found in the source is discarded.
 
+## Run-level AI budgets
+
+AI work is optional and can be bounded for a reproducible research run. The normal search, generic
+triage, State triage, and State synthesis paths accept `--max-llm-tokens`; admission is checked
+before each request and includes a conservative prompt estimate plus the requested completion cap.
+Retries consume budget as uncertain usage rather than silently bypassing the ceiling. Cache hits do
+not consume tokens and are reported separately.
+
+For a cost ceiling, also provide `--max-llm-cost-usd`, `--llm-input-cost-per-1k`, and
+`--llm-output-cost-per-1k`. Rates are explicit because OpenAI-compatible and ARC endpoints may use
+different pricing. Completed AI products include observed or conservative usage in their metadata;
+source text, credentials, and prompts are not written to the cache.
+
 Several high-consequence labels require their own validated evidence span and are removed otherwise:
 
 - `anti_us_explicit`

@@ -28,6 +28,10 @@ class CollectorCapabilities:
     profile_timeline: bool = False
     authenticated_search: bool = False
     anonymous_search: bool = False
+    pagination: bool = False
+    date_filtering: bool = False
+    location_data: bool = False
+    engagement_metrics: bool = False
 
     def as_dict(self) -> dict[str, bool]:
         return {
@@ -37,6 +41,10 @@ class CollectorCapabilities:
             "profile_timeline": self.profile_timeline,
             "authenticated_search": self.authenticated_search,
             "anonymous_search": self.anonymous_search,
+            "pagination": self.pagination,
+            "date_filtering": self.date_filtering,
+            "location_data": self.location_data,
+            "engagement_metrics": self.engagement_metrics,
         }
 
 
@@ -180,6 +188,7 @@ def _mark_weibo_access(records: list[PostRecord], cookie: str) -> list[PostRecor
     for record in records:
         record.raw_stats = dict(record.raw_stats)
         record.raw_stats["access_mode"] = mode
+        record.access_mode = mode
         if mode == "session" and record.source_mode.startswith("weibo_public_"):
             record.source_mode = record.source_mode.replace("weibo_public_", "weibo_session_", 1)
     return records
@@ -233,6 +242,10 @@ COLLECTORS: dict[str, CollectorSpec] = {
             keyword_search=True,
             authenticated_search=True,
             anonymous_search=False,
+            pagination=True,
+            date_filtering=True,
+            location_data=True,
+            engagement_metrics=True,
         ),
         description="X API recent/full-archive search.",
     ),
@@ -243,6 +256,9 @@ COLLECTORS: dict[str, CollectorSpec] = {
             keyword_search=True,
             authenticated_search=True,
             anonymous_search=True,
+            pagination=True,
+            date_filtering=True,
+            engagement_metrics=True,
         ),
         description="Bluesky AppView search, optionally authenticated through a PDS app password.",
     ),
@@ -253,6 +269,9 @@ COLLECTORS: dict[str, CollectorSpec] = {
             keyword_search=True,
             authenticated_search=True,
             anonymous_search=True,
+            pagination=True,
+            date_filtering=True,
+            engagement_metrics=True,
         ),
         description="Instance-scoped Mastodon status search.",
     ),
@@ -266,6 +285,9 @@ COLLECTORS: dict[str, CollectorSpec] = {
             known_item=True,
             comments=True,
             anonymous_search=True,
+            pagination=True,
+            date_filtering=True,
+            engagement_metrics=True,
         ),
         description="Fail-closed public Bilibili video search, known-video metadata, and comments.",
     ),
@@ -280,6 +302,10 @@ COLLECTORS: dict[str, CollectorSpec] = {
             comments=True,
             authenticated_search=True,
             anonymous_search=True,
+            pagination=True,
+            date_filtering=True,
+            location_data=True,
+            engagement_metrics=True,
         ),
         description=(
             "Fail-closed Weibo mobile-web search/status/comments. Public status and basic comment "

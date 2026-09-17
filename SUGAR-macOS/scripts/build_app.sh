@@ -25,6 +25,7 @@ cp "$HERE/.build/release/SUGARMac" "$APP/Contents/MacOS/SUGAR"
 cp "$BUILD/backend/sugar-bridge" "$APP/Contents/Resources/sugar-bridge"
 cp "$HERE/Resources/Info.plist" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
 
 if [[ -f "$ROOT/sugar-logo.png" ]]; then
   ICONSET="$BUILD/SUGAR.iconset"; rm -rf "$ICONSET"; mkdir -p "$ICONSET"

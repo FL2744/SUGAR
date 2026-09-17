@@ -13,7 +13,7 @@ import requests
 
 from .models import PostRecord, merge_record
 from .storage import save_records
-from .utils import normalize_whitespace, utc_iso
+from .utils import atomic_write_text, normalize_whitespace, safe_artifact_stem, utc_iso
 from .weibo import (
     WEIBO_MOBILE_BASE_URL,
     WEIBO_SEARCH_ENDPOINT,
@@ -355,7 +355,9 @@ def build_weibo_insights(
             "reposts_retrieved": len(reposts),
             "comment_retrieved_to_reported_ratio": _safe_ratio(len(comments), reported_comments),
             "repost_retrieved_to_reported_ratio": _safe_ratio(len(reposts), reported_reposts),
-            "unique_public_responders": len({row.author_handle or row.author_name for row in responses if row.author_handle or row.author_name}),
+            "unique_public_responders": len(
+                {row.author_handle or row.author_name for row in responses if row.author_handle or row.author_name}
+            ),
             "surface_status": surface_status or {},
         },
         "response_context": {
@@ -389,9 +391,7 @@ def investigate_weibo_seed(
 ) -> WeiboInvestigation:
     session = session or create_weibo_session(cookie)
     seed_record, seed_mode = fetch_weibo_seed_status(seed, cookie=cookie, session=session)
-    surface_status: dict[str, dict[str, str]] = {
-        "seed": {"status": "ok", "mode": seed_mode}
-    }
+    surface_status: dict[str, dict[str, str]] = {"seed": {"status": "ok", "mode": seed_mode}}
 
     def capture(name: str, fn):
         try:
@@ -425,16 +425,20 @@ def investigate_weibo_seed(
             session=session,
         ),
     )
-    timeline = capture(
-        "author_timeline",
-        lambda: collect_weibo_user_timeline(
-            seed_record.author_handle,
-            max_posts=author_posts,
-            max_pages=author_pages,
-            cookie=cookie,
-            session=session,
-        ),
-    ) if seed_record.author_handle else []
+    timeline = (
+        capture(
+            "author_timeline",
+            lambda: collect_weibo_user_timeline(
+                seed_record.author_handle,
+                max_posts=author_posts,
+                max_pages=author_pages,
+                cookie=cookie,
+                session=session,
+            ),
+        )
+        if seed_record.author_handle
+        else []
+    )
 
     original = None
     original_id = normalize_whitespace((seed_record.raw_stats or {}).get("retweeted_status_id", ""))
@@ -524,13 +528,15 @@ def render_weibo_brief(investigation: WeiboInvestigation) -> str:
     if not insight["response_context"]["top_public_responses"]:
         lines.append("- No public response records were retrievable from the tested surfaces.")
 
-    lines.extend([
-        "",
-        "## Methodological note",
-        "",
-        insight["interpretation_guardrail"],
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Methodological note",
+            "",
+            insight["interpretation_guardrail"],
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -542,6 +548,7 @@ def save_weibo_investigation(
 ) -> list[str]:
     out = Path(output_directory).expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
+    name = safe_artifact_stem(name, "weibo_investigation")
     stem = out / name
     csv_path = stem.with_suffix(".csv")
     save_records(
@@ -554,9 +561,9 @@ def save_weibo_investigation(
         },
     )
     insights_path = out / f"{name}.insights.json"
-    insights_path.write_text(json.dumps(investigation.insights, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(insights_path, json.dumps(investigation.insights, ensure_ascii=False, indent=2))
     brief_path = out / f"{name}.brief.md"
-    brief_path.write_text(render_weibo_brief(investigation), encoding="utf-8")
+    atomic_write_text(brief_path, render_weibo_brief(investigation))
     return [
         str(csv_path),
         str(csv_path.with_suffix(".xlsx")),

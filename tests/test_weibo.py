@@ -70,9 +70,7 @@ def test_supplied_cookie_is_forwarded_but_not_generated():
 
 
 def test_fetch_status_normalizes_text_time_metrics_and_thread_root():
-    session = QueueSession(
-        [FakeResponse({"ok": 1, "data": _status()}, url="https://m.weibo.cn/statuses/show?id=123")]
-    )
+    session = QueueSession([FakeResponse({"ok": 1, "data": _status()}, url="https://m.weibo.cn/statuses/show?id=123")])
 
     record = fetch_weibo_status("123", session=session)
 
@@ -111,6 +109,13 @@ def test_login_required_fails_closed():
         fetch_weibo_status("123", session=session)
 
 
+def test_fetch_status_rejects_payload_without_stable_identifier():
+    session = QueueSession([FakeResponse({"ok": 1, "data": {"text": "missing id"}})])
+
+    with pytest.raises(RuntimeError, match="stable status identifier"):
+        fetch_weibo_status("123", session=session)
+
+
 def test_search_preserves_multi_query_provenance_without_hydration():
     card = {"card_type": 9, "mblog": _status()}
     session = QueueSession(
@@ -133,6 +138,30 @@ def test_search_preserves_multi_query_provenance_without_hydration():
     assert rows[0].source_mode == "weibo_public_search"
 
 
+def test_search_duplicate_pages_do_not_hide_later_unique_records():
+    def card(status_id: str) -> dict:
+        return {"card_type": 9, "mblog": _status(status_id=status_id)}
+
+    session = QueueSession(
+        [
+            FakeResponse({"ok": 1, "data": {"cards": [card("one")]}}),
+            FakeResponse({"ok": 1, "data": {"cards": [card("one")]}}),
+            FakeResponse({"ok": 1, "data": {"cards": [card("two")]}}),
+        ]
+    )
+
+    rows = collect_weibo_public(
+        search_terms=["q"],
+        max_posts_per_query=2,
+        max_pages_per_query=3,
+        hydrate_details=False,
+        session=session,
+    )
+
+    assert [row.native_id for row in rows] == ["one", "two"]
+    assert len(session.calls) == 3
+
+
 def test_search_login_gate_is_not_retried_or_bypassed():
     session = QueueSession([FakeResponse({"ok": -100, "msg": "未登录"})])
 
@@ -144,6 +173,12 @@ def test_search_login_gate_is_not_retried_or_bypassed():
         )
 
     assert len(session.calls) == 1
+
+
+def test_search_ignores_malformed_cards_without_synthesizing_records():
+    session = QueueSession([FakeResponse({"ok": 1, "data": {"cards": {"not": "a list"}}})])
+
+    assert collect_weibo_public(search_terms=["test"], hydrate_details=False, session=session) == []
 
 
 def test_comments_link_to_status_and_direct_reply_parent():

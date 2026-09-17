@@ -7,6 +7,7 @@ from typing import Any, Iterable
 import requests
 from bs4 import BeautifulSoup
 
+from . import __version__
 from .models import PostRecord, merge_record
 from .utils import in_inclusive_date_range, normalize_whitespace
 
@@ -26,7 +27,7 @@ def create_bilibili_session() -> requests.Session:
     session = requests.Session()
     session.headers.update(
         {
-            "User-Agent": "SUGAR/1.1 research-client (+Virginia Tech Diplomacy Lab; public Bilibili client)",
+            "User-Agent": f"SUGAR/{__version__} research-client (+Virginia Tech Diplomacy Lab; public Bilibili client)",
             "Accept": "application/json,text/plain;q=0.9,*/*;q=0.8",
             "Referer": f"{BILIBILI_WEB_BASE_URL}/",
         }
@@ -37,7 +38,7 @@ def create_bilibili_session() -> requests.Session:
 def _metric(value: Any) -> int:
     try:
         return max(0, int(float(value or 0)))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
@@ -66,7 +67,9 @@ def _iso_from_unix(value: Any) -> str:
     if timestamp <= 0:
         return ""
     try:
-        return datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        return (
+            datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        )
     except (OverflowError, OSError, ValueError):
         return ""
 
@@ -125,6 +128,19 @@ def _merge_record(records: OrderedDict[tuple[str, str], PostRecord], record: Pos
     records[key] = record
 
 
+def _merge_record_for_query(
+    records: OrderedDict[tuple[str, str], PostRecord],
+    record: PostRecord,
+    seen_query_keys: set[tuple[str, str]],
+) -> bool:
+    key = (record.platform, record.native_id or record.canonical_url)
+    _merge_record(records, record)
+    if key in seen_query_keys:
+        return False
+    seen_query_keys.add(key)
+    return True
+
+
 def _video_url(bvid: str, fallback: str = "") -> str:
     bvid = normalize_whitespace(bvid)
     return f"{BILIBILI_WEB_BASE_URL}/video/{bvid}" if bvid else normalize_whitespace(fallback)
@@ -159,6 +175,7 @@ def _search_item_to_record(item: dict[str, Any], *, query: str, source_url: str)
         query_matches=[query],
         content_type="video",
         source_mode="bilibili_public_search",
+        access_mode="anonymous",
         source_host="api.bilibili.com",
         source_url=source_url,
         published_at=published,
@@ -200,6 +217,7 @@ def _detail_to_record(data: dict[str, Any], *, query: str, source_url: str) -> P
         query_matches=[query] if query else [],
         content_type="video",
         source_mode="bilibili_public_video",
+        access_mode="anonymous",
         source_host="api.bilibili.com",
         source_url=source_url,
         published_at=_iso_from_unix(data.get("pubdate", data.get("ctime"))),
@@ -269,6 +287,7 @@ def collect_bilibili_public(
         if not query:
             continue
         collected = 0
+        seen_query_keys: set[tuple[str, str]] = set()
         for page in range(1, max_pages_per_query + 1):
             remaining = max_posts_per_query - collected
             if remaining <= 0:
@@ -309,8 +328,8 @@ def collect_bilibili_public(
                         record = search_record
                 if not in_inclusive_date_range(record.published_at, since, until):
                     continue
-                _merge_record(records, record)
-                collected += 1
+                if _merge_record_for_query(records, record, seen_query_keys):
+                    collected += 1
                 if collected >= max_posts_per_query:
                     break
 
@@ -347,6 +366,7 @@ def _comment_record(
         query_matches=[query] if query else [],
         content_type="comment",
         source_mode="bilibili_public_comment",
+        access_mode="anonymous",
         source_host="api.bilibili.com",
         source_url=source_url,
         published_at=_iso_from_unix(reply.get("ctime")),

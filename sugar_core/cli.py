@@ -4,8 +4,12 @@ import argparse
 import getpass
 import json
 import os
+import sys
 from pathlib import Path
 
+from . import __version__
+from .diagnostics import build_report, save_bundle, save_report
+from .errors import error_payload
 from .llm import ARC_BASE_URL, LLMConfig
 from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from .triage import DEFAULT_PROJECT_CONTEXT
@@ -108,8 +112,20 @@ def _workspace_arg(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _emit_outputs(outputs: list[str], *, json_output: bool) -> None:
+    values = [str(output) for output in outputs]
+    if json_output:
+        print(json.dumps({"event": "complete", "outputs": values}, ensure_ascii=False, sort_keys=True))
+    else:
+        print("\n".join(values))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sugar", description="SUGAR stable research pipeline")
+    parser.add_argument("--version", action="version", version=__version__)
+    parser.add_argument(
+        "--json", dest="json_output", action="store_true", help="Emit machine-readable JSON completion output."
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     search = sub.add_parser("search", help="Run a normal bounded collection + optional enrichment.")
@@ -123,6 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
     search.add_argument("--model", default="gpt-5.6-luna")
     search.add_argument("--base-url", default="")
+    _add_llm_budget_args(search)
     search.add_argument("--no-translate", action="store_true")
     search.add_argument("--no-location", action="store_true")
     search.add_argument("--x-mode", choices=["recent", "all"], default="recent")
@@ -185,8 +202,15 @@ def build_parser() -> argparse.ArgumentParser:
         "weibo-seed-harvest",
         help="Durably expand hundreds/thousands of known public Weibo post URLs or IDs without relying on keyword search.",
     )
-    seed_harvest.add_argument("seeds", nargs="*", help="Inline public Weibo URLs/IDs. Can be combined with --seeds-file.")
-    seed_harvest.add_argument("--seeds-file", action="append", default=[], help="UTF-8 file with one public Weibo URL/ID per line. Repeatable.")
+    seed_harvest.add_argument(
+        "seeds", nargs="*", help="Inline public Weibo URLs/IDs. Can be combined with --seeds-file."
+    )
+    seed_harvest.add_argument(
+        "--seeds-file",
+        action="append",
+        default=[],
+        help="UTF-8 file with one public Weibo URL/ID per line. Repeatable.",
+    )
     seed_harvest.add_argument("--comments", type=int, default=20)
     seed_harvest.add_argument("--comment-pages", type=int, default=1)
     seed_harvest.add_argument("--reposts", type=int, default=0)
@@ -210,8 +234,15 @@ def build_parser() -> argparse.ArgumentParser:
     qualify.add_argument("--terms-file", action="append", default=[])
     qualify.add_argument("--seed", action="append", default=[], help="Real public Weibo post URL/ID. Repeatable.")
     qualify.add_argument("--seeds-file", action="append", default=[], help="UTF-8 seed file, one post URL/ID per line.")
-    qualify.add_argument("--replicates", type=int, default=2, help="Independent fresh harvest snapshots for stability measurement.")
-    qualify.add_argument("--target", type=int, default=1000, help="Minimum unique-record acceptance floor per fresh replicate; does not stop the query plan early.")
+    qualify.add_argument(
+        "--replicates", type=int, default=2, help="Independent fresh harvest snapshots for stability measurement."
+    )
+    qualify.add_argument(
+        "--target",
+        type=int,
+        default=1000,
+        help="Minimum unique-record acceptance floor per fresh replicate; does not stop the query plan early.",
+    )
     qualify.add_argument("--posts-per-task", type=int, default=250)
     qualify.add_argument("--pages-per-task", type=int, default=2)
     qualify.add_argument("--max-pages-per-query", type=int, default=25)
@@ -241,6 +272,7 @@ def build_parser() -> argparse.ArgumentParser:
     triage.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
     triage.add_argument("--model", default="gpt-5.6-luna")
     triage.add_argument("--base-url", default="")
+    _add_llm_budget_args(triage)
     triage.add_argument("--project-context-file")
     triage.add_argument("--fail-fast", action="store_true")
     _workspace_arg(triage)
@@ -276,25 +308,86 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--output-stem")
     report.add_argument("--format", choices=["docx", "pdf", "both"], default="both")
     _workspace_arg(report)
+
+    diagnostics = sub.add_parser("diagnostics", help="Emit a redacted runtime and workspace health report.")
+    diagnostics.add_argument("--workspace", help="Optional SUGAR project directory to health-check.")
+    diagnostics.add_argument("--output", help="Optional path for a JSON diagnostic report.")
+    diagnostics.add_argument("--bundle", help="Optional path for an atomic redacted diagnostic ZIP bundle.")
+
+    # Accept --json after the subcommand as well as before it. Suppressing the
+    # subparser default preserves a global --json value.
+    for command_parser in sub.choices.values():
+        command_parser.add_argument(
+            "--json",
+            dest="json_output",
+            action="store_true",
+            default=argparse.SUPPRESS,
+            help=argparse.SUPPRESS,
+        )
     return parser
 
 
-def _llm_from_cli(provider: str, model: str, base_url: str, api_key: str) -> LLMConfig:
+def _add_llm_budget_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--max-llm-tokens",
+        type=int,
+        help="Hard upper bound for estimated/observed prompt plus completion tokens in this run.",
+    )
+    parser.add_argument(
+        "--max-llm-cost-usd",
+        type=float,
+        help="Hard upper bound for estimated provider cost; pair with both --llm-*-cost-per-1k options.",
+    )
+    parser.add_argument("--llm-input-cost-per-1k", type=float, help="Input-token cost used for the run budget.")
+    parser.add_argument("--llm-output-cost-per-1k", type=float, help="Output-token cost used for the run budget.")
+
+
+def _llm_from_cli(
+    provider: str,
+    model: str,
+    base_url: str,
+    api_key: str,
+    *,
+    max_total_tokens: int | None = None,
+    max_cost_usd: float | None = None,
+    input_cost_per_1k_tokens: float | None = None,
+    output_cost_per_1k_tokens: float | None = None,
+) -> LLMConfig:
     base = base_url.strip()
     if provider == "arc" and not base:
         base = ARC_BASE_URL
     if provider == "custom" and not base:
         raise ValueError("--base-url is required when --provider custom is used.")
-    return LLMConfig(provider=provider, model=model, api_key=api_key, base_url=base)
+    return LLMConfig(
+        provider=provider,
+        model=model,
+        api_key=api_key,
+        base_url=base,
+        max_total_tokens=max_total_tokens,
+        max_cost_usd=max_cost_usd,
+        input_cost_per_1k_tokens=input_cost_per_1k_tokens,
+        output_cost_per_1k_tokens=output_cost_per_1k_tokens,
+    )
 
 
-def main(argv=None) -> int:
+def _run(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.command == "diagnostics":
+        report = build_report(args.workspace)
+        if args.output:
+            output = save_report(args.workspace, args.output)
+            report = {"report": output, **report}
+        if args.bundle:
+            bundle = save_bundle(args.workspace, args.bundle)
+            report = {"bundle": bundle, **report}
+        print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+
     if args.command == "map":
         outputs = run_map({"source_file": args.source_file, "output_file": args.output, "workspace": args.workspace})
-        print("\n".join(outputs))
+        _emit_outputs(outputs, json_output=args.json_output)
         return 0
 
     if args.command == "overlap":
@@ -312,21 +405,20 @@ def main(argv=None) -> int:
                 "map_output": args.map_output,
             },
         }
-        print("\n".join(run_overlap(config)))
+        _emit_outputs(run_overlap(config), json_output=args.json_output)
         return 0
 
     if args.command == "analysis":
-        print(
-            "\n".join(
-                run_analysis(
-                    {
-                        "source_file": args.source_file,
-                        "output_stem": args.output_stem,
-                        "output_format": args.format,
-                        "workspace": args.workspace,
-                    }
-                )
-            )
+        _emit_outputs(
+            run_analysis(
+                {
+                    "source_file": args.source_file,
+                    "output_stem": args.output_stem,
+                    "output_format": args.format,
+                    "workspace": args.workspace,
+                }
+            ),
+            json_output=args.json_output,
         )
         return 0
 
@@ -346,7 +438,7 @@ def main(argv=None) -> int:
         )
         outputs = save_weibo_investigation(investigation, out_dir, name=args.name)
         register_workspace_outputs(workspace, outputs, operation="weibo-investigate")
-        print("\n".join(outputs))
+        _emit_outputs(outputs, json_output=args.json_output)
         return 0
 
     if args.command == "weibo-seed-harvest":
@@ -376,7 +468,7 @@ def main(argv=None) -> int:
             cookie=os.environ.get("SUGAR_WEIBO_COOKIE", ""),
         )
         register_workspace_outputs(workspace, outputs, operation="weibo-seed-harvest", kind="harvest")
-        print("\n".join(outputs))
+        _emit_outputs(outputs, json_output=args.json_output)
         return 0
 
     if args.command == "weibo-qualify":
@@ -423,7 +515,7 @@ def main(argv=None) -> int:
         secrets = {"weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", "")}
         outputs = run_weibo_qualification(config, secrets)
         register_workspace_outputs(workspace, outputs, operation="weibo-qualify")
-        print("\n".join(outputs))
+        _emit_outputs(outputs, json_output=args.json_output)
         return 0
 
     if args.command == "triage":
@@ -444,7 +536,16 @@ def main(argv=None) -> int:
             if not project_context:
                 raise ValueError("The project context file is empty.")
         api_key = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
-        llm = _llm_from_cli(args.provider, args.model, args.base_url, api_key)
+        llm = _llm_from_cli(
+            args.provider,
+            args.model,
+            args.base_url,
+            api_key,
+            max_total_tokens=args.max_llm_tokens,
+            max_cost_usd=args.max_llm_cost_usd,
+            input_cost_per_1k_tokens=args.llm_input_cost_per_1k,
+            output_cost_per_1k_tokens=args.llm_output_cost_per_1k,
+        )
         outputs = triage_dataset(
             source,
             output,
@@ -453,7 +554,7 @@ def main(argv=None) -> int:
             continue_on_error=not args.fail_fast,
         )
         register_workspace_outputs(workspace, outputs, operation="triage", kind="observations")
-        print("\n".join(outputs))
+        _emit_outputs(outputs, json_output=args.json_output)
         return 0
 
     sources = _csv(args.sources)
@@ -491,7 +592,7 @@ def main(argv=None) -> int:
                 "continue_on_error": not args.fail_fast,
             },
         }
-        print("\n".join(run_harvest(config, secrets)))
+        _emit_outputs(run_harvest(config, secrets), json_output=args.json_output)
         return 0
 
     if not (args.no_translate and args.no_location):
@@ -511,7 +612,47 @@ def main(argv=None) -> int:
         "x_search_mode": args.x_mode,
         "post_languages": _csv(args.x_languages),
         "mastodon_url": args.mastodon_url,
-        "llm": {"provider": args.provider, "model": args.model, "base_url": args.base_url},
+        "llm": {
+            "provider": args.provider,
+            "model": args.model,
+            "base_url": args.base_url,
+            "max_total_tokens": args.max_llm_tokens,
+            "max_cost_usd": args.max_llm_cost_usd,
+            "input_cost_per_1k_tokens": args.llm_input_cost_per_1k,
+            "output_cost_per_1k_tokens": args.llm_output_cost_per_1k,
+        },
     }
-    print("\n".join(run_search(config, secrets)))
+    _emit_outputs(run_search(config, secrets), json_output=args.json_output)
     return 0
+
+
+def main(argv=None) -> int:
+    try:
+        return _run(argv)
+    except KeyboardInterrupt as exc:
+        secrets = {
+            key: os.environ.get(env, "")
+            for key, env in {
+                "x_bearer_token": "SUGAR_X_BEARER_TOKEN",
+                "llm_api_key": "SUGAR_LLM_API_KEY",
+                "bluesky_app_password": "SUGAR_BLUESKY_APP_PASSWORD",
+                "mastodon_token": "SUGAR_MASTODON_TOKEN",
+                "weibo_cookie": "SUGAR_WEIBO_COOKIE",
+            }.items()
+        }
+        print(json.dumps({"event": "error", **error_payload(exc, secrets=secrets)}), file=sys.stderr)
+        return 130
+    except Exception as exc:
+        secrets = {
+            key: os.environ.get(env, "")
+            for key, env in {
+                "x_bearer_token": "SUGAR_X_BEARER_TOKEN",
+                "llm_api_key": "SUGAR_LLM_API_KEY",
+                "bluesky_app_password": "SUGAR_BLUESKY_APP_PASSWORD",
+                "mastodon_token": "SUGAR_MASTODON_TOKEN",
+                "weibo_cookie": "SUGAR_WEIBO_COOKIE",
+            }.items()
+        }
+        payload = {"event": "error", **error_payload(exc, secrets=secrets)}
+        print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
+        return 1

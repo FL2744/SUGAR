@@ -8,6 +8,7 @@ from urllib.parse import quote
 import requests
 from bs4 import BeautifulSoup
 
+from . import __version__
 from .models import PostRecord, merge_record
 from .utils import in_inclusive_date_range, normalize_whitespace
 
@@ -38,7 +39,7 @@ def create_weibo_session(cookie: str = "") -> requests.Session:
             "User-Agent": (
                 "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
                 "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 "
-                "Mobile/15E148 Safari/604.1 SUGAR-VT-Diplomacy-Lab/1.1"
+                f"Mobile/15E148 Safari/604.1 SUGAR-VT-Diplomacy-Lab/{__version__}"
             ),
             "Accept": "application/json,text/plain,*/*",
             "Referer": f"{WEIBO_MOBILE_BASE_URL}/",
@@ -55,7 +56,7 @@ def create_weibo_session(cookie: str = "") -> requests.Session:
 def _metric(value: Any) -> int:
     try:
         return max(0, int(float(value or 0)))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
@@ -75,9 +76,7 @@ def _handle_http(response: requests.Response, operation: str) -> None:
 
 
 def _message(payload: dict[str, Any]) -> str:
-    return normalize_whitespace(
-        payload.get("msg", payload.get("message", payload.get("errmsg", "")))
-    )
+    return normalize_whitespace(payload.get("msg", payload.get("message", payload.get("errmsg", ""))))
 
 
 def _unwrap(payload: Any, operation: str) -> Any:
@@ -350,7 +349,6 @@ def collect_weibo_public(
             if not mblogs:
                 break
 
-            new_on_page = 0
             for status in mblogs:
                 native_id, _ = _status_identity(status)
                 if not native_id or native_id in seen_page_ids:
@@ -377,11 +375,10 @@ def collect_weibo_public(
                     continue
                 _merge_record(records, record)
                 collected += 1
-                new_on_page += 1
                 if collected >= max_posts_per_query:
                     break
 
-            if collected >= max_posts_per_query or new_on_page == 0:
+            if collected >= max_posts_per_query:
                 break
 
     return list(records.values())
@@ -397,9 +394,7 @@ def _comment_to_record(
     user = comment.get("user") if isinstance(comment.get("user"), dict) else {}
     comment_id = normalize_whitespace(comment.get("id", comment.get("idstr", "")))
     reply_comment = comment.get("reply_comment") if isinstance(comment.get("reply_comment"), dict) else {}
-    direct_parent = normalize_whitespace(
-        reply_comment.get("id", comment.get("reply_id", comment.get("replyid", "")))
-    )
+    direct_parent = normalize_whitespace(reply_comment.get("id", comment.get("reply_id", comment.get("replyid", ""))))
     parent_key = f"weibo:{direct_parent}" if direct_parent else f"weibo:{status_id}"
     raw = {
         "like_count": _metric(comment.get("like_count", comment.get("like_counts"))),

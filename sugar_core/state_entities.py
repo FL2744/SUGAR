@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
+from .utils import atomic_path
+
 ENTITY_TYPES = {
     "prc_government",
     "prc_diplomatic_mission",
@@ -156,7 +158,9 @@ def _list_cell(value: Any) -> list[str]:
             if isinstance(data, list):
                 return _clean_list(data)
         except json.JSONDecodeError:
-            pass
+            # Preserve the legacy delimiter form when a spreadsheet cell starts
+            # like JSON but contains an invalid list literal.
+            return _clean_list(text.replace("|", ";").split(";"))
     return _clean_list(text.replace("|", ";").split(";"))
 
 
@@ -170,9 +174,12 @@ def load_entity_registry(path: str | Path) -> EntityRegistry:
             if not line.strip():
                 continue
             try:
-                entities.append(MonitoredEntity(**json.loads(line)))
+                raw = json.loads(line)
             except json.JSONDecodeError as exc:
                 raise ValueError(f"Invalid entity JSON on line {line_number}") from exc
+            if not isinstance(raw, dict):
+                raise ValueError(f"Entity JSON on line {line_number} must be an object")
+            entities.append(MonitoredEntity(**raw))
         return EntityRegistry(entities)
     if source.suffix.lower() != ".csv":
         raise ValueError("Entity registry must be CSV or JSONL.")
@@ -206,24 +213,39 @@ def save_entity_registry(registry: EntityRegistry, path: str | Path) -> str:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.suffix.lower() == ".jsonl":
-        with target.open("w", encoding="utf-8") as stream:
-            for entity in registry.entities.values():
-                stream.write(json.dumps(asdict(entity), ensure_ascii=False, sort_keys=True) + "\n")
+        with atomic_path(target, suffix=".jsonl") as temporary:
+            with temporary.open("w", encoding="utf-8") as stream:
+                for entity in registry.entities.values():
+                    stream.write(json.dumps(asdict(entity), ensure_ascii=False, sort_keys=True) + "\n")
         return str(target.resolve())
     if target.suffix.lower() != ".csv":
         target = target.with_suffix(".csv")
     fields = [
-        "entity_id", "canonical_name", "entity_type", "aliases", "native_names", "country", "city",
-        "parent_entity_id", "official_urls", "social_urls", "languages", "query_terms", "priority", "active", "notes",
+        "entity_id",
+        "canonical_name",
+        "entity_type",
+        "aliases",
+        "native_names",
+        "country",
+        "city",
+        "parent_entity_id",
+        "official_urls",
+        "social_urls",
+        "languages",
+        "query_terms",
+        "priority",
+        "active",
+        "notes",
     ]
-    with target.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        for entity in registry.entities.values():
-            raw = asdict(entity)
-            for key in ("aliases", "native_names", "official_urls", "social_urls", "languages", "query_terms"):
-                raw[key] = "; ".join(raw[key])
-            writer.writerow(raw)
+    with atomic_path(target, suffix=".csv") as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fields)
+            writer.writeheader()
+            for entity in registry.entities.values():
+                raw = asdict(entity)
+                for key in ("aliases", "native_names", "official_urls", "social_urls", "languages", "query_terms"):
+                    raw[key] = "; ".join(raw[key])
+                writer.writerow(raw)
     return str(target.resolve())
 
 
@@ -252,8 +274,9 @@ def save_query_plan(registry: EntityRegistry, path: str | Path) -> str:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     fields = ["entity_id", "entity_type", "canonical_name", "country", "city", "priority", "query"]
-    with target.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(registry.query_plan())
+    with atomic_path(target, suffix=".csv") as temporary:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(registry.query_plan())
     return str(target.resolve())

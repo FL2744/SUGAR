@@ -1,0 +1,97 @@
+# Release-readiness ledger
+
+This ledger turns the 25-section hardening specification into an auditable work queue. It is not a
+release approval. `[x]` means the repository has a checked-in implementation or deterministic test;
+`[~]` means the technical foundation exists but an environment, human review, or release-owner
+decision remains; `[ ]` means work remains.
+
+1. `[~]` Legal and ownership: access/data-handling policy and disclaimers are documented; license,
+   copyright owner, institutional affiliation approval, project-name review, and third-party notices
+   still require the release owner. `SECURITY.md` names the GitHub Security Advisory route, but an
+   administrator must verify that private reporting is enabled.
+2. `[~]` Releases: tagged wheel/sdist, exact version/changelog validation, checksums, and SBOM
+   automation are present; Windows Authenticode and macOS signing/notarization identities are not
+   configured.
+3. `[~]` CI quality: Ruff, formatting, focused mypy, coverage, pip-audit, package installation,
+   deterministic stress smoke, custom CodeQL, Gitleaks, Dependabot, and dependency review are
+   configured. GitHub default CodeQL currently reports two clear-text-storage findings on deliberate
+   plaintext research-artifact writes; security-owner review or an approved default-setup policy is
+   still required. Branch protection and required-review settings remain repository-admin work.
+4. `[~]` Dependencies: supported Python bounds and declared ranges are explicit, universal newest and
+   Python 3.11 lowest-direct hash-pinned runtime locks are checked in, CI exercises both tracks, and
+   generated reproducibility metadata records the runtime/dependency versions; a formally approved
+   update policy remains to be selected.
+5. `[~]` Collectors: capability/access matrix, malformed-payload guards, pagination/duplicate
+   coverage, and bounded live separation are present; full per-platform adversarial and authorized
+   live qualification still needs execution.
+6. `[x]` Provenance: records and derived observations preserve identity, URLs, timestamps, method,
+   query matches, collector/access mode, raw/normalized metrics, confidence, evidence, review, AI,
+   and round-trip provenance fields.
+7. `[~]` Evidence: grounded evidence and unknown/uncertain review semantics exist, and a checked-in
+   adversarial corpus now covers deleted/edited/reposted/contradictory/archived-source cases; larger
+   source-specific fixtures and expert review remain.
+8. `[~]` Scientific semantics: deterministic State, overlap, freshness, network, longitudinal,
+   conflict, and review tests exist, including a checked-in cross-module golden fixture; expert
+   sign-off remains.
+9. `[~]` Spatial: coordinate/precision/proximity safeguards and map marker budgets exist; large
+   browser-load and 100k/1M aggregation policy tests remain.
+10. `[x]` AI safety: source text is untrusted, prompt-injection behavior is tested, output is
+   evidence-grounded, AI provenance is retained, and credentials are runtime-only.
+    LLM and triage caches are process-local; only public geocoder metadata may be persisted.
+11. `[~]` Workspaces: portable manifests, relative-path checks, missing-artifact health, migration
+    guards, atomic manifest writes, and validated portable archive/restore exist; interruption,
+    concurrency, OneDrive, and migration-recovery testing remains.
+12. `[x]` Security: formula-safe spreadsheets, escaped map HTML, typed bridge operations, bounded
+    bridge config, secret redaction, fail-closed access behavior, and security scans are present.
+13. `[x]` Structured errors: the desktop bridge emits stable error codes, retryability, remediation,
+    and redacted messages with nonzero failure exit status.
+14. `[x]` Diagnostics: bridge diagnostics and `sugar diagnostics --bundle` report
+    protocol/runtime/capabilities and credential presence booleans without including credential
+    values, config contents, or research data.
+15. `[~]` CLI: public entry points expose `--help`/`--version`, live tests are separately marked,
+    major exports are atomic, cancellation has a stable exit/event contract, and JSON mode works
+    before or after subcommands; config precedence, full output-manifest semantics, and a product
+    usability pass remain.
+16. `[~]` Desktop UX: backend protocol and packaged smoke tests exist; interactive usability,
+    accessibility, long-run cancellation, and signed-install testing require Windows/macOS hosts.
+17. `[~]` Exports: CSV/XLSX/JSONL plus PDF/DOCX/HTML paths and formula/HTML safety exist; exhaustive
+    Unicode/RTL/emoji/long-field workbook and document rendering QA remains.
+18. `[~]` Performance harness: deterministic storage/export/map probes and a CI 5k smoke are
+    checked in; a 1M storage-only qualification is measured on the current Windows host, but
+    representative-hardware budgets and large-map browser policy still need owner approval.
+19. `[~]` Long-running reliability: a bounded offline repetition/memory harness and scheduled
+    three-pass CI reliability workflow are checked in; six-hour/24-hour collector, retry,
+    checkpoint, and network-reset qualification runs have not been completed.
+20. `[~]` Documentation: architecture, collector, workspace, access, stress, and release docs are
+    present; final operator runbooks and deployment-specific data-retention guidance remain.
+21. `[~]` Canonical demo: the deterministic Kyrgyzstan case is in CI; a polished clean-room demo
+    package and expected-output review remain.
+22. `[~]` External reproducibility: CI now installs the built wheel into an empty environment, and
+    a fresh supported Python 3.13 environment has passed CLI/diagnostic smoke locally; an
+    independent operator still needs to complete the clean-machine fixture run and artifact review.
+23. `[ ]` Analyst usability: task-based evaluation with representative analysts has not yet run.
+24. `[ ]` Domain review: methodology, legal/privacy, and platform-access review has not yet been
+    recorded by the responsible experts.
+25. `[~]` Professional gate: the repository has a technical candidate gate, but production release
+    approval must wait for the unresolved owner, signing, governance, soak, and review items above.
+
+## Local candidate gate
+
+From the repository root, the current deterministic gate is:
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,security]"
+.\.venv\Scripts\python.exe -m pytest --basetemp ..\pytest-basetemp -m "not live"
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff format --check .
+.\.venv\Scripts\python.exe -m mypy
+.\.venv\Scripts\python.exe -m pip_audit --format columns
+.\.venv\Scripts\python.exe tools\stress_test.py --records 5000 --skip-map --output-dir .\stress-output
+.\.venv\Scripts\python.exe -m build --sdist --wheel
+```
+
+Live collection is never part of this offline gate. It requires explicit authorization, a bounded
+test plan, and the source-specific environment variable documented by the live test. The live
+smoke is isolated in `.github/workflows/authorized-live-smoke.yml` and requires a manual
+`workflow_dispatch` confirmation; pull requests and ordinary pushes run the offline suite only.
