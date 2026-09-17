@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -72,16 +73,27 @@ def _clean_list(values: Iterable[Any]) -> list[str]:
 def _bounded_confidence(value: float | int | None, field_name: str) -> float | None:
     if value is None or value == "":
         return None
-    number = float(value)
-    if not 0.0 <= number <= 1.0:
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{field_name} must be a finite number between 0 and 1.") from exc
+    if not math.isfinite(number) or not 0.0 <= number <= 1.0:
         raise ValueError(f"{field_name} must be between 0 and 1.")
     return number
 
 
 def _optional_float(value: Any) -> float | None:
-    if value is None or value == "" or str(value).strip().casefold() in {"nan", "none", "<na>"}:
+    if value is None or value == "":
         return None
-    return float(value)
+    if isinstance(value, str) and value.strip().casefold() in {"nan", "none", "<na>"}:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Expected a finite numeric value.") from exc
+    if not math.isfinite(number):
+        raise ValueError("Expected a finite numeric value.")
+    return number
 
 
 def _nonnegative_float(value: Any, field_name: str) -> float | None:
@@ -267,8 +279,11 @@ class SpatialMatch:
         self.reference_category = _clean(self.reference_category) or "reference"
         self.distance_band = _clean(self.distance_band)
         self.source_url = _clean(self.source_url)
-        self.distance_km = float(self.distance_km)
-        if self.distance_km < 0:
+        try:
+            self.distance_km = float(self.distance_km)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("Spatial match distance_km must be a finite number.") from exc
+        if not math.isfinite(self.distance_km) or self.distance_km < 0:
             raise ValueError("Spatial match distance_km cannot be negative.")
         self.latitude = _optional_float(self.latitude)
         self.longitude = _optional_float(self.longitude)

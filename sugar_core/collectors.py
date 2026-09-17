@@ -30,7 +30,7 @@ def create_session() -> requests.Session:
 def _metric(value) -> int:
     try:
         return max(0, int(value or 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 

@@ -12,6 +12,13 @@ from .storage import load_results
 from .triage import DEFAULT_PROJECT_CONTEXT, ProgressCallback, triage_posts
 
 
+def _safe_metric(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
 def _missing(value: Any) -> bool:
     return value is None or (isinstance(value, float) and math.isnan(value))
 
@@ -100,7 +107,9 @@ def post_record_from_mapping(row: Mapping[str, Any]) -> PostRecord:
         detected_language=str(_first(row, "detected_language")),
         original_text=str(_first(row, "original_text")),
         translated_text=str(_first(row, "translated_text", "translated_en")),
-        engagement={key: int(value or 0) for key, value in _json_dict(_first(row, "engagement", default={})).items()},
+        engagement={
+            key: _safe_metric(value) for key, value in _json_dict(_first(row, "engagement", default={})).items()
+        },
         raw_stats=_json_dict(_first(row, "raw_stats", default={})),
         is_repost=_bool(_first(row, "is_repost", "is_retweet", default=False)),
         inferred_location=str(_first(row, "inferred_location")),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable
 
@@ -229,8 +230,11 @@ def _reach_metric_name(value: Any) -> str:
 def _confidence(value: Any, field_name: str = "confidence") -> float | None:
     if value is None or value == "":
         return None
-    number = float(value)
-    if not 0.0 <= number <= 1.0:
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{field_name} must be between 0 and 1.") from exc
+    if not math.isfinite(number) or not 0.0 <= number <= 1.0:
         raise ValueError(f"{field_name} must be between 0 and 1.")
     return number
 
@@ -238,7 +242,10 @@ def _confidence(value: Any, field_name: str = "confidence") -> float | None:
 def _nonnegative_int(value: Any) -> int | None:
     if value is None or value == "":
         return None
-    number = int(value)
+    try:
+        number = int(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Reach metrics must be finite non-negative integers.") from exc
     if number < 0:
         raise ValueError("Reach metrics cannot be negative.")
     return number
@@ -247,8 +254,11 @@ def _nonnegative_int(value: Any) -> int | None:
 def _nonnegative_float(value: Any, field_name: str) -> float | None:
     if value is None or value == "":
         return None
-    number = float(value)
-    if number < 0:
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{field_name} must be a finite non-negative number.") from exc
+    if not math.isfinite(number) or number < 0:
         raise ValueError(f"{field_name} cannot be negative.")
     return number
 
@@ -700,6 +710,8 @@ class StateAssessment:
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> "StateAssessment":
+        if not isinstance(raw, dict):
+            raise ValueError("State assessment records must be JSON objects.")
         return cls(**dict(raw))
 
     def fingerprint(self) -> str:

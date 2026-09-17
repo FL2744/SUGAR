@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -157,8 +158,8 @@ def _safe_confidence(value: Any) -> float | None:
         if value is None or value == "":
             return None
         number = float(value)
-        return number if 0.0 <= number <= 1.0 else None
-    except (TypeError, ValueError):
+        return number if math.isfinite(number) and 0.0 <= number <= 1.0 else None
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -167,8 +168,8 @@ def _safe_metric(value: Any) -> int | None:
         if value is None or value == "":
             return None
         number = int(float(value))
-        return number if number >= 0 else None
-    except (TypeError, ValueError):
+        return number if math.isfinite(number) and number >= 0 else None
+    except (TypeError, ValueError, OverflowError):
         return None
 
 

@@ -222,7 +222,12 @@ def load_source_conflicts(path: str | Path) -> list[SourceConflict]:
     raw = json.loads(source.read_text(encoding="utf-8-sig"))
     if not isinstance(raw, list):
         raise ValueError("Source conflict files must contain a JSON list.")
-    return [SourceConflict(**dict(item)) for item in raw]
+    conflicts: list[SourceConflict] = []
+    for index, item in enumerate(raw, 1):
+        if not isinstance(item, dict):
+            raise ValueError(f"Source conflict record {index} must be a JSON object.")
+        conflicts.append(SourceConflict(**dict(item)))
+    return conflicts
 
 
 def source_conflict_summary(conflicts: Iterable[SourceConflict]) -> dict[str, Any]:

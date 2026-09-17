@@ -174,9 +174,12 @@ def load_entity_registry(path: str | Path) -> EntityRegistry:
             if not line.strip():
                 continue
             try:
-                entities.append(MonitoredEntity(**json.loads(line)))
+                raw = json.loads(line)
             except json.JSONDecodeError as exc:
                 raise ValueError(f"Invalid entity JSON on line {line_number}") from exc
+            if not isinstance(raw, dict):
+                raise ValueError(f"Entity JSON on line {line_number} must be an object")
+            entities.append(MonitoredEntity(**raw))
         return EntityRegistry(entities)
     if source.suffix.lower() != ".csv":
         raise ValueError("Entity registry must be CSV or JSONL.")

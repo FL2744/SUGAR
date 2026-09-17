@@ -55,7 +55,7 @@ def create_weibo_session(cookie: str = "") -> requests.Session:
 def _metric(value: Any) -> int:
     try:
         return max(0, int(float(value or 0)))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
