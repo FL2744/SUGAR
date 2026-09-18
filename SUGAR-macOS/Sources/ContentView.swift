@@ -67,6 +67,7 @@ struct ResearchProjectView: View {
     @State private var useMastodon = false
     @State private var maxPosts = 20
     @State private var maxPages = 1
+    @State private var planEditReason = ""
     @State private var importFile = ""
     @State private var importSystem = "external"
     @State private var llmSelection = LLMSelection()
@@ -162,6 +163,68 @@ struct ResearchProjectView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                }
+            }
+
+            Section("2b. Review search branches") {
+                Text("Review the generated plan before collection. Edit a query or rationale directly, then save it or record an approval, pause, or exclusion. Every change is appended to the plan audit history.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    TextField("Optional analyst reason", text: $planEditReason)
+                    Button("Refresh Plan") {
+                        model.run(
+                            command: "research-plan-review",
+                            config: ["workspace": cleanWorkspace]
+                        )
+                    }
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                }
+                if model.researchPlanBranches.isEmpty {
+                    Text("Build or refresh a search plan to review its branches.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach($model.researchPlanBranches) { $branch in
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text(branch.origin.capitalized)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text("Status: \(branch.status)")
+                                        .font(.caption)
+                                    Text("Hop: \(branch.hopDepth)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Text(branch.branchID)
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                }
+                                TextField("Query", text: $branch.query)
+                                TextField("Rationale", text: $branch.rationale)
+                                HStack {
+                                    Button("Save Edits") {
+                                        updatePlanBranch(branch)
+                                    }
+                                    Button("Approve") {
+                                        updatePlanBranch(branch, status: "approved")
+                                    }
+                                    Button("Pause") {
+                                        updatePlanBranch(branch, status: "paused")
+                                    }
+                                    Button("Exclude") {
+                                        updatePlanBranch(branch, status: "excluded")
+                                    }
+                                    Spacer()
+                                }
+                                .disabled(model.isRunning)
+                            }
+                        } label: {
+                            Text(branch.query)
+                        }
+                    }
                 }
             }
 
@@ -322,6 +385,22 @@ struct ResearchProjectView: View {
             "max_pages_per_query": maxPages,
             "continue_on_source_error": true,
         ])
+    }
+
+    private func updatePlanBranch(
+        _ branch: ResearchPlanBranchView,
+        status: String = ""
+    ) {
+        var config: [String: Any] = [
+            "workspace": cleanWorkspace,
+            "branch_id": branch.branchID,
+            "query": branch.query,
+            "rationale": branch.rationale,
+            "actor": "desktop analyst",
+            "reason": planEditReason.trimmingCharacters(in: .whitespacesAndNewlines),
+        ]
+        if !status.isEmpty { config["status"] = status }
+        model.run(command: "research-plan-update", config: config)
     }
 
     private func exportHandoff() {

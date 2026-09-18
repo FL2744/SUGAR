@@ -74,6 +74,8 @@ def test_mac_defaults_to_question_first_research_project_workflow():
         "workspace-init",
         "research-requirement",
         "research-plan",
+        "research-plan-review",
+        "research-plan-update",
         "research-import",
         "research-collect",
         "research-triage",
@@ -84,6 +86,10 @@ def test_mac_defaults_to_question_first_research_project_workflow():
         assert f'command: "{operation}"' in mac
     assert 'command == "research-triage"' in model
     assert 'command == "research-collect"' in model
+    assert "@Published var researchPlanBranches" in model
+    assert 'Section("2b. Review search branches")' in mac
+    for label in ("Save Edits", "Approve", "Pause", "Exclude"):
+        assert f'Button("{label}")' in mac
 
 
 def test_bridge_exposes_llm_connection_check():

@@ -102,6 +102,40 @@ def test_branch_controller_retires_saturated_low_value_branch():
     assert any("Duplicate rate" in reason for reason in decision.reasons)
 
 
+def test_analyst_can_edit_and_control_branch_with_auditable_events():
+    plan = build_initial_search_plan(_requirement())
+    branch = plan.branches[0]
+    original_id = branch.branch_id
+    plan.edit_branch(
+        branch.branch_id,
+        query="Public Engagement Center A student advising",
+        rationale="Analyst narrowed the branch to the target audience.",
+        actor="Analyst A",
+        reason="Initial seed was too broad.",
+    )
+    plan.set_status(
+        branch.branch_id,
+        "approved",
+        actor="Analyst A",
+        reason="Reviewed before collection.",
+    )
+    assert branch.branch_id == original_id
+    assert branch.query == "Public Engagement Center A student advising"
+    assert branch.status == "approved"
+    edit_event = next(item for item in plan.events if item["type"] == "branch_edited")
+    assert edit_event["branch_id"] == original_id
+    assert edit_event["actor"] == "Analyst A"
+    assert edit_event["changes"]["query"]["to"] == branch.query
+    status_event = next(item for item in plan.events if item["type"] == "status_change")
+    assert status_event["to"] == "approved"
+
+
+def test_branch_edit_rejects_duplicate_query():
+    plan = build_initial_search_plan(_requirement())
+    with pytest.raises(ValueError, match="duplicates existing branch"):
+        plan.edit_branch(plan.branches[0].branch_id, query=plan.branches[1].query)
+
+
 def test_requirement_rejects_reversed_dates():
     with pytest.raises(ValueError, match="cannot be after"):
         ResearchTimeframe("2026-09-17", "2026-01-01")

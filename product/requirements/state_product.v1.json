@@ -131,7 +131,7 @@
       "priority": "P0",
       "category": "research_workflow",
       "title": "Auditable adaptive search planning",
-      "status": "partially_met",
+      "status": "met",
       "requirement": "Search expansion, retirement, and pivot decisions must be inspectable and tied to evidence rather than hidden inside an unconstrained agent loop.",
       "acceptance": [
         "Each generated query records parent concept/query, rationale, origin, and status.",

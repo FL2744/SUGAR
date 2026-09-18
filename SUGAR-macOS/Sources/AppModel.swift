@@ -2,11 +2,24 @@ import AppKit
 import Foundation
 import Security
 
+struct ResearchPlanBranchView: Identifiable, Equatable {
+    let branchID: String
+    var query: String
+    var rationale: String
+    let origin: String
+    var status: String
+    let parentBranchID: String
+    let hopDepth: Int
+
+    var id: String { branchID }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var isRunning = false
     @Published var log = "Ready."
     @Published var outputs: [String] = []
+    @Published var researchPlanBranches: [ResearchPlanBranchView] = []
     @Published var xToken = KeychainStore.read("xBearerToken")
     @Published var openAIKey = KeychainStore.read(LLMProvider.openAI.keychainAccount)
     @Published var arcKey = KeychainStore.read(LLMProvider.arc.keychainAccount)
@@ -123,6 +136,7 @@ final class AppModel: ObservableObject {
                 let result = try await Task.detached {
                     try await Self.execute(command: command, configData: configData, secrets: secrets) { line in
                         self.rawBackendLog += line
+                        self.consumeBackendEvent(line)
                         self.log += Self.renderBackendLog(line) + "\n"
                         self.outputs = Self.outputPaths(from: self.rawBackendLog)
                     }
@@ -197,6 +211,33 @@ final class AppModel: ObservableObject {
             return "Cannot read the selected source file: \(source)"
         }
         return nil
+    }
+
+    private func consumeBackendEvent(_ raw: String) {
+        for rawLine in raw.split(separator: "\n") {
+            let line = String(rawLine)
+            guard let data = line.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  json["event"] as? String == "plan-review",
+                  let branches = json["branches"] as? [[String: Any]] else {
+                continue
+            }
+            researchPlanBranches = branches.compactMap { branch in
+                guard let branchID = branch["branch_id"] as? String,
+                      !branchID.isEmpty else {
+                    return nil
+                }
+                return ResearchPlanBranchView(
+                    branchID: branchID,
+                    query: branch["query"] as? String ?? "",
+                    rationale: branch["rationale"] as? String ?? "",
+                    origin: branch["origin"] as? String ?? "",
+                    status: branch["status"] as? String ?? "",
+                    parentBranchID: branch["parent_branch_id"] as? String ?? "",
+                    hopDepth: branch["hop_depth"] as? Int ?? 0
+                )
+            }
+        }
     }
 
     func copyLog() {
@@ -308,6 +349,16 @@ final class AppModel: ObservableObject {
             case "plan-expanded":
                 let branches = json["branches"] as? Int ?? 0
                 lines.append("AI-assisted plan expansion complete • \(branches) branches.")
+            case "plan-review":
+                let branches = (json["branches"] as? [[String: Any]])?.count ?? 0
+                lines.append("Search plan ready for review: \(branches) branches.")
+            case "plan-branch-updated":
+                if let branch = json["branch"] as? [String: Any] {
+                    let status = branch["status"] as? String ?? "updated"
+                    lines.append("Search branch saved: \(status).")
+                } else {
+                    lines.append("Search branch saved.")
+                }
             case "plan-collection-started":
                 lines.append("Executing the approved search plan…")
             case "plan-collection-complete":

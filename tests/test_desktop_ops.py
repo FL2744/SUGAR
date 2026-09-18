@@ -54,6 +54,8 @@ def test_bridge_advertises_typed_desktop_operations():
     for operation in (
         "research-requirement",
         "research-plan",
+        "research-plan-review",
+        "research-plan-update",
         "research-import",
         "research-collect",
         "research-triage",

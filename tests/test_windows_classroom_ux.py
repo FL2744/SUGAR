@@ -70,6 +70,8 @@ def test_windows_state_workflow_starts_with_research_question_and_portable_hando
     for operation in (
         "research-requirement",
         "research-plan",
+        "research-plan-review",
+        "research-plan-update",
         "research-import",
         "research-collect",
         "research-triage",
@@ -77,3 +79,14 @@ def test_windows_state_workflow_starts_with_research_question_and_portable_hando
         "research-handoff",
     ):
         assert f'"{operation}"' in app
+
+
+def test_windows_search_plan_review_is_editable_and_audited() -> None:
+    app = (ROOT / "SUGAR-Windows" / "app.py").read_text(encoding="utf-8")
+    assert '"2b. Review search branches"' in app
+    assert "QTableWidget(0, 5)" in app
+    assert '"research-plan-review"' in app
+    assert '"research-plan-update"' in app
+    for label in ("Save Edits", "Approve", "Pause", "Exclude"):
+        assert f'QPushButton("{label}"' in app
+    assert "handle_backend_event" in app

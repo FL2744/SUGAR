@@ -307,6 +307,60 @@ class SearchPlan:
             },
         )
 
+    def edit_branch(
+        self,
+        branch_id: str,
+        *,
+        query: str | None = None,
+        rationale: str | None = None,
+        actor: str = "analyst",
+        reason: str = "",
+    ) -> None:
+        branch = self.branch(branch_id)
+        changes: dict[str, dict[str, str]] = {}
+
+        if query is not None:
+            cleaned_query = _clean(query)
+            if not cleaned_query:
+                raise ValueError("Search branch query cannot be empty.")
+            duplicate = next(
+                (
+                    item
+                    for item in self.branches
+                    if item.branch_id != branch.branch_id
+                    and item.query.casefold() == cleaned_query.casefold()
+                ),
+                None,
+            )
+            if duplicate is not None:
+                raise ValueError(
+                    f"Search branch query duplicates existing branch {duplicate.branch_id}."
+                )
+            if cleaned_query != branch.query:
+                changes["query"] = {"from": branch.query, "to": cleaned_query}
+                branch.query = cleaned_query
+
+        if rationale is not None:
+            cleaned_rationale = _clean(rationale)
+            if not cleaned_rationale:
+                raise ValueError("Search branch rationale cannot be empty.")
+            if cleaned_rationale != branch.rationale:
+                changes["rationale"] = {
+                    "from": branch.rationale,
+                    "to": cleaned_rationale,
+                }
+                branch.rationale = cleaned_rationale
+
+        if not changes:
+            return
+        self.add_event(
+            "branch_edited",
+            branch_id=branch.branch_id,
+            actor=_clean(actor) or "analyst",
+            reason=_clean(reason),
+            changes=changes,
+        )
+
     def add_discovered_branch(
         self,
         *,

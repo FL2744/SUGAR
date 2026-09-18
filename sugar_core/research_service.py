@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -12,6 +13,7 @@ from .plan_execution import execute_search_plan
 from .plan_feedback import apply_triage_feedback
 from .research_requirements import (
     ResearchRequirement,
+    SearchPlan,
     ResearchTimeframe,
     build_initial_search_plan,
     load_requirement,
@@ -35,6 +37,42 @@ ProgressCallback = Callable[[str, dict[str, Any]], None]
 def _notify(progress: ProgressCallback | None, event: str, **values: Any) -> None:
     if progress is not None:
         progress(event, values)
+
+
+def _branch_review_payload(branch) -> dict[str, Any]:
+    return {
+        "branch_id": branch.branch_id,
+        "query": branch.query,
+        "rationale": branch.rationale,
+        "origin": branch.origin,
+        "status": branch.status,
+        "search_family": branch.search_family,
+        "language": branch.language,
+        "generator": branch.generator,
+        "parent_branch_id": branch.parent_branch_id,
+        "parent_concept": branch.parent_concept,
+        "evidence_ids": list(branch.evidence_ids),
+        "hop_depth": branch.hop_depth,
+        "metrics": asdict(branch.metrics),
+    }
+
+
+def _plan_review_payload(plan: SearchPlan, plan_path: str | Path) -> dict[str, Any]:
+    return {
+        "plan_file": str(Path(plan_path).expanduser().resolve()),
+        "requirement_id": plan.requirement_id,
+        "policy": asdict(plan.policy),
+        "event_count": len(plan.events),
+        "branches": [_branch_review_payload(branch) for branch in plan.branches],
+    }
+
+
+def _notify_plan_review(
+    progress: ProgressCallback | None,
+    plan: SearchPlan,
+    plan_path: str | Path,
+) -> None:
+    _notify(progress, "plan-review", **_plan_review_payload(plan, plan_path))
 
 
 def _values(value: Any) -> list[str]:
@@ -173,8 +211,95 @@ def create_research_plan(
                 "branch_count": len(plan.branches),
             },
         )
+    _notify_plan_review(progress, plan, output)
     _notify(progress, "saved", outputs=[output])
     return [output]
+
+
+def review_research_plan(
+    config: dict[str, Any],
+    *,
+    progress: ProgressCallback | None = None,
+) -> list[str]:
+    workspace = optional_workspace(config.get("workspace"))
+    plan_path = _required_path(
+        config,
+        "plan_file",
+        workspace=workspace,
+        kinds="search_plan",
+    )
+    plan = load_search_plan(plan_path)
+    _notify_plan_review(progress, plan, plan_path)
+    return [str(plan_path)]
+
+
+def update_research_plan_branch(
+    config: dict[str, Any],
+    *,
+    progress: ProgressCallback | None = None,
+) -> list[str]:
+    workspace = optional_workspace(config.get("workspace"))
+    plan_path = _required_path(
+        config,
+        "plan_file",
+        workspace=workspace,
+        kinds="search_plan",
+    )
+    plan = load_search_plan(plan_path)
+    branch_id = str(config.get("branch_id") or "").strip()
+    if not branch_id:
+        raise ValueError("Choose a search-plan branch to update.")
+    branch = plan.branch(branch_id)
+    actor = str(config.get("actor") or "analyst").strip() or "analyst"
+    reason = str(config.get("reason") or "").strip()
+
+    has_query = "query" in config and config.get("query") is not None
+    has_rationale = "rationale" in config and config.get("rationale") is not None
+    status = str(config.get("status") or "").strip().casefold()
+    if not has_query and not has_rationale and not status:
+        raise ValueError("No branch edit or status change was supplied.")
+
+    if has_query or has_rationale:
+        plan.edit_branch(
+            branch_id,
+            query=str(config.get("query") or "") if has_query else None,
+            rationale=(
+                str(config.get("rationale") or "")
+                if has_rationale
+                else None
+            ),
+            actor=actor,
+            reason=reason,
+        )
+    if status:
+        plan.set_status(
+            branch_id,
+            status,
+            actor=actor,
+            reason=reason,
+        )
+
+    saved_plan = save_search_plan(plan, plan_path)
+    if workspace is not None:
+        workspace.register_artifact(
+            "search_plan",
+            saved_plan,
+            label=f"Analyst-reviewed search plan for {plan.requirement_id}",
+            metadata={
+                "requirement_id": plan.requirement_id,
+                "branch_count": len(plan.branches),
+                "event_count": len(plan.events),
+            },
+        )
+    branch = plan.branch(branch_id)
+    _notify(
+        progress,
+        "plan-branch-updated",
+        branch=_branch_review_payload(branch),
+        event_count=len(plan.events),
+    )
+    _notify_plan_review(progress, plan, saved_plan)
+    return [str(Path(saved_plan).resolve())]
 
 
 def import_research_dataset(
@@ -256,6 +381,7 @@ def collect_research_plan(
             },
         )
     outputs = [*result.outputs, str(Path(saved_plan).resolve())]
+    _notify_plan_review(progress, plan, saved_plan)
     _notify(progress, "plan-collection-complete", records=result.records, coverage_status=result.coverage_status, outputs=outputs)
     return outputs
 
@@ -334,6 +460,7 @@ def apply_research_feedback(
         workspace.register_artifact("plan_feedback", summary_path, label="Search-plan feedback decisions")
     outputs = [str(Path(saved_plan).resolve()), str(summary_path.resolve())]
     _notify(progress, "feedback-applied", branches=len(feedback), outputs=outputs)
+    _notify_plan_review(progress, plan, saved_plan)
     return outputs
 
 

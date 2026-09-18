@@ -26,7 +26,9 @@ from sugar_core.research_service import (
     create_research_requirement,
     export_research_handoff,
     import_research_dataset,
+    review_research_plan,
     triage_research_records,
+    update_research_plan_branch,
     verify_research_handoff,
 )
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
@@ -46,6 +48,8 @@ BASE_OPERATIONS = {
     "ingest",
     "research-requirement",
     "research-plan",
+    "research-plan-review",
+    "research-plan-update",
     "research-import",
     "research-collect",
     "research-triage",
@@ -253,6 +257,10 @@ def main(argv=None) -> int:
             outputs = create_research_requirement(config, progress=progress_event)
         elif args.command == "research-plan":
             outputs = create_research_plan(config, secrets, progress=progress_event)
+        elif args.command == "research-plan-review":
+            outputs = review_research_plan(config, progress=progress_event)
+        elif args.command == "research-plan-update":
+            outputs = update_research_plan_branch(config, progress=progress_event)
         elif args.command == "research-import":
             outputs = import_research_dataset(config, progress=progress_event)
         elif args.command == "research-collect":

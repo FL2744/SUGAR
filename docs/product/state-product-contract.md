@@ -94,6 +94,8 @@ The planner should generate a portfolio of query branches rather than one query.
 
 LLMs may propose terms and interpret retrieved evidence, but deterministic policy should decide whether a branch is allowed to expand beyond configured semantic/graph-hop boundaries and should preserve an audit record of every pivot.
 
+Both desktop clients expose the same branch-review controls. An analyst can refresh the current plan, edit a branch query or rationale, and mark a branch approved, paused, or excluded. Every edit and status transition is appended to the saved plan event history with actor/reason metadata; evidence-driven feedback can still retire or pause branches using measured relevance, novelty, duplication, source diversity, and coverage gain.
+
 ### 4. Portable evidence package
 
 Define a stable export bundle containing:

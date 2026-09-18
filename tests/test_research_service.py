@@ -47,6 +47,52 @@ def test_requirement_and_plan_use_workspace_defaults(tmp_path: Path) -> None:
     assert payload["branches"]
 
 
+def test_plan_review_and_analyst_update_round_trip(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    research_service.create_research_requirement(
+        {
+            "workspace": str(workspace.root),
+            "question": "How is the program reaching students?",
+            "known_entities": ["Example Center"],
+        }
+    )
+    research_service.create_research_plan({"workspace": str(workspace.root)})
+
+    events: list[tuple[str, dict]] = []
+    review_outputs = research_service.review_research_plan(
+        {"workspace": str(workspace.root)},
+        progress=lambda event, values: events.append((event, values)),
+    )
+    assert review_outputs[0].endswith("search-plan.json")
+    review = next(values for event, values in events if event == "plan-review")
+    assert review["branches"]
+    branch = review["branches"][0]
+
+    events.clear()
+    research_service.update_research_plan_branch(
+        {
+            "workspace": str(workspace.root),
+            "branch_id": branch["branch_id"],
+            "query": "Example Center student advising",
+            "rationale": "Analyst narrowed the seed to the target audience.",
+            "status": "approved",
+            "actor": "Analyst A",
+            "reason": "Reviewed before collection.",
+        },
+        progress=lambda event, values: events.append((event, values)),
+    )
+    updated = next(values for event, values in events if event == "plan-branch-updated")
+    assert updated["branch"]["status"] == "approved"
+    assert updated["branch"]["query"] == "Example Center student advising"
+    refreshed = next(values for event, values in events if event == "plan-review")
+    assert refreshed["branches"][0]["status"] == "approved"
+
+    plan = json.loads(Path(review_outputs[0]).read_text(encoding="utf-8"))
+    assert plan["branches"][0]["query"] == "Example Center student advising"
+    assert any(item["type"] == "branch_edited" for item in plan["events"])
+    assert any(item["type"] == "status_change" for item in plan["events"])
+
+
 def test_external_import_is_first_class_research_input(tmp_path: Path) -> None:
     workspace = _workspace(tmp_path)
     source = tmp_path / "partner.csv"

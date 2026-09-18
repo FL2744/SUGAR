@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QStackedWidget,
     QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -867,6 +869,36 @@ class StatePage(QWidget):
         qactions=QHBoxLayout(); qactions.addWidget(primary_button("Save Research Question",self._research_requirement)); qactions.addWidget(QPushButton("Build Inspectable Search Plan",clicked=self._research_plan)); qactions.addStretch(1); question.layout.addLayout(qactions)
         layout.addWidget(question)
 
+        plan_review = Card(
+            "2b. Review search branches",
+            "Review the generated plan before collection. Query and rationale cells are editable; approvals, pauses, and exclusions are preserved in the plan audit history.",
+        )
+        self.research_plan_table = QTableWidget(0, 5)
+        self.research_plan_table.setHorizontalHeaderLabels(
+            ["Branch ID", "Query", "Rationale", "Origin", "Status"]
+        )
+        self.research_plan_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.research_plan_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.research_plan_table.setMinimumHeight(220)
+        self.research_plan_table.setColumnWidth(0, 155)
+        self.research_plan_table.setColumnWidth(1, 260)
+        self.research_plan_table.setColumnWidth(2, 360)
+        self.research_plan_table.setColumnWidth(3, 95)
+        self.research_plan_table.setColumnWidth(4, 95)
+        plan_review.layout.addWidget(self.research_plan_table)
+        self.research_plan_reason = QLineEdit()
+        self.research_plan_reason.setPlaceholderText("Optional analyst reason for this edit/status change")
+        plan_review.layout.addWidget(LabeledRow("Reason", self.research_plan_reason))
+        plan_actions = QHBoxLayout()
+        plan_actions.addWidget(QPushButton("Refresh Plan", clicked=self._research_plan_refresh))
+        plan_actions.addWidget(QPushButton("Save Edits", clicked=self._research_plan_save_edits))
+        plan_actions.addWidget(QPushButton("Approve", clicked=lambda: self._research_plan_set_status("approved")))
+        plan_actions.addWidget(QPushButton("Pause", clicked=lambda: self._research_plan_set_status("paused")))
+        plan_actions.addWidget(QPushButton("Exclude", clicked=lambda: self._research_plan_set_status("excluded")))
+        plan_actions.addStretch(1)
+        plan_review.layout.addLayout(plan_actions)
+        layout.addWidget(plan_review)
+
         evidence = Card("3. Gather evidence", "Either execute the approved search plan or import an existing partner/Department export. Both routes normalize into the same evidence model with provenance.")
         self.research_import_file = PathField(mode="file", extensions=("csv","jsonl"))
         self.research_import_system = QLineEdit("external")
@@ -920,6 +952,78 @@ class StatePage(QWidget):
     def _research_plan(self) -> None:
         workspace = self._require_research_workspace()
         if workspace: self.run_operation("research-plan",{"workspace":workspace},False)
+
+    def _research_plan_refresh(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation("research-plan-review", {"workspace": workspace}, False)
+
+    def _selected_research_plan_row(self) -> tuple[str, str, str] | None:
+        row = self.research_plan_table.currentRow()
+        if row < 0:
+            QMessageBox.information(
+                self,
+                "Choose a branch",
+                "Select one search-plan row first.",
+            )
+            return None
+        branch_item = self.research_plan_table.item(row, 0)
+        query_item = self.research_plan_table.item(row, 1)
+        rationale_item = self.research_plan_table.item(row, 2)
+        if branch_item is None or query_item is None or rationale_item is None:
+            return None
+        return branch_item.text(), query_item.text(), rationale_item.text()
+
+    def _research_plan_update(self, status: str = "") -> None:
+        workspace = self._require_research_workspace()
+        if not workspace:
+            return
+        selected = self._selected_research_plan_row()
+        if selected is None:
+            return
+        branch_id, query, rationale = selected
+        config = {
+            "workspace": workspace,
+            "branch_id": branch_id,
+            "query": query,
+            "rationale": rationale,
+            "actor": "desktop analyst",
+            "reason": self.research_plan_reason.text().strip(),
+        }
+        if status:
+            config["status"] = status
+        self.run_operation("research-plan-update", config, False)
+
+    def _research_plan_save_edits(self) -> None:
+        self._research_plan_update()
+
+    def _research_plan_set_status(self, status: str) -> None:
+        self._research_plan_update(status)
+
+    def handle_backend_event(self, payload: dict[str, Any]) -> None:
+        if payload.get("event") != "plan-review":
+            return
+        branches = payload.get("branches") or []
+        if not isinstance(branches, list):
+            return
+        self.research_plan_table.setRowCount(0)
+        for branch in branches:
+            if not isinstance(branch, dict):
+                continue
+            row = self.research_plan_table.rowCount()
+            self.research_plan_table.insertRow(row)
+            values = (
+                str(branch.get("branch_id") or ""),
+                str(branch.get("query") or ""),
+                str(branch.get("rationale") or ""),
+                str(branch.get("origin") or ""),
+                str(branch.get("status") or ""),
+            )
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if column in {0, 3, 4}:
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                self.research_plan_table.setItem(row, column, item)
 
     def _research_collect(self) -> None:
         workspace = self._require_research_workspace()
@@ -1162,15 +1266,16 @@ class MainWindow(QMainWindow):
         if icon.is_file(): self.setWindowIcon(QIcon(str(icon)))
         self.runner=BackendRunner(self); self._diagnostics:dict[str,Any]={}; self.pages:dict[str,int]={}
         self.settings_page=SettingsPage(); self.home=HomePage()
+        self.state_page=StatePage(self.run_operation,self.settings_page)
         central=QWidget(); outer=QHBoxLayout(central); outer.setContentsMargins(0,0,0,0); outer.setSpacing(0)
         sidebar=QFrame(); sidebar.setObjectName("sidebar"); sidebar.setFixedWidth(210); side=QVBoxLayout(sidebar); side.setContentsMargins(8,16,8,12); brand=QLabel("SUGAR"); brand.setObjectName("brand"); sub=QLabel("State Research Workbench"); sub.setObjectName("brandSub"); side.addWidget(brand); side.addWidget(sub); side.addSpacing(12); self.nav=QListWidget(); self.nav.setObjectName("nav"); side.addWidget(self.nav,1); version=QLabel("Evidence-first OSINT + analysis"); version.setObjectName("brandSub"); version.setWordWrap(True); side.addWidget(version); outer.addWidget(sidebar)
         self.stack=QStackedWidget(); outer.addWidget(self.stack,1); self.setCentralWidget(central)
-        page_defs=[("Home",self.home),("Collect",CollectPage(self.run_operation,self.settings_page)),("Weibo",WeiboPage(self.run_operation,self.settings_page)),("State Workflow",StatePage(self.run_operation,self.settings_page)),("Intelligence",IntelligencePage(self.run_operation,self.settings_page)),("Maps & Reports",ReportsPage(self.run_operation,self.settings_page)),("Settings",self.settings_page)]
+        page_defs=[("Home",self.home),("Collect",CollectPage(self.run_operation,self.settings_page)),("Weibo",WeiboPage(self.run_operation,self.settings_page)),("State Workflow",self.state_page),("Intelligence",IntelligencePage(self.run_operation,self.settings_page)),("Maps & Reports",ReportsPage(self.run_operation,self.settings_page)),("Settings",self.settings_page)]
         for name,page in page_defs:
             self.pages[name]=self.stack.count(); self.nav.addItem(QListWidgetItem(name)); self.stack.addWidget(scroll_page(page))
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex); self.nav.setCurrentRow(0); self.home.navigate.connect(self.navigate)
         self.activity=ActivityDock(self); self.addDockWidget(Qt.BottomDockWidgetArea,self.activity); self.activity.cancel_requested.connect(self.runner.cancel)
-        self.runner.event.connect(self._event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.settings_page.diagnostics_requested.connect(self._diagnostics_run); self.settings_page.arc_test_requested.connect(self._arc_test_run)
+        self.runner.event.connect(self._event); self.runner.event.connect(self.state_page.handle_backend_event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.settings_page.diagnostics_requested.connect(self._diagnostics_run); self.settings_page.arc_test_requested.connect(self._arc_test_run)
         self._build_menu()
         if not smoke:
             QTimer.singleShot(150,self._diagnostics_run)
