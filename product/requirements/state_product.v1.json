@@ -117,7 +117,7 @@
       "priority": "P0",
       "category": "research_workflow",
       "title": "Research-question-first workflow",
-      "status": "partially_met",
+      "status": "met",
       "requirement": "The primary State workflow must begin from a research requirement rather than requiring the user to design a keyword matrix manually.",
       "acceptance": [
         "User can specify question, geography, timeframe, target audience, languages, known entities, and collection constraints.",

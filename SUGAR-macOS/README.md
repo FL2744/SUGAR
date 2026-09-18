@@ -6,6 +6,23 @@ This directory contains the native SwiftUI distribution of SUGAR. The app stores
 credentials in macOS Keychain and bundles the Python search, map, and analysis
 engine so recipients do not install Python or use Terminal.
 
+## Recommended workflow
+
+The app now opens on **Research Project** rather than raw keyword search. This is
+the supported question-first path for a substantive research task:
+
+1. create or open a portable SUGAR project folder;
+2. save the research question, geography, timeframe, target audiences, languages,
+   known entities, preferred sources, and collection depth;
+3. build an inspectable bounded search plan;
+4. execute that plan or import an existing authorized CSV/JSONL dataset;
+5. triage evidence into ResearchObservation records and apply evidence feedback;
+6. export or verify a portable hash-checked handoff bundle.
+
+**Expert Search**, **Public URL**, **Map**, and **Analysis** remain available for
+one-off operations. They are deliberately secondary to the project workflow so a
+new user does not have to design a keyword matrix before defining the question.
+
 ## Build an unsigned test release
 
 ```bash
@@ -97,7 +114,8 @@ Settings stores OpenAI, Virginia Tech ARC, and custom endpoint keys separately.
 Search has provider and model dropdowns for OpenAI and ARC, with independent
 model selections retained while switching providers. The custom endpoint keeps
 its own model-ID and base-URL fields. Only the selected provider's key is passed
-to the search backend; a missing key never falls back to another provider.
+to the backend operation that requested it; a missing key never falls back to
+another provider. Research Project triage uses the same provider/key boundary.
 
 If an earlier version saved a shared LLM key, Settings offers a one-time menu to
 assign that key to the correct provider. Save to Keychain to finish the move.

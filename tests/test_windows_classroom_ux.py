@@ -65,6 +65,8 @@ def test_windows_state_workflow_starts_with_research_question_and_portable_hando
     assert 'Card("2. Research question"' in app
     assert 'Card("3. Gather evidence"' in app
     assert 'Card("4. Review and hand off"' in app
+    assert 'LabeledRow("Target audiences",self.research_audiences)' in app
+    assert '"target_audiences":self.research_audiences.text()' in app
     for operation in (
         "research-requirement",
         "research-plan",

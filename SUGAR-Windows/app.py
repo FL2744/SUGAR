@@ -856,12 +856,13 @@ class StatePage(QWidget):
         self.research_question = QTextEdit(); self.research_question.setPlaceholderText("Example: How are public-facing cultural and educational programs expanding across the target geography, and what evidence supports that assessment?"); self.research_question.setMaximumHeight(92)
         self.research_geographies = QLineEdit(); self.research_geographies.setPlaceholderText("Comma separated, e.g. Country A, Capital City")
         self.research_entities = QLineEdit(); self.research_entities.setPlaceholderText("Known institutions, programs, organizations…")
+        self.research_audiences = QLineEdit(); self.research_audiences.setPlaceholderText("Target audiences, communities, or stakeholder groups")
         self.research_languages = QLineEdit("auto")
         self.research_since = QLineEdit(); self.research_since.setPlaceholderText("YYYY-MM-DD (optional)")
         self.research_until = QLineEdit(); self.research_until.setPlaceholderText("YYYY-MM-DD (optional)")
         self.research_mode = EnumCombo((("Quick reconnaissance","quick"),("Standard research","standard"),("Deep bounded research","deep"))); self.research_mode.setCurrentIndex(1)
         self.research_sources = SourceSelector(SOURCES); self.research_sources.boxes["bilibili"].setChecked(True)
-        qgrid=QGridLayout(); qgrid.addWidget(LabeledRow("Research question",self.research_question),0,0,1,2); qgrid.addWidget(LabeledRow("Geographies",self.research_geographies),1,0); qgrid.addWidget(LabeledRow("Known entities",self.research_entities),1,1); qgrid.addWidget(LabeledRow("Languages",self.research_languages),2,0); qgrid.addWidget(LabeledRow("Depth",self.research_mode),2,1); qgrid.addWidget(LabeledRow("Since",self.research_since),3,0); qgrid.addWidget(LabeledRow("Until",self.research_until),3,1); qgrid.addWidget(LabeledRow("Preferred searchable sources",self.research_sources,"These are preferences, not proof of coverage. Source failures and zero-result searches are recorded separately."),4,0,1,2)
+        qgrid=QGridLayout(); qgrid.addWidget(LabeledRow("Research question",self.research_question),0,0,1,2); qgrid.addWidget(LabeledRow("Geographies",self.research_geographies),1,0); qgrid.addWidget(LabeledRow("Known entities",self.research_entities),1,1); qgrid.addWidget(LabeledRow("Target audiences",self.research_audiences),2,0); qgrid.addWidget(LabeledRow("Languages",self.research_languages),2,1); qgrid.addWidget(LabeledRow("Depth",self.research_mode),3,0); qgrid.addWidget(LabeledRow("Since",self.research_since),3,1); qgrid.addWidget(LabeledRow("Until",self.research_until),4,1); qgrid.addWidget(LabeledRow("Preferred searchable sources",self.research_sources,"These are preferences, not proof of coverage. Source failures and zero-result searches are recorded separately."),5,0,1,2)
         question.layout.addLayout(qgrid)
         qactions=QHBoxLayout(); qactions.addWidget(primary_button("Save Research Question",self._research_requirement)); qactions.addWidget(QPushButton("Build Inspectable Search Plan",clicked=self._research_plan)); qactions.addStretch(1); question.layout.addLayout(qactions)
         layout.addWidget(question)
@@ -911,6 +912,7 @@ class StatePage(QWidget):
             return
         self.run_operation("research-requirement",{
             "workspace":workspace,"question":question,"geographies":self.research_geographies.text(),"known_entities":self.research_entities.text(),
+            "target_audiences":self.research_audiences.text(),
             "languages":self.research_languages.text(),"since":self.research_since.text().strip(),"until":self.research_until.text().strip(),
             "collection_mode":self.research_mode.value(),"preferred_sources":self.research_sources.selected(),
         },False)

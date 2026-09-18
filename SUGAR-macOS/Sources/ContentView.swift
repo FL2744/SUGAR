@@ -3,10 +3,16 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum AppSection: String, CaseIterable, Identifiable {
-    case search = "Search", ingest = "Public URL", map = "Map", analysis = "Analysis", settings = "Settings"
+    case research = "Research Project"
+    case search = "Expert Search"
+    case ingest = "Public URL"
+    case map = "Map"
+    case analysis = "Analysis"
+    case settings = "Settings"
     var id: String { rawValue }
     var icon: String {
         switch self {
+        case .research: "doc.text.magnifyingglass"
         case .search: "magnifyingglass"
         case .ingest: "link"
         case .map: "map"
@@ -18,7 +24,7 @@ enum AppSection: String, CaseIterable, Identifiable {
 
 struct ContentView: View {
     @EnvironmentObject var model: AppModel
-    @State private var selection: AppSection? = .search
+    @State private var selection: AppSection? = .research
     var body: some View {
         NavigationSplitView {
             List(AppSection.allCases, selection: $selection) { item in
@@ -26,7 +32,8 @@ struct ContentView: View {
             }.navigationTitle("SUGAR")
         } detail: {
             VStack(spacing: 0) {
-                switch selection ?? .search {
+                switch selection ?? .research {
+                case .research: ResearchProjectView()
                 case .search: SearchView()
                 case .ingest: PublicItemView()
                 case .map: MapResultsView()
@@ -37,6 +44,297 @@ struct ContentView: View {
                 ActivityView()
             }
         }
+    }
+}
+
+struct ResearchProjectView: View {
+    @EnvironmentObject var model: AppModel
+
+    @State private var workspace = NSHomeDirectory() + "/Documents/SUGAR/Projects/State-Research-Project"
+    @State private var projectName = "State Research Project"
+    @State private var question = ""
+    @State private var geographies = ""
+    @State private var knownEntities = ""
+    @State private var targetAudiences = ""
+    @State private var languages = "auto"
+    @State private var since = ""
+    @State private var until = ""
+    @State private var collectionMode = "standard"
+    @State private var useBilibili = true
+    @State private var useWeibo = false
+    @State private var useX = false
+    @State private var useBluesky = false
+    @State private var useMastodon = false
+    @State private var maxPosts = 20
+    @State private var maxPages = 1
+    @State private var importFile = ""
+    @State private var importSystem = "external"
+    @State private var llmSelection = LLMSelection()
+    @State private var baseURL = ""
+    @State private var handoffName = "sugar-handoff"
+    @State private var handoffOutput = ""
+    @State private var verificationBundle = ""
+
+    var body: some View {
+        Form {
+            Section("1. Project workspace") {
+                Text("One portable folder keeps the question, search plan, evidence, review artifacts, lineage, and final handoff together.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("Project name", text: $projectName)
+                HStack {
+                    TextField("Project folder", text: $workspace)
+                    Button("Choose...") {
+                        if let url = chooseDirectory() { workspace = url.path }
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Create / Open Project") {
+                        model.run(command: "workspace-init", config: [
+                            "workspace": cleanWorkspace,
+                            "name": projectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                ? "State Research Project"
+                                : projectName.trimmingCharacters(in: .whitespacesAndNewlines),
+                            "exist_ok": true,
+                        ])
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                }
+            }
+
+            Section("2. Research question") {
+                Text("Start with what you need to answer. SUGAR stores the requirement and derives an inspectable bounded search plan from it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $question)
+                    .frame(minHeight: 72)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5)
+                            .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                    )
+                HStack {
+                    TextField("Geographies, comma separated", text: $geographies)
+                    TextField("Known entities / programs", text: $knownEntities)
+                }
+                HStack {
+                    TextField("Target audiences / stakeholder groups", text: $targetAudiences)
+                    TextField("Languages, comma separated or auto", text: $languages)
+                }
+                HStack {
+                    Picker("Depth", selection: $collectionMode) {
+                        Text("Quick reconnaissance").tag("quick")
+                        Text("Standard research").tag("standard")
+                        Text("Deep bounded research").tag("deep")
+                    }
+                    .pickerStyle(.menu)
+                }
+                HStack {
+                    TextField("Start YYYY-MM-DD (optional)", text: $since)
+                    TextField("End YYYY-MM-DD (optional)", text: $until)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Preferred searchable sources").font(.headline)
+                    HStack {
+                        Toggle("Bilibili", isOn: $useBilibili)
+                        Toggle("Weibo", isOn: $useWeibo)
+                        Toggle("X", isOn: $useX)
+                    }
+                    HStack {
+                        Toggle("Bluesky", isOn: $useBluesky)
+                        Toggle("Mastodon", isOn: $useMastodon)
+                    }
+                    Text("Source preferences guide collection; they do not imply coverage. Zero-result searches and source failures remain explicit in the project record.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Spacer()
+                    Button("Save Research Question", action: saveRequirement)
+                        .disabled(
+                            model.isRunning
+                            || cleanWorkspace.isEmpty
+                            || question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        )
+                    Button("Build Inspectable Search Plan") {
+                        model.run(command: "research-plan", config: ["workspace": cleanWorkspace])
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                }
+            }
+
+            Section("3. Gather and review evidence") {
+                HStack {
+                    Stepper("Posts per query: \(maxPosts)", value: $maxPosts, in: 1...1000)
+                    Stepper("Pages per query: \(maxPages)", value: $maxPages, in: 1...100)
+                }
+                HStack {
+                    Spacer()
+                    Button("Run Search Plan", action: collectPlan)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.isRunning || cleanWorkspace.isEmpty || selectedSources.isEmpty)
+                }
+
+                Divider()
+                Text("Or import an existing authorized partner / Department dataset. Imported and collected material use the same evidence and provenance model.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    TextField("Existing CSV / JSONL", text: $importFile)
+                    Button("Choose...") {
+                        if let url = chooseFile(["csv", "jsonl"]) { importFile = url.path }
+                    }
+                }
+                TextField("Source system", text: $importSystem)
+                HStack {
+                    Spacer()
+                    Button("Import Existing Dataset") {
+                        model.run(command: "research-import", config: [
+                            "workspace": cleanWorkspace,
+                            "source_file": importFile,
+                            "source_system": importSystem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                ? "external"
+                                : importSystem.trimmingCharacters(in: .whitespacesAndNewlines),
+                        ])
+                    }
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty || importFile.isEmpty)
+                }
+
+                Divider()
+                Picker("Triage LLM provider", selection: $llmSelection.provider) {
+                    ForEach(LLMProvider.allCases) { provider in
+                        Text(provider.title).tag(provider)
+                    }
+                }
+                .pickerStyle(.menu)
+                if llmSelection.provider == .custom {
+                    TextField("Model ID", text: $llmSelection.model)
+                    TextField("Custom base URL", text: $baseURL)
+                } else {
+                    Picker("Model", selection: $llmSelection.model) {
+                        ForEach(llmSelection.provider.models, id: \.self) { name in
+                            Text(name).tag(name)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .id(llmSelection.provider)
+                }
+                HStack {
+                    Spacer()
+                    Button("Triage into ResearchObservations") {
+                        model.run(command: "research-triage", config: [
+                            "workspace": cleanWorkspace,
+                            "continue_on_error": true,
+                            "llm": llmSelection.provider.configuration(
+                                model: llmSelection.model,
+                                customBaseURL: baseURL
+                            ),
+                        ])
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                    Button("Apply Evidence Feedback to Plan") {
+                        model.run(command: "research-feedback", config: ["workspace": cleanWorkspace])
+                    }
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                }
+            }
+
+            Section("4. Verified handoff") {
+                Text("Export a portable bundle containing the requirement, search plan, evidence, observations, limitations, provenance, assessments, source conflicts, and claim/evidence lineage when available.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("Handoff name", text: $handoffName)
+                HStack {
+                    TextField("Optional handoff parent folder", text: $handoffOutput)
+                    Button("Choose...") {
+                        if let url = chooseDirectory() { handoffOutput = url.path }
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Export Verified Handoff", action: exportHandoff)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                }
+
+                Divider()
+                HStack {
+                    TextField("Existing handoff bundle to verify", text: $verificationBundle)
+                    Button("Choose...") {
+                        if let url = chooseDirectory() { verificationBundle = url.path }
+                    }
+                    Button("Verify Bundle") {
+                        model.run(command: "research-handoff-verify", config: [
+                            "bundle_directory": verificationBundle
+                        ])
+                    }
+                    .disabled(model.isRunning || verificationBundle.isEmpty)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Research Project")
+    }
+
+    private var cleanWorkspace: String {
+        workspace.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var selectedSources: [String] {
+        var result: [String] = []
+        if useBilibili { result.append("bilibili") }
+        if useWeibo { result.append("weibo") }
+        if useX { result.append("x") }
+        if useBluesky { result.append("bluesky") }
+        if useMastodon { result.append("mastodon") }
+        return result
+    }
+
+    private func commaList(_ value: String) -> [String] {
+        value.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func saveRequirement() {
+        model.run(command: "research-requirement", config: [
+            "workspace": cleanWorkspace,
+            "question": question.trimmingCharacters(in: .whitespacesAndNewlines),
+            "geographies": commaList(geographies),
+            "known_entities": commaList(knownEntities),
+            "target_audiences": commaList(targetAudiences),
+            "languages": commaList(languages),
+            "since": since.trimmingCharacters(in: .whitespacesAndNewlines),
+            "until": until.trimmingCharacters(in: .whitespacesAndNewlines),
+            "collection_mode": collectionMode,
+            "preferred_sources": selectedSources,
+        ])
+    }
+
+    private func collectPlan() {
+        model.run(command: "research-collect", config: [
+            "workspace": cleanWorkspace,
+            "sources": selectedSources,
+            "max_posts_per_query": maxPosts,
+            "max_pages_per_query": maxPages,
+            "continue_on_source_error": true,
+        ])
+    }
+
+    private func exportHandoff() {
+        var config: [String: Any] = [
+            "workspace": cleanWorkspace,
+            "name": handoffName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "sugar-handoff"
+                : handoffName.trimmingCharacters(in: .whitespacesAndNewlines),
+            "create_zip": true,
+        ]
+        let output = handoffOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !output.isEmpty { config["output_directory"] = output }
+        model.run(command: "research-handoff", config: config)
     }
 }
 

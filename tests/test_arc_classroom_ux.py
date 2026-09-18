@@ -51,12 +51,39 @@ def test_mac_search_exposes_chinese_media_and_safe_first_run_defaults():
 
 def test_mac_exposes_public_item_ingestion_without_wechat_search_toggle():
     mac = (ROOT / "SUGAR-macOS" / "Sources" / "ContentView.swift").read_text(encoding="utf-8")
-    assert 'case search = "Search", ingest = "Public URL"' in mac
+    assert 'case ingest = "Public URL"' in mac
     assert 'struct PublicItemView: View' in mac
     assert 'PublicItemSource(label: "WeChat Official Account article", value: "wechat")' in mac
     assert 'model.run(command: "ingest"' in mac
     assert "mp.weixin.qq.com" in mac
     assert 'Toggle("WeChat"' not in mac
+
+
+def test_mac_defaults_to_question_first_research_project_workflow():
+    mac = (ROOT / "SUGAR-macOS" / "Sources" / "ContentView.swift").read_text(encoding="utf-8")
+    model = (ROOT / "SUGAR-macOS" / "Sources" / "AppModel.swift").read_text(encoding="utf-8")
+    assert 'case research = "Research Project"' in mac
+    assert '@State private var selection: AppSection? = .research' in mac
+    assert 'struct ResearchProjectView: View' in mac
+    assert 'Section("1. Project workspace")' in mac
+    assert 'Section("2. Research question")' in mac
+    assert 'Section("3. Gather and review evidence")' in mac
+    assert 'Section("4. Verified handoff")' in mac
+    assert '"target_audiences": commaList(targetAudiences)' in mac
+    for operation in (
+        "workspace-init",
+        "research-requirement",
+        "research-plan",
+        "research-import",
+        "research-collect",
+        "research-triage",
+        "research-feedback",
+        "research-handoff",
+        "research-handoff-verify",
+    ):
+        assert f'command: "{operation}"' in mac
+    assert 'command == "research-triage"' in model
+    assert 'command == "research-collect"' in model
 
 
 def test_bridge_exposes_llm_connection_check():

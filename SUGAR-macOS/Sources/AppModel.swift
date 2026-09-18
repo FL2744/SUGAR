@@ -77,7 +77,12 @@ final class AppModel: ObservableObject {
         }
         let llm = config["llm"] as? [String: String] ?? [:]
         let provider = LLMProvider(rawValue: llm["provider"] ?? "openai")
-        guard !["search", "llm-check"].contains(command) || provider != nil else {
+        let requiresLLMProvider =
+            command == "search"
+            || command == "llm-check"
+            || command == "research-triage"
+            || (command == "research-plan" && (config["ai_expand"] as? Bool ?? false))
+        guard !requiresLLMProvider || provider != nil else {
             log = "Choose a valid LLM provider."
             return
         }
@@ -93,7 +98,18 @@ final class AppModel: ObservableObject {
             log = "Enter your ARC API key in Settings before testing the ARC connection."
             return
         }
-        let usesLLMKey = command == "search" || command == "llm-check"
+        if command == "research-triage",
+           selectedKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            log = "Enter the \(provider!.title) API key in Settings before triaging project evidence."
+            return
+        }
+        if command == "research-plan",
+           (config["ai_expand"] as? Bool ?? false),
+           selectedKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            log = "Enter the \(provider!.title) API key in Settings before AI-assisted plan expansion."
+            return
+        }
+        let usesLLMKey = provider != nil && !llm.isEmpty
         let secrets = BackendSecrets(
             xToken: xToken, llmKey: usesLLMKey ? selectedKey : "", blueskyIdentifier: blueskyIdentifier,
             blueskyPassword: blueskyPassword, mastodonToken: mastodonToken, weiboCookie: weiboCookie
@@ -155,7 +171,7 @@ final class AppModel: ObservableObject {
     }
 
     private func preflight(command: String, config: [String: Any]) -> String? {
-        if command == "search" {
+        if command == "search" || command == "research-collect" {
             let sources = (config["sources"] as? [String]) ?? []
             if sources.contains("x") && xToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "Cannot start search: X is selected, but no X bearer token is saved. Open Settings, enter the token, and try again."
@@ -284,6 +300,35 @@ final class AppModel: ObservableObject {
                 lines.append("Saving results…")
             case "saved":
                 lines.append("Results saved.")
+            case "requirement-created":
+                lines.append("Research requirement saved.")
+            case "plan-created":
+                let branches = json["branches"] as? Int ?? 0
+                lines.append("Inspectable search plan created with \(branches) branches.")
+            case "plan-expanded":
+                let branches = json["branches"] as? Int ?? 0
+                lines.append("AI-assisted plan expansion complete • \(branches) branches.")
+            case "plan-collection-started":
+                lines.append("Executing the approved search plan…")
+            case "plan-collection-complete":
+                let records = json["records"] as? Int ?? 0
+                let coverage = json["coverage_status"] as? String ?? "unknown"
+                lines.append("Plan collection complete • \(records) records • coverage \(coverage)")
+            case "triage-started":
+                lines.append("Triaging evidence into ResearchObservations…")
+            case "triage-complete":
+                lines.append("Evidence triage complete.")
+            case "feedback-applied":
+                let branches = json["branches"] as? Int ?? 0
+                lines.append("Evidence feedback applied to \(branches) search branches.")
+            case "handoff-started":
+                lines.append("Building portable verified handoff…")
+            case "handoff-complete":
+                let artifacts = json["artifacts"] as? Int ?? 0
+                lines.append("Verified handoff created • \(artifacts) artifacts.")
+            case "handoff-verified":
+                let status = json["status"] as? String ?? "unknown"
+                lines.append("Handoff verification: \(status).")
             case "mapping":
                 lines.append("Creating map…")
             case "analyzing":

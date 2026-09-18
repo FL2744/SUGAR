@@ -4,11 +4,15 @@ This guide is for a first-time user who wants to get useful results without lear
 
 ## The 5-minute path
 
-1. **Open Settings.** Choose **Virginia Tech ARC**. Click **Get ARC API Key**, sign in with your VT account, create a personal key, paste it into SUGAR, and click **Test ARC Connection**.
-2. **Open Collect → Quick Search.** Start with **Bilibili** and/or **Weibo**. Enter a few search terms, one per line.
-3. Leave **Source credentials** blank unless your specific task requires an authenticated source. Basic public Bilibili work is designed to operate without X, Bluesky, or Mastodon credentials.
-4. Keep the first search small. Run it and watch **Activity & Outputs** at the bottom of the window.
-5. Open the generated CSV/XLSX/JSONL outputs before moving on to advanced analysis.
+For a real research assignment, start from the question rather than a keyword box:
+
+1. **Create a Research Project.** On Windows open **State Workflow -> Research Project**. On macOS open **Research Project**. Choose a project folder that can travel with the work.
+2. Enter the **research question**, geography, target audiences, known entities, languages, timeframe, and preferred sources. Save the requirement.
+3. Click **Build Inspectable Search Plan**. The plan is stored with the project rather than hidden inside an agent loop.
+4. Run the plan with a small initial collection, or import an existing authorized CSV/JSONL dataset.
+5. If you need AI triage, configure an LLM key in **Settings**, triage the evidence, then export a **Verified Handoff**. The bundle carries the requirement, plan, evidence, observations, provenance, limitations, and lineage together.
+
+For a fast collector sanity check rather than a research project, **Collect -> Quick Search** on Windows or **Expert Search** on macOS is still available.
 
 ## What the pages are for
 
@@ -16,7 +20,7 @@ This guide is for a first-time user who wants to get useful results without lear
 - **Collect** — normal keyword collection and resumable larger harvests.
 - **Weibo** — investigate a known public Weibo post or run repeatable Weibo qualification/coverage checks.
 - **Public URL** — import a specific known public item without pretending it is searchable. This is the supported path for public WeChat Official Account articles.
-- **State Workflow** — turn normalized observations into reviewable assessments, change reports, templates, and briefing packages.
+- **State Workflow** - the Windows home for the question-first Research Project plus expert assessment/review tools.
 - **Intelligence** — deterministic tradecraft checks and optional LLM-assisted synthesis. Use this after you have a real corpus.
 - **Maps & Reports** — turn existing results into maps, PDF, or Word outputs.
 - **Settings** — ARC/model connection, optional source credentials, and output defaults.
@@ -29,7 +33,7 @@ This guide is for a first-time user who wants to get useful results without lear
 
 **Weibo:** supported public surfaces can be used without a saved session. An authorized existing Weibo session is optional and may improve access to surfaces that are otherwise limited.
 
-**WeChat Official Accounts:** use **Collect → Public URL** with an ordinary public `https://mp.weixin.qq.com/...` article URL. SUGAR does not provide WeChat keyword search, private-chat collection, Mini Program collection, automated login, or challenge bypass.
+**WeChat Official Accounts:** use **Collect -> Public URL** with an ordinary public `https://mp.weixin.qq.com/...` article URL. SUGAR does not provide WeChat keyword search, private-chat collection, Mini Program collection, automated login, or challenge bypass.
 
 **X / Bluesky / Mastodon:** optional general-source adapters. Only configure their credentials if you intentionally plan to use those sources.
 
