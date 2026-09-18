@@ -190,6 +190,10 @@ ARC's shared API endpoint is `https://llm-api.arc.vt.edu/api/v1`. Dedicated Open
 
 SUGAR is designed for ordinary public or explicitly authorized access. It does **not** solve CAPTCHAs, manufacture authentication/session state, spoof devices, rotate proxies/accounts to evade limits, or bypass platform access controls. When a source denies access, requires unsupported login/verification, or rate-limits collection, the collector must fail or defer explicitly rather than converting that failure into evidence of zero activity.
 
+The default State workflow is ecosystem/audience oriented rather than person-dossier oriented. Canonical source records retain account identity when a public source provides it, but conversion into a ResearchObservation does not automatically promote every post author into an analytic actor. Actors are added only when the evidence makes them relevant to the research requirement. Runtime credentials are passed separately from project configuration and are redacted from bridge log events; SUGAR does not write them into portable workspace manifests.
+
+External partner/Department imports preserve supplied handling, usage, license, and data-owner caveats as structured provenance even when unrelated unmapped fields are intentionally dropped.
+
 The State workflow is a research methodology and product for the Diplomacy Lab project. It is not a Department of State security authorization, ATO, official intelligence product, procurement approval, or AI certification.
 
 ## Repository architecture

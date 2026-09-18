@@ -191,7 +191,7 @@
       "priority": "P0",
       "category": "privacy_security",
       "title": "Public/authorized access and data minimization",
-      "status": "partially_met",
+      "status": "met",
       "requirement": "SUGAR must operate within public or explicitly authorized access boundaries and minimize unnecessary personal data collection.",
       "acceptance": [
         "Collectors fail closed at unsupported authentication, anti-bot, or access-control boundaries.",

@@ -42,7 +42,23 @@ FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "thread_root_key": ("thread_root_id", "root_record"),
     "raw_stats": ("metrics", "statistics", "stats"),
     "engagement": ("engagement_metrics",),
+    "handling": (
+        "handling_marking",
+        "data_handling",
+        "distribution_statement",
+        "distribution",
+    ),
+    "usage": (
+        "usage_restrictions",
+        "use_restrictions",
+        "terms_of_use",
+        "permitted_use",
+    ),
+    "license": ("data_license", "content_license", "rights"),
+    "data_owner": ("owner", "provider_owner", "data_provider"),
 }
+
+DATA_HANDLING_FIELDS = ("handling", "usage", "license", "data_owner")
 
 ENGAGEMENT_ALIASES: dict[str, tuple[str, ...]] = {
     "likes": ("likes", "like_count", "favorites", "favorite_count"),
@@ -115,6 +131,38 @@ def _bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     return _clean(value).casefold() in {"1", "true", "yes", "y"}
+
+
+def _handling_values(resolved: Mapping[str, Any]) -> dict[str, list[str]]:
+    values: dict[str, list[str]] = {}
+    for key in DATA_HANDLING_FIELDS:
+        text = _clean(resolved.get(key))
+        if text:
+            values[key] = [text]
+    return values
+
+
+def _handling_summary(records: Iterable[PostRecord]) -> dict[str, list[str]]:
+    summary: dict[str, list[str]] = {}
+    seen: dict[str, set[str]] = {}
+    for record in records:
+        raw = record.raw_stats.get("data_handling") if isinstance(record.raw_stats, dict) else None
+        if not isinstance(raw, dict):
+            continue
+        for key in DATA_HANDLING_FIELDS:
+            value = raw.get(key)
+            items = value if isinstance(value, list) else [value]
+            for item in items:
+                text = _clean(item)
+                if not text:
+                    continue
+                marker = text.casefold()
+                seen.setdefault(key, set())
+                if marker in seen[key]:
+                    continue
+                seen[key].add(marker)
+                summary.setdefault(key, []).append(text)
+    return summary
 
 
 def _source_sha256(path: Path) -> str:
@@ -273,6 +321,26 @@ def normalize_external_row(row: Mapping[str, Any], spec: ImportSpec) -> tuple[Po
 
     engagement, engagement_columns = _engagement(row, spec)
     raw_stats = _json_dict(resolved["raw_stats"])
+    handling = _handling_values(resolved)
+    if handling:
+        raw_stats = dict(raw_stats)
+        existing_handling = raw_stats.get("data_handling")
+        if isinstance(existing_handling, dict):
+            merged: dict[str, list[str]] = {}
+            for key in DATA_HANDLING_FIELDS:
+                values = existing_handling.get(key)
+                items = values if isinstance(values, list) else [values]
+                cleaned = [_clean(item) for item in items if _clean(item)]
+                if cleaned:
+                    merged[key] = list(dict.fromkeys(cleaned))
+            for key, values in handling.items():
+                merged.setdefault(key, [])
+                for value in values:
+                    if value.casefold() not in {item.casefold() for item in merged[key]}:
+                        merged[key].append(value)
+            raw_stats["data_handling"] = merged
+        else:
+            raw_stats["data_handling"] = handling
     used_source_columns = {name for name in used_columns.values() if name}
     used_source_columns.update(engagement_columns)
     if spec.preserve_unmapped_fields:
@@ -373,6 +441,7 @@ def save_import_result(result: ImportResult, output_file: str | Path, *, spec: I
     jsonl_path = Path(f"{base}.jsonl")
     rejected_path = Path(f"{base}.rejected.jsonl")
     manifest_path = Path(f"{base}.import.json")
+    handling_metadata = _handling_summary(result.records)
 
     save_records(
         result.records,
@@ -388,6 +457,7 @@ def save_import_result(result: ImportResult, output_file: str | Path, *, spec: I
             "accepted_records": result.accepted_rows,
             "rejected_rows": len(result.rejected),
             "duplicate_rows": result.duplicate_rows,
+            "data_handling": handling_metadata,
         },
     )
     with jsonl_path.open("w", encoding="utf-8", newline="\n") as stream:
@@ -418,6 +488,7 @@ def save_import_result(result: ImportResult, output_file: str | Path, *, spec: I
         "accepted_records": result.accepted_rows,
         "rejected_rows": len(result.rejected),
         "duplicate_rows": result.duplicate_rows,
+        "data_handling": handling_metadata,
         "outputs": [Path(path).name for path in outputs],
     }
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")

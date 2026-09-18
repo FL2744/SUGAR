@@ -79,6 +79,61 @@ def test_external_import_outputs_manifest_jsonl_and_rejections(tmp_path: Path):
     assert len(payload["source_sha256"]) == 64
 
 
+def test_external_import_retains_handling_and_usage_metadata_when_unmapped_fields_are_dropped(tmp_path: Path):
+    source = tmp_path / "partner.csv"
+    source.write_text(
+        "platform,native_id,text,handling_marking,usage_restrictions,data_license,extra\n"
+        "example,1,public record,PARTNER-PUBLIC,Research use only,CC-BY-4.0,discard-me\n",
+        encoding="utf-8",
+    )
+
+    outputs = import_external_dataset(
+        source,
+        tmp_path / "normalized",
+        source_system="partner-export",
+        preserve_unmapped_fields=False,
+    )
+    record = load_post_records(tmp_path / "normalized.jsonl")[0]
+    assert record.raw_stats["data_handling"] == {
+        "handling": ["PARTNER-PUBLIC"],
+        "usage": ["Research use only"],
+        "license": ["CC-BY-4.0"],
+    }
+    assert "external_fields" not in record.raw_stats
+
+    manifest = json.loads((tmp_path / "normalized.import.json").read_text(encoding="utf-8"))
+    assert manifest["data_handling"]["handling"] == ["PARTNER-PUBLIC"]
+    assert manifest["data_handling"]["usage"] == ["Research use only"]
+    assert manifest["data_handling"]["license"] == ["CC-BY-4.0"]
+    assert any(path.endswith("normalized.import.json") for path in outputs)
+
+
+def test_duplicate_external_rows_union_inconsistent_handling_caveats(tmp_path: Path):
+    source = tmp_path / "handling.jsonl"
+    rows = [
+        {
+            "platform": "example",
+            "native_id": "1",
+            "original_text": "same source item",
+            "usage": "Research use only",
+        },
+        {
+            "platform": "example",
+            "native_id": "1",
+            "original_text": "same source item",
+            "usage": "Do not redistribute",
+            "handling": "Partner supplied",
+        },
+    ]
+    source.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    result = import_external_records(source)
+    assert len(result.records) == 1
+    handling = result.records[0].raw_stats["data_handling"]
+    assert handling["usage"] == ["Research use only", "Do not redistribute"]
+    assert handling["handling"] == ["Partner supplied"]
+
+
 def test_external_import_strict_mode_fails_at_invalid_identity(tmp_path: Path):
     source = tmp_path / "bad.jsonl"
     source.write_text(json.dumps({"platform": "test", "text": "no id"}) + "\n", encoding="utf-8")

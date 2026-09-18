@@ -68,6 +68,22 @@ def test_bridge_advertises_typed_desktop_operations():
     assert set(DESKTOP_ANALYTIC_OPERATIONS).issubset(info["operations"])
 
 
+def test_bridge_redacts_runtime_secrets_from_structured_logs(monkeypatch, capsys):
+    secret = "super-secret-runtime-token-12345"
+    monkeypatch.setenv("SUGAR_LLM_API_KEY", secret)
+    sugar_bridge.secrets_from_environment()
+    sugar_bridge.emit(
+        "error",
+        message=f"upstream failure echoed {secret}",
+        nested={"detail": secret},
+    )
+    output = capsys.readouterr().out
+    assert secret not in output
+    assert output.count("[REDACTED]") == 2
+    monkeypatch.delenv("SUGAR_LLM_API_KEY", raising=False)
+    sugar_bridge.secrets_from_environment()
+
+
 def test_desktop_operation_rejects_unlisted_command(tmp_path):
     with pytest.raises(ValueError, match="Unsupported desktop analytic operation"):
         run_desktop_analytic_operation("run-arbitrary-command", {"output_directory": str(tmp_path)})

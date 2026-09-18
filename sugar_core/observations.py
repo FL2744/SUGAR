@@ -495,7 +495,7 @@ def observation_from_post(record: PostRecord, *, summary: str | None = None) -> 
     location_label = record.inferred_location or record.author_location
     return ResearchObservation(
         observation_type="digital_post",
-        title=f"{record.platform} post by {record.author_handle or record.author_name}".strip(),
+        title=f"{record.platform} public post".strip(),
         summary=summary or record.translated_text or record.original_text,
         observed_at=record.published_at,
         location_label=location_label,
@@ -503,7 +503,11 @@ def observation_from_post(record: PostRecord, *, summary: str | None = None) -> 
         longitude=record.longitude,
         location_basis=location_basis,
         location_confidence=record.location_confidence if record.inferred_location else None,
-        actors=[record.author_name or record.author_handle] if (record.author_name or record.author_handle) else [],
+        # Keep account identity in the canonical source record/evidence chain rather
+        # than automatically promoting every post author into an analytic actor.
+        # Triage may add an actor when the source content makes that entity relevant
+        # to the research requirement.
+        actors=[],
         evidence=[evidence],
         source_record_keys=[record.record_key],
     )

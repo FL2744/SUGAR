@@ -38,6 +38,8 @@ def test_post_conversion_preserves_source_and_location_provenance():
     assert observation.primary_source_url == post.canonical_url
     assert observation.evidence[0].platform == "bluesky"
     assert observation.evidence[0].native_id == "abc123"
+    assert observation.actors == []
+    assert "example.bsky.social" not in observation.title
 
 
 def test_observation_id_is_stable_for_same_evidence():

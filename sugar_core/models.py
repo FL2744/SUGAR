@@ -135,4 +135,26 @@ def merge_record(existing: PostRecord, incoming: PostRecord) -> PostRecord:
     if sum(incoming.engagement.values()) > sum(existing.engagement.values()):
         existing.engagement = dict(incoming.engagement)
         existing.raw_stats = dict(incoming.raw_stats)
+    incoming_handling = (
+        incoming.raw_stats.get("data_handling")
+        if isinstance(incoming.raw_stats, dict)
+        else None
+    )
+    if isinstance(incoming_handling, dict):
+        existing.raw_stats = dict(existing.raw_stats)
+        current = existing.raw_stats.get("data_handling")
+        if not isinstance(current, dict):
+            current = {}
+        merged_handling: dict[str, list[str]] = {}
+        for key in set(current) | set(incoming_handling):
+            values: list[str] = []
+            for raw in (current.get(key), incoming_handling.get(key)):
+                items = raw if isinstance(raw, list) else [raw]
+                for item in items:
+                    text = str(item or "").strip()
+                    if text and text.casefold() not in {value.casefold() for value in values}:
+                        values.append(text)
+            if values:
+                merged_handling[str(key)] = values
+        existing.raw_stats["data_handling"] = merged_handling
     return existing

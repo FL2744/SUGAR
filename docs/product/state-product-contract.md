@@ -119,7 +119,17 @@ AI-generated classifications, extraction, and analytic suggestions remain explic
 
 For reproducibility, AI-derived observations and assessments record the provider, model, and workflow/prompt version that produced the suggestion. Those fields survive storage, review, lineage generation, and portable handoff. State-facing briefing logic remains verified-only: an assessment cannot become briefing-eligible merely because an AI model assigned a high confidence value.
 
-### 6. State delivery UX
+### 6. Public/authorized access and data minimization
+
+Collectors must stop or defer at unsupported authentication, anti-bot, verification, CAPTCHA, and rate-limit boundaries rather than manufacture access or interpret denial as evidence of zero activity. Existing authorized sessions may be supplied where the collector explicitly supports them; SUGAR must not synthesize login state, rotate identities, or bypass access controls.
+
+Secrets are runtime inputs, not research artifacts. Desktop clients pass credentials separately from operation configuration, workspace manifests do not store them, and bridge event output redacts active secret values if an upstream exception echoes them.
+
+The default State workflow is ecosystem/audience oriented. Canonical source evidence may retain the public account identity needed for provenance, but post authors are not automatically promoted into analytic actors or person dossiers. Adaptive search remains bounded to the research requirement and evidence-linked discoveries.
+
+External datasets retain source-provided handling, usage, license, and ownership caveats as structured import provenance. Those caveats survive deliberate dropping of unrelated unmapped source columns and conflicting caveats from duplicate rows are unioned rather than silently overwritten.
+
+### 7. State delivery UX
 
 Only after the first four are stable should the desktop workflow be reorganized around:
 

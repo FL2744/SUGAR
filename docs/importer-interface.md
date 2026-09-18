@@ -28,10 +28,19 @@ Common unambiguous aliases such as `post_id`, `url`, `text`, `timestamp`, and `u
 
 Unmapped source fields are preserved by default under `raw_stats.external_fields` so a handoff does not silently discard upstream context. Use `--drop-unmapped` only when the project intentionally wants a narrower normalized copy.
 
+Handling and usage metadata are different from arbitrary extra columns. Common
+fields such as handling_marking, data_handling, distribution_statement,
+usage_restrictions, terms_of_use, data_license, and data_owner normalize into
+`raw_stats.data_handling` and are retained even when `--drop-unmapped` is
+used. Duplicate source rows union distinct caveats rather than overwriting one
+another. The import manifest summarizes the handling, usage, license, and owner
+values present in the accepted dataset so downstream reviewers can see the
+restrictions without reverse-engineering source columns.
+
 ## Invalid rows and provenance
 
 Default behavior quarantines invalid rows to `*.rejected.jsonl`; `--strict` instead fails on the first invalid row. Successful imports write canonical CSV/XLSX, canonical JSONL, an `*.import.json` manifest, and a rejected-row JSONL when needed.
 
-The manifest records the import schema/version, source SHA-256, upstream system name, resolved mapping, import time, accepted/rejected/duplicate counts, and output names. Duplicate canonical identities are merged using the existing `PostRecord` merge rule so multiple query matches remain provenance rather than being discarded.
+The manifest records the import schema/version, source SHA-256, upstream system name, resolved mapping, import time, accepted/rejected/duplicate counts, handling metadata, and output names. Duplicate canonical identities are merged using the existing `PostRecord` merge rule so multiple query matches and distinct handling caveats remain provenance rather than being discarded.
 
 This interface is intentionally file-based and public. A future Northstar, contractor, or Department API adapter should normalize through the same boundary instead of bypassing it.

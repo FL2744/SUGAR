@@ -42,6 +42,7 @@ from sugar_core.workspace_runtime import (
 )
 
 BRIDGE_PROTOCOL_VERSION = 3
+_ACTIVE_SECRET_VALUES: set[str] = set()
 WORKSPACE_OPERATIONS = {"workspace-init", "workspace-status", "workspace-register"}
 BASE_OPERATIONS = {
     "search",
@@ -69,8 +70,25 @@ BASE_OPERATIONS = {
 ALL_OPERATIONS = BASE_OPERATIONS | DESKTOP_ANALYTIC_OPERATIONS
 
 
+def _redact_runtime_secrets(value: Any) -> Any:
+    if isinstance(value, str):
+        result = value
+        for secret in sorted(_ACTIVE_SECRET_VALUES, key=len, reverse=True):
+            if len(secret) >= 8:
+                result = result.replace(secret, "[REDACTED]")
+        return result
+    if isinstance(value, dict):
+        return {key: _redact_runtime_secrets(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_runtime_secrets(item) for item in value]
+    if isinstance(value, tuple):
+        return [_redact_runtime_secrets(item) for item in value]
+    return value
+
+
 def emit(event: str, **values: Any) -> None:
-    print(json.dumps({"event": event, **values}, ensure_ascii=False), flush=True)
+    payload = _redact_runtime_secrets({"event": event, **values})
+    print(json.dumps(payload, ensure_ascii=False), flush=True)
 
 
 def load_config(path: str) -> dict[str, Any]:
@@ -82,7 +100,7 @@ def load_config(path: str) -> dict[str, Any]:
 
 
 def secrets_from_environment() -> dict[str, str]:
-    return {
+    secrets = {
         "x_bearer_token": os.environ.get("SUGAR_X_BEARER_TOKEN", ""),
         "llm_api_key": os.environ.get("SUGAR_LLM_API_KEY", ""),
         "bluesky_identifier": os.environ.get("SUGAR_BLUESKY_IDENTIFIER", ""),
@@ -90,6 +108,11 @@ def secrets_from_environment() -> dict[str, str]:
         "mastodon_token": os.environ.get("SUGAR_MASTODON_TOKEN", ""),
         "weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", ""),
     }
+    _ACTIVE_SECRET_VALUES.clear()
+    _ACTIVE_SECRET_VALUES.update(
+        str(value) for value in secrets.values() if str(value)
+    )
+    return secrets
 
 
 def backend_info() -> dict[str, Any]:
