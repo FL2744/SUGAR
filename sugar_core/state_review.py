@@ -9,6 +9,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
 
+from .observation_storage import load_observations, save_observations
 from .observations import ResearchObservation
 from .state_schema import (
     NARRATIVE_TAGS,
@@ -63,8 +64,33 @@ def export_review_workbook(
     if target.suffix.lower() != ".xlsx":
         target = target.with_suffix(".xlsx")
 
+    observation_rows: list[dict[str, Any]] = []
     assessment_rows: list[dict[str, Any]] = []
     claim_rows: list[dict[str, Any]] = []
+    for observation in observations:
+        observation_rows.append(
+            {
+                "observation_id": observation.observation_id,
+                "observation_type": observation.observation_type,
+                "title": observation.title,
+                "summary": observation.summary,
+                "country": observation.country,
+                "city": observation.city,
+                "primary_source_url": observation.primary_source_url,
+                "relevance": observation.relevance,
+                "triage_labels": _list_text(observation.triage_labels),
+                "triage_evidence": _list_text(observation.triage_evidence),
+                "ai_confidence": observation.ai_confidence,
+                "ai_provider": observation.ai_provider,
+                "ai_model": observation.ai_model,
+                "ai_workflow": observation.ai_workflow,
+                "ai_reason": observation.ai_reason,
+                "current_verification_state": observation.verification_state,
+                "decision": "",
+                "reviewer": "",
+                "verification_notes": observation.verification_notes,
+            }
+        )
     for assessment in assessments:
         obs = observation_map.get(assessment.observation_id)
         assessment_rows.append(
@@ -77,6 +103,9 @@ def export_review_workbook(
                 "country": obs.country if obs else "",
                 "city": obs.city if obs else "",
                 "primary_source_url": obs.primary_source_url if obs else "",
+                "ai_provider": assessment.ai_provider,
+                "ai_model": assessment.ai_model,
+                "ai_workflow": assessment.ai_workflow,
                 "current_review_state": assessment.review_state,
                 "decision": "",
                 "reviewer": "",
@@ -113,6 +142,9 @@ def export_review_workbook(
                     "epistemic_status": claim.epistemic_status,
                     "confidence": claim.confidence,
                     "evidence_refs": _list_text(claim.evidence_refs),
+                    "assessment_ai_provider": assessment.ai_provider,
+                    "assessment_ai_model": assessment.ai_model,
+                    "assessment_ai_workflow": assessment.ai_workflow,
                     "current_review_state": claim.review_state,
                     "decision": "",
                     "reviewer": "",
@@ -124,6 +156,8 @@ def export_review_workbook(
     instructions = _formula_safe_frame(
         [
             {"rule": "Purpose", "guidance": "This workbook records human analytic decisions. It does not edit raw source evidence."},
+            {"rule": "Observation verification", "guidance": "Use the observations sheet to verify or reject the underlying ResearchObservation. Human-verified/rejected decisions require a named reviewer and are applied through SUGAR's verification state machine."},
+            {"rule": "AI labels", "guidance": "AI triage fields are suggestions, not verified facts. Reviewing an assessment does not automatically verify its underlying observation."},
             {"rule": "Evidence", "guidance": "Do not verify a claim unless its evidence_refs identify source evidence attached to the observation."},
             {"rule": "sponsor support", "guidance": "Confirmed support requires explicit evidence and support_review_decision=human_verified with a named reviewer."},
             {"rule": "Influence", "guidance": "Do not verify an influence claim from views, likes, comments, attendance, repetition, or proximity alone. Causal influence requires outcome/causal evidence and will still be audited."},
@@ -135,6 +169,7 @@ def export_review_workbook(
     )
 
     with pd.ExcelWriter(target, engine="openpyxl") as writer:
+        _formula_safe_frame(observation_rows).to_excel(writer, index=False, sheet_name="observations")
         _formula_safe_frame(assessment_rows).to_excel(writer, index=False, sheet_name="assessments")
         _formula_safe_frame(claim_rows).to_excel(writer, index=False, sheet_name="claims")
         instructions.to_excel(writer, index=False, sheet_name="instructions")
@@ -142,7 +177,7 @@ def export_review_workbook(
     workbook = load_workbook(target)
     header_fill = PatternFill("solid", fgColor="D9EAF7")
     decision_fill = PatternFill("solid", fgColor="FFF2CC")
-    for sheet_name in ("assessments", "claims", "instructions"):
+    for sheet_name in ("observations", "assessments", "claims", "instructions"):
         ws = workbook[sheet_name]
         ws.freeze_panes = "A2"
         if ws.max_column:
@@ -157,7 +192,17 @@ def export_review_workbook(
         for column_cells in ws.columns:
             header = str(column_cells[0].value or "")
             width = 18
-            if header in {"summary", "statement", "review_note", "support_rationale", "support_evidence_refs", "evidence_refs"}:
+            if header in {
+                "summary",
+                "statement",
+                "review_note",
+                "support_rationale",
+                "support_evidence_refs",
+                "evidence_refs",
+                "triage_evidence",
+                "ai_reason",
+                "verification_notes",
+            }:
                 width = 55
             elif header in {"primary_source_url"}:
                 width = 42
@@ -168,7 +213,7 @@ def export_review_workbook(
     decision_values = '"' + ",".join(sorted(REVIEW_STATES)) + '"'
     support_values = '"' + ",".join(sorted(SUPPORT_LEVELS)) + '"'
     observability_values = '"' + ",".join(sorted(OBSERVABILITY_LEVELS)) + '"'
-    for sheet_name in ("assessments", "claims"):
+    for sheet_name in ("observations", "assessments", "claims"):
         ws = workbook[sheet_name]
         headers = {str(cell.value): cell.column for cell in ws[1]}
         if "decision" in headers:
@@ -195,6 +240,55 @@ def export_review_workbook(
     workbook.save(target)
     workbook.close()
     return str(target.resolve())
+
+
+def apply_observation_review_workbook(
+    observations: Iterable[ResearchObservation],
+    workbook_file: str | Path,
+) -> list[ResearchObservation]:
+    observations = list(observations)
+    path = Path(workbook_file)
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    with pd.ExcelFile(path) as workbook:
+        if "observations" not in workbook.sheet_names:
+            return observations
+        frame = workbook.parse(sheet_name="observations")
+
+    by_id = {row.observation_id: row for row in observations}
+    for raw in frame.to_dict(orient="records"):
+        observation_id = _clean(raw.get("observation_id"))
+        if not observation_id:
+            continue
+        observation = by_id.get(observation_id)
+        if observation is None:
+            raise ValueError(
+                f"Review workbook references unknown observation_id: {observation_id}"
+            )
+        decision = _clean(raw.get("decision")).casefold()
+        reviewer = _clean(raw.get("reviewer"))
+        notes = _clean(raw.get("verification_notes"))
+        if not decision:
+            continue
+        if decision not in REVIEW_STATES:
+            raise ValueError(f"Unsupported observation decision: {decision}")
+        if decision in {"human_verified", "rejected"} and not reviewer:
+            raise ValueError(
+                f"Observation {observation_id} decision {decision} requires a reviewer."
+            )
+        if decision == observation.verification_state:
+            if reviewer:
+                observation.reviewer = reviewer
+            if notes:
+                observation.verification_notes = notes
+            observation.touch()
+            continue
+        observation.transition_verification(
+            decision,
+            reviewer=reviewer,
+            notes=notes,
+        )
+    return observations
 
 
 def _validate_taxonomy(values: list[str], allowed: set[str], field_name: str) -> list[str]:
@@ -324,3 +418,28 @@ def apply_review_workbook_file(
     assessments = load_state_assessments(assessments_file)
     reviewed = apply_review_workbook(assessments, workbook_file)
     return save_state_assessments(reviewed, output_file)
+
+
+def apply_observation_review_workbook_file(
+    observations_file: str | Path,
+    workbook_file: str | Path,
+    output_file: str | Path,
+) -> list[str]:
+    observations = load_observations(observations_file)
+    reviewed = apply_observation_review_workbook(observations, workbook_file)
+    target = Path(output_file).expanduser().resolve()
+    csv_path = target if target.suffix.lower() == ".csv" else target.with_suffix(".csv")
+    save_observations(
+        reviewed,
+        csv_path,
+        metadata={
+            "human_review_applied": True,
+            "review_workbook": Path(workbook_file).name,
+            "source_observations": Path(observations_file).name,
+        },
+    )
+    return [
+        str(csv_path),
+        str(csv_path.with_suffix(".xlsx")),
+        str(csv_path.with_suffix(".metadata.json")),
+    ]

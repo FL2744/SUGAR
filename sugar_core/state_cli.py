@@ -20,7 +20,10 @@ from .state_freshness import save_freshness_report
 from .state_gaps import save_gap_report
 from .state_map import create_state_map
 from .state_network import save_state_network
-from .state_review import apply_review_workbook_file
+from .state_review import (
+    apply_observation_review_workbook_file,
+    apply_review_workbook_file,
+)
 from .state_triage import triage_observations
 from .state_workflow import (
     apply_us_overlaps,
@@ -89,9 +92,11 @@ def build_parser() -> argparse.ArgumentParser:
     review_export.add_argument("--output")
     _workspace_arg(review_export)
 
-    review_apply = sub.add_parser("review-apply", help="Apply analyst workbook decisions back into validated State assessments and optional source conflicts.")
+    review_apply = sub.add_parser("review-apply", help="Apply analyst workbook decisions back into validated observations, State assessments, and optional source conflicts.")
     review_apply.add_argument("assessments")
     review_apply.add_argument("workbook")
+    review_apply.add_argument("--observations", help="Original ResearchObservation dataset used to create the workbook.")
+    review_apply.add_argument("--observations-output", help="Output path for reviewed observations. Defaults beside the reviewed assessment output.")
     review_apply.add_argument("--source-conflicts", help="Original structured source-conflict JSON used to create the workbook.")
     review_apply.add_argument("--source-conflicts-output", help="Output path for reviewed source conflicts. Defaults beside the reviewed assessment output.")
     review_apply.add_argument("--output")
@@ -307,6 +312,24 @@ def main(argv=None) -> int:
         outputs = [assessment_output]
         register_workspace_outputs(workspace, [assessment_output], operation="state-review-apply", kind="state_assessments")
 
+        if args.observations:
+            if args.observations_output:
+                observation_target = Path(args.observations_output).expanduser().resolve()
+            else:
+                observation_target = target.with_name(f"{target.stem}.observations.csv")
+            observation_outputs = apply_observation_review_workbook_file(
+                args.observations,
+                args.workbook,
+                observation_target,
+            )
+            outputs.extend(observation_outputs)
+            register_workspace_outputs(
+                workspace,
+                observation_outputs,
+                operation="state-review-apply",
+                kind="observations",
+            )
+
         if args.source_conflicts:
             if args.source_conflicts_output:
                 conflict_target = Path(args.source_conflicts_output).expanduser().resolve()
@@ -319,7 +342,12 @@ def main(argv=None) -> int:
                 conflict_target,
             )
             outputs.append(conflict_output)
-            register_workspace_outputs(workspace, [conflict_output], operation="state-review-apply", kind="state")
+            register_workspace_outputs(
+                workspace,
+                [conflict_output],
+                operation="state-review-apply",
+                kind="source_conflicts",
+            )
 
         print("\n".join(outputs))
         return 0

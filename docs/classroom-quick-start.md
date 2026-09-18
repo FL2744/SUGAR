@@ -10,7 +10,7 @@ For a real research assignment, start from the question rather than a keyword bo
 2. Enter the **research question**, geography, target audiences, known entities, languages, timeframe, and preferred sources. Save the requirement.
 3. Click **Build Inspectable Search Plan**. The plan is stored with the project rather than hidden inside an agent loop.
 4. Run the plan with a small initial collection, or import an existing authorized CSV/JSONL dataset.
-5. If you need AI triage, configure an LLM key in **Settings**, triage the evidence, then export a **Verified Handoff**. The bundle carries the requirement, plan, evidence, observations, provenance, limitations, and lineage together.
+5. If you need AI assistance, configure an LLM key in **Settings** and triage the evidence. Then **Prepare State Assessment Suggestions**, **Export Human Review Workbook**, make the named analyst decisions in that workbook, save it, and click **Apply Human Review**. Only after that should you export the **Verified Handoff**. The bundle carries the requirement, plan, evidence, reviewed observations, assessments, provenance, limitations, and lineage together.
 
 For a fast collector sanity check rather than a research project, **Collect -> Quick Search** on Windows or **Expert Search** on macOS is still available.
 
@@ -62,6 +62,7 @@ This does **not** require a separate Python installation. The GUI is best for di
 - **Compare assessment versions** means showing what changed between two saved assessment snapshots (the operation is often called a “diff” in developer tools).
 - **Qualification** means measuring collector coverage, failures, access limits, provenance, duplicates, and repeatability. It is not an official certification or authority-to-operate.
 - **Observation** is collected evidence. **Assessment** is an analytic judgment linked to evidence. SUGAR deliberately keeps those separate.
+- **AI-triaged** means a provider/model/workflow generated a suggestion. It is not human verification. SUGAR records the provider, model, workflow version, reviewer, and review state separately.
 
 
 ## Live-source reliability note

@@ -32,6 +32,18 @@ def test_lineage_resolves_claim_to_observation_record_and_collection_context():
         collected_at="2026-09-02T00:00:00Z",
     )
     observation = observation_from_post(record)
+    observation.set_ai_triage(
+        labels=["program_activity"],
+        confidence=0.79,
+        provider="arc",
+        model="gpt-oss-120b",
+        workflow="diplomacy-lab-triage-v1",
+    )
+    observation.transition_verification(
+        "human_verified",
+        reviewer="Analyst",
+        notes="Source checked.",
+    )
     claim = AnalyticClaim(
         statement="The source documents a relationship.",
         claim_type="support_relationship",
@@ -42,6 +54,9 @@ def test_lineage_resolves_claim_to_observation_record_and_collection_context():
     assessment = StateAssessment(
         observation_id=observation.observation_id,
         claims=[claim],
+        ai_provider="arc",
+        ai_model="gpt-oss-120b",
+        ai_workflow="state-department-triage-v1",
         review_state="human_verified",
         reviewer="Analyst",
     )
@@ -64,6 +79,12 @@ def test_lineage_resolves_claim_to_observation_record_and_collection_context():
     assert lineage["dataset_provenance"]["source_sha256"] == "a" * 64
     assert lineage["assessments"][0]["assessment_id"] == assessment.assessment_id
     assert lineage["assessments"][0]["observation_id"] == observation.observation_id
+    assert lineage["assessments"][0]["ai_provider"] == "arc"
+    assert lineage["assessments"][0]["ai_model"] == "gpt-oss-120b"
+    assert lineage["assessments"][0]["ai_workflow"] == "state-department-triage-v1"
+    assert lineage["observations"][0]["ai_provider"] == "arc"
+    assert lineage["observations"][0]["ai_workflow"] == "diplomacy-lab-triage-v1"
+    assert lineage["observations"][0]["reviewer"] == "Analyst"
     assert finding["reviewer"] == "Analyst"
     assert validate_lineage_index(lineage)["status"] == "pass"
 

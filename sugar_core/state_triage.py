@@ -21,6 +21,7 @@ from .state_schema import (
 from .utils import JsonCache
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
+STATE_TRIAGE_WORKFLOW_VERSION = "state-department-triage-v1"
 
 
 def _notify(progress: ProgressCallback | None, event: str, **values: Any) -> None:
@@ -176,7 +177,9 @@ def assessment_from_triage_payload(
     observation: ResearchObservation,
     payload: dict[str, Any],
     *,
+    provider: str = "",
     model: str = "",
+    workflow: str = STATE_TRIAGE_WORKFLOW_VERSION,
 ) -> StateAssessment:
     allowed_refs = set(_evidence_identities(observation))
     support_raw = dict(payload.get("sponsor_support") or {})
@@ -275,6 +278,9 @@ def assessment_from_triage_payload(
         observability_level=observability,
         reach=reach,
         claims=claims,
+        ai_provider=provider,
+        ai_model=model,
+        ai_workflow=workflow,
         review_state="needs_followup" if needs_followup else "ai_triaged",
         review_note=" ".join(part for part in note_parts if part),
         analytic_priority=priority,
@@ -293,13 +299,19 @@ def triage_observation(
         client,
         llm,
         cache,
-        "state-department-triage-v1",
+        STATE_TRIAGE_WORKFLOW_VERSION,
         _triage_system_prompt(),
         _triage_user_prompt(observation),
         max_tokens=3500,
     )
     payload = parse_json_object(response)
-    return assessment_from_triage_payload(observation, payload, model=llm.model)
+    return assessment_from_triage_payload(
+        observation,
+        payload,
+        provider=llm.provider,
+        model=llm.model,
+        workflow=STATE_TRIAGE_WORKFLOW_VERSION,
+    )
 
 
 def triage_observations(
@@ -328,6 +340,9 @@ def triage_observations(
             message = " ".join(str(exc).split())[:600]
             assessment = StateAssessment(
                 observation_id=observation.observation_id,
+                ai_provider=llm.provider,
+                ai_model=llm.model,
+                ai_workflow=STATE_TRIAGE_WORKFLOW_VERSION,
                 review_state="needs_followup",
                 review_note=f"AI triage failed closed ({type(exc).__name__}): {message}",
                 analytic_priority="high",

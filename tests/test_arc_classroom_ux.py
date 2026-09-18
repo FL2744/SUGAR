@@ -68,7 +68,7 @@ def test_mac_defaults_to_question_first_research_project_workflow():
     assert 'Section("1. Project workspace")' in mac
     assert 'Section("2. Research question")' in mac
     assert 'Section("3. Gather and review evidence")' in mac
-    assert 'Section("4. Verified handoff")' in mac
+    assert 'Section("4. Human review and verified handoff")' in mac
     assert '"target_audiences": commaList(targetAudiences)' in mac
     for operation in (
         "workspace-init",
@@ -82,13 +82,23 @@ def test_mac_defaults_to_question_first_research_project_workflow():
         "research-feedback",
         "research-handoff",
         "research-handoff-verify",
+        "state-triage",
+        "state-review-export",
+        "state-review-apply",
     ):
         assert f'command: "{operation}"' in mac
     assert 'command == "research-triage"' in model
+    assert 'command == "state-triage"' in model
     assert 'command == "research-collect"' in model
     assert "@Published var researchPlanBranches" in model
     assert 'Section("2b. Review search branches")' in mac
     for label in ("Save Edits", "Approve", "Pause", "Exclude"):
+        assert f'Button("{label}")' in mac
+    for label in (
+        "Prepare State Assessment Suggestions",
+        "Export Human Review Workbook",
+        "Apply Human Review",
+    ):
         assert f'Button("{label}")' in mac
 
 

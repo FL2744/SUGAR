@@ -68,9 +68,18 @@ def test_human_verification_requires_reviewer_and_can_be_reopened():
         evidence=[EvidenceReference(url="https://example.org/event")],
     )
 
-    observation.set_ai_triage(labels=["education", "students"], confidence=0.77, model="test-model")
+    observation.set_ai_triage(
+        labels=["education", "students"],
+        confidence=0.77,
+        provider="arc",
+        model="test-model",
+        workflow="diplomacy-lab-triage-v1",
+    )
     assert observation.verification_state == "ai_triaged"
     assert observation.triage_labels == ["education", "students"]
+    assert observation.ai_provider == "arc"
+    assert observation.ai_model == "test-model"
+    assert observation.ai_workflow == "diplomacy-lab-triage-v1"
 
     with pytest.raises(ValueError, match="requires a reviewer"):
         observation.transition_verification("human_verified")
@@ -130,7 +139,13 @@ def test_observation_storage_round_trip(tmp_path):
         us_overlap=["EducationUSA"],
         evidence=[EvidenceReference(url="https://example.org/program", source_type="official")],
     )
-    observation.set_ai_triage(labels=["strategic_audience"], confidence=0.8, model="test-model")
+    observation.set_ai_triage(
+        labels=["strategic_audience"],
+        confidence=0.8,
+        provider="openai",
+        model="test-model",
+        workflow="diplomacy-lab-triage-v1",
+    )
     observation.transition_verification("human_verified", reviewer="Analyst", notes="Source reviewed.")
 
     target = tmp_path / "observations.csv"
@@ -146,6 +161,9 @@ def test_observation_storage_round_trip(tmp_path):
     assert restored.us_overlap == ["EducationUSA"]
     assert restored.verification_state == "human_verified"
     assert restored.reviewer == "Analyst"
+    assert restored.ai_provider == "openai"
+    assert restored.ai_model == "test-model"
+    assert restored.ai_workflow == "diplomacy-lab-triage-v1"
     assert restored.evidence[0].url == "https://example.org/program"
 
     metadata = json.loads(target.with_suffix(".metadata.json").read_text(encoding="utf-8"))

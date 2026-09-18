@@ -366,6 +366,9 @@ def build_lineage_index(
                 "reviewer": assessment.reviewer,
                 "review_note": assessment.review_note,
                 "analytic_priority": assessment.analytic_priority,
+                "ai_provider": assessment.ai_provider,
+                "ai_model": assessment.ai_model,
+                "ai_workflow": assessment.ai_workflow,
                 "schema_version": assessment.schema_version,
                 "claim_ids": [claim.claim_id for claim in assessment.claims],
             }
@@ -375,6 +378,12 @@ def build_lineage_index(
             {
                 "observation_id": observation.observation_id,
                 "verification_state": observation.verification_state,
+                "reviewer": observation.reviewer,
+                "reviewed_at": observation.reviewed_at,
+                "verification_notes": observation.verification_notes,
+                "ai_provider": observation.ai_provider,
+                "ai_model": observation.ai_model,
+                "ai_workflow": observation.ai_workflow,
                 "source_record_keys": observation.source_record_keys,
                 "evidence": [asdict(item) for item in observation.evidence],
             }

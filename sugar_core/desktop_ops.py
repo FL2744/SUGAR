@@ -21,7 +21,10 @@ from .state_intelligence import save_intelligence_packet
 from .state_longitudinal import save_longitudinal_comparison
 from .state_map import create_state_map
 from .state_network import save_state_network
-from .state_review import apply_review_workbook_file
+from .state_review import (
+    apply_observation_review_workbook_file,
+    apply_review_workbook_file,
+)
 from .state_agentic import save_iterative_agentic_synthesis
 from .state_tradecraft import save_tradecraft_audit
 from .state_triage import triage_observations
@@ -382,7 +385,12 @@ def run_desktop_analytic_operation(
     if operation == "state-review-export":
         observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
         assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
-        source_conflicts = _optional_input_path(config, "source_conflicts", workspace)
+        source_conflicts = _optional_input_path(
+            config,
+            "source_conflicts",
+            workspace,
+            workspace_kinds=("source_conflicts",),
+        )
         target = _output_path(config, "output_file", "state_review.xlsx", workspace=workspace, workspace_key="state")
         output = export_review_workbook_with_conflict_file(
             observations,
@@ -395,7 +403,18 @@ def run_desktop_analytic_operation(
     if operation == "state-review-apply":
         assessments = _required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",))
         workbook = _required_path(config, "workbook", workspace=workspace, workspace_kinds=("state_review",))
-        source_conflicts = _optional_input_path(config, "source_conflicts", workspace)
+        observations = _optional_input_path(
+            config,
+            "observations",
+            workspace,
+            workspace_kinds=("observations",),
+        )
+        source_conflicts = _optional_input_path(
+            config,
+            "source_conflicts",
+            workspace,
+            workspace_kinds=("source_conflicts",),
+        )
         has_conflict_decisions = workbook_has_source_conflict_decisions(workbook)
         if has_conflict_decisions and source_conflicts is None:
             raise ValueError(
@@ -405,6 +424,28 @@ def run_desktop_analytic_operation(
         target = _output_path(config, "output_file", "state_reviewed.jsonl", workspace=workspace, workspace_key="state")
         assessment_output = apply_review_workbook_file(assessments, workbook, target)
         outputs = _register(workspace, [assessment_output], operation=operation, kind="state_assessments")
+
+        if observations is not None:
+            observation_target = _output_path(
+                config,
+                "observations_output_file",
+                "observations_reviewed.csv",
+                workspace=workspace,
+                workspace_key="state",
+            )
+            observation_outputs = apply_observation_review_workbook_file(
+                observations,
+                workbook,
+                observation_target,
+            )
+            outputs.extend(
+                _register(
+                    workspace,
+                    observation_outputs,
+                    operation=operation,
+                    kind="observations",
+                )
+            )
 
         if source_conflicts is not None:
             raw_conflict_output = str(config.get("source_conflicts_output_file") or "").strip()
@@ -418,7 +459,14 @@ def run_desktop_analytic_operation(
                 workbook,
                 conflict_target,
             )
-            outputs.extend(_register(workspace, [conflict_output], operation=operation, kind="state"))
+            outputs.extend(
+                _register(
+                    workspace,
+                    [conflict_output],
+                    operation=operation,
+                    kind="source_conflicts",
+                )
+            )
 
         return list(dict.fromkeys(outputs))
 

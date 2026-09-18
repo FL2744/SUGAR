@@ -42,6 +42,8 @@ TRIAGE_LABELS = {
     "triage_error",
 }
 
+TRIAGE_WORKFLOW_VERSION = "diplomacy-lab-triage-v1"
+
 _EVIDENCE_LABELS = TRIAGE_LABELS | {"relevance", "location"}
 _STRICTLY_GROUNDED_LABELS = {
     "anti_us_explicit",
@@ -230,7 +232,7 @@ def triage_post(
         client,
         llm,
         cache,
-        "diplomacy-lab-triage-v1",
+        TRIAGE_WORKFLOW_VERSION,
         system,
         user,
         max_tokens=1800,
@@ -238,7 +240,14 @@ def triage_post(
     return parse_triage_result(parse_json_object(response), record)
 
 
-def observation_from_triage(record: PostRecord, result: TriageResult, *, model: str) -> ResearchObservation:
+def observation_from_triage(
+    record: PostRecord,
+    result: TriageResult,
+    *,
+    provider: str = "",
+    model: str,
+    workflow: str = TRIAGE_WORKFLOW_VERSION,
+) -> ResearchObservation:
     observation = observation_from_post(record, summary=result.summary or None)
     observation.institution_name = result.institution_name
     observation.program_name = result.program_name
@@ -257,7 +266,9 @@ def observation_from_triage(record: PostRecord, result: TriageResult, *, model: 
     observation.set_ai_triage(
         labels=result.labels,
         confidence=result.relevance_confidence,
+        provider=provider,
         model=model,
+        workflow=workflow,
         reason=result.reason,
         relevance=result.relevance,
         relevance_confidence=result.relevance_confidence,
@@ -294,7 +305,13 @@ def triage_posts(
                 cache=cache,
                 project_context=project_context,
             )
-            observation = observation_from_triage(record, result, model=llm.model)
+            observation = observation_from_triage(
+                record,
+                result,
+                provider=llm.provider,
+                model=llm.model,
+                workflow=TRIAGE_WORKFLOW_VERSION,
+            )
         except Exception as exc:
             if not continue_on_error:
                 raise
@@ -302,7 +319,9 @@ def triage_posts(
             observation.set_ai_triage(
                 labels=["triage_error", "needs_context"],
                 confidence=None,
+                provider=llm.provider,
                 model=llm.model,
+                workflow=TRIAGE_WORKFLOW_VERSION,
                 reason=f"AI triage failed: {type(exc).__name__}",
                 relevance="unknown",
                 relevance_confidence=None,

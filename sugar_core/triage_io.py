@@ -10,7 +10,12 @@ from .llm import LLMConfig
 from .models import SCHEMA_VERSION, PostRecord
 from .observation_storage import save_observations
 from .storage import load_results
-from .triage import DEFAULT_PROJECT_CONTEXT, ProgressCallback, triage_posts
+from .triage import (
+    DEFAULT_PROJECT_CONTEXT,
+    TRIAGE_WORKFLOW_VERSION,
+    ProgressCallback,
+    triage_posts,
+)
 
 
 def _missing(value: Any) -> bool:
@@ -151,6 +156,7 @@ def triage_dataset(
         "source_file": source_file.name,
         "triage_provider": llm.provider,
         "triage_model": llm.model,
+        "triage_workflow": TRIAGE_WORKFLOW_VERSION,
         "triage_project_context": project_context,
     }
     source_metadata_path = source_file.with_suffix(".metadata.json")

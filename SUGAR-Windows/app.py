@@ -907,7 +907,18 @@ class StatePage(QWidget):
         eactions=QHBoxLayout(); eactions.addWidget(primary_button("Run Search Plan",self._research_collect)); eactions.addWidget(QPushButton("Import Existing Dataset",clicked=self._research_import)); eactions.addWidget(QPushButton("Triage into ResearchObservations",clicked=self._research_triage)); eactions.addStretch(1); evidence.layout.addLayout(eactions)
         layout.addWidget(evidence)
 
-        finish = Card("4. Review and hand off", "After triage/human review, feed relevance judgments back into the plan and export a hash-verified portable bundle containing the requirement, plan, evidence, observations, limitations and provenance.")
+        finish = Card("4. Human review and handoff", "AI triage and State assessments remain suggestions until a named analyst reviews the underlying observation and any analytic claims. The review workbook applies those decisions through SUGAR's verification gates before handoff.")
+        review_actions=QHBoxLayout()
+        review_actions.addWidget(QPushButton("Prepare State Assessment Suggestions",clicked=self._research_state_triage))
+        review_actions.addWidget(QPushButton("Export Human Review Workbook",clicked=self._research_review_export))
+        review_actions.addStretch(1)
+        finish.layout.addLayout(review_actions)
+        self.research_review_book=PathField(mode="file",extensions=("xlsx",))
+        finish.layout.addWidget(LabeledRow("Completed human review workbook (optional override)",self.research_review_book,"Leave blank to reuse the project's latest exported review workbook after you edit and save it. The workbook contains observation, assessment, claim, sponsor-support, and source-conflict review fields when available."))
+        apply_review_actions=QHBoxLayout()
+        apply_review_actions.addWidget(primary_button("Apply Human Review",self._research_review_apply))
+        apply_review_actions.addStretch(1)
+        finish.layout.addLayout(apply_review_actions)
         self.research_handoff_name = QLineEdit("sugar-handoff")
         self.research_handoff_output = PathField(mode="directory", placeholder="Optional; defaults to the project exports folder")
         finish.layout.addWidget(LabeledRow("Handoff name",self.research_handoff_name))
@@ -1050,6 +1061,29 @@ class StatePage(QWidget):
         workspace = self._require_research_workspace()
         if workspace: self.run_operation("research-feedback",{"workspace":workspace},False)
 
+    def _research_state_triage(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation(
+                "state-triage",
+                {"workspace": workspace, "llm": self.settings.llm_config()},
+                True,
+            )
+
+    def _research_review_export(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation("state-review-export", {"workspace": workspace}, False)
+
+    def _research_review_apply(self) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace:
+            return
+        config={"workspace":workspace}
+        if self.research_review_book.text():
+            config["workbook"]=self.research_review_book.text()
+        self.run_operation("state-review-apply",config,False)
+
     def _research_handoff(self) -> None:
         workspace = self._require_research_workspace()
         if not workspace: return
@@ -1117,8 +1151,11 @@ class StatePage(QWidget):
         export.layout.addWidget(LabeledRow("Observations",self.review_obs)); export.layout.addWidget(LabeledRow("Assessments",self.review_assess)); export.layout.addWidget(LabeledRow("Review workbook",self.review_book)); export.layout.addWidget(primary_button("Export Review Workbook",self._review_export))
         layout.addWidget(export)
         apply=Card("Apply analyst decisions","Imports reviewed decisions back through the same evidence and verification constraints.")
+        self.apply_obs=PathField(mode="file",extensions=("csv","xlsx","jsonl"))
         self.apply_assess=PathField(mode="file",extensions=("jsonl",)); self.apply_book=PathField(mode="file",extensions=("xlsx",)); self.apply_out=PathField(mode="save",save_extension="jsonl")
-        apply.layout.addWidget(LabeledRow("Original assessments",self.apply_assess)); apply.layout.addWidget(LabeledRow("Completed review workbook",self.apply_book)); apply.layout.addWidget(LabeledRow("Reviewed assessments",self.apply_out)); apply.layout.addWidget(primary_button("Apply Human Review",self._review_apply))
+        self.apply_obs_out=PathField(mode="save",save_extension="csv")
+        apply.layout.addWidget(LabeledRow("Original observations",self.apply_obs,"Required to apply observation verification decisions from the workbook."))
+        apply.layout.addWidget(LabeledRow("Original assessments",self.apply_assess)); apply.layout.addWidget(LabeledRow("Completed review workbook",self.apply_book)); apply.layout.addWidget(LabeledRow("Reviewed observations",self.apply_obs_out)); apply.layout.addWidget(LabeledRow("Reviewed assessments",self.apply_out)); apply.layout.addWidget(primary_button("Apply Human Review",self._review_apply))
         layout.addWidget(apply); layout.addStretch(1); return page
 
     def _review_export(self)->None:
@@ -1127,9 +1164,10 @@ class StatePage(QWidget):
         self.run_operation("state-review-export",{"observations":self.review_obs.text(),"assessments":self.review_assess.text(),"output_file":out},False)
 
     def _review_apply(self)->None:
-        if not self.apply_assess.text() or not self.apply_book.text(): QMessageBox.warning(self,"Missing files","Choose assessments and a completed review workbook."); return
+        if not self.apply_obs.text() or not self.apply_assess.text() or not self.apply_book.text(): QMessageBox.warning(self,"Missing files","Choose observations, assessments, and a completed review workbook."); return
         out=self.apply_out.text() or str(Path(self.settings.default_output())/"state_reviewed.jsonl")
-        self.run_operation("state-review-apply",{"assessments":self.apply_assess.text(),"workbook":self.apply_book.text(),"output_file":out},False)
+        obs_out=self.apply_obs_out.text() or str(Path(self.settings.default_output())/"observations_reviewed.csv")
+        self.run_operation("state-review-apply",{"observations":self.apply_obs.text(),"assessments":self.apply_assess.text(),"workbook":self.apply_book.text(),"observations_output_file":obs_out,"output_file":out},False)
 
     def _audit_tab(self)->QWidget:
         page=QWidget(); layout=QVBoxLayout(page); layout.setContentsMargins(16,16,16,16)

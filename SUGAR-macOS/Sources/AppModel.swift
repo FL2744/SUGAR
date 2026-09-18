@@ -94,6 +94,7 @@ final class AppModel: ObservableObject {
             command == "search"
             || command == "llm-check"
             || command == "research-triage"
+            || command == "state-triage"
             || (command == "research-plan" && (config["ai_expand"] as? Bool ?? false))
         guard !requiresLLMProvider || provider != nil else {
             log = "Choose a valid LLM provider."
@@ -111,7 +112,7 @@ final class AppModel: ObservableObject {
             log = "Enter your ARC API key in Settings before testing the ARC connection."
             return
         }
-        if command == "research-triage",
+        if command == "research-triage" || command == "state-triage",
            selectedKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             log = "Enter the \(provider!.title) API key in Settings before triaging project evidence."
             return

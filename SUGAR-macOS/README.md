@@ -17,7 +17,12 @@ the supported question-first path for a substantive research task:
 3. build an inspectable bounded search plan;
 4. execute that plan or import an existing authorized CSV/JSONL dataset;
 5. triage evidence into ResearchObservation records and apply evidence feedback;
-6. export or verify a portable hash-checked handoff bundle.
+6. prepare State assessment suggestions, export the human-review workbook, and apply named analyst decisions;
+7. export or verify a portable hash-checked handoff bundle.
+
+AI triage never self-verifies evidence. SUGAR records the AI provider, model, and
+workflow/prompt version separately from human review state, and the verified-only
+State-facing path requires named analyst review before briefing eligibility.
 
 **Expert Search**, **Public URL**, **Map**, and **Analysis** remain available for
 one-off operations. They are deliberately secondary to the project workflow so a

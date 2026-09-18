@@ -263,7 +263,9 @@ class ResearchObservation:
     triage_labels: list[str] = field(default_factory=list)
     triage_evidence: list[str] = field(default_factory=list)
     ai_confidence: float | None = None
+    ai_provider: str = ""
     ai_model: str = ""
+    ai_workflow: str = ""
     ai_reason: str = ""
 
     verification_state: str = "unreviewed"
@@ -285,7 +287,8 @@ class ResearchObservation:
 
         for attr in (
             "title", "observed_at", "activity_status", "location_label", "country", "region", "city",
-            "location_basis", "institution_name", "program_name", "overlap_note", "ai_model", "ai_reason",
+            "location_basis", "institution_name", "program_name", "overlap_note", "ai_provider", "ai_model",
+            "ai_workflow", "ai_reason",
             "reviewer", "reviewed_at", "verification_notes", "created_at", "updated_at", "schema_version",
         ):
             setattr(self, attr, _clean(getattr(self, attr)))
@@ -398,7 +401,9 @@ class ResearchObservation:
         *,
         labels: Iterable[str],
         confidence: float | int | None,
+        provider: str = "",
         model: str,
+        workflow: str = "",
         reason: str = "",
         relevance: str = "unknown",
         relevance_confidence: float | int | None = None,
@@ -412,7 +417,9 @@ class ResearchObservation:
         self.triage_labels = _clean_list(labels)
         self.triage_evidence = _clean_list(evidence_spans)
         self.ai_confidence = _bounded_confidence(confidence, "ai_confidence")
+        self.ai_provider = _clean(provider).casefold()
         self.ai_model = _clean(model)
+        self.ai_workflow = _clean(workflow)
         self.ai_reason = _clean(reason)
         if self.verification_state in {"unreviewed", "needs_followup"}:
             self.verification_state = "ai_triaged"

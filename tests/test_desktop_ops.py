@@ -2,13 +2,14 @@ import json
 from pathlib import Path
 
 import pytest
+from openpyxl import load_workbook
 
 import sugar_bridge
 from sugar_core.desktop_ops import DESKTOP_ANALYTIC_OPERATIONS, run_desktop_analytic_operation
-from sugar_core.observation_storage import save_observations
+from sugar_core.observation_storage import load_observations, save_observations
 from sugar_core.observations import EvidenceReference, ResearchObservation
 from sugar_core.state_schema import StateAssessment
-from sugar_core.state_workflow import save_state_assessments
+from sugar_core.state_workflow import load_state_assessments, save_state_assessments
 from sugar_core.workspace import SugarWorkspace
 
 
@@ -155,3 +156,65 @@ def test_desktop_state_map_can_resolve_registered_workspace_inputs(tmp_path):
     assert html_outputs[0].parent == workspace.path_for("maps")
     assert html_outputs[0].is_file()
     assert workspace.latest_artifact("map") is not None
+
+
+def test_workspace_human_review_round_trip_needs_no_manual_input_paths(tmp_path):
+    workspace = SugarWorkspace.create(tmp_path / "project", name="Review Project")
+    observation = ResearchObservation(
+        observation_type="program",
+        title="AI triaged program",
+        summary="A public source describes a student program.",
+        evidence=[EvidenceReference(url="https://example.org/review")],
+    )
+    observation.set_ai_triage(
+        labels=["education"],
+        confidence=0.8,
+        provider="arc",
+        model="gpt-oss-120b",
+        workflow="diplomacy-lab-triage-v1",
+    )
+    observations_path = workspace.path_for("observations") / "observations.csv"
+    save_observations([observation], observations_path)
+    assessment = StateAssessment(
+        observation_id=observation.observation_id,
+        ai_provider="arc",
+        ai_model="gpt-oss-120b",
+        ai_workflow="state-department-triage-v1",
+        review_state="ai_triaged",
+    )
+    assessments_path = workspace.path_for("state") / "assessments.jsonl"
+    save_state_assessments([assessment], assessments_path)
+    workspace.register_artifact("observations", observations_path)
+    workspace.register_artifact("state_assessments", assessments_path)
+
+    exported = run_desktop_analytic_operation(
+        "state-review-export",
+        {"workspace": str(workspace.root)},
+    )
+    workbook_path = Path(exported[0])
+    workbook = load_workbook(workbook_path)
+    for sheet_name in ("observations", "assessments"):
+        sheet = workbook[sheet_name]
+        headers = {cell.value: cell.column for cell in sheet[1]}
+        sheet.cell(2, headers["decision"]).value = "human_verified"
+        sheet.cell(2, headers["reviewer"]).value = "Analyst One"
+    workbook.save(workbook_path)
+    workbook.close()
+
+    outputs = run_desktop_analytic_operation(
+        "state-review-apply",
+        {"workspace": str(workspace.root)},
+    )
+    reviewed_observations_path = next(
+        Path(value) for value in outputs if str(value).endswith("observations_reviewed.csv")
+    )
+    reviewed_assessments_path = next(
+        Path(value) for value in outputs if str(value).endswith("state_reviewed.jsonl")
+    )
+    reviewed_observation = load_observations(reviewed_observations_path)[0]
+    reviewed_assessment = load_state_assessments(reviewed_assessments_path)[0]
+    assert reviewed_observation.verification_state == "human_verified"
+    assert reviewed_observation.reviewer == "Analyst One"
+    assert reviewed_assessment.review_state == "human_verified"
+    assert reviewed_assessment.reviewer == "Analyst One"
+    assert reviewed_assessment.brief_eligible

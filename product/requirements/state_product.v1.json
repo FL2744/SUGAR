@@ -176,7 +176,7 @@
       "priority": "P0",
       "category": "governance",
       "title": "Human review and AI labeling",
-      "status": "partially_met",
+      "status": "met",
       "requirement": "Observed facts, calculations, AI classifications/inferences, and human analytic judgments must remain distinguishable throughout the workflow.",
       "acceptance": [
         "AI cannot self-verify evidence or silently promote a hypothesis into a verified finding.",

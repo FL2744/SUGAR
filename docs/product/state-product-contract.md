@@ -113,7 +113,13 @@ Define a stable export bundle containing:
 
 This package is the key handoff artifact if direct Department-system integration is impossible.
 
-### 5. State delivery UX
+### 5. Human review and AI provenance
+
+AI-generated classifications, extraction, and analytic suggestions remain explicitly marked as AI-triaged until a named analyst reviews them. The review workbook covers the underlying ResearchObservation as well as State assessments, claims, sponsor-support judgments, and source conflicts when present. Human-verified or rejected decisions require a named reviewer and are applied through validated state transitions rather than by silently editing flags.
+
+For reproducibility, AI-derived observations and assessments record the provider, model, and workflow/prompt version that produced the suggestion. Those fields survive storage, review, lineage generation, and portable handoff. State-facing briefing logic remains verified-only: an assessment cannot become briefing-eligible merely because an AI model assigned a high confidence value.
+
+### 6. State delivery UX
 
 Only after the first four are stable should the desktop workflow be reorganized around:
 
@@ -121,9 +127,10 @@ Only after the first four are stable should the desktop workflow be reorganized 
 2. **Import or Collect**
 3. **Review Search Plan**
 4. **Run / Monitor Coverage**
-5. **Review Evidence and Findings**
-6. **Export Brief / Evidence Package**
-7. **Save as Monitor / Compare with Prior Run**
+5. **AI Triage / Prepare Assessment Suggestions**
+6. **Human Review of Evidence and Findings**
+7. **Export Brief / Evidence Package**
+8. **Save as Monitor / Compare with Prior Run**
 
 Platform-specific credential setup should live behind source configuration rather than dominate the State-facing workflow.
 

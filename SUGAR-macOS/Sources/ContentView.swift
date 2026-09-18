@@ -72,6 +72,7 @@ struct ResearchProjectView: View {
     @State private var importSystem = "external"
     @State private var llmSelection = LLMSelection()
     @State private var baseURL = ""
+    @State private var reviewWorkbook = ""
     @State private var handoffName = "sugar-handoff"
     @State private var handoffOutput = ""
     @State private var verificationBundle = ""
@@ -305,8 +306,47 @@ struct ResearchProjectView: View {
                 }
             }
 
-            Section("4. Verified handoff") {
-                Text("Export a portable bundle containing the requirement, search plan, evidence, observations, limitations, provenance, assessments, source conflicts, and claim/evidence lineage when available.")
+            Section("4. Human review and verified handoff") {
+                Text("AI triage and State assessment suggestions remain unverified until a named analyst reviews the underlying observation and analytic claims. Export one review workbook, make the human decisions, save it, and apply those decisions through SUGAR's verification gates.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Prepare State Assessment Suggestions") {
+                        model.run(command: "state-triage", config: [
+                            "workspace": cleanWorkspace,
+                            "llm": llmSelection.provider.configuration(
+                                model: llmSelection.model,
+                                customBaseURL: baseURL
+                            ),
+                        ])
+                    }
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                    Button("Export Human Review Workbook") {
+                        model.run(
+                            command: "state-review-export",
+                            config: ["workspace": cleanWorkspace]
+                        )
+                    }
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                    Spacer()
+                }
+                HStack {
+                    TextField("Completed review workbook (optional override)", text: $reviewWorkbook)
+                    Button("Choose...") {
+                        if let url = chooseFile(["xlsx"]) { reviewWorkbook = url.path }
+                    }
+                    Button("Apply Human Review") {
+                        applyHumanReview()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                }
+                Text("Leave the workbook field blank to reuse the project's latest exported review workbook after editing and saving it. The workbook carries observation, assessment, claim, sponsor-support, and source-conflict review fields when available.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Divider()
+                Text("After review, export a portable bundle containing the requirement, search plan, evidence, reviewed observations, limitations, provenance, assessments, source conflicts, and claim/evidence lineage when available.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 TextField("Handoff name", text: $handoffName)
@@ -401,6 +441,13 @@ struct ResearchProjectView: View {
         ]
         if !status.isEmpty { config["status"] = status }
         model.run(command: "research-plan-update", config: config)
+    }
+
+    private func applyHumanReview() {
+        var config: [String: Any] = ["workspace": cleanWorkspace]
+        let workbook = reviewWorkbook.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !workbook.isEmpty { config["workbook"] = workbook }
+        model.run(command: "state-review-apply", config: config)
     }
 
     private func exportHandoff() {

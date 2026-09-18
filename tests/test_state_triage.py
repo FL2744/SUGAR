@@ -41,7 +41,9 @@ def test_ai_confirmed_support_is_downgraded_and_bogus_taxonomy_is_dropped():
             "claims": [],
             "analytic_priority": "high",
         },
+        provider="arc",
         model="test-model",
+        workflow="state-department-triage-v1",
     )
     assert assessment.sponsor_support.level == "probable"
     assert assessment.sponsor_support.evidence_refs == ["https://example.org/program"]
@@ -52,6 +54,9 @@ def test_ai_confirmed_support_is_downgraded_and_bogus_taxonomy_is_dropped():
     assert assessment.reach.views == 500
     assert assessment.reach.likes is None
     assert assessment.review_state == "ai_triaged"
+    assert assessment.ai_provider == "arc"
+    assert assessment.ai_model == "test-model"
+    assert assessment.ai_workflow == "state-department-triage-v1"
 
 
 def test_ai_probable_support_without_attached_evidence_is_downgraded():

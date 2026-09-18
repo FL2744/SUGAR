@@ -646,6 +646,9 @@ class StateAssessment:
     reach: ReachMetrics = field(default_factory=ReachMetrics)
     us_overlap: USOverlapAssessment = field(default_factory=USOverlapAssessment)
     claims: list[AnalyticClaim] = field(default_factory=list)
+    ai_provider: str = ""
+    ai_model: str = ""
+    ai_workflow: str = ""
     review_state: str = "unreviewed"
     reviewer: str = ""
     review_note: str = ""
@@ -684,6 +687,9 @@ class StateAssessment:
             self.observability_level, OBSERVABILITY_LEVELS, "observability_level", "not_assessed"
         )
         self.review_state = _choice(self.review_state, REVIEW_STATES, "review_state", "unreviewed")
+        self.ai_provider = _clean(self.ai_provider).casefold()
+        self.ai_model = _clean(self.ai_model)
+        self.ai_workflow = _clean(self.ai_workflow)
         self.reviewer = _clean(self.reviewer)
         self.review_note = _clean(self.review_note)
         self.analytic_priority = _clean(self.analytic_priority).casefold() or "normal"
