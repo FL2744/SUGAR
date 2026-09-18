@@ -470,7 +470,7 @@ def main(argv=None) -> int:
             strict=args.strict,
             preserve_unmapped_fields=not args.drop_unmapped,
         )
-        register_workspace_outputs(workspace, outputs, operation="external-import", kind="import")
+        register_workspace_outputs(workspace, outputs, operation="external-import")
         print("\n".join(outputs))
         return 0
 

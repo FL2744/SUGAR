@@ -327,7 +327,7 @@ def import_research_dataset(
         strict=bool(config.get("strict")),
         preserve_unmapped_fields=not bool(config.get("drop_unmapped")),
     )
-    register_workspace_outputs(workspace, outputs, operation="external-import", kind="import")
+    register_workspace_outputs(workspace, outputs, operation="external-import")
     _notify(progress, "saved", outputs=outputs)
     return outputs
 

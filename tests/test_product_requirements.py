@@ -43,3 +43,19 @@ def test_product_contract_is_linked_from_documentation_index():
     assert "product/state-product-contract.md" in index
     assert "state_product.v1.json" in index
 
+
+def test_runtime_does_not_assume_an_undocumented_statechat_api():
+    runtime_files = [
+        *sorted((ROOT / "sugar_core").glob("*.py")),
+        ROOT / "sugar_bridge.py",
+        ROOT / "SUGAR-Windows" / "app.py",
+        ROOT / "SUGAR-macOS" / "Sources" / "AppModel.swift",
+        ROOT / "SUGAR-macOS" / "Sources" / "ContentView.swift",
+    ]
+    offenders = [
+        str(path.relative_to(ROOT))
+        for path in runtime_files
+        if "statechat" in path.read_text(encoding="utf-8").casefold()
+    ]
+    assert offenders == []
+

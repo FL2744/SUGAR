@@ -58,7 +58,7 @@
       "priority": "P0",
       "category": "architecture",
       "title": "Complement existing Department systems",
-      "status": "partially_met",
+      "status": "met",
       "requirement": "SUGAR must be able to complement existing Department collection, analytics, and AI systems rather than require SUGAR to replace them.",
       "acceptance": [
         "Collection, model inference, evidence management, and reporting remain separable layers.",
@@ -102,7 +102,7 @@
       "priority": "P0",
       "category": "ai",
       "title": "Provider-neutral AI boundary",
-      "status": "partially_met",
+      "status": "met",
       "requirement": "LLM-assisted features must depend on a provider interface rather than Virginia Tech ARC or a single commercial model.",
       "acceptance": [
         "OpenAI, a custom OpenAI-compatible endpoint, and no-LLM operation are supported deployment paths.",

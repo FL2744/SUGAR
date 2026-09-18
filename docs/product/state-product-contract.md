@@ -42,6 +42,10 @@ SUGAR collectors             external State/partner data
 
 No direct Northstar, StateChat, OpenNet, or other internal Department API should be coded until an actual supported interface is provided. File interchange is the minimum integration surface because it remains useful even when no API is available.
 
+The implemented boundary now keeps these layers separable in the workspace catalog. External imports register canonical machine-readable evidence separately from human-friendly views, import manifests, and rejected rows; later research steps therefore resolve evidence rather than accidentally consuming provenance metadata as records. A partner/Department export can enter a project and produce a portable handoff without invoking a SUGAR collector or any LLM.
+
+LLM-assisted operations use the shared provider configuration boundary for OpenAI, Virginia Tech ARC, or a custom OpenAI-compatible endpoint. Core requirement, planning, import, project inspection, review, and handoff operations remain usable without an LLM. Provider/model/workflow identity is recorded on AI-derived artifacts, and provider failure produces explicit review-needed state rather than a fabricated factual finding. No StateChat or other undocumented Department API client exists in runtime code.
+
 ## Delivery profiles
 
 SUGAR should distinguish two profiles rather than forcing one environment to satisfy incompatible needs.

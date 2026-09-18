@@ -13,7 +13,9 @@ from sugar_core.storage import save_records
 from sugar_core.source_conflicts import SourceClaim, SourceConflict, save_source_conflicts
 from sugar_core.state_schema import AnalyticClaim, StateAssessment
 from sugar_core.state_workflow import save_state_assessments
+from sugar_core.triage_io import load_post_records
 from sugar_core.workspace import SugarWorkspace
+from sugar_core.workspace_runtime import latest_workspace_artifact_path
 
 
 def _workspace(tmp_path: Path) -> SugarWorkspace:
@@ -111,6 +113,71 @@ def test_external_import_is_first_class_research_input(tmp_path: Path) -> None:
     )
     assert any(path.endswith(".csv") for path in outputs)
     assert any(path.endswith(".import.json") for path in outputs)
+    imported = latest_workspace_artifact_path(workspace, "import")
+    manifest = latest_workspace_artifact_path(workspace, "import_manifest")
+    assert imported is not None and imported.suffix == ".jsonl"
+    assert manifest is not None and manifest.name.endswith(".import.json")
+
+
+def test_external_dataset_reaches_portable_handoff_without_collector_or_llm(tmp_path: Path, monkeypatch) -> None:
+    workspace = _workspace(tmp_path)
+    research_service.create_research_requirement(
+        {
+            "workspace": str(workspace.root),
+            "question": "What public program activity is documented?",
+            "known_entities": ["Example Center"],
+        }
+    )
+    research_service.create_research_plan({"workspace": str(workspace.root)})
+
+    source = tmp_path / "partner.csv"
+    pd.DataFrame(
+        [
+            {
+                "platform": "partner",
+                "native_id": "partner-1",
+                "canonical_url": "https://example.org/partner/1",
+                "original_text": "Example Center announced a public student program.",
+                "usage_restrictions": "Research use only",
+            }
+        ]
+    ).to_csv(source, index=False)
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("external-data handoff path must not invoke collection or LLM triage")
+
+    monkeypatch.setattr(research_service, "execute_search_plan", unexpected)
+    monkeypatch.setattr(research_service, "triage_dataset", unexpected)
+    research_service.import_research_dataset(
+        {
+            "workspace": str(workspace.root),
+            "source_file": str(source),
+            "source_system": "partner-export",
+        }
+    )
+
+    records_path = latest_workspace_artifact_path(workspace, "import")
+    assert records_path is not None and records_path.suffix == ".jsonl"
+    records = load_post_records(records_path)
+    assert len(records) == 1
+    observation = observation_from_post(records[0])
+    observations_path = workspace.path_for("state") / "partner-observations.csv"
+    save_observations([observation], observations_path)
+    workspace.register_artifact("observations", observations_path, label="Partner observations")
+
+    outputs = research_service.export_research_handoff(
+        {"workspace": str(workspace.root), "name": "partner-handoff"}
+    )
+    bundle = next(Path(path) for path in outputs if Path(path).name == "partner-handoff")
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["portability"]["requires_virginia_tech_infrastructure"] is False
+    assert manifest["counts"]["records"] == 1
+    assert manifest["counts"]["observations"] == 1
+    verification = research_service.verify_research_handoff(
+        {"bundle_directory": str(bundle)}
+    )
+    result = json.loads(Path(verification[0]).read_text(encoding="utf-8"))
+    assert result["status"] == "pass"
 
 
 def test_feedback_and_handoff_can_resolve_workspace_artifacts(tmp_path: Path) -> None:

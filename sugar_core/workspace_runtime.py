@@ -84,6 +84,16 @@ def classify_workspace_output(path: str | Path, *, operation: str = "") -> str:
     suffix = value.suffix.casefold()
     operation = operation.casefold()
 
+    if operation == "external-import":
+        if name.endswith(".import.json"):
+            return "import_manifest"
+        if name.endswith(".rejected.jsonl"):
+            return "import_rejections"
+        if suffix == ".jsonl":
+            return "import"
+        if suffix in {".csv", ".xlsx"}:
+            return "import_view"
+        return "import_artifact"
     if operation in {"search", "weibo-investigate", "weibo-qualify"}:
         return "raw_collection"
     if operation in {"harvest", "weibo-seed-harvest"}:

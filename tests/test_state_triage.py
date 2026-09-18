@@ -1,5 +1,6 @@
+from sugar_core.llm import LLMConfig
 from sugar_core.observations import EvidenceReference, ResearchObservation
-from sugar_core.state_triage import assessment_from_triage_payload
+from sugar_core.state_triage import assessment_from_triage_payload, triage_observations
 
 
 def observation() -> ResearchObservation:
@@ -98,3 +99,32 @@ def test_ai_influence_language_becomes_followup_hypothesis_not_finding():
     assert assessment.claims[0].epistemic_status == "hypothesis"
     assert assessment.claims[0].review_state == "needs_followup"
     assert not assessment.brief_eligible
+
+
+def test_provider_failure_fails_closed_without_inventing_findings(monkeypatch):
+    obs = observation()
+    monkeypatch.setattr("sugar_core.state_triage.create_client", lambda llm: object())
+
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("configured model service unavailable")
+
+    monkeypatch.setattr("sugar_core.state_triage.cached_chat", unavailable)
+    assessments = triage_observations(
+        [obs],
+        llm=LLMConfig(
+            provider="custom",
+            model="partner-model",
+            api_key="test-key",
+            base_url="https://models.example.test/v1",
+        ),
+        continue_on_error=True,
+    )
+    assert len(assessments) == 1
+    assessment = assessments[0]
+    assert assessment.review_state == "needs_followup"
+    assert assessment.claims == []
+    assert assessment.sponsor_support.level == "not_assessed"
+    assert assessment.ai_provider == "custom"
+    assert assessment.ai_model == "partner-model"
+    assert "failed closed" in assessment.review_note
+    assert obs.verification_state == "human_verified"
