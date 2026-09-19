@@ -1,0 +1,40 @@
+name: Authorized public API benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_bounded_public_reads:
+        description: "At most two read-only GETs: public Bluesky, and Mastodon status search only if SUGAR_MASTODON_TOKEN is configured"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: authorized-public-api-benchmark-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bounded-live-public-apis:
+    if: inputs.confirm_bounded_public_reads == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - name: Read one bounded page from each configured API adapter
+        env:
+          SUGAR_MASTODON_TOKEN: ${{ secrets.SUGAR_MASTODON_TOKEN }}
+        run: python tools/live_public_api_benchmark.py --output "$RUNNER_TEMP/sugar-live-public-api-report.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sugar-live-public-api-report
+          path: ${{ runner.temp }}/sugar-live-public-api-report.json
+          if-no-files-found: error
+          retention-days: 14

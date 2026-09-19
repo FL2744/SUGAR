@@ -423,8 +423,16 @@ class HarvestStore:
     def count_records(self) -> int:
         return int(self.connection.execute("SELECT COUNT(*) FROM records").fetchone()[0])
 
-    def records(self) -> list[PostRecord]:
-        rows = self.connection.execute("SELECT payload_json FROM records ORDER BY platform, native_id").fetchall()
+    def records(self, *, limit: int | None = None) -> list[PostRecord]:
+        if limit is not None:
+            limit = int(limit)
+            if limit < 0:
+                raise ValueError("limit cannot be negative")
+            rows = self.connection.execute(
+                "SELECT payload_json FROM records ORDER BY platform, native_id LIMIT ?", (limit,)
+            ).fetchall()
+        else:
+            rows = self.connection.execute("SELECT payload_json FROM records ORDER BY platform, native_id").fetchall()
         return [PostRecord(**json.loads(row[0])) for row in rows]
 
     def task_counts(self) -> dict[str, int]:
