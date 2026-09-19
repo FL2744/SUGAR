@@ -104,6 +104,8 @@ jobs:
           JSON
           SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge analysis --config /tmp/sugar-analysis.json
           test -s /tmp/sugar-smoke-report.pdf
+      - name: Packaged no-credential research-project smoke test
+        run: sh tools/smoke_packaged_no_credentials.sh SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
       - name: Verify bundle signature
         run: |
           test -s SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/LICENSE
@@ -176,6 +178,9 @@ jobs:
           @{ workspace = "$env:RUNNER_TEMP\sugar-project"; name = "CI Workspace" } | ConvertTo-Json | Set-Content -Encoding UTF8 $env:RUNNER_TEMP\workspace-init.json
           & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe workspace-init --config $env:RUNNER_TEMP\workspace-init.json
           if (-not (Test-Path $env:RUNNER_TEMP\sugar-project\sugar-project.json)) { throw "Packaged workspace operation did not create manifest" }
+      - name: Packaged no-credential research-project smoke test
+        shell: pwsh
+        run: .\tools\smoke_packaged_no_credentials.ps1 -Bridge .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe
       - name: Verify portable artifact
         shell: pwsh
         run: |

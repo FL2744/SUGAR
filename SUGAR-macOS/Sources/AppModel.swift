@@ -14,12 +14,42 @@ struct ResearchPlanBranchView: Identifiable, Equatable {
     var id: String { branchID }
 }
 
+struct ResearchStrategyConceptView: Identifiable, Equatable {
+    let conceptID: String
+    let origin: String
+    let kind: String
+    var value: String
+    let confidence: Double
+    var included: Bool
+    var rationale: String
+    let sourceText: String
+
+    var id: String { conceptID }
+}
+
+struct ResearchStrategyDimensionView: Identifiable, Equatable {
+    let dimensionID: String
+    let name: String
+    var question: String
+    var indicators: String
+    var sourceFamilies: String
+    var rationale: String
+    var included: Bool
+
+    var id: String { dimensionID }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var isRunning = false
     @Published var log = "Ready."
     @Published var outputs: [String] = []
     @Published var researchPlanBranches: [ResearchPlanBranchView] = []
+    @Published var researchStrategyConcepts: [ResearchStrategyConceptView] = []
+    @Published var researchStrategyDimensions: [ResearchStrategyDimensionView] = []
+    @Published var researchStrategyTask = ""
+    @Published var researchStrategyReviewState = ""
+    @Published var researchStrategySummary = ""
     @Published var xToken = KeychainStore.read("xBearerToken")
     @Published var openAIKey = KeychainStore.read(LLMProvider.openAI.keychainAccount)
     @Published var arcKey = KeychainStore.read(LLMProvider.arc.keychainAccount)
@@ -95,6 +125,7 @@ final class AppModel: ObservableObject {
             || command == "llm-check"
             || command == "research-triage"
             || command == "state-triage"
+            || (command == "research-compile" && (config["ai_expand"] as? Bool ?? false))
             || (command == "research-plan" && (config["ai_expand"] as? Bool ?? false))
         guard !requiresLLMProvider || provider != nil else {
             log = "Choose a valid LLM provider."
@@ -121,6 +152,12 @@ final class AppModel: ObservableObject {
            (config["ai_expand"] as? Bool ?? false),
            selectedKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             log = "Enter the \(provider!.title) API key in Settings before AI-assisted plan expansion."
+            return
+        }
+        if command == "research-compile",
+           (config["ai_expand"] as? Bool ?? false),
+           selectedKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            log = "Enter the \(provider!.title) API key in Settings before AI-assisted question compilation."
             return
         }
         let usesLLMKey = provider != nil && !llm.isEmpty
@@ -219,7 +256,60 @@ final class AppModel: ObservableObject {
             let line = String(rawLine)
             guard let data = line.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  json["event"] as? String == "plan-review",
+                  let event = json["event"] as? String else {
+                continue
+            }
+            if event == "strategy-review" {
+                researchStrategyTask = json["analytic_task"] as? String ?? ""
+                researchStrategyReviewState = json["review_state"] as? String ?? "draft"
+                let concepts = json["concepts"] as? [[String: Any]] ?? []
+                researchStrategyConcepts = concepts.compactMap { concept in
+                    guard let conceptID = concept["concept_id"] as? String,
+                          !conceptID.isEmpty else {
+                        return nil
+                    }
+                    let sourceSpan = concept["source_span"] as? [String: Any]
+                    return ResearchStrategyConceptView(
+                        conceptID: conceptID,
+                        origin: concept["origin"] as? String ?? "",
+                        kind: concept["kind"] as? String ?? "",
+                        value: concept["value"] as? String ?? "",
+                        confidence: concept["confidence"] as? Double ?? 0,
+                        included: concept["included"] as? Bool ?? true,
+                        rationale: concept["rationale"] as? String ?? "",
+                        sourceText: sourceSpan?["text"] as? String ?? ""
+                    )
+                }
+                let dimensions = json["dimensions"] as? [[String: Any]] ?? []
+                researchStrategyDimensions = dimensions.compactMap { dimension in
+                    guard let dimensionID = dimension["dimension_id"] as? String,
+                          !dimensionID.isEmpty else {
+                        return nil
+                    }
+                    return ResearchStrategyDimensionView(
+                        dimensionID: dimensionID,
+                        name: dimension["name"] as? String ?? "",
+                        question: dimension["question"] as? String ?? "",
+                        indicators: (dimension["indicators"] as? [String] ?? []).joined(separator: ", "),
+                        sourceFamilies: (dimension["source_families"] as? [String] ?? []).joined(separator: ", "),
+                        rationale: dimension["rationale"] as? String ?? "",
+                        included: dimension["included"] as? Bool ?? true
+                    )
+                }
+                var summary: [String] = []
+                let missing = json["missing_dimensions"] as? [[String: Any]] ?? []
+                if !missing.isEmpty {
+                    summary.append("Missing / confirm:")
+                    for item in missing {
+                        let field = item["field"] as? String ?? ""
+                        let reason = item["reason"] as? String ?? ""
+                        summary.append("- \(field): \(reason)")
+                    }
+                }
+                researchStrategySummary = summary.joined(separator: "\n")
+                continue
+            }
+            guard event == "plan-review",
                   let branches = json["branches"] as? [[String: Any]] else {
                 continue
             }
@@ -298,6 +388,35 @@ final class AppModel: ObservableObject {
                 let python = json["python"] as? String ?? "unknown"
                 let runtime = json["runtime"] as? String ?? "unknown"
                 lines.append("Backend \(version) • \(architecture) • Python \(python) • \(runtime)")
+                if let deployment = json["deployment"] as? [String: Any],
+                   deployment["virginia_tech_required"] as? Bool == false,
+                   deployment["llm_required_for_core_workflows"] as? Bool == false {
+                    lines.append("Core project/import/review/export workflows need no Virginia Tech service or LLM.")
+                }
+                if let credentials = json["optional_credentials"] as? [String: Any] {
+                    let labels = [
+                        "llm_api_key": "LLM",
+                        "x_bearer_token": "X",
+                        "bluesky_identifier": "Bluesky ID",
+                        "bluesky_app_password": "Bluesky password",
+                        "mastodon_token": "Mastodon",
+                        "weibo_cookie": "Weibo session",
+                    ]
+                    let configured = credentials.compactMap { key, value -> String? in
+                        (value as? Bool) == true ? (labels[key] ?? key) : nil
+                    }.sorted()
+                    let missing = credentials.compactMap { key, value -> String? in
+                        (value as? Bool) == false ? (labels[key] ?? key) : nil
+                    }.sorted()
+                    lines.append(
+                        configured.isEmpty
+                            ? "No optional credentials configured."
+                            : "Optional credentials configured: \(configured.joined(separator: ", "))."
+                    )
+                    if !missing.isEmpty {
+                        lines.append("Optional/not configured: \(missing.joined(separator: ", ")).")
+                    }
+                }
             case "llm_connection":
                 let provider = json["provider"] as? String ?? "LLM"
                 let model = json["model"] as? String ?? "model"

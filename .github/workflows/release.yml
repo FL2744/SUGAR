@@ -59,6 +59,9 @@ jobs:
           & .\SUGAR-Windows\dist\SUGAR\SUGAR.exe --smoke-test
           if (-not (Test-Path .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip)) { throw "Portable Windows ZIP missing" }
           if ((Get-Item .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip).Length -lt 1000000) { throw "Portable Windows ZIP is unexpectedly small" }
+      - name: Validate no-credential State workflow
+        shell: pwsh
+        run: .\tools\smoke_packaged_no_credentials.ps1 -Bridge .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe
       - uses: actions/upload-artifact@v7
         with:
           name: release-windows-x64
@@ -86,6 +89,8 @@ jobs:
           codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
           ditto -c -k --sequesterRsrc --keepParent SUGAR-macOS/.build-native/SUGAR.app SUGAR-macOS.zip
           test -s SUGAR-macOS.zip
+      - name: Validate no-credential State workflow
+        run: sh tools/smoke_packaged_no_credentials.sh SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
       - uses: actions/upload-artifact@v7
         with:
           name: release-macos-apple-silicon

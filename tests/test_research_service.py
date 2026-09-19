@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from sugar_core import research_service
 from sugar_core.models import PostRecord
@@ -47,6 +48,91 @@ def test_requirement_and_plan_use_workspace_defaults(tmp_path: Path) -> None:
     assert plan.parent == workspace.path_for("state")
     assert payload["requirement_id"]
     assert payload["branches"]
+
+
+def test_compiled_strategy_requires_analyst_approval_before_driving_plan(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    research_service.create_research_requirement(
+        {
+            "workspace": str(workspace.root),
+            "question": "How are foreign educational institutions reaching university students in Exampleland?",
+            "collection_mode": "standard",
+        }
+    )
+    events: list[tuple[str, dict]] = []
+    research_service.compile_research_strategy(
+        {"workspace": str(workspace.root), "ai_expand": False},
+        progress=lambda event, values: events.append((event, values)),
+    )
+    review = next(values for event, values in events if event == "strategy-review")
+    assert review["review_state"] == "draft"
+    assert any(
+        item["kind"] == "subject"
+        and item["origin"] == "explicit"
+        and item["value"] == "foreign educational institutions"
+        for item in review["concepts"]
+    )
+    assert any(
+        item["kind"] == "target_audience"
+        and item["value"] == "university students"
+        for item in review["concepts"]
+    )
+
+    with pytest.raises(ValueError, match="Review and approve"):
+        research_service.create_research_plan({"workspace": str(workspace.root)})
+
+    research_service.update_research_strategy(
+        {
+            "workspace": str(workspace.root),
+            "add_concepts": [
+                {
+                    "kind": "entity",
+                    "value": "Public Engagement Center Exampleland",
+                    "origin": "hypothesis",
+                    "rationale": "Analyst wants this investigated, not asserted.",
+                }
+            ],
+            "decision": "approved",
+            "reviewer": "Analyst One",
+            "review_note": "Question interpretation checked.",
+        }
+    )
+    outputs = research_service.create_research_plan({"workspace": str(workspace.root)})
+    plan = json.loads(Path(outputs[0]).read_text(encoding="utf-8"))
+    queries = {item["query"] for item in plan["branches"]}
+    assert "foreign educational institutions Exampleland" in queries
+    assert "foreign educational institutions university students" in queries
+    assert "Public Engagement Center Exampleland" in queries
+    assert any(item["type"] == "compiled_strategy_plan" for item in plan["events"])
+    strategy_artifact = workspace.latest_artifact("research_strategy")
+    assert strategy_artifact is not None
+    assert strategy_artifact.metadata["review_state"] == "approved"
+
+
+def test_changed_requirement_invalidates_old_compiled_strategy(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    research_service.create_research_requirement(
+        {
+            "workspace": str(workspace.root),
+            "question": "How are educational institutions reaching university students in Exampleland?",
+        }
+    )
+    research_service.compile_research_strategy({"workspace": str(workspace.root)})
+    research_service.update_research_strategy(
+        {
+            "workspace": str(workspace.root),
+            "decision": "approved",
+            "reviewer": "Analyst One",
+        }
+    )
+    research_service.create_research_requirement(
+        {
+            "workspace": str(workspace.root),
+            "question": "How are cultural institutions reaching high school students in Sampleland?",
+        }
+    )
+    with pytest.raises(ValueError, match="different research requirement"):
+        research_service.create_research_plan({"workspace": str(workspace.root)})
 
 
 def test_plan_review_and_analyst_update_round_trip(tmp_path: Path) -> None:
@@ -173,6 +259,62 @@ def test_external_dataset_reaches_portable_handoff_without_collector_or_llm(tmp_
     assert manifest["portability"]["requires_virginia_tech_infrastructure"] is False
     assert manifest["counts"]["records"] == 1
     assert manifest["counts"]["observations"] == 1
+    verification = research_service.verify_research_handoff(
+        {"bundle_directory": str(bundle)}
+    )
+    result = json.loads(Path(verification[0]).read_text(encoding="utf-8"))
+    assert result["status"] == "pass"
+
+
+def test_approved_compiled_strategy_is_preserved_in_portable_handoff(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    research_service.create_research_requirement(
+        {
+            "workspace": str(workspace.root),
+            "question": "How are foreign educational institutions reaching university students in Exampleland?",
+        }
+    )
+    research_service.compile_research_strategy({"workspace": str(workspace.root)})
+    research_service.update_research_strategy(
+        {
+            "workspace": str(workspace.root),
+            "decision": "approved",
+            "reviewer": "Analyst One",
+            "review_note": "Interpretation checked.",
+        }
+    )
+    research_service.create_research_plan({"workspace": str(workspace.root)})
+    record = PostRecord(
+        platform="external",
+        native_id="strategy-1",
+        canonical_url="https://example.org/strategy/1",
+        original_text="A public program announcement.",
+        query="foreign educational institutions Exampleland",
+    )
+    records_path = workspace.path_for("raw") / "records.csv"
+    save_records([record], records_path)
+    workspace.register_artifact("evidence", records_path, label="Evidence")
+    observation = observation_from_post(record)
+    observations_path = workspace.path_for("state") / "observations.csv"
+    save_observations([observation], observations_path)
+    workspace.register_artifact("observations", observations_path, label="Observations")
+
+    outputs = research_service.export_research_handoff(
+        {"workspace": str(workspace.root), "name": "strategy-handoff"}
+    )
+    bundle = next(Path(path) for path in outputs if Path(path).name == "strategy-handoff")
+    strategy_file = bundle / "context" / "research-strategy.json"
+    assert strategy_file.is_file()
+    strategy = json.loads(strategy_file.read_text(encoding="utf-8"))
+    assert strategy["review_state"] == "approved"
+    assert strategy["reviewer"] == "Analyst One"
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["strategy_id"] == strategy["strategy_id"]
+    assert manifest["schemas"]["research_strategy"] == "1.0"
+    assert any(
+        artifact["role"] == "compiled_research_strategy"
+        for artifact in manifest["artifacts"]
+    )
     verification = research_service.verify_research_handoff(
         {"bundle_directory": str(bundle)}
     )

@@ -21,6 +21,22 @@ sugar requirement create \
 
 When a workspace is active, the requirement is stored in the State workspace area and registered as a `research_requirement` artifact.
 
+## Requirement compiler
+
+The requirement is not sent directly into an opaque agent loop. SUGAR can compile it into a separate `research-strategy.json` artifact before planning.
+
+The compiler keeps three classes separate:
+
+- **explicit** concepts carry exact character spans into the analyst's original question;
+- **interpreted** concepts explain semantic meaning without pretending the analyst literally stated them;
+- **hypotheses** are proposed search probes, not facts.
+
+The deterministic compiler requires no LLM. Optional AI semantic expansion can add validated explicit spans, interpretations, hypotheses, and research dimensions. A proposed explicit span is accepted only if its text and offsets exactly match the original question.
+
+The strategy begins in draft state. The analyst can edit interpreted/hypothesis concepts, include or exclude concepts, inspect missing dimensions and observable research dimensions, and must provide a named reviewer to approve the strategy. Any later strategy edit resets it to draft.
+
+See `research-requirement-compiler.md` for the full contract.
+
 ## Search plan
 
 ```bash
@@ -30,7 +46,9 @@ sugar plan research-requirement.json
 sugar plan research-requirement.json --ai-expand --provider openai
 ```
 
-The initial deterministic planner deliberately does only what it can explain without a model: it seeds known entities and scoped geography combinations. If no known entities exist, it creates a clearly labeled discovery fallback from the research question.
+If no compiled strategy exists, the legacy deterministic planner deliberately does only what it can explain without a model: it seeds known entities and scoped geography combinations, with a clearly labeled fallback from the research question.
+
+When an approved compiled strategy exists, the strategy-aware planner builds an inspectable query matrix from approved subjects/entities, geographies, audiences, activities, observable research-dimension indicators, and analyst-approved search hypotheses. Hypothesis branches are labeled as search probes rather than findings. A draft strategy cannot drive planning.
 
 Every `SearchBranch` stores a query, rationale, origin, status, search family, language, generator identity, parent, parent concept, evidence IDs, hop depth, metrics, and stable branch ID. Model-assisted planning may propose branches, while the deterministic controller remains responsible for budgets, exclusions, deduplication, and auditability.
 

@@ -18,9 +18,9 @@ SUGAR provides one shared Python research core with native macOS and Windows cli
 
 The core currently supports collection/workflows for **X, Bluesky, Mastodon, Bilibili, Weibo, and public WeChat Official Account articles**, including resumable high-volume harvesting, known-public-item ingestion, source provenance, thread relationships, AI-assisted triage, research observations, project workspaces, mapping, State-specific assessment/review, networks, rollups, freshness/change detection, and analytic-intelligence workflows.
 
-For integration-first research, the core can also ingest external CSV/JSONL datasets into the same canonical evidence model and persist a research requirement plus an auditable adaptive search plan. Model-assisted query expansion is optional; collection, imported evidence, plan state, and human review remain usable without it.
+For integration-first research, the core can also ingest external CSV/JSONL datasets into the same canonical evidence model and persist a research requirement, a separately reviewed compiled research strategy, and an auditable adaptive search plan. The compiler distinguishes exact analyst-stated source spans from semantic interpretations and search hypotheses; deterministic compilation requires no model, while AI semantic expansion remains optional. Collection, imported evidence, plan state, and human review remain usable without an LLM.
 
-Completed or intermediate research can be exported with `sugar handoff` as a portable directory/ZIP containing canonical evidence, requirement/search-plan context, coverage limitations, review state, provenance, and existing analytic outputs. `sugar verify-handoff` verifies every manifest-listed artifact by SHA-256 and byte length.
+Completed or intermediate research can be exported with `sugar handoff` as a portable directory/ZIP containing canonical evidence, requirement/approved-strategy/search-plan context, coverage limitations, review state, provenance, and existing analytic outputs. `sugar verify-handoff` verifies both file integrity and semantic strategy/plan linkage when a compiled strategy is present.
 
 State packages and portable handoffs also emit explicit evidence-lineage indexes so analytic claims can be traced through observation/evidence identities to canonical source records and collection/import context where available. Structured contradictory sources remain separate from supporting evidence rather than being flattened into one citation list.
 
@@ -211,6 +211,7 @@ For the State/Diplomacy Lab delivery target, the versioned product contract live
 - [`docs/collector-interface.md`](docs/collector-interface.md) — collector capabilities and normalization contract
 - [`docs/importer-interface.md`](docs/importer-interface.md) ? external-data normalization and provenance contract
 - [`docs/research-requirements.md`](docs/research-requirements.md) ? research requirements and bounded adaptive search planning
+- [`docs/research-requirement-compiler.md`](docs/research-requirement-compiler.md) - deterministic/AI semantic requirement compilation, analyst approval, and strategy-aware planning
 - [`docs/handoff-bundles.md`](docs/handoff-bundles.md) ? portable evidence-package handoff and integrity verification
 - [`docs/collection-coverage.md`](docs/collection-coverage.md) ? collection success/failure/availability and absence semantics
 - [`docs/evidence-lineage.md`](docs/evidence-lineage.md) — claim/evidence/record provenance and contradiction linkage

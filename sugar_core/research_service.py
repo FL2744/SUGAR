@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -21,6 +22,14 @@ from .research_requirements import (
     save_requirement,
     save_search_plan,
 )
+from .requirement_compiler import (
+    CompiledResearchStrategy,
+    build_search_plan_from_strategy,
+    compile_requirement_deterministically,
+    enrich_strategy_with_llm,
+    load_research_strategy,
+    save_research_strategy,
+)
 from .search_planner import expand_initial_plan_with_llm
 from .triage import DEFAULT_PROJECT_CONTEXT
 from .triage_io import load_post_records, triage_dataset
@@ -32,6 +41,10 @@ from .workspace_runtime import (
 )
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _notify(progress: ProgressCallback | None, event: str, **values: Any) -> None:
@@ -73,6 +86,38 @@ def _notify_plan_review(
     plan_path: str | Path,
 ) -> None:
     _notify(progress, "plan-review", **_plan_review_payload(plan, plan_path))
+
+
+def _strategy_review_payload(
+    strategy: CompiledResearchStrategy,
+    strategy_path: str | Path,
+) -> dict[str, Any]:
+    return {
+        "strategy_file": str(Path(strategy_path).expanduser().resolve()),
+        "strategy_id": strategy.strategy_id,
+        "requirement_id": strategy.requirement_id,
+        "original_question": strategy.original_question,
+        "analytic_task": strategy.analytic_task,
+        "review_state": strategy.review_state,
+        "reviewer": strategy.reviewer,
+        "review_note": strategy.review_note,
+        "reviewed_at": strategy.reviewed_at,
+        "ai_provider": strategy.ai_provider,
+        "ai_model": strategy.ai_model,
+        "ai_workflow": strategy.ai_workflow,
+        "concepts": [asdict(item) for item in strategy.concepts],
+        "dimensions": [asdict(item) for item in strategy.dimensions],
+        "missing_dimensions": [asdict(item) for item in strategy.missing_dimensions],
+        "event_count": len(strategy.events),
+    }
+
+
+def _notify_strategy_review(
+    progress: ProgressCallback | None,
+    strategy: CompiledResearchStrategy,
+    strategy_path: str | Path,
+) -> None:
+    _notify(progress, "strategy-review", **_strategy_review_payload(strategy, strategy_path))
 
 
 def _values(value: Any) -> list[str]:
@@ -186,7 +231,23 @@ def create_research_plan(
         if workspace is not None
         else requirement_path.with_name("search-plan.json")
     )
-    plan = build_initial_search_plan(requirement)
+    strategy_path = _path(config.get("strategy_file"))
+    if strategy_path is None and workspace is not None:
+        strategy_path = latest_workspace_artifact_path(workspace, "research_strategy")
+    strategy: CompiledResearchStrategy | None = None
+    if strategy_path is not None and strategy_path.is_file():
+        strategy = load_research_strategy(strategy_path)
+        if strategy.requirement_id != requirement.requirement_id:
+            raise ValueError(
+                "The compiled research strategy belongs to a different research requirement. Recompile the current question."
+            )
+        if not strategy.approved:
+            raise ValueError(
+                "Review and approve the compiled research strategy before building a search plan."
+            )
+        plan = build_search_plan_from_strategy(requirement, strategy)
+    else:
+        plan = build_initial_search_plan(requirement)
     _notify(progress, "plan-created", branches=len(plan.branches), requirement_id=requirement.requirement_id)
     if bool(config.get("ai_expand")):
         llm = _llm_config(config, secrets)
@@ -209,10 +270,207 @@ def create_research_plan(
                 "requirement_id": requirement.requirement_id,
                 "schema_version": plan.schema_version,
                 "branch_count": len(plan.branches),
+                "strategy_id": strategy.strategy_id if strategy is not None else "",
             },
         )
     _notify_plan_review(progress, plan, output)
     _notify(progress, "saved", outputs=[output])
+    return [output]
+
+
+def compile_research_strategy(
+    config: dict[str, Any],
+    secrets: dict[str, str] | None = None,
+    *,
+    progress: ProgressCallback | None = None,
+) -> list[str]:
+    secrets = secrets or {}
+    workspace = optional_workspace(config.get("workspace"))
+    requirement_path = _required_path(
+        config,
+        "requirement_file",
+        workspace=workspace,
+        kinds="research_requirement",
+    )
+    requirement = load_requirement(requirement_path)
+    target = _path(config.get("output_file")) or (
+        workspace.path_for("state") / "research-strategy.json"
+        if workspace is not None
+        else requirement_path.with_name("research-strategy.json")
+    )
+    strategy = compile_requirement_deterministically(requirement)
+    _notify(
+        progress,
+        "strategy-compiled",
+        requirement_id=requirement.requirement_id,
+        concepts=len(strategy.concepts),
+        dimensions=len(strategy.dimensions),
+        ai_used=False,
+    )
+    if bool(config.get("ai_expand")):
+        llm = _llm_config(config, secrets)
+        cache_dir = workspace.path_for("cache") if workspace is not None else target.parent / ".sugar-cache"
+        strategy = enrich_strategy_with_llm(
+            requirement,
+            strategy,
+            llm=llm,
+            cache_dir=cache_dir,
+        )
+        _notify(
+            progress,
+            "strategy-expanded",
+            concepts=len(strategy.concepts),
+            dimensions=len(strategy.dimensions),
+            provider=llm.provider,
+            model=llm.model,
+        )
+    output = save_research_strategy(strategy, target)
+    if workspace is not None:
+        workspace.register_artifact(
+            "research_strategy",
+            output,
+            label=f"Compiled strategy for {requirement.requirement_id}",
+            metadata={
+                "strategy_id": strategy.strategy_id,
+                "requirement_id": requirement.requirement_id,
+                "schema_version": strategy.schema_version,
+                "review_state": strategy.review_state,
+                "ai_provider": strategy.ai_provider,
+                "ai_model": strategy.ai_model,
+            },
+        )
+    _notify_strategy_review(progress, strategy, output)
+    _notify(progress, "saved", outputs=[output])
+    return [output]
+
+
+def review_research_strategy(
+    config: dict[str, Any],
+    *,
+    progress: ProgressCallback | None = None,
+) -> list[str]:
+    workspace = optional_workspace(config.get("workspace"))
+    strategy_path = _required_path(
+        config,
+        "strategy_file",
+        workspace=workspace,
+        kinds="research_strategy",
+    )
+    strategy = load_research_strategy(strategy_path)
+    _notify_strategy_review(progress, strategy, strategy_path)
+    return [str(strategy_path)]
+
+
+def update_research_strategy(
+    config: dict[str, Any],
+    *,
+    progress: ProgressCallback | None = None,
+) -> list[str]:
+    workspace = optional_workspace(config.get("workspace"))
+    strategy_path = _required_path(
+        config,
+        "strategy_file",
+        workspace=workspace,
+        kinds="research_strategy",
+    )
+    strategy = load_research_strategy(strategy_path)
+    actor = str(config.get("actor") or config.get("reviewer") or "analyst").strip() or "analyst"
+
+    updates = config.get("concept_updates") or []
+    if not isinstance(updates, list):
+        raise ValueError("concept_updates must be a list.")
+    for raw in updates:
+        if not isinstance(raw, dict):
+            continue
+        concept_id = str(raw.get("concept_id") or "").strip()
+        if not concept_id:
+            continue
+        strategy.update_concept(
+            concept_id,
+            value=str(raw["value"]) if "value" in raw else None,
+            included=bool(raw["included"]) if "included" in raw else None,
+            rationale=str(raw["rationale"]) if "rationale" in raw else None,
+            analyst_note=str(raw["analyst_note"]) if "analyst_note" in raw else None,
+            actor=actor,
+        )
+
+    additions = config.get("add_concepts") or []
+    if not isinstance(additions, list):
+        raise ValueError("add_concepts must be a list.")
+    for raw in additions:
+        if not isinstance(raw, dict):
+            continue
+        strategy.add_analyst_concept(
+            kind=str(raw.get("kind") or ""),
+            value=str(raw.get("value") or ""),
+            origin=str(raw.get("origin") or "interpreted"),
+            rationale=str(raw.get("rationale") or ""),
+            actor=actor,
+        )
+
+    dimension_updates = config.get("dimension_updates") or []
+    if not isinstance(dimension_updates, list):
+        raise ValueError("dimension_updates must be a list.")
+    for raw in dimension_updates:
+        if not isinstance(raw, dict):
+            continue
+        dimension_id = str(raw.get("dimension_id") or "").strip()
+        if not dimension_id:
+            continue
+        strategy.update_dimension(
+            dimension_id,
+            question=str(raw["question"]) if "question" in raw else None,
+            indicators=raw.get("indicators") if "indicators" in raw else None,
+            source_families=raw.get("source_families") if "source_families" in raw else None,
+            rationale=str(raw["rationale"]) if "rationale" in raw else None,
+            included=bool(raw["included"]) if "included" in raw else None,
+            analyst_note=str(raw["analyst_note"]) if "analyst_note" in raw else None,
+            actor=actor,
+        )
+
+    analytic_task = str(config.get("analytic_task") or "").strip()
+    if analytic_task:
+        strategy.update_analytic_task(analytic_task, actor=actor)
+
+    decision = str(config.get("decision") or "").strip().casefold()
+    reviewer = str(config.get("reviewer") or "").strip()
+    review_note = str(config.get("review_note") or "").strip()
+    if decision == "approved":
+        strategy.approve(reviewer=reviewer, note=review_note)
+    elif decision == "rejected":
+        if not reviewer:
+            raise ValueError("Strategy rejection requires a named reviewer.")
+        strategy.review_state = "rejected"
+        strategy.reviewer = reviewer
+        strategy.review_note = review_note
+        strategy.reviewed_at = _utc_now()
+        strategy.updated_at = strategy.reviewed_at
+        strategy.events.append(
+            {
+                "type": "strategy_rejected",
+                "at": strategy.reviewed_at,
+                "actor": reviewer,
+                "note": review_note,
+            }
+        )
+    elif decision and decision != "draft":
+        raise ValueError("strategy decision must be approved, rejected, or draft.")
+
+    output = save_research_strategy(strategy, strategy_path)
+    if workspace is not None:
+        workspace.register_artifact(
+            "research_strategy",
+            output,
+            label=f"Reviewed strategy for {strategy.requirement_id}",
+            metadata={
+                "strategy_id": strategy.strategy_id,
+                "requirement_id": strategy.requirement_id,
+                "review_state": strategy.review_state,
+                "reviewer": strategy.reviewer,
+            },
+        )
+    _notify(progress, "strategy-updated", review_state=strategy.review_state, reviewer=strategy.reviewer)
+    _notify_strategy_review(progress, strategy, output)
     return [output]
 
 
@@ -472,6 +730,9 @@ def export_research_handoff(
     workspace = optional_workspace(config.get("workspace"))
     requirement_path = _required_path(config, "requirement_file", workspace=workspace, kinds="research_requirement")
     plan_path = _required_path(config, "plan_file", workspace=workspace, kinds="search_plan")
+    strategy_path = _path(config.get("strategy_file"))
+    if strategy_path is None:
+        strategy_path = latest_workspace_artifact_path(workspace, "research_strategy")
     records_path = _required_path(config, "records_file", workspace=workspace, kinds=("evidence", "raw_collection", "import"))
     observations_path = _required_path(config, "observations_file", workspace=workspace, kinds="observations")
     output_directory = _path(config.get("output_directory")) or (
@@ -494,6 +755,7 @@ def export_research_handoff(
         observations_path,
         output_directory,
         name=str(config.get("name") or "sugar-handoff"),
+        strategy_file=strategy_path,
         assessments_file=assessments,
         source_conflicts_file=source_conflicts,
         limitations_file=limitations,

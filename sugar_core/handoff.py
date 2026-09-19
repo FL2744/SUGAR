@@ -34,6 +34,10 @@ from .research_requirements import (
     load_requirement,
     load_search_plan,
 )
+from .requirement_compiler import (
+    RESEARCH_STRATEGY_SCHEMA_VERSION,
+    load_research_strategy,
+)
 from .triage_io import load_post_records
 from .source_conflicts import load_source_conflicts
 from .state_workflow import load_state_assessments
@@ -246,6 +250,7 @@ def build_handoff_bundle(
     output_directory: str | Path,
     *,
     name: str = "sugar-handoff",
+    strategy_file: str | Path | None = None,
     assessments_file: str | Path | None = None,
     source_conflicts_file: str | Path | None = None,
     limitations_file: str | Path | None = None,
@@ -257,6 +262,12 @@ def build_handoff_bundle(
     plan = load_search_plan(plan_file)
     if requirement.requirement_id != plan.requirement_id:
         raise ValueError("Research requirement and search plan IDs do not match.")
+    strategy = load_research_strategy(strategy_file) if strategy_file else None
+    if strategy is not None:
+        if strategy.requirement_id != requirement.requirement_id:
+            raise ValueError("Compiled research strategy and requirement IDs do not match.")
+        if not strategy.approved:
+            raise ValueError("Portable handoff cannot include an unapproved compiled research strategy.")
     records = load_post_records(records_file)
     observations = load_observations(observations_file)
     assessments = load_state_assessments(assessments_file) if assessments_file else []
@@ -285,8 +296,11 @@ def build_handoff_bundle(
         outputs = staging_root / "outputs"
 
         requirement_path = context / "research-requirement.json"
+        strategy_path = context / "research-strategy.json"
         plan_path = context / "search-plan.json"
         _write_json(requirement_path, requirement.export_dict())
+        if strategy is not None:
+            _write_json(strategy_path, strategy.export_dict())
         _write_json(plan_path, plan.export_dict())
         records_path = evidence / "records.jsonl"
         observations_path = evidence / "observations.jsonl"
@@ -327,6 +341,8 @@ def build_handoff_bundle(
             _artifact(staging_root, observations_path, "research_observations"),
             _artifact(staging_root, lineage_path, "evidence_lineage"),
         ]
+        if strategy is not None:
+            artifacts.append(_artifact(staging_root, strategy_path, "compiled_research_strategy"))
 
         if assessments_file:
             copied = _copy_named(assessments_file, review, preferred_name="state-assessments" + Path(assessments_file).suffix)
@@ -367,10 +383,12 @@ def build_handoff_bundle(
             "generated_at": _utc_now(),
             "software": {"name": "SUGAR", "version": __version__},
             "requirement_id": requirement.requirement_id,
+            "strategy_id": strategy.strategy_id if strategy is not None else "",
             "schemas": {
                 "post_record": POST_SCHEMA_VERSION,
                 "research_observation": OBSERVATION_SCHEMA_VERSION,
                 "research_requirement": REQUIREMENT_SCHEMA_VERSION,
+                "research_strategy": RESEARCH_STRATEGY_SCHEMA_VERSION if strategy is not None else "",
                 "search_plan": SEARCH_PLAN_SCHEMA_VERSION,
                 "limitations": LIMITATIONS_SCHEMA_VERSION,
                 "lineage": LINEAGE_SCHEMA_VERSION,
@@ -424,6 +442,9 @@ def verify_handoff_bundle(bundle_directory: str | Path) -> dict[str, Any]:
         raise ValueError(f"Unsupported handoff schema: {manifest.get('handoff_schema_version')!r}")
     findings: list[dict[str, Any]] = []
     lineage_path: Path | None = None
+    requirement_path: Path | None = None
+    plan_path: Path | None = None
+    strategy_path: Path | None = None
     for artifact in manifest.get("artifacts") or []:
         relative = Path(str(artifact.get("path") or ""))
         if relative.is_absolute() or ".." in relative.parts:
@@ -454,6 +475,12 @@ def verify_handoff_bundle(bundle_directory: str | Path) -> dict[str, Any]:
         })
         if artifact.get("role") == "evidence_lineage" and status == "ok":
             lineage_path = path
+        elif artifact.get("role") == "research_requirement" and status == "ok":
+            requirement_path = path
+        elif artifact.get("role") == "search_plan" and status == "ok":
+            plan_path = path
+        elif artifact.get("role") == "compiled_research_strategy" and status == "ok":
+            strategy_path = path
 
     semantic_findings: list[dict[str, Any]] = []
     if lineage_path is not None:
@@ -468,12 +495,76 @@ def verify_handoff_bundle(bundle_directory: str | Path) -> dict[str, Any]:
     else:
         semantic_findings.append({"code": "missing_evidence_lineage", "status": "fail"})
 
+    strategy_findings: list[dict[str, Any]] = []
+    manifest_strategy_id = str(manifest.get("strategy_id") or "")
+    if manifest_strategy_id:
+        if strategy_path is None:
+            strategy_findings.append(
+                {"code": "missing_compiled_research_strategy", "status": "fail"}
+            )
+        elif requirement_path is None or plan_path is None:
+            strategy_findings.append(
+                {"code": "missing_strategy_context", "status": "fail"}
+            )
+        else:
+            try:
+                requirement = load_requirement(requirement_path)
+                plan = load_search_plan(plan_path)
+                strategy = load_research_strategy(strategy_path)
+                issues: list[str] = []
+                if strategy.strategy_id != manifest_strategy_id:
+                    issues.append("strategy_id_mismatch")
+                if strategy.requirement_id != requirement.requirement_id:
+                    issues.append("strategy_requirement_mismatch")
+                if plan.requirement_id != requirement.requirement_id:
+                    issues.append("plan_requirement_mismatch")
+                if not strategy.approved or not strategy.reviewer:
+                    issues.append("strategy_not_human_approved")
+                compiled_events = [
+                    event
+                    for event in plan.events
+                    if isinstance(event, dict)
+                    and event.get("type") == "compiled_strategy_plan"
+                ]
+                if not any(
+                    str(event.get("strategy_id") or "") == strategy.strategy_id
+                    for event in compiled_events
+                ):
+                    issues.append("plan_not_linked_to_strategy")
+                strategy_findings.append(
+                    {
+                        "code": "compiled_research_strategy",
+                        "status": "ok" if not issues else "fail",
+                        "strategy_id": strategy.strategy_id,
+                        "requirement_id": strategy.requirement_id,
+                        "reviewer": strategy.reviewer,
+                        "issues": issues,
+                    }
+                )
+            except Exception as exc:
+                strategy_findings.append(
+                    {
+                        "code": "compiled_research_strategy",
+                        "status": "fail",
+                        "issues": [f"strategy_validation_error:{type(exc).__name__}"],
+                    }
+                )
+    elif strategy_path is not None:
+        strategy_findings.append(
+            {
+                "code": "unexpected_compiled_research_strategy",
+                "status": "fail",
+            }
+        )
+
     file_ok = bool(findings) and all(item["status"] == "ok" for item in findings)
     semantic_ok = bool(semantic_findings) and all(item["status"] == "ok" for item in semantic_findings)
+    strategy_ok = all(item["status"] == "ok" for item in strategy_findings)
     return {
-        "status": "pass" if file_ok and semantic_ok else "fail",
+        "status": "pass" if file_ok and semantic_ok and strategy_ok else "fail",
         "bundle": str(root),
         "artifacts": len(findings),
         "findings": findings,
         "semantic_lineage": semantic_findings,
+        "semantic_strategy": strategy_findings,
     }

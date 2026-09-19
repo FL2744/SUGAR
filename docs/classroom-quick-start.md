@@ -8,9 +8,11 @@ For a real research assignment, start from the question rather than a keyword bo
 
 1. **Create a Research Project.** On Windows open **State Workflow -> Research Project**. On macOS open **Research Project**. Choose a project folder that can travel with the work.
 2. Enter the **research question**, geography, target audiences, known entities, languages, timeframe, and preferred sources. Save the requirement.
-3. Click **Build Inspectable Search Plan**. The plan is stored with the project rather than hidden inside an agent loop.
-4. Run the plan with a small initial collection, or import an existing authorized CSV/JSONL dataset.
-5. If you need AI assistance, configure an LLM key in **Settings** and triage the evidence. Then **Prepare State Assessment Suggestions**, **Export Human Review Workbook**, make the named analyst decisions in that workbook, save it, and click **Apply Human Review**. Only after that should you export the **Verified Handoff**. The bundle carries the requirement, plan, evidence, reviewed observations, assessments, provenance, limitations, and lineage together.
+3. Click **Compile Deterministically** to turn the prose question into an inspectable research strategy. Optionally use **Compile + AI** to enrich semantic interpretations and search hypotheses. AI is not required.
+4. Review the compiled strategy. Explicit source-span concepts remain tied to the exact words you wrote; interpreted concepts, search hypotheses, and research dimensions can be edited or excluded. Enter a named reviewer and click **Approve Research Strategy**.
+5. Click **Build Search Plan from Approved Strategy**. The plan records which approved strategy produced it and remains inspectable rather than hidden inside an agent loop.
+6. Run the plan with a small initial collection, or import an existing authorized CSV/JSONL dataset.
+7. If you need AI assistance for evidence triage or synthesis, configure an LLM key in **Settings**. Then **Prepare State Assessment Suggestions**, **Export Human Review Workbook**, make the named analyst decisions in that workbook, save it, and click **Apply Human Review**. Only after that should you export the **Verified Handoff**. The bundle carries the requirement, approved compiled strategy, plan, evidence, reviewed observations, assessments, provenance, limitations, and lineage together.
 
 For a fast collector sanity check rather than a research project, **Collect -> Quick Search** on Windows or **Expert Search** on macOS is still available.
 
@@ -27,7 +29,7 @@ For a fast collector sanity check rather than a research project, **Collect -> Q
 
 ## Credentials: what is actually required?
 
-**Virginia Tech ARC API key:** recommended for classroom use when you want translation, location inference, AI triage, or synthesis.
+**LLM API key:** optional. Use OpenAI, Virginia Tech ARC, or a compatible custom provider when you want AI semantic compilation, translation, location inference, AI triage, or synthesis. Deterministic requirement compilation, project/import/review/export workflows, and ordinary collection do not require an LLM.
 
 **Bilibili:** no source credential is required for the supported public collection path.
 

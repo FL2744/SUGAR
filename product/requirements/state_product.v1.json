@@ -122,9 +122,11 @@
       "acceptance": [
         "User can specify question, geography, timeframe, target audience, languages, known entities, and collection constraints.",
         "SUGAR can generate an inspectable initial search plan from that requirement.",
-        "The original requirement is stored with the project and all downstream runs."
+        "The original requirement is stored with the project and all downstream runs.",
+        "SUGAR compiles the natural-language question into a separate inspectable research-strategy artifact that distinguishes exact source-span concepts, semantic interpretations, and search hypotheses.",
+        "A named analyst can edit or exclude interpreted concepts, hypotheses, and research dimensions and must approve the compiled strategy before it drives strategy-aware planning."
       ],
-      "verification": "workflow and persistence tests"
+      "verification": "requirement-compiler, strategy-approval, workflow, and persistence tests"
     },
     {
       "id": "STATE-P0-007",

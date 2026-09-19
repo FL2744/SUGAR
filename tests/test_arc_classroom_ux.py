@@ -67,12 +67,17 @@ def test_mac_defaults_to_question_first_research_project_workflow():
     assert 'struct ResearchProjectView: View' in mac
     assert 'Section("1. Project workspace")' in mac
     assert 'Section("2. Research question")' in mac
+    assert 'Section("2b. Interpret and approve the research strategy")' in mac
+    assert 'Section("2c. Review search branches")' in mac
     assert 'Section("3. Gather and review evidence")' in mac
     assert 'Section("4. Human review and verified handoff")' in mac
     assert '"target_audiences": commaList(targetAudiences)' in mac
     for operation in (
         "workspace-init",
         "research-requirement",
+        "research-compile",
+        "research-strategy-review",
+        "research-strategy-update",
         "research-plan",
         "research-plan-review",
         "research-plan-update",
@@ -88,11 +93,25 @@ def test_mac_defaults_to_question_first_research_project_workflow():
     ):
         assert f'command: "{operation}"' in mac
     assert 'command == "research-triage"' in model
+    assert 'command == "research-compile"' in model
     assert 'command == "state-triage"' in model
     assert 'command == "research-collect"' in model
     assert "@Published var researchPlanBranches" in model
-    assert 'Section("2b. Review search branches")' in mac
+    assert "@Published var researchStrategyConcepts" in model
+    assert "@Published var researchStrategyTask" in model
+    assert "@Published var researchStrategyDimensions" in model
+    assert 'Text("Research dimensions")' in mac
+    assert 'TextField("Operational question", text: $dimension.question)' in mac
+    assert 'TextField("Indicators, comma separated", text: $dimension.indicators)' in mac
+    assert '"dimension_updates": dimensionUpdates' in mac
     for label in ("Save Edits", "Approve", "Pause", "Exclude"):
+        assert f'Button("{label}")' in mac
+    for label in (
+        "Compile Deterministically",
+        "Compile + AI",
+        "Approve Research Strategy",
+        "Build Search Plan from Approved Strategy",
+    ):
         assert f'Button("{label}")' in mac
     for label in (
         "Prepare State Assessment Suggestions",

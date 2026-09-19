@@ -13,6 +13,11 @@ from sugar_core.research_requirements import (
     save_requirement,
     save_search_plan,
 )
+from sugar_core.requirement_compiler import (
+    build_search_plan_from_strategy,
+    compile_requirement_deterministically,
+    save_research_strategy,
+)
 from sugar_core.storage import save_records
 from sugar_core.state_workflow import blank_state_assessments, save_state_package
 from sugar_core.source_conflicts import SourceClaim, SourceConflict, save_source_conflicts
@@ -87,6 +92,74 @@ def test_handoff_bundle_is_portable_self_describing_and_hash_verified(tmp_path: 
     assert limitations["source_coverage"]["unobserved-source"]["status"] == "not_run"
     assert limitations["search_plan"]["branch_coverage"][0]["query"]
     assert any("not evidence of zero" in line for line in limitations["limitations"])
+
+
+def test_handoff_semantically_verifies_compiled_strategy_linkage(tmp_path: Path):
+    requirement = ResearchRequirement(
+        question="How are foreign educational institutions reaching university students in Exampleland?"
+    )
+    strategy = compile_requirement_deterministically(requirement)
+    strategy.approve(reviewer="Analyst One", note="Interpretation checked.")
+    plan = build_search_plan_from_strategy(requirement, strategy)
+    requirement_file = Path(save_requirement(requirement, tmp_path / "requirement.json"))
+    strategy_file = Path(save_research_strategy(strategy, tmp_path / "strategy.json"))
+    plan_file = Path(save_search_plan(plan, tmp_path / "plan.json"))
+    record = PostRecord(
+        platform="example",
+        native_id="strategy-1",
+        canonical_url="https://example.test/strategy-1",
+        query=plan.branches[0].query,
+        original_text="Public source evidence",
+    )
+    records_file = tmp_path / "records.csv"
+    save_records([record], records_file)
+    observation = observation_from_post(record)
+    observations_file = tmp_path / "observations.jsonl"
+    observations_file.write_text(
+        json.dumps(observation.export_dict(), ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    result = build_handoff_bundle(
+        requirement_file,
+        plan_file,
+        records_file,
+        observations_file,
+        tmp_path / "handoffs",
+        name="compiled-strategy",
+        strategy_file=strategy_file,
+        create_zip=False,
+    )
+    root = Path(result.directory)
+    verification = verify_handoff_bundle(root)
+    assert verification["status"] == "pass"
+    assert verification["semantic_strategy"][0]["status"] == "ok"
+    assert verification["semantic_strategy"][0]["strategy_id"] == strategy.strategy_id
+
+    strategy_path = root / "context" / "research-strategy.json"
+    tampered = json.loads(strategy_path.read_text(encoding="utf-8"))
+    tampered["review_state"] = "draft"
+    tampered["reviewer"] = ""
+    strategy_path.write_text(
+        json.dumps(tampered, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    artifact = next(
+        item
+        for item in manifest["artifacts"]
+        if item["role"] == "compiled_research_strategy"
+    )
+    artifact["sha256"] = hashlib.sha256(strategy_path.read_bytes()).hexdigest()
+    artifact["bytes"] = strategy_path.stat().st_size
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    verification = verify_handoff_bundle(root)
+    assert verification["status"] == "fail"
+    assert verification["semantic_strategy"][0]["status"] == "fail"
+    assert "strategy_not_human_approved" in verification["semantic_strategy"][0]["issues"]
 
 
 def test_handoff_verifier_detects_tampering(tmp_path: Path):

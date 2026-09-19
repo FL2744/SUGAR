@@ -7,6 +7,7 @@ Use this index to find the current design or methodology document for the part o
 - [`architecture.md`](architecture.md) — system boundaries, dependency direction, desktop/core separation, and engineering rules.
 - [`importer-interface.md`](importer-interface.md) ? external CSV/JSONL ingestion contract and provenance rules.
 - [`research-requirements.md`](research-requirements.md) ? research-question schema, bounded search-plan model, and drift controls.
+- [`research-requirement-compiler.md`](research-requirement-compiler.md) - natural-language question compiler, explicit/interpreted/hypothesis separation, analyst approval, and strategy-aware planning.
 - [`handoff-bundles.md`](handoff-bundles.md) ? portable hash-verified evidence-package format and verification workflow.
 - [`collection-coverage.md`](collection-coverage.md) ? source success/zero/partial/unavailable/failure semantics and provenance propagation.
 - [`evidence-lineage.md`](evidence-lineage.md) — finding-to-observation-to-source-record provenance and contradiction links.

@@ -67,6 +67,8 @@ struct ResearchProjectView: View {
     @State private var useMastodon = false
     @State private var maxPosts = 20
     @State private var maxPages = 1
+    @State private var strategyReviewer = ""
+    @State private var strategyReviewNote = ""
     @State private var planEditReason = ""
     @State private var importFile = ""
     @State private var importSystem = "external"
@@ -159,15 +161,123 @@ struct ResearchProjectView: View {
                             || cleanWorkspace.isEmpty
                             || question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         )
-                    Button("Build Inspectable Search Plan") {
-                        model.run(command: "research-plan", config: ["workspace": cleanWorkspace])
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.isRunning || cleanWorkspace.isEmpty)
                 }
             }
 
-            Section("2b. Review search branches") {
+            Section("2b. Interpret and approve the research strategy") {
+                Text("SUGAR compiles the sentence into explicit source-span concepts, semantic interpretations, search hypotheses, missing dimensions, and operational research dimensions. AI semantic expansion is optional and cannot turn a hypothesis into an analyst-stated fact.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Compile Deterministically") {
+                        compileStrategy(useAI: false)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button("Compile + AI") {
+                        compileStrategy(useAI: true)
+                    }
+                    Button("Refresh Interpretation") {
+                        model.run(
+                            command: "research-strategy-review",
+                            config: ["workspace": cleanWorkspace]
+                        )
+                    }
+                    Spacer()
+                }
+                .disabled(model.isRunning || cleanWorkspace.isEmpty)
+
+                TextField("Analytic task", text: $model.researchStrategyTask)
+                if model.researchStrategyConcepts.isEmpty {
+                    Text("Compile the saved research question to see how SUGAR interpreted it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach($model.researchStrategyConcepts) { $concept in
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 7) {
+                                HStack {
+                                    Text(concept.origin.uppercased())
+                                        .font(.caption.bold())
+                                    Text(concept.kind)
+                                        .font(.caption)
+                                    Text(String(format: "%.2f", concept.confidence))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Toggle("Use", isOn: $concept.included)
+                                        .toggleStyle(.checkbox)
+                                }
+                                if concept.origin == "explicit" {
+                                    Text(concept.value)
+                                        .textSelection(.enabled)
+                                    if !concept.sourceText.isEmpty {
+                                        Text("Exact source span: \"\(concept.sourceText)\"")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                } else {
+                                    TextField("Concept value", text: $concept.value)
+                                }
+                                TextField("Rationale", text: $concept.rationale)
+                            }
+                        } label: {
+                            Text(concept.value)
+                        }
+                    }
+                }
+                if !model.researchStrategyDimensions.isEmpty {
+                    Text("Research dimensions")
+                        .font(.headline)
+                    ForEach($model.researchStrategyDimensions) { $dimension in
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 7) {
+                                HStack {
+                                    Text(dimension.name)
+                                        .font(.caption.bold())
+                                    Spacer()
+                                    Toggle("Use", isOn: $dimension.included)
+                                        .toggleStyle(.checkbox)
+                                }
+                                TextField("Operational question", text: $dimension.question)
+                                TextField("Indicators, comma separated", text: $dimension.indicators)
+                                TextField("Source families, comma separated", text: $dimension.sourceFamilies)
+                                TextField("Rationale", text: $dimension.rationale)
+                            }
+                        } label: {
+                            Text(dimension.name)
+                        }
+                    }
+                }
+                if !model.researchStrategySummary.isEmpty {
+                    Text(model.researchStrategySummary)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                }
+                HStack {
+                    TextField("Named analyst reviewer", text: $strategyReviewer)
+                    TextField("Optional review note", text: $strategyReviewNote)
+                }
+                HStack {
+                    Text("State: \(model.researchStrategyReviewState.isEmpty ? "not compiled" : model.researchStrategyReviewState)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Save Interpretation Edits") {
+                        saveStrategy(decision: "")
+                    }
+                    Button("Approve Research Strategy") {
+                        saveStrategy(decision: "approved")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(strategyReviewer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("Build Search Plan from Approved Strategy") {
+                        model.run(command: "research-plan", config: ["workspace": cleanWorkspace])
+                    }
+                }
+                .disabled(model.isRunning || cleanWorkspace.isEmpty)
+            }
+
+            Section("2c. Review search branches") {
                 Text("Review the generated plan before collection. Edit a query or rationale directly, then save it or record an approval, pause, or exclusion. Every change is appended to the plan audit history.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -425,6 +535,59 @@ struct ResearchProjectView: View {
             "max_pages_per_query": maxPages,
             "continue_on_source_error": true,
         ])
+    }
+
+    private func compileStrategy(useAI: Bool) {
+        var config: [String: Any] = [
+            "workspace": cleanWorkspace,
+            "ai_expand": useAI,
+        ]
+        if useAI {
+            config["llm"] = llmSelection.provider.configuration(
+                model: llmSelection.model,
+                customBaseURL: baseURL
+            )
+        }
+        model.run(command: "research-compile", config: config)
+    }
+
+    private func saveStrategy(decision: String) {
+        let updates: [[String: Any]] = model.researchStrategyConcepts.map { concept in
+            var item: [String: Any] = [
+                "concept_id": concept.conceptID,
+                "included": concept.included,
+                "rationale": concept.rationale,
+            ]
+            if concept.origin != "explicit" {
+                item["value"] = concept.value
+            }
+            return item
+        }
+        let dimensionUpdates: [[String: Any]] = model.researchStrategyDimensions.map { dimension in
+            [
+                "dimension_id": dimension.dimensionID,
+                "included": dimension.included,
+                "question": dimension.question,
+                "indicators": commaList(dimension.indicators),
+                "source_families": commaList(dimension.sourceFamilies),
+                "rationale": dimension.rationale,
+            ]
+        }
+        var config: [String: Any] = [
+            "workspace": cleanWorkspace,
+            "actor": strategyReviewer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "desktop analyst"
+                : strategyReviewer.trimmingCharacters(in: .whitespacesAndNewlines),
+            "analytic_task": model.researchStrategyTask,
+            "concept_updates": updates,
+            "dimension_updates": dimensionUpdates,
+        ]
+        if !decision.isEmpty {
+            config["decision"] = decision
+            config["reviewer"] = strategyReviewer.trimmingCharacters(in: .whitespacesAndNewlines)
+            config["review_note"] = strategyReviewNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        model.run(command: "research-strategy-update", config: config)
     }
 
     private func updatePlanBranch(

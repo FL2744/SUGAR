@@ -92,6 +92,10 @@ Create a versioned object containing at minimum:
 
 Store this object in the project workspace so every query plan and later refresh has a stable parent requirement.
 
+Before an interpreted requirement drives planning, compile it into a separate versioned research-strategy artifact. That artifact must distinguish exact source-span concepts from semantic interpretations and search hypotheses, expose missing dimensions and operational research dimensions, and retain the original question unchanged. Deterministic compilation must work without an LLM; optional AI semantic compilation may enrich the artifact but cannot promote unsupported hypotheses into analyst-stated facts.
+
+A named analyst must be able to edit/include/exclude interpreted concepts, hypotheses, and research dimensions and approve the compiled strategy. Any later edit must return the strategy to draft. Once a strategy exists for a requirement, the strategy-aware planner must reject it until approved and must record the approved strategy identity/reviewer in the resulting plan.
+
 ### 3. Search planner with bounded adaptation
 
 The planner should generate a portfolio of query branches rather than one query. Branches should carry rationale, parentage, discovered concepts, yield, novelty, duplicate rate, coverage contribution, and status.
@@ -106,6 +110,7 @@ Define a stable export bundle containing:
 
 - project/run manifest;
 - research requirement;
+- approved compiled research strategy when used;
 - search-plan/audit history;
 - source/normalized evidence;
 - claim-to-evidence relationships;
@@ -138,13 +143,14 @@ External datasets retain source-provided handling, usage, license, and ownership
 Only after the first four are stable should the desktop workflow be reorganized around:
 
 1. **New Research Requirement**
-2. **Import or Collect**
+2. **Compile / Review Research Strategy**
 3. **Review Search Plan**
-4. **Run / Monitor Coverage**
-5. **AI Triage / Prepare Assessment Suggestions**
-6. **Human Review of Evidence and Findings**
-7. **Export Brief / Evidence Package**
-8. **Save as Monitor / Compare with Prior Run**
+4. **Import or Collect**
+5. **Run / Monitor Coverage**
+6. **AI Triage / Prepare Assessment Suggestions**
+7. **Human Review of Evidence and Findings**
+8. **Export Brief / Evidence Package**
+9. **Save as Monitor / Compare with Prior Run**
 
 Platform-specific credential setup should live behind source configuration rather than dominate the State-facing workflow.
 

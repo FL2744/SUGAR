@@ -14,11 +14,18 @@ the supported question-first path for a substantive research task:
 1. create or open a portable SUGAR project folder;
 2. save the research question, geography, timeframe, target audiences, languages,
    known entities, preferred sources, and collection depth;
-3. build an inspectable bounded search plan;
-4. execute that plan or import an existing authorized CSV/JSONL dataset;
-5. triage evidence into ResearchObservation records and apply evidence feedback;
-6. prepare State assessment suggestions, export the human-review workbook, and apply named analyst decisions;
-7. export or verify a portable hash-checked handoff bundle.
+3. compile the requirement into an inspectable research strategy, deterministically or with optional AI semantic enrichment;
+4. review explicit source spans, interpretations, hypotheses, and research dimensions, then approve the strategy with a named analyst;
+5. build an inspectable bounded search plan from the approved strategy;
+6. execute that plan or import an existing authorized CSV/JSONL dataset;
+7. triage evidence into ResearchObservation records and apply evidence feedback;
+8. prepare State assessment suggestions, export the human-review workbook, and apply named analyst decisions;
+9. export or verify a portable hash-checked handoff bundle.
+
+The deterministic requirement compiler does not require an LLM. AI semantic
+compilation is optional, and AI-proposed interpretations or hypotheses remain
+separate from exact analyst-stated source spans until a named analyst approves
+the strategy.
 
 AI triage never self-verifies evidence. SUGAR records the AI provider, model, and
 workflow/prompt version separately from human review state, and the verified-only

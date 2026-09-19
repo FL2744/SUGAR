@@ -191,7 +191,7 @@ class SettingsPage(QWidget):
         root.setSpacing(14)
         root.addWidget(page_header("Settings & Credentials", "Secrets are held in memory for this app session and are never written by the Windows UI."))
 
-        llm = Card("LLM provider", "Used for translation, State triage, and agentic intelligence. Virginia Tech ARC uses its OpenAI-compatible endpoint.")
+        llm = Card("Optional LLM provider", "Only AI-assisted workflows require this. OpenAI and custom OpenAI-compatible endpoints are deployment-neutral options; Virginia Tech ARC is a classroom/development convenience.")
         grid = QGridLayout()
         self.provider = EnumCombo((("OpenAI", "openai"), ("Virginia Tech ARC", "arc"), ("Custom OpenAI-compatible", "custom")))
         self.model = QComboBox()
@@ -265,7 +265,7 @@ class SettingsPage(QWidget):
         self._load()
 
     def _load(self) -> None:
-        provider = str(self.store.value("llm/provider", "arc"))
+        provider = str(self.store.value("llm/provider", "openai"))
         index = self.provider.findData(provider)
         self.provider.setCurrentIndex(max(0, index))
         self.base_url.setText(str(self.store.value("llm/base_url", "")))
@@ -273,7 +273,7 @@ class SettingsPage(QWidget):
         self.output_root.setText(default_output)
         self.mastodon_url.setText(str(self.store.value("sources/mastodon_url", "https://mastodon.social")))
         self._provider_changed()
-        saved_model = str(self.store.value("llm/model", "gpt-oss-120b"))
+        saved_model = str(self.store.value("llm/model", "gpt-5.6-luna"))
         if provider == "arc":
             saved_model = {
                 "DeepSeek-V4-Flash": "DeepSeek-V4.1-Flash",
@@ -374,19 +374,19 @@ class HomePage(QWidget):
 
         start = Card(
             "Start here — first time?",
-            "Recommended classroom path: first prove a small collection works, then enable ARC-powered enrichment. Keep the first Bilibili run small because live public access can be rate- or risk-controlled by the platform.",
+            "Recommended State/research path: create a portable Research Project, define the question, and build an inspectable plan. Core project, import, review, and export workflows do not require an LLM or Virginia Tech credentials.",
         )
         steps = QLabel(
-            "1. Collect → Quick Search → leave Bilibili selected → enter one term → keep the 20-post / 1-page defaults → Run Search.\n"
-            "2. Inspect the generated files from Activity & Outputs. If Bilibili denies anonymous access, stop rather than repeatedly retrying.\n"
-            "3. For translation or location inference, open Settings → Virginia Tech ARC → Get ARC API Key → paste the key → Test ARC Connection. Weibo keyword search requires an authorized Weibo session."
+            "1. Open State Workflow → Research Project and create or open a project folder.\n"
+            "2. Enter the research question and constraints, then build and review the search plan. You can import an existing authorized dataset without configuring an LLM.\n"
+            "3. Configure OpenAI, a custom OpenAI-compatible endpoint, or the optional Virginia Tech ARC classroom integration only if you need AI-assisted triage or enrichment."
         )
         steps.setWordWrap(True)
         start.layout.addWidget(steps)
         start_row = QHBoxLayout()
-        setup_arc = primary_button("3. Set up Virginia Tech ARC", lambda: self.navigate.emit("Settings"))
-        collect_public = QPushButton("1. Start small Bilibili search")
-        collect_public.clicked.connect(lambda: self.navigate.emit("Collect"))
+        setup_arc = QPushButton("Optional LLM settings")
+        setup_arc.clicked.connect(lambda: self.navigate.emit("Settings"))
+        collect_public = primary_button("1. Start Research Project", lambda: self.navigate.emit("State Workflow"))
         guide = QPushButton("Open 5-minute guide")
         guide.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(resource_path("CLASSROOM-QUICK-START.md")))))
         start_row.addWidget(setup_arc)
@@ -401,6 +401,7 @@ class HomePage(QWidget):
         self.backend_status = StatusPill("Checking…", "neutral")
         self.backend_detail = QLabel("Starting diagnostics")
         self.backend_detail.setObjectName("muted")
+        self.backend_detail.setWordWrap(True)
         self.backend_card.layout.addWidget(self.backend_status)
         self.backend_card.layout.addWidget(self.backend_detail)
         summary.addWidget(self.backend_card)
@@ -441,8 +442,42 @@ class HomePage(QWidget):
     def update_diagnostics(self, payload: dict[str, Any]) -> None:
         self.backend_status.setText("Ready")
         self.backend_status.set_tone("good")
+        deployment = payload.get("deployment") or {}
+        credentials = payload.get("optional_credentials") or {}
+        credential_labels = {
+            "llm_api_key": "LLM",
+            "x_bearer_token": "X",
+            "bluesky_identifier": "Bluesky ID",
+            "bluesky_app_password": "Bluesky password",
+            "mastodon_token": "Mastodon",
+            "weibo_cookie": "Weibo session",
+        }
+        configured = [
+            credential_labels.get(key, key)
+            for key, value in credentials.items()
+            if bool(value)
+        ]
+        missing = [
+            credential_labels.get(key, key)
+            for key, value in credentials.items()
+            if not bool(value)
+        ]
+        core_note = (
+            "Core project/import/review/export workflows need no Virginia Tech service or LLM."
+            if not deployment.get("virginia_tech_required", False)
+            and not deployment.get("llm_required_for_core_workflows", False)
+            else "Review deployment requirements before use."
+        )
+        credential_note = (
+            f"Optional credentials configured: {', '.join(configured)}."
+            if configured
+            else "No optional credentials configured."
+        )
+        if missing:
+            credential_note += f" Optional/not configured: {', '.join(missing)}."
         self.backend_detail.setText(
-            f"SUGAR {payload.get('version', '?')} · {payload.get('runtime', '?')} · {payload.get('architecture', '?')} · bridge v{payload.get('bridge_protocol', '?')}"
+            f"SUGAR {payload.get('version', '?')} · {payload.get('runtime', '?')} · {payload.get('architecture', '?')} · bridge v{payload.get('bridge_protocol', '?')}\n"
+            f"{core_note}\n{credential_note}"
         )
         collectors = payload.get("collectors") or {}
         labels: list[str] = []
@@ -866,11 +901,82 @@ class StatePage(QWidget):
         self.research_sources = SourceSelector(SOURCES); self.research_sources.boxes["bilibili"].setChecked(True)
         qgrid=QGridLayout(); qgrid.addWidget(LabeledRow("Research question",self.research_question),0,0,1,2); qgrid.addWidget(LabeledRow("Geographies",self.research_geographies),1,0); qgrid.addWidget(LabeledRow("Known entities",self.research_entities),1,1); qgrid.addWidget(LabeledRow("Target audiences",self.research_audiences),2,0); qgrid.addWidget(LabeledRow("Languages",self.research_languages),2,1); qgrid.addWidget(LabeledRow("Depth",self.research_mode),3,0); qgrid.addWidget(LabeledRow("Since",self.research_since),3,1); qgrid.addWidget(LabeledRow("Until",self.research_until),4,1); qgrid.addWidget(LabeledRow("Preferred searchable sources",self.research_sources,"These are preferences, not proof of coverage. Source failures and zero-result searches are recorded separately."),5,0,1,2)
         question.layout.addLayout(qgrid)
-        qactions=QHBoxLayout(); qactions.addWidget(primary_button("Save Research Question",self._research_requirement)); qactions.addWidget(QPushButton("Build Inspectable Search Plan",clicked=self._research_plan)); qactions.addStretch(1); question.layout.addLayout(qactions)
+        qactions=QHBoxLayout(); qactions.addWidget(primary_button("Save Research Question",self._research_requirement)); qactions.addStretch(1); question.layout.addLayout(qactions)
         layout.addWidget(question)
 
+        strategy_review = Card(
+            "2b. Interpret and approve the research strategy",
+            "SUGAR compiles the sentence into explicit source-span concepts, semantic interpretations, search hypotheses, missing dimensions, and operational research dimensions. AI enrichment is optional; it may propose interpretations/hypotheses but cannot turn them into analyst-stated facts.",
+        )
+        strategy_actions = QHBoxLayout()
+        strategy_actions.addWidget(primary_button("Compile Deterministically", self._research_compile))
+        strategy_actions.addWidget(QPushButton("Compile + AI", clicked=self._research_compile_ai))
+        strategy_actions.addWidget(QPushButton("Refresh Interpretation", clicked=self._research_strategy_refresh))
+        strategy_actions.addStretch(1)
+        strategy_review.layout.addLayout(strategy_actions)
+        self.research_strategy_task = QLineEdit()
+        self.research_strategy_task.setPlaceholderText("Compiled analytic task, e.g. mechanism_assessment")
+        strategy_review.layout.addWidget(LabeledRow("Analytic task", self.research_strategy_task))
+        self.research_strategy_table = QTableWidget(0, 7)
+        self.research_strategy_table.setHorizontalHeaderLabels(
+            ["Concept ID", "Class", "Kind", "Value", "Confidence", "Use", "Rationale"]
+        )
+        self.research_strategy_table.setMinimumHeight(260)
+        self.research_strategy_table.setColumnWidth(0, 150)
+        self.research_strategy_table.setColumnWidth(1, 90)
+        self.research_strategy_table.setColumnWidth(2, 110)
+        self.research_strategy_table.setColumnWidth(3, 250)
+        self.research_strategy_table.setColumnWidth(4, 80)
+        self.research_strategy_table.setColumnWidth(5, 55)
+        self.research_strategy_table.setColumnWidth(6, 360)
+        strategy_review.layout.addWidget(self.research_strategy_table)
+        self.research_strategy_dimensions = QTableWidget(0, 7)
+        self.research_strategy_dimensions.setHorizontalHeaderLabels(
+            ["Dimension ID", "Use", "Name", "Question", "Indicators", "Source families", "Rationale"]
+        )
+        self.research_strategy_dimensions.setMinimumHeight(220)
+        self.research_strategy_dimensions.setColumnWidth(0, 145)
+        self.research_strategy_dimensions.setColumnWidth(1, 50)
+        self.research_strategy_dimensions.setColumnWidth(2, 125)
+        self.research_strategy_dimensions.setColumnWidth(3, 320)
+        self.research_strategy_dimensions.setColumnWidth(4, 260)
+        self.research_strategy_dimensions.setColumnWidth(5, 240)
+        self.research_strategy_dimensions.setColumnWidth(6, 300)
+        strategy_review.layout.addWidget(
+            LabeledRow(
+                "Research dimensions",
+                self.research_strategy_dimensions,
+                "Edit the operational questions/indicators or exclude a dimension before approval.",
+            )
+        )
+        self.research_strategy_missing = QPlainTextEdit()
+        self.research_strategy_missing.setReadOnly(True)
+        self.research_strategy_missing.setMaximumHeight(105)
+        strategy_review.layout.addWidget(
+            LabeledRow(
+                "Missing / confirm",
+                self.research_strategy_missing,
+                "Missing fields are not silently guessed. Update the research requirement and recompile when they matter.",
+            )
+        )
+        self.research_strategy_reviewer = QLineEdit()
+        self.research_strategy_reviewer.setPlaceholderText("Named analyst required for approval")
+        self.research_strategy_note = QLineEdit()
+        self.research_strategy_note.setPlaceholderText("Optional review note")
+        strategy_meta = QGridLayout()
+        strategy_meta.addWidget(LabeledRow("Reviewer", self.research_strategy_reviewer), 0, 0)
+        strategy_meta.addWidget(LabeledRow("Review note", self.research_strategy_note), 0, 1)
+        strategy_review.layout.addLayout(strategy_meta)
+        strategy_review_actions = QHBoxLayout()
+        strategy_review_actions.addWidget(QPushButton("Save Interpretation Edits", clicked=self._research_strategy_save))
+        strategy_review_actions.addWidget(primary_button("Approve Research Strategy", self._research_strategy_approve))
+        strategy_review_actions.addWidget(QPushButton("Build Search Plan from Approved Strategy", clicked=self._research_plan))
+        strategy_review_actions.addStretch(1)
+        strategy_review.layout.addLayout(strategy_review_actions)
+        layout.addWidget(strategy_review)
+
         plan_review = Card(
-            "2b. Review search branches",
+            "2c. Review search branches",
             "Review the generated plan before collection. Query and rationale cells are editable; approvals, pauses, and exclusions are preserved in the plan audit history.",
         )
         self.research_plan_table = QTableWidget(0, 5)
@@ -964,6 +1070,104 @@ class StatePage(QWidget):
         workspace = self._require_research_workspace()
         if workspace: self.run_operation("research-plan",{"workspace":workspace},False)
 
+    def _research_compile(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation("research-compile", {"workspace": workspace, "ai_expand": False}, False)
+
+    def _research_compile_ai(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation(
+                "research-compile",
+                {
+                    "workspace": workspace,
+                    "ai_expand": True,
+                    "llm": self.settings.llm_config(),
+                },
+                True,
+            )
+
+    def _research_strategy_refresh(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation("research-strategy-review", {"workspace": workspace}, False)
+
+    def _research_strategy_updates(self) -> list[dict[str, Any]]:
+        updates: list[dict[str, Any]] = []
+        for row in range(self.research_strategy_table.rowCount()):
+            concept_id = self.research_strategy_table.item(row, 0)
+            origin = self.research_strategy_table.item(row, 1)
+            value = self.research_strategy_table.item(row, 3)
+            included = self.research_strategy_table.item(row, 5)
+            rationale = self.research_strategy_table.item(row, 6)
+            if concept_id is None or origin is None or value is None or included is None:
+                continue
+            update: dict[str, Any] = {
+                "concept_id": concept_id.text(),
+                "included": included.checkState() == Qt.CheckState.Checked,
+            }
+            if origin.text().casefold() != "explicit":
+                update["value"] = value.text()
+            if rationale is not None:
+                update["rationale"] = rationale.text()
+            updates.append(update)
+        return updates
+
+    def _research_strategy_dimension_updates(self) -> list[dict[str, Any]]:
+        updates: list[dict[str, Any]] = []
+        for row in range(self.research_strategy_dimensions.rowCount()):
+            dimension_id = self.research_strategy_dimensions.item(row, 0)
+            included = self.research_strategy_dimensions.item(row, 1)
+            question = self.research_strategy_dimensions.item(row, 3)
+            indicators = self.research_strategy_dimensions.item(row, 4)
+            sources = self.research_strategy_dimensions.item(row, 5)
+            rationale = self.research_strategy_dimensions.item(row, 6)
+            if dimension_id is None or included is None or question is None:
+                continue
+            updates.append(
+                {
+                    "dimension_id": dimension_id.text(),
+                    "included": included.checkState() == Qt.CheckState.Checked,
+                    "question": question.text(),
+                    "indicators": split_terms(indicators.text()) if indicators is not None else [],
+                    "source_families": split_terms(sources.text()) if sources is not None else [],
+                    "rationale": rationale.text() if rationale is not None else "",
+                }
+            )
+        return updates
+
+    def _research_strategy_save(self, *, decision: str = "") -> None:
+        workspace = self._require_research_workspace()
+        if not workspace:
+            return
+        config: dict[str, Any] = {
+            "workspace": workspace,
+            "actor": self.research_strategy_reviewer.text().strip() or "desktop analyst",
+            "analytic_task": self.research_strategy_task.text().strip(),
+            "concept_updates": self._research_strategy_updates(),
+            "dimension_updates": self._research_strategy_dimension_updates(),
+        }
+        if decision:
+            config.update(
+                {
+                    "decision": decision,
+                    "reviewer": self.research_strategy_reviewer.text().strip(),
+                    "review_note": self.research_strategy_note.text().strip(),
+                }
+            )
+        self.run_operation("research-strategy-update", config, False)
+
+    def _research_strategy_approve(self) -> None:
+        if not self.research_strategy_reviewer.text().strip():
+            QMessageBox.warning(
+                self,
+                "Reviewer required",
+                "Enter the name of the analyst approving the compiled research strategy.",
+            )
+            return
+        self._research_strategy_save(decision="approved")
+
     def _research_plan_refresh(self) -> None:
         workspace = self._require_research_workspace()
         if workspace:
@@ -1012,7 +1216,85 @@ class StatePage(QWidget):
         self._research_plan_update(status)
 
     def handle_backend_event(self, payload: dict[str, Any]) -> None:
-        if payload.get("event") != "plan-review":
+        event = payload.get("event")
+        if event == "strategy-review":
+            self.research_strategy_task.setText(str(payload.get("analytic_task") or ""))
+            concepts = payload.get("concepts") or []
+            self.research_strategy_table.setRowCount(0)
+            for concept in concepts:
+                if not isinstance(concept, dict):
+                    continue
+                row = self.research_strategy_table.rowCount()
+                self.research_strategy_table.insertRow(row)
+                confidence = concept.get("confidence")
+                values = (
+                    str(concept.get("concept_id") or ""),
+                    str(concept.get("origin") or ""),
+                    str(concept.get("kind") or ""),
+                    str(concept.get("value") or ""),
+                    f"{float(confidence):.2f}" if isinstance(confidence, (int, float)) else "",
+                    "",
+                    str(concept.get("rationale") or ""),
+                )
+                for column, value in enumerate(values):
+                    item = QTableWidgetItem(value)
+                    if column in {0, 1, 2, 4}:
+                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    if column == 3 and str(concept.get("origin") or "").casefold() == "explicit":
+                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    if column == 5:
+                        item.setFlags(
+                            (item.flags() | Qt.ItemIsUserCheckable) & ~Qt.ItemIsEditable
+                        )
+                        item.setCheckState(
+                            Qt.CheckState.Checked
+                            if bool(concept.get("included", True))
+                            else Qt.CheckState.Unchecked
+                        )
+                    self.research_strategy_table.setItem(row, column, item)
+            dimensions = payload.get("dimensions") or []
+            self.research_strategy_dimensions.setRowCount(0)
+            for dimension in dimensions:
+                if not isinstance(dimension, dict):
+                    continue
+                row = self.research_strategy_dimensions.rowCount()
+                self.research_strategy_dimensions.insertRow(row)
+                values = (
+                    str(dimension.get("dimension_id") or ""),
+                    "",
+                    str(dimension.get("name") or ""),
+                    str(dimension.get("question") or ""),
+                    ", ".join(str(value) for value in dimension.get("indicators") or []),
+                    ", ".join(str(value) for value in dimension.get("source_families") or []),
+                    str(dimension.get("rationale") or ""),
+                )
+                for column, value in enumerate(values):
+                    item = QTableWidgetItem(value)
+                    if column in {0, 2}:
+                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    if column == 1:
+                        item.setFlags(
+                            (item.flags() | Qt.ItemIsUserCheckable) & ~Qt.ItemIsEditable
+                        )
+                        item.setCheckState(
+                            Qt.CheckState.Checked
+                            if bool(dimension.get("included", True))
+                            else Qt.CheckState.Unchecked
+                        )
+                    self.research_strategy_dimensions.setItem(row, column, item)
+            lines: list[str] = []
+            missing = payload.get("missing_dimensions") or []
+            if missing:
+                lines.append("Missing / analyst confirmation needed:")
+                for item in missing:
+                    if isinstance(item, dict):
+                        lines.append(f"- {item.get('field', '')}: {item.get('reason', '')}")
+            state = str(payload.get("review_state") or "draft")
+            reviewer = str(payload.get("reviewer") or "")
+            lines.append(f"Strategy review state: {state}" + (f" by {reviewer}" if reviewer else ""))
+            self.research_strategy_missing.setPlainText("\n".join(lines))
+            return
+        if event != "plan-review":
             return
         branches = payload.get("branches") or []
         if not isinstance(branches, list):
@@ -1334,10 +1616,10 @@ class MainWindow(QMainWindow):
         box.setTextFormat(Qt.RichText)
         box.setText(
             "<b>Recommended first run</b><br><br>"
-            "<b>1.</b> Open <b>Collect → Quick Search</b>. Leave <b>Bilibili</b> selected, use one search term, and keep the small 20-post / 1-page defaults.<br><br>"
-            "<b>2.</b> Inspect the generated files under <b>Activity & Outputs</b>. If Bilibili denies anonymous access, stop and retry later rather than repeatedly hammering the public endpoint.<br><br>"
-            "<b>3.</b> For translation/location inference, open <b>Settings</b>, choose <b>Virginia Tech ARC</b>, get your personal API key, and test the connection.<br><br>"
-            "<b>Credentials:</b> Weibo keyword search requires an authorized Weibo session. X requires its API token. Bilibili Quick Search uses anonymous public access only when Bilibili permits it."
+            "<b>1.</b> Open <b>State Workflow → Research Project</b> and create or open a portable project.<br><br>"
+            "<b>2.</b> Save the research question and build the inspectable search plan. Import, project inspection, human review, and export work without any LLM or Virginia Tech credentials.<br><br>"
+            "<b>3.</b> Configure an LLM only if you need AI assistance. OpenAI and custom OpenAI-compatible providers are supported; Virginia Tech ARC is an optional classroom/development integration.<br><br>"
+            "<b>Source credentials:</b> only configure a source credential when you intentionally use that source and are authorized to do so."
         )
         check=QCheckBox("Don't show this automatically again")
         check.setChecked(True)
@@ -1384,7 +1666,19 @@ class MainWindow(QMainWindow):
     def _event(self,payload:dict[str,Any])->None:
         event=payload.get("event");
         if event in {"diagnostics","backend"}:
-            self._diagnostics=payload; self.home.update_diagnostics(payload)
+            diagnostic_payload=dict(payload)
+            backend_credentials=dict(payload.get("optional_credentials") or {})
+            session_secrets=self.settings_page.secrets()
+            backend_credentials.update({
+                "llm_api_key": bool(session_secrets.get("llm_api_key")),
+                "x_bearer_token": bool(session_secrets.get("x_bearer_token")),
+                "bluesky_identifier": bool(session_secrets.get("bluesky_identifier")),
+                "bluesky_app_password": bool(session_secrets.get("bluesky_app_password")),
+                "mastodon_token": bool(session_secrets.get("mastodon_token")),
+                "weibo_cookie": bool(session_secrets.get("weibo_cookie")),
+            })
+            diagnostic_payload["optional_credentials"]=backend_credentials
+            self._diagnostics=diagnostic_payload; self.home.update_diagnostics(diagnostic_payload)
         if event=="llm_connection":
             available=bool(payload.get("selected_model_available",True)); model=str(payload.get("model") or "ARC model")
             self.settings_page.arc_status.setText("ARC connected" if available else "ARC connected · model unavailable"); self.settings_page.arc_status.set_tone("good" if available else "warn")

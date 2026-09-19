@@ -54,6 +54,9 @@ def test_bridge_advertises_typed_desktop_operations():
     assert info["collectors"]["wechat"]["known_item"] is True
     for operation in (
         "research-requirement",
+        "research-compile",
+        "research-strategy-review",
+        "research-strategy-update",
         "research-plan",
         "research-plan-review",
         "research-plan-update",

@@ -22,13 +22,16 @@ from sugar_core.service import run_analysis, run_harvest, run_ingest, run_map, r
 from sugar_core.research_service import (
     apply_research_feedback,
     collect_research_plan,
+    compile_research_strategy,
     create_research_plan,
     create_research_requirement,
     export_research_handoff,
     import_research_dataset,
     review_research_plan,
+    review_research_strategy,
     triage_research_records,
     update_research_plan_branch,
+    update_research_strategy,
     verify_research_handoff,
 )
 from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_investigation
@@ -48,6 +51,9 @@ BASE_OPERATIONS = {
     "search",
     "ingest",
     "research-requirement",
+    "research-compile",
+    "research-strategy-review",
+    "research-strategy-update",
     "research-plan",
     "research-plan-review",
     "research-plan-update",
@@ -116,6 +122,14 @@ def secrets_from_environment() -> dict[str, str]:
 
 
 def backend_info() -> dict[str, Any]:
+    optional_credentials = {
+        "llm_api_key": bool(os.environ.get("SUGAR_LLM_API_KEY", "").strip()),
+        "x_bearer_token": bool(os.environ.get("SUGAR_X_BEARER_TOKEN", "").strip()),
+        "bluesky_identifier": bool(os.environ.get("SUGAR_BLUESKY_IDENTIFIER", "").strip()),
+        "bluesky_app_password": bool(os.environ.get("SUGAR_BLUESKY_APP_PASSWORD", "").strip()),
+        "mastodon_token": bool(os.environ.get("SUGAR_MASTODON_TOKEN", "").strip()),
+        "weibo_cookie": bool(os.environ.get("SUGAR_WEIBO_COOKIE", "").strip()),
+    }
     return {
         "version": sugar_core.__version__,
         "bridge_protocol": BRIDGE_PROTOCOL_VERSION,
@@ -126,6 +140,13 @@ def backend_info() -> dict[str, Any]:
         "os": platform.system().lower(),
         "collectors": collector_capabilities(),
         "operations": sorted(ALL_OPERATIONS),
+        "deployment": {
+            "virginia_tech_required": False,
+            "llm_required_for_core_workflows": False,
+            "supported_llm_providers": ["openai", "custom", "arc"],
+            "arc_role": "optional_classroom_development",
+        },
+        "optional_credentials": optional_credentials,
     }
 
 
@@ -168,8 +189,8 @@ def _run_llm_check(config: dict[str, Any], secrets: dict[str, str]) -> list[str]
     raw = config.get("llm") or {}
     if not isinstance(raw, dict):
         raise ValueError("llm configuration must be an object.")
-    provider = str(raw.get("provider") or "arc").strip()
-    model = str(raw.get("model") or "gpt-oss-120b").strip()
+    provider = str(raw.get("provider") or "openai").strip()
+    model = str(raw.get("model") or "gpt-5.6-luna").strip()
     base_url = str(raw.get("base_url") or "").strip()
     llm_config = LLMConfig(
         provider=provider,
@@ -278,6 +299,12 @@ def main(argv=None) -> int:
             outputs = run_ingest(config, secrets, progress=progress_event)
         elif args.command == "research-requirement":
             outputs = create_research_requirement(config, progress=progress_event)
+        elif args.command == "research-compile":
+            outputs = compile_research_strategy(config, secrets, progress=progress_event)
+        elif args.command == "research-strategy-review":
+            outputs = review_research_strategy(config, progress=progress_event)
+        elif args.command == "research-strategy-update":
+            outputs = update_research_strategy(config, progress=progress_event)
         elif args.command == "research-plan":
             outputs = create_research_plan(config, secrets, progress=progress_event)
         elif args.command == "research-plan-review":

@@ -30,6 +30,13 @@ from .research_requirements import (
     save_requirement,
     save_search_plan,
 )
+from .requirement_compiler import (
+    build_search_plan_from_strategy,
+    compile_requirement_deterministically,
+    enrich_strategy_with_llm,
+    load_research_strategy,
+    save_research_strategy,
+)
 from .search_planner import expand_branch_from_evidence, expand_initial_plan_with_llm
 from .service import run_analysis, run_harvest, run_map, run_overlap, run_search
 from .source_conflicts import load_source_conflicts
@@ -41,6 +48,7 @@ from .weibo_qualification import run_weibo_qualification
 from .weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
 from .workspace_runtime import (
     choose_output_directory,
+    latest_workspace_artifact_path,
     optional_workspace,
     register_handoff_bundle,
     register_workspace_outputs,
@@ -202,8 +210,44 @@ def build_parser() -> argparse.ArgumentParser:
     requirement_validate = requirement_sub.add_parser("validate")
     requirement_validate.add_argument("requirement_file")
 
+    strategy = sub.add_parser(
+        "strategy",
+        help="Compile, inspect, edit, and approve a structured research strategy from a requirement.",
+    )
+    strategy_sub = strategy.add_subparsers(dest="strategy_command", required=True)
+    strategy_compile = strategy_sub.add_parser("compile")
+    strategy_compile.add_argument("requirement_file")
+    strategy_compile.add_argument("--output")
+    strategy_compile.add_argument("--ai-expand", action="store_true")
+    strategy_compile.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
+    strategy_compile.add_argument("--model", default="gpt-5.6-luna")
+    strategy_compile.add_argument("--base-url", default="")
+    _workspace_arg(strategy_compile)
+    strategy_show = strategy_sub.add_parser("show")
+    strategy_show.add_argument("strategy_file")
+    strategy_update = strategy_sub.add_parser(
+        "update",
+        help="Apply structured JSON edits to a compiled strategy.",
+    )
+    strategy_update.add_argument("strategy_file")
+    strategy_update.add_argument(
+        "--edits",
+        required=True,
+        help="JSON file containing concept_updates, add_concepts, and/or analytic_task.",
+    )
+    strategy_update.add_argument("--output")
+    strategy_update.add_argument("--actor", default="cli analyst")
+    _workspace_arg(strategy_update)
+    strategy_approve = strategy_sub.add_parser("approve")
+    strategy_approve.add_argument("strategy_file")
+    strategy_approve.add_argument("--reviewer", required=True)
+    strategy_approve.add_argument("--note", default="")
+    strategy_approve.add_argument("--output")
+    _workspace_arg(strategy_approve)
+
     plan = sub.add_parser("plan", help="Create an inspectable bounded initial search plan from a requirement.")
     plan.add_argument("requirement_file")
+    plan.add_argument("--strategy", help="Approved compiled research strategy. Workspace plans auto-discover one when present.")
     plan.add_argument("--output")
     plan.add_argument("--ai-expand", action="store_true", help="Ask the configured LLM for additional bounded query branches.")
     plan.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
@@ -257,6 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.add_argument("plan_file")
     handoff.add_argument("records_file")
     handoff.add_argument("observations_file")
+    handoff.add_argument("--strategy")
     handoff.add_argument("--output", required=True, help="Parent directory for the portable handoff.")
     handoff.add_argument("--name", default="sugar-handoff")
     handoff.add_argument("--assessments")
@@ -521,6 +566,120 @@ def main(argv=None) -> int:
         print(output)
         return 0
 
+    if args.command == "strategy":
+        if args.strategy_command == "show":
+            strategy = load_research_strategy(args.strategy_file)
+            print(json.dumps(strategy.export_dict(), ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+
+        workspace = optional_workspace(getattr(args, "workspace", None))
+        if args.strategy_command == "compile":
+            requirement = load_requirement(args.requirement_file)
+            target = (
+                Path(args.output).expanduser()
+                if args.output
+                else (
+                    workspace.path_for("state") / "research-strategy.json"
+                    if workspace is not None
+                    else Path(args.requirement_file).expanduser().with_name("research-strategy.json")
+                )
+            )
+            strategy = compile_requirement_deterministically(requirement)
+            if args.ai_expand:
+                api_key = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
+                llm = _llm_from_cli(args.provider, args.model, args.base_url, api_key)
+                cache_dir = workspace.path_for("cache") if workspace is not None else target.parent / ".sugar-cache"
+                strategy = enrich_strategy_with_llm(
+                    requirement,
+                    strategy,
+                    llm=llm,
+                    cache_dir=cache_dir,
+                )
+            output = save_research_strategy(strategy, target)
+            if workspace is not None:
+                workspace.register_artifact(
+                    "research_strategy",
+                    output,
+                    label=f"Compiled strategy for {requirement.requirement_id}",
+                    metadata={
+                        "strategy_id": strategy.strategy_id,
+                        "requirement_id": requirement.requirement_id,
+                        "review_state": strategy.review_state,
+                        "ai_provider": strategy.ai_provider,
+                        "ai_model": strategy.ai_model,
+                    },
+                )
+            print(output)
+            return 0
+
+        strategy = load_research_strategy(args.strategy_file)
+        target = (
+            Path(args.output).expanduser()
+            if getattr(args, "output", None)
+            else Path(args.strategy_file).expanduser()
+        )
+        if args.strategy_command == "update":
+            edits_path = Path(args.edits).expanduser()
+            payload = json.loads(edits_path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("Strategy edits file must contain a JSON object.")
+            for raw in payload.get("concept_updates") or []:
+                if not isinstance(raw, dict) or not str(raw.get("concept_id") or "").strip():
+                    continue
+                strategy.update_concept(
+                    str(raw["concept_id"]),
+                    value=str(raw["value"]) if "value" in raw else None,
+                    included=bool(raw["included"]) if "included" in raw else None,
+                    rationale=str(raw["rationale"]) if "rationale" in raw else None,
+                    analyst_note=str(raw["analyst_note"]) if "analyst_note" in raw else None,
+                    actor=args.actor,
+                )
+            for raw in payload.get("add_concepts") or []:
+                if not isinstance(raw, dict):
+                    continue
+                strategy.add_analyst_concept(
+                    kind=str(raw.get("kind") or ""),
+                    value=str(raw.get("value") or ""),
+                    origin=str(raw.get("origin") or "interpreted"),
+                    rationale=str(raw.get("rationale") or ""),
+                    actor=args.actor,
+                )
+            for raw in payload.get("dimension_updates") or []:
+                if not isinstance(raw, dict) or not str(raw.get("dimension_id") or "").strip():
+                    continue
+                strategy.update_dimension(
+                    str(raw["dimension_id"]),
+                    question=str(raw["question"]) if "question" in raw else None,
+                    indicators=raw.get("indicators") if "indicators" in raw else None,
+                    source_families=raw.get("source_families") if "source_families" in raw else None,
+                    rationale=str(raw["rationale"]) if "rationale" in raw else None,
+                    included=bool(raw["included"]) if "included" in raw else None,
+                    analyst_note=str(raw["analyst_note"]) if "analyst_note" in raw else None,
+                    actor=args.actor,
+                )
+            if str(payload.get("analytic_task") or "").strip():
+                strategy.update_analytic_task(
+                    str(payload["analytic_task"]),
+                    actor=args.actor,
+                )
+        elif args.strategy_command == "approve":
+            strategy.approve(reviewer=args.reviewer, note=args.note)
+        output = save_research_strategy(strategy, target)
+        if workspace is not None:
+            workspace.register_artifact(
+                "research_strategy",
+                output,
+                label=f"Reviewed strategy for {strategy.requirement_id}",
+                metadata={
+                    "strategy_id": strategy.strategy_id,
+                    "requirement_id": strategy.requirement_id,
+                    "review_state": strategy.review_state,
+                    "reviewer": strategy.reviewer,
+                },
+            )
+        print(output)
+        return 0
+
     if args.command == "plan":
         workspace = optional_workspace(args.workspace)
         requirement = load_requirement(args.requirement_file)
@@ -533,7 +692,21 @@ def main(argv=None) -> int:
                 else Path(args.requirement_file).expanduser().with_name("search-plan.json")
             )
         )
-        plan = build_initial_search_plan(requirement)
+        strategy_path = (
+            Path(args.strategy).expanduser().resolve()
+            if args.strategy
+            else latest_workspace_artifact_path(workspace, "research_strategy")
+        )
+        strategy = None
+        if strategy_path is not None and strategy_path.is_file():
+            strategy = load_research_strategy(strategy_path)
+            if strategy.requirement_id != requirement.requirement_id:
+                raise ValueError(
+                    "The compiled research strategy belongs to a different research requirement."
+                )
+            plan = build_search_plan_from_strategy(requirement, strategy)
+        else:
+            plan = build_initial_search_plan(requirement)
         if args.ai_expand:
             api_key = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
             llm = _llm_from_cli(args.provider, args.model, args.base_url, api_key)
@@ -555,6 +728,7 @@ def main(argv=None) -> int:
                     "requirement_id": requirement.requirement_id,
                     "schema_version": plan.schema_version,
                     "branch_count": len(plan.branches),
+                    "strategy_id": strategy.strategy_id if strategy is not None else "",
                 },
             )
         print(output)
@@ -682,6 +856,11 @@ def main(argv=None) -> int:
 
     if args.command == "handoff":
         workspace = optional_workspace(args.workspace)
+        strategy_path = (
+            Path(args.strategy).expanduser().resolve()
+            if args.strategy
+            else latest_workspace_artifact_path(workspace, "research_strategy")
+        )
         result = build_handoff_bundle(
             args.requirement_file,
             args.plan_file,
@@ -689,6 +868,7 @@ def main(argv=None) -> int:
             args.observations_file,
             args.output,
             name=args.name,
+            strategy_file=strategy_path,
             assessments_file=args.assessments,
             source_conflicts_file=args.source_conflicts,
             limitations_file=args.limitations,
