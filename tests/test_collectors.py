@@ -1,4 +1,11 @@
-from sugar_core.collectors import collect_bluesky, collect_mastodon, collect_x
+from sugar_core.collectors import collect_bluesky, collect_mastodon, collect_x, create_session
+
+
+def test_http_user_agent_identifies_sugar_without_claiming_an_affiliation():
+    user_agent = create_session().headers["User-Agent"]
+    assert user_agent.startswith("SUGAR research client")
+    assert "github.com/FL2744/SUGAR" in user_agent
+    assert "Virginia Tech" not in user_agent
 
 
 class FakeResponse:
@@ -77,12 +84,23 @@ def test_mastodon_until_date_inclusive_and_metrics():
         "replies_count":1, "reblogs_count":2, "favourites_count":3, "account":{"acct":"a","display_name":"A"}
     }]}
     session = FakeSession([FakeResponse(payload)])
-    rows = collect_mastodon(instance_url="https://m.example", search_terms=["q"], until="2026-09-10", session=session)
+    rows = collect_mastodon(instance_url="https://m.example", search_terms=["q"], until="2026-09-10", access_token="test-token", session=session)
     assert len(rows) == 1
     assert rows[0].engagement["likes"] == 3
     assert rows[0].engagement["reposts"] == 2
     assert rows[0].thread_root_key == "mastodon:9"
     assert rows[0].conversation_id == "9"
+
+
+def test_mastodon_status_search_requires_authorized_token_before_request():
+    session = FakeSession([])
+    try:
+        collect_mastodon(instance_url="https://m.example", search_terms=["q"], session=session)
+    except ValueError as error:
+        assert "read:search" in str(error)
+    else:
+        raise AssertionError("unauthenticated Mastodon status search should fail closed")
+    assert session.calls == []
 
 
 def test_mastodon_reply_preserves_parent_without_inventing_root():
@@ -93,7 +111,7 @@ def test_mastodon_reply_preserves_parent_without_inventing_root():
         "account":{"acct":"a","display_name":"A"}
     }]}
     rows = collect_mastodon(
-        instance_url="https://m.example", search_terms=["q"],
+        instance_url="https://m.example", search_terms=["q"], access_token="test-token",
         session=FakeSession([FakeResponse(payload)]),
     )
     assert rows[0].parent_record_key == "mastodon:9"

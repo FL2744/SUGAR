@@ -102,7 +102,7 @@ See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the workspace
 | --- | --- |
 | X | API v2 recent/full-archive search, subject to caller access/billing |
 | Bluesky | Public AppView search; optional authenticated PDS proxy path |
-| Mastodon | Instance-scoped status search |
+| Mastodon | Instance-scoped status search with an authorized user token (`read:search`) |
 | Bilibili | Public video search, known-video metadata, and public comments |
 | Weibo | Public/authorized search where available, known-public-post retrieval, comments, seed expansion, qualification workflows |
 | WeChat Official Accounts | Known public `mp.weixin.qq.com` article ingestion; no keyword search or private/account-only surfaces |

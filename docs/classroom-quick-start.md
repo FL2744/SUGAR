@@ -37,7 +37,7 @@ For a fast collector sanity check rather than a research project, **Collect -> Q
 
 **WeChat Official Accounts:** use **Collect -> Public URL** with an ordinary public `https://mp.weixin.qq.com/...` article URL. SUGAR does not provide WeChat keyword search, private-chat collection, Mini Program collection, automated login, or challenge bypass.
 
-**X / Bluesky / Mastodon:** optional general-source adapters. Only configure their credentials if you intentionally plan to use those sources.
+**X / Bluesky / Mastodon:** optional general-source adapters. Mastodon status search requires a user token with `read:search`. Configure credentials only for sources you intend to use.
 
 SUGAR does not create accounts, bypass authentication, rotate identities, or defeat platform access controls.
 

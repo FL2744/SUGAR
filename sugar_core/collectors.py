@@ -19,7 +19,7 @@ BLUESKY_SERVICE_PROXY = "did:web:api.bsky.app#bsky_appview"
 def create_session() -> requests.Session:
     session = requests.Session()
     session.headers.update({
-        "User-Agent": "SUGAR/1.1 research-client (+Virginia Tech Diplomacy Lab)",
+        "User-Agent": "SUGAR research client (+https://github.com/FL2744/SUGAR)",
         "Accept": "application/json,text/plain;q=0.9,*/*;q=0.8",
     })
     return session
@@ -255,6 +255,8 @@ def collect_mastodon(*, instance_url: str, search_terms: Iterable[str], access_t
                      since: str | None = None, until: str | None = None, include_reposts: bool = False,
                      max_posts_per_query: int = 40, max_pages_per_query: int = 1,
                      session: requests.Session | None = None) -> list[PostRecord]:
+    if not access_token.strip():
+        raise ValueError("Mastodon status search requires an authorized user token with the read:search scope.")
     session = session or create_session(); instance_url = instance_url.rstrip("/")
     records: OrderedDict[tuple[str, str], PostRecord] = OrderedDict()
     endpoint = f"{instance_url}/api/v2/search"; headers = {"Authorization": f"Bearer {access_token}"} if access_token else {}

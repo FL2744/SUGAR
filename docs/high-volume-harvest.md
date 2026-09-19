@@ -50,7 +50,7 @@ These adapters reuse the existing fail-closed public collectors. Page sharding d
 
 ### Mastodon
 
-Mastodon remains instance-scoped. The current search adapter is not date-sharded by default because its date bounds are filtered locally rather than defining independent server-side result partitions. A future bulk adapter should use instance-supported pagination semantics directly rather than repeatedly rescanning the same search result pages.
+Mastodon remains instance-scoped. Status search requires an authorized user token with `read:search`; the collector fails before sending a request when no token is provided. The current search adapter is not date-sharded by default because its date bounds are filtered locally rather than defining independent server-side result partitions. A future bulk adapter should use instance-supported pagination semantics directly rather than repeatedly rescanning the same search result pages.
 
 ## Query-plan files
 

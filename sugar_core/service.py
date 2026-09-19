@@ -270,7 +270,7 @@ def _harvest_access_modes(config: dict[str, Any], secrets: dict[str, str]) -> di
             authenticated = bool(secrets.get("bluesky_identifier", "").strip() and secrets.get("bluesky_app_password", "").strip())
             modes[source] = "authenticated" if authenticated else "public_appview"
         elif source == "mastodon":
-            modes[source] = "authenticated" if secrets.get("mastodon_token", "").strip() else "anonymous_instance"
+            modes[source] = "authenticated" if secrets.get("mastodon_token", "").strip() else "missing_credential"
         elif source == "weibo":
             modes[source] = "session" if secrets.get("weibo_cookie", "").strip() else "anonymous"
         elif source == "bilibili":

@@ -27,6 +27,7 @@ Use this index to find the current design or methodology document for the part o
 - [`weibo-public.md`](weibo-public.md) — Weibo public/authorized collection behavior.
 - [`wechat-public.md`](wechat-public.md) — public WeChat Official Account article ingestion and access boundaries.
 - [`weibo-investigation.md`](weibo-investigation.md) — known-public-post expansion and context workflow.
+- [`benchmarking.md`](benchmarking.md) — intelligence calibration and bounded live/offline workload benchmarks.
 - [`weibo-qualification.md`](weibo-qualification.md) — reproducible Weibo collection/investigation acceptance campaign.
 
 ## Evidence, AI, and spatial analysis

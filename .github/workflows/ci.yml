@@ -57,21 +57,17 @@ jobs:
       - name: Workspace smoke test
         run: python -c "import tempfile; from pathlib import Path; from sugar_core.workspace import SugarWorkspace; d=Path(tempfile.mkdtemp())/'project'; w=SugarWorkspace.create(d,name='CI'); p=w.path_for('raw')/'sample.txt'; p.write_text('ok',encoding='utf-8'); w.register_artifact('raw',p); assert SugarWorkspace.open(d).status()['artifact_count']==1"
 
-  weibo-live-smoke:
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+  offline-stress-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           cache: pip
       - run: python -m pip install -e ".[dev]"
-      - name: Bounded live public Weibo seed, qualification, and bulk-seed smoke
-        env:
-          SUGAR_LIVE_WEIBO: "1"
-        run: python -m pytest -q -s tests/test_weibo_live.py tests/test_weibo_qualification_live.py tests/test_weibo_seed_harvest_live.py
+      - name: Exercise a bounded 5,000-record checkpoint workload offline
+        run: python tools/stress_test.py --records 5000 --skip-export --skip-map --output-dir "$RUNNER_TEMP/sugar-stress" --max-seconds 90 --max-disk-mb 256 --max-peak-python-mb 512
 
   macos-app:
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'

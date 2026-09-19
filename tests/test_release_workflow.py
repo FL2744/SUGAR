@@ -27,12 +27,21 @@ def test_ci_retains_a_validated_mac_bundle() -> None:
 
 def test_branch_ci_uses_fast_gate_and_reserves_expensive_jobs() -> None:
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    live_workflow = (ROOT / ".github" / "workflows" / "authorized-live-smoke.yml").read_text(encoding="utf-8")
     assert "fast-test:" in workflow
     assert 'python-version: "3.14"' in workflow
     assert "compatibility-test:" in workflow
     expensive_gate = "github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'"
-    # Live-network and packaged desktop jobs should not run on every fix-branch push.
-    assert workflow.count(expensive_gate) >= 3
+    # Packaged desktop jobs should not run on every fix-branch push. Public live
+    # API checks run only through a separately confirmed manual workflow.
+    assert workflow.count(expensive_gate) >= 2
+    assert "weibo-live-smoke:" not in workflow
+    assert "offline-stress-smoke:" in workflow
+    assert "workflow_dispatch:" in live_workflow
+    assert "confirm_bounded_public_reads:" in live_workflow
+    assert "type: boolean" in live_workflow
+    assert "push:" not in live_workflow
+    assert "pull_request:" not in live_workflow
     # The compatibility matrix is intentionally non-Cartesian: supported Python
     # versions are covered cheaply on Linux while native OS checks use one runtime.
     assert "os: [ubuntu-latest, macos-latest, windows-latest]" not in workflow

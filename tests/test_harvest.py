@@ -66,6 +66,17 @@ def test_store_merges_duplicate_query_provenance(tmp_path: Path):
         assert record.query_matches == ["alpha", "beta"]
 
 
+def test_store_records_limit_bounds_materialized_rows(tmp_path: Path):
+    with HarvestStore(tmp_path / "harvest.sqlite3") as store:
+        store.upsert_records([_record("bluesky", str(index), "sample") for index in range(5)])
+
+        assert len(store.records()) == 5
+        assert [record.native_id for record in store.records(limit=2)] == ["0", "1"]
+        assert store.records(limit=0) == []
+        with pytest.raises(ValueError, match="limit cannot be negative"):
+            store.records(limit=-1)
+
+
 def test_retry_after_header_is_honored():
     response = requests.Response()
     response.status_code = 429
