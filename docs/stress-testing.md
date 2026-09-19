@@ -134,7 +134,7 @@ these measurements are qualification inputs, not universal performance guarantee
 
 ### 4. State and workspace workflows
 
-- Run the deterministic Kyrgyzstan case and compare its summary/guardrail fields with the checked-in
+- Run the deterministic state fixture and compare its summary/guardrail fields with the checked-in
   expectations.
 - Scale observation and assessment JSONL/CSV/XLSX inputs independently from 1k through 100k rows.
 - Exercise workspace registration, repeated registration, missing artifacts, relative paths, and
