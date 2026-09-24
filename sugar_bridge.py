@@ -263,6 +263,25 @@ def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
         emit("workspace_status", **workspace.status())
         return [str(workspace.manifest_path), str(workspace.database_path)]
 
+    if command == "workspace-share-verify":
+        share_file = str(config.get("share_file") or config.get("file") or "").strip()
+        if not share_file:
+            raise ValueError("share_file is required.")
+        result = verify_project_share(share_file)
+        emit("workspace_share_verification", **result)
+        if not result.get("valid"):
+            raise ValueError("Project share verification failed: " + "; ".join(result.get("errors") or []))
+        return [str(Path(share_file).expanduser().resolve())]
+
+    if command == "workspace-share-import":
+        share_file = str(config.get("share_file") or config.get("file") or "").strip()
+        destination = str(config.get("destination") or "").strip()
+        if not share_file or not destination:
+            raise ValueError("share_file and destination are required.")
+        imported = import_project_share(share_file, destination)
+        emit("workspace_share_imported", workspace=imported)
+        return [imported]
+
     workspace = SugarWorkspace.open(_workspace_path(config))
     if command == "workspace-status":
         emit("workspace_status", **workspace.status())
@@ -422,25 +441,6 @@ def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
         workspace.register_artifact("project_share", output, metadata={"operation": command})
         emit("workspace_share", output=output)
         return [output]
-
-    if command == "workspace-share-verify":
-        share_file = str(config.get("share_file") or config.get("file") or "").strip()
-        if not share_file:
-            raise ValueError("share_file is required.")
-        result = verify_project_share(share_file)
-        emit("workspace_share_verification", **result)
-        if not result.get("valid"):
-            raise ValueError("Project share verification failed: " + "; ".join(result.get("errors") or []))
-        return [str(Path(share_file).expanduser().resolve())]
-
-    if command == "workspace-share-import":
-        share_file = str(config.get("share_file") or config.get("file") or "").strip()
-        destination = str(config.get("destination") or "").strip()
-        if not share_file or not destination:
-            raise ValueError("share_file and destination are required.")
-        imported = import_project_share(share_file, destination)
-        emit("workspace_share_imported", workspace=imported)
-        return [imported]
 
     artifact_path = str(config.get("artifact") or config.get("artifact_path") or "").strip()
     if not artifact_path:
