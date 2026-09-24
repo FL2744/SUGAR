@@ -1036,6 +1036,11 @@ class StatePage(QWidget):
         self.research_workspace_tabs.addTab(self.research_history_table, "Search History")
         self.research_workspace_tabs.addTab(self.research_layers_table, "Reference Layers")
         workspace_tools.layout.addWidget(self.research_workspace_tabs)
+        workspace_actions = QHBoxLayout()
+        workspace_actions.addWidget(QPushButton("Run Selected Listening Post", clicked=self._research_listening_run))
+        workspace_actions.addWidget(QPushButton("Build Conversation View", clicked=self._research_conversation_view))
+        workspace_actions.addStretch(1)
+        workspace_tools.layout.addLayout(workspace_actions)
         layout.addWidget(workspace_tools)
 
         question = Card("2. Research question", "Define what you are trying to answer before collecting. SUGAR turns this into a versioned requirement and an inspectable bounded search plan.")
@@ -1260,6 +1265,36 @@ class StatePage(QWidget):
             },
             False,
         )
+
+    def _selected_listening_post_id(self) -> str:
+        row = self.research_listening_table.currentRow()
+        if row < 0:
+            return ""
+        item = self.research_listening_table.item(row, 0)
+        return item.text().strip() if item is not None else ""
+
+    def _research_listening_run(self) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace:
+            return
+        listening_post_id = self._selected_listening_post_id()
+        if not listening_post_id:
+            QMessageBox.information(self, "Choose a listening post", "Select a listening-post row first.")
+            return
+        self.run_operation(
+            "workspace-listening-run",
+            {
+                "workspace": workspace,
+                "listening_post_id": listening_post_id,
+                "mastodon_url": self.settings.mastodon_url.text().strip() or "https://mastodon.social",
+            },
+            False,
+        )
+
+    def _research_conversation_view(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation("workspace-conversation-view", {"workspace": workspace}, False)
 
     def _research_reference_files_dropped(self, paths: list[str]) -> None:
         workspace = self._require_research_workspace()
@@ -1608,7 +1643,20 @@ class StatePage(QWidget):
             self._render_research_workspace(payload)
             return
         if event == "workspace_listening_post":
+            item = payload.get("listening_post") or {}
+            if isinstance(item, dict):
+                self._populate_readonly_table(
+                    self.research_listening_table,
+                    [[item.get("listening_post_id",""), item.get("name",""), ", ".join(item.get("sources") or []), item.get("cadence",""), item.get("status","")]]
+                )
             self._render_research_workspace(payload)
+            return
+        if event == "workspace_listening_post_run":
+            item = payload.get("listening_post") or {}
+            if isinstance(item, dict):
+                self.research_workspace_summary.setText(
+                    f"Listening post {item.get('name','')} completed · last success {item.get('last_success_at','')}"
+                )
             return
         if event == "workspace_reference_layers":
             items = payload.get("reference_layers") or []
