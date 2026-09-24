@@ -20,12 +20,12 @@ The report exposes six components and their weights:
 | --- | ---: | --- |
 | Uncovered scope match | 0.25 | Candidate mentions requirement geography, audience, language, or known entity not represented by a completed branch with records. |
 | Hypothesis discrimination | 0.30 | Candidate matches collection-needed or discriminator text, including its originating hypothesis. |
-| Observed novelty | 0.15 | New concepts per relevant item on a measured branch, capped at 1. |
+| Observed novelty | 0.15 | New concepts per relevant item when the branch has a populated novelty counter, capped at 1. |
 | Observed relevance | 0.15 | Relevant assessments divided by assessed items on a measured branch. |
 | Observed source diversity | 0.10 | Distinct observed source count scaled to four. This does not assert source independence. |
-| Observed duplicate avoidance | 0.05 | One minus the measured duplicate rate. |
+| Observed duplicate avoidance | 0.05 | One minus the measured duplicate rate when duplicate counts were populated. |
 
-Unmeasured components are omitted and the other weights are renormalized. `available_weight` shows how much measured information supports each priority. Accessibility, expected live yield, and actual time or compute cost are reported as unestimated. The record budget is an analyst-set maximum, not a predicted yield.
+Unmeasured components are omitted and the other weights are renormalized. `available_weight` shows how much measured information supports each priority. Default zero novelty/duplicate counters are treated as unmeasured because the current plan schema does not distinguish an observed zero from an unset value. The report explains each recommendation and its metric basis. If a candidate has no measurements, it can use completed branches from the same search family and language, then falls back to family, language, or all completed branches. It reports the selected cohort size, historical median record yield, observed range, and pooled decisive-triage rate; these are planning references, not calibrated predictions. Relevance rates count observations while yield counts records, so SUGAR reports them separately. Accessibility and runtime or compute cost remain unestimated. The record maximum is an analyst-set cap.
 
 Running the operation records a `next_evidence_recommendation` event in the search plan. A new hypothesis-derived query is added as a **paused** branch, where the analyst can edit it and approve it using the ordinary plan review controls. No collection starts from this operation.
 

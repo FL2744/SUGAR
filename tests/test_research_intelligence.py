@@ -108,6 +108,122 @@ def test_next_evidence_apply_adds_hypothesis_query_paused_for_human_review():
     assert plan.events[-1]["analyst_approval_required"] is True
 
 
+def test_next_evidence_uses_comparable_completed_branch_history_and_explains_rank():
+    requirement = ResearchRequirement(
+        question="Find Russian scholarships for students in Bishkek.",
+        geographies=["Bishkek"],
+        target_audiences=["students"],
+        languages=["Russian"],
+    )
+    plan = SearchPlan(
+        requirement_id=requirement.requirement_id,
+        branches=[
+            SearchBranch(
+                query="Russian university scholarship Bishkek students",
+                rationale="Targets the remaining local gap.",
+                search_family="local_programs",
+                language="Russian",
+                status="planned",
+            ),
+            SearchBranch(
+                query="Completed local program search in Russian",
+                rationale="Completed comparison branch.",
+                search_family="local_programs",
+                language="Russian",
+                status="completed",
+                metrics=BranchMetrics(
+                    retrieved=10,
+                    relevance_assessed=4,
+                    relevant=3,
+                    unique=8,
+                    duplicates=2,
+                    new_concepts=2,
+                    distinct_sources=2,
+                ),
+            ),
+            SearchBranch(
+                query="Completed zero-result local program search in Russian",
+                rationale="A successful zero-result attempt remains part of yield history.",
+                search_family="local_programs",
+                language="Russian",
+                status="completed",
+                metrics=BranchMetrics(retrieved=0),
+            ),
+            SearchBranch(
+                query="Completed unrelated English search",
+                rationale="Must not override the more specific cohort.",
+                search_family="general_discovery",
+                language="English",
+                status="completed",
+                metrics=BranchMetrics(
+                    retrieved=100,
+                    relevance_assessed=1,
+                    relevant=0,
+                    unique=100,
+                    distinct_sources=4,
+                ),
+            ),
+        ],
+    )
+
+    report = build_next_evidence_recommendation(requirement, plan)
+    selected = next(
+        item for item in report["recommendations"]
+        if item["query"] == "Russian university scholarship Bishkek students"
+    )
+
+    assert selected["historical_outcomes"]["basis"] == "same_search_family_and_language"
+    assert selected["historical_outcomes"]["completed_branch_count"] == 2
+    assert selected["historical_outcomes"]["observed_retrieved_records"] == {
+        "median": 5, "minimum": 0, "maximum": 10,
+    }
+    assert selected["historical_outcomes"]["planning_estimate"]["expected_retrieved_records"] == 5
+    assert selected["historical_outcomes"]["planning_estimate"]["human_triage_relevance_rate"] == 0.7
+    assert selected["component_evidence_basis"]["observed_relevance"] == (
+        "historical_completed_branches:same_search_family_and_language"
+    )
+    assert any("geography=Bishkek" in reason for reason in selected["why_recommended"])
+    assert "guarantee" in " ".join(selected["historical_outcomes"]["limits"])
+
+
+def test_next_evidence_accepts_string_collection_need_as_one_proposal():
+    requirement = ResearchRequirement(question="Assess scholarship announcements.")
+    plan = SearchPlan(requirement_id=requirement.requirement_id, branches=[])
+    report = build_next_evidence_recommendation(requirement, plan, hypotheses={
+        "hypotheses": [{
+            "hypothesis_id": "h_local",
+            "hypothesis": "Local adaptation matters.",
+            "collection_needed": "Search local university scholarship announcements.",
+        }],
+    })
+
+    assert [item["query"] for item in report["recommendations"]] == [
+        "Search local university scholarship announcements."
+    ]
+
+
+def test_next_evidence_does_not_treat_default_zero_quality_counters_as_measured():
+    requirement = ResearchRequirement(question="Assess scholarship announcements.")
+    plan = SearchPlan(requirement_id=requirement.requirement_id, branches=[SearchBranch(
+        query="scholarship announcements",
+        rationale="Existing bounded candidate.",
+        status="planned",
+        metrics=BranchMetrics(
+            retrieved=20,
+            relevance_assessed=10,
+            relevant=5,
+            unique=20,
+            distinct_sources=1,
+        ),
+    )])
+
+    selected = build_next_evidence_recommendation(requirement, plan)["recommended_next_collection"]
+
+    assert selected["component_evidence_basis"]["observed_relevance"] == "candidate_branch_metrics"
+    assert selected["component_evidence_basis"]["observed_novelty"] == "unmeasured"
+    assert selected["component_evidence_basis"]["observed_duplicate_avoidance"] == "unmeasured"
+
+
 def test_next_evidence_cli_saves_report_and_paused_plan_proposal(tmp_path: Path, capsys):
     requirement = ResearchRequirement(question="Assess local public scholarship programs.")
     requirement_path = Path(save_requirement(requirement, tmp_path / "requirement.json"))

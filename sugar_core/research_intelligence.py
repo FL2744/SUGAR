@@ -6,6 +6,7 @@ import re
 from collections import defaultdict
 from datetime import date, datetime, timezone
 from pathlib import Path
+from statistics import median
 from typing import Any, Iterable
 from urllib.parse import urlsplit
 
@@ -29,6 +30,93 @@ def _tokens(value: str) -> set[str]:
 def _stable_id(prefix: str, *parts: Any) -> str:
     payload = "|".join(_clean(item).casefold() for item in parts)
     return f"{prefix}_{hashlib.sha256(payload.encode('utf-8')).hexdigest()[:16]}"
+
+
+def _as_text_list(value: Any) -> list[str]:
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, (list, tuple)):
+        values = list(value)
+    else:
+        values = []
+    return [_clean(item) for item in values if isinstance(item, str) and _clean(item)]
+
+
+def _historical_outcomes(
+    plan: SearchPlan,
+    *,
+    search_family: str,
+    language: str,
+    max_records_per_query: int,
+) -> dict[str, Any]:
+    """Summarize comparable completed branches without presenting them as certainty."""
+    completed = [
+        branch for branch in plan.branches
+        if branch.status == "completed"
+    ]
+    family = _clean(search_family).casefold()
+    lang = _clean(language).casefold()
+    cohorts: list[tuple[str, list[SearchBranch]]] = []
+    if family and lang:
+        cohorts.append(("same_search_family_and_language", [
+            branch for branch in completed
+            if branch.search_family == family and branch.language.casefold() == lang
+        ]))
+    if family:
+        cohorts.append(("same_search_family", [branch for branch in completed if branch.search_family == family]))
+    if lang:
+        cohorts.append(("same_language", [branch for branch in completed if branch.language.casefold() == lang]))
+    cohorts.append(("all_completed_branches", completed))
+    basis, rows = next(((basis, rows) for basis, rows in cohorts if rows), ("no_completed_yield", []))
+
+    retrievals = [branch.metrics.retrieved for branch in rows]
+    median_retrieved = median(retrievals) if retrievals else None
+    assessed = sum(branch.metrics.relevance_assessed for branch in rows)
+    relevant = sum(branch.metrics.relevant for branch in rows)
+    relevance_rate = (relevant + 0.5) / (assessed + 1.0) if assessed else None
+    source_counts = [branch.metrics.distinct_sources for branch in rows if branch.metrics.distinct_sources > 0]
+    source_diversity = min(1.0, max(0.0, median(source_counts) / 4.0)) if source_counts else None
+    # These counters default to zero and the current collectors do not write an
+    # explicit "measured zero" marker, so only positive counters establish that
+    # novelty/duplicate fields were actually populated.
+    novelty_rows = [branch.metrics for branch in rows if branch.metrics.relevant > 0 and branch.metrics.new_concepts > 0]
+    novelty_rate = (
+        min(1.0, max(0.0, sum(item.new_concepts for item in novelty_rows) / sum(item.relevant for item in novelty_rows)))
+        if novelty_rows else None
+    )
+    duplicate_rows = [branch.metrics for branch in rows if branch.metrics.duplicates > 0]
+    duplicate_avoidance = (
+        1.0 - sum(item.duplicates for item in duplicate_rows)
+        / sum(item.unique + item.duplicates for item in duplicate_rows)
+        if duplicate_rows else None
+    )
+    return {
+        "basis": basis,
+        "completed_branch_count": len(rows),
+        "branches_with_relevance_assessment": sum(branch.metrics.relevance_assessed > 0 for branch in rows),
+        "branches_with_source_counts": len(source_counts),
+        "observed_retrieved_records": {
+            "median": int(round(median_retrieved)) if median_retrieved is not None else None,
+            "minimum": min(retrievals) if retrievals else None,
+            "maximum": max(retrievals) if retrievals else None,
+        },
+        "rate_estimates": {
+            "relevance": round(relevance_rate, 4) if relevance_rate is not None else None,
+            "novelty": round(novelty_rate, 4) if novelty_rate is not None else None,
+            "source_diversity": round(source_diversity, 4) if source_diversity is not None else None,
+            "duplicate_avoidance": round(duplicate_avoidance, 4) if duplicate_avoidance is not None else None,
+        },
+        "planning_estimate": {
+            "expected_retrieved_records": min(int(round(median_retrieved)), int(max_records_per_query)) if median_retrieved is not None else None,
+            "human_triage_relevance_rate": round(relevance_rate, 4) if relevance_rate is not None else None,
+            "basis": "Median observed record yield and pooled decisive-observation triage rate from the selected completed-branch cohort; the two measures are reported separately because one branch metric counts records and the other counts observations.",
+        },
+        "limits": [
+            "Historical branches are analogues, not guarantees for a new query.",
+            "Collection success and availability are not forecast from prior record yield.",
+            "Human-triage relevance rates reflect only observations with decisive labels.",
+        ],
+    }
 
 
 def _host(url: str) -> str:
@@ -67,14 +155,14 @@ def _hypotheses(payload: dict[str, Any] | None) -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             continue
         statement = _clean(item.get("hypothesis"))
-        collection = item.get("collection_needed") or []
+        collection = _as_text_list(item.get("collection_needed"))
         if not statement:
             continue
         result.append({
             "hypothesis_id": _clean(item.get("hypothesis_id")) or _stable_id("h", statement),
             "hypothesis": statement,
-            "collection_needed": [_clean(value) for value in collection if _clean(value)],
-            "discriminators": [_clean(value) for value in item.get("discriminators") or [] if _clean(value)],
+            "collection_needed": collection,
+            "discriminators": _as_text_list(item.get("discriminators")),
         })
     return result
 
@@ -129,6 +217,7 @@ def build_next_evidence_recommendation(
             "origin": "search_plan",
             "branch_id": branch.branch_id,
             "language": branch.language,
+            "search_family": branch.search_family,
             "metrics": branch.metrics,
         })
 
@@ -145,6 +234,7 @@ def build_next_evidence_recommendation(
                 "origin": "hypothesis_collection_need",
                 "hypothesis_ids": [hypothesis["hypothesis_id"]],
                 "language": "",
+                "search_family": "hypothesis_discriminator",
                 "metrics": None,
             })
 
@@ -192,16 +282,38 @@ def build_next_evidence_recommendation(
             "observed_source_diversity": None,
             "observed_duplicate_avoidance": None,
         }
+        component_basis = {key: "unmeasured" for key in components}
         if metrics is not None:
             if metrics.relevance_assessed > 0:
                 components["observed_relevance"] = min(1.0, max(0.0, metrics.relevance_rate))
-            if metrics.relevant > 0:
+                component_basis["observed_relevance"] = "candidate_branch_metrics"
+            if metrics.relevant > 0 and metrics.new_concepts > 0:
                 components["observed_novelty"] = min(1.0, max(0.0, metrics.novelty_rate))
+                component_basis["observed_novelty"] = "candidate_branch_metrics"
             if metrics.retrieved > 0 and metrics.distinct_sources > 0:
                 components["observed_source_diversity"] = min(1.0, metrics.distinct_sources / 4.0)
+                component_basis["observed_source_diversity"] = "candidate_branch_metrics"
             denominator = metrics.unique + metrics.duplicates
-            if denominator > 0:
+            if metrics.duplicates > 0 and denominator > 0:
                 components["observed_duplicate_avoidance"] = 1.0 - metrics.duplicate_rate
+                component_basis["observed_duplicate_avoidance"] = "candidate_branch_metrics"
+
+        historical = _historical_outcomes(
+            plan,
+            search_family=candidate.get("search_family", ""),
+            language=candidate.get("language", ""),
+            max_records_per_query=max_records_per_query,
+        )
+        historical_rates = historical["rate_estimates"]
+        for component, rate_name in (
+            ("observed_relevance", "relevance"),
+            ("observed_novelty", "novelty"),
+            ("observed_source_diversity", "source_diversity"),
+            ("observed_duplicate_avoidance", "duplicate_avoidance"),
+        ):
+            if components[component] is None and historical_rates[rate_name] is not None:
+                components[component] = float(historical_rates[rate_name])
+                component_basis[component] = f"historical_completed_branches:{historical['basis']}"
 
         available_weight = sum(weights[key] for key, value in components.items() if value is not None)
         score = (
@@ -215,15 +327,32 @@ def build_next_evidence_recommendation(
             "origin": candidate["origin"],
             "branch_id": candidate.get("branch_id", ""),
             "language": candidate.get("language", ""),
+            "search_family": candidate.get("search_family", ""),
             "matched_open_scope": scope_matches,
             "hypothesis_ids": sorted(set(matched_hypotheses)),
             "components": components,
+            "component_evidence_basis": component_basis,
             "component_weights": weights,
             "available_weight": round(available_weight, 4),
             "inspectable_priority": round(score, 4),
             "estimated_cost": {"queries": 1, "records_max": int(max_records_per_query)},
             "cost_basis": "One bounded query action; record maximum is analyst-supplied. No runtime, platform, or access estimate is inferred.",
+            "historical_outcomes": historical,
         })
+
+        why = []
+        if scope_matches:
+            labels = [f"{item['dimension']}={item['value']}" for item in scope_matches]
+            why.append("Targets uncovered requirement scope: " + ", ".join(labels) + ".")
+        if matched_hypotheses:
+            why.append(f"Targets evidence needs for {len(set(matched_hypotheses))} competing hypothesis(es).")
+        sourced_components = [key.removeprefix("observed_") for key, basis in component_basis.items() if basis != "unmeasured"]
+        if sourced_components:
+            why.append("Uses observed or historical " + ", ".join(sourced_components) + " outcomes.")
+        if not why:
+            why.append("Retained as a bounded planned action; current evidence does not identify a more specific scope or hypothesis gap.")
+        scored[-1]["why_recommended"] = why
+        scored[-1]["recommendation_summary"] = " ".join(why)
 
     scored.sort(key=lambda row: (-row["inspectable_priority"], -row["available_weight"], row["query"].casefold()))
     for index, row in enumerate(scored, 1):
@@ -245,11 +374,12 @@ def build_next_evidence_recommendation(
             "missing_component_handling": "Unmeasured components are omitted and remaining weights are renormalized; available_weight shows how much evidence supports each priority.",
             "scope_proxy": "Requirement values mentioned by a candidate and absent from completed branches with records; phrase match or token match allowing a terminal English plural s.",
             "hypothesis_proxy": "Explicit collection-needed/discriminator text, matched by exact text or token Jaccard >= 0.35.",
-            "source_diversity_proxy": "Observed distinct source count scaled to four sources; source identity independence is not assumed.",
+            "source_diversity_proxy": "Observed distinct source count scaled to four sources; source identity independence is not assumed. Missing candidate metrics may use the selected completed-branch history cohort.",
+            "historical_outcome_proxy": "Completed branches are matched by exact search family and language when available, falling back to family, language, then all completed yielding branches. Historical medians and rates are planning references, not calibrated predictions.",
             "guardrails": [
                 "Priority is a transparent ranking aid, not a probability or universal research-quality score.",
                 "A natural-language collection need is a proposed query; an analyst should edit and approve it before collection.",
-                "Accessibility, live yield, and runtime cost are unestimated unless present in observed plan metrics.",
+                "Historical yield and decisive-triage rates may provide planning references; accessibility and runtime cost remain unestimated.",
                 "No collection is started by this recommendation operation.",
             ],
         },
@@ -286,11 +416,14 @@ def apply_next_evidence_recommendation(
             query=query,
             rationale=(
                 f"Recommended collection action (priority {selected.get('inspectable_priority', 0)}): "
-                f"{_clean(selected.get('rationale')) or 'See next-evidence report.'}"
+                f"{_clean(selected.get('recommendation_summary')) or _clean(selected.get('rationale')) or 'See next-evidence report.'}"
             ),
             origin="generated",
             status="paused",
-            search_family="hypothesis_discriminator" if selected.get("origin") == "hypothesis_collection_need" else "recommended",
+            search_family=_clean(selected.get("search_family")) or (
+                "hypothesis_discriminator" if selected.get("origin") == "hypothesis_collection_need" else "recommended"
+            ),
+            language=_clean(selected.get("language")),
             generator="inspectable_next_evidence_v1",
             parent_concept=", ".join(selected.get("hypothesis_ids") or []),
         )
@@ -307,6 +440,8 @@ def apply_next_evidence_recommendation(
         priority=selected.get("inspectable_priority"),
         hypothesis_ids=selected.get("hypothesis_ids") or [],
         cost=selected.get("estimated_cost") or {},
+        why_recommended=selected.get("why_recommended") or [],
+        historical_outcome_basis=(selected.get("historical_outcomes") or {}).get("basis", ""),
         analyst_approval_required=True,
     )
     return branch_id
