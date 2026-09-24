@@ -39,6 +39,14 @@ from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_in
 from sugar_core.weibo_qualification import run_weibo_qualification
 from sugar_core.weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
 from sugar_core.workspace import SugarWorkspace
+from sugar_core.research_workspace import (
+    CollaborationMember,
+    ListeningPost,
+    ReferenceLayer,
+    ResearchWorkspaceState,
+    SearchHistoryEntry,
+    Subproject,
+)
 from sugar_core.workspace_runtime import (
     choose_output_directory,
     register_workspace_outputs,
@@ -47,7 +55,17 @@ from sugar_core.workspace_runtime import (
 
 BRIDGE_PROTOCOL_VERSION = 3
 _ACTIVE_SECRET_VALUES: set[str] = set()
-WORKSPACE_OPERATIONS = {"workspace-init", "workspace-status", "workspace-register"}
+WORKSPACE_OPERATIONS = {
+    "workspace-init",
+    "workspace-status",
+    "workspace-register",
+    "workspace-research-status",
+    "workspace-subproject-add",
+    "workspace-search-record",
+    "workspace-listening-upsert",
+    "workspace-layer-upsert",
+    "workspace-collaborator-upsert",
+}
 BASE_OPERATIONS = {
     "search",
     "ingest",
@@ -242,6 +260,89 @@ def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
     if command == "workspace-status":
         emit("workspace_status", **workspace.status())
         return [str(workspace.manifest_path)]
+
+    research = ResearchWorkspaceState.open(workspace.root, project_id=workspace.manifest.project_id)
+    if command == "workspace-research-status":
+        emit(
+            "workspace_research",
+            dashboard=research.dashboard(),
+            subprojects=[asdict(item) for item in research.subprojects.values()],
+            search_history=[asdict(item) for item in research.search_history],
+            listening_posts=[asdict(item) for item in research.listening_posts.values()],
+            reference_layers=[asdict(item) for item in research.reference_layers.values()],
+            collaborators=[asdict(item) for item in research.collaborators.values()],
+        )
+        return [str(research.path)]
+
+    if command == "workspace-subproject-add":
+        item = research.add_subproject(Subproject(
+            name=str(config.get("name") or ""),
+            description=str(config.get("description") or ""),
+            parent_subproject_id=str(config.get("parent_subproject_id") or ""),
+            status=str(config.get("status") or "active"),
+            tags=list(config.get("tags") or []),
+        ))
+        emit("workspace_subproject", subproject=asdict(item), dashboard=research.dashboard())
+        return [str(research.path)]
+
+    if command == "workspace-search-record":
+        item = research.record_search(SearchHistoryEntry(
+            query_terms=list(config.get("query_terms") or []),
+            sources=list(config.get("sources") or []),
+            subproject_id=str(config.get("subproject_id") or ""),
+            research_question=str(config.get("research_question") or ""),
+            started_at=str(config.get("started_at") or ""),
+            completed_at=str(config.get("completed_at") or ""),
+            result_count=config.get("result_count"),
+            status=str(config.get("status") or "complete"),
+            collection_id=str(config.get("collection_id") or ""),
+            notes=str(config.get("notes") or ""),
+            metadata=dict(config.get("metadata") or {}),
+        ))
+        emit("workspace_search_history", entry=asdict(item), dashboard=research.dashboard())
+        return [str(research.path)]
+
+    if command == "workspace-listening-upsert":
+        item = research.upsert_listening_post(ListeningPost(
+            listening_post_id=str(config.get("listening_post_id") or ""),
+            name=str(config.get("name") or ""),
+            query_terms=list(config.get("query_terms") or []),
+            sources=list(config.get("sources") or []),
+            subproject_id=str(config.get("subproject_id") or ""),
+            entity_ids=list(config.get("entity_ids") or []),
+            status=str(config.get("status") or "active"),
+            cadence=str(config.get("cadence") or "manual"),
+            baseline_start=str(config.get("baseline_start") or ""),
+            metadata=dict(config.get("metadata") or {}),
+        ))
+        emit("workspace_listening_post", listening_post=asdict(item), dashboard=research.dashboard())
+        return [str(research.path)]
+
+    if command == "workspace-layer-upsert":
+        item = research.upsert_reference_layer(ReferenceLayer(
+            layer_id=str(config.get("layer_id") or ""),
+            name=str(config.get("name") or ""),
+            source=str(config.get("source") or ""),
+            layer_type=str(config.get("layer_type") or "custom"),
+            subproject_id=str(config.get("subproject_id") or ""),
+            visible_by_default=bool(config.get("visible_by_default", True)),
+            style=dict(config.get("style") or {}),
+            field_mapping=dict(config.get("field_mapping") or {}),
+            metadata=dict(config.get("metadata") or {}),
+        ))
+        emit("workspace_reference_layer", reference_layer=asdict(item), dashboard=research.dashboard())
+        return [str(research.path)]
+
+    if command == "workspace-collaborator-upsert":
+        item = research.upsert_collaborator(CollaborationMember(
+            member_id=str(config.get("member_id") or ""),
+            display_name=str(config.get("display_name") or ""),
+            role=str(config.get("role") or "analyst"),
+            contact=str(config.get("contact") or ""),
+            metadata=dict(config.get("metadata") or {}),
+        ))
+        emit("workspace_collaborator", collaborator=asdict(item), dashboard=research.dashboard())
+        return [str(research.path)]
 
     artifact_path = str(config.get("artifact") or config.get("artifact_path") or "").strip()
     if not artifact_path:
