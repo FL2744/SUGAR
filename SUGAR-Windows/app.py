@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDockWidget,
     QDoubleSpinBox,
+    QFileDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -1013,6 +1014,7 @@ class StatePage(QWidget):
         layer_actions = QHBoxLayout()
         layer_actions.addWidget(QPushButton("Build Reference Map", clicked=self._research_reference_map))
         layer_actions.addWidget(QPushButton("Export Shareable Project", clicked=self._research_share_export))
+        layer_actions.addWidget(QPushButton("Import Shared Project", clicked=self._research_share_import))
         layer_actions.addStretch(1)
         workspace_tools.layout.addLayout(layer_actions)
 
@@ -1183,6 +1185,216 @@ class StatePage(QWidget):
         layout.addWidget(finish); layout.addStretch(1)
         return page
 
+    def _load_recent_projects(self) -> None:
+        store = QSettings(APP_ORGANIZATION, APP_NAME)
+        raw = store.value("projects/recent", [])
+        if isinstance(raw, str):
+            values = [raw] if raw else []
+        else:
+            values = [str(value) for value in (raw or []) if str(value)]
+        self.research_recent_projects.clear()
+        self.research_recent_projects.addItems(values)
+
+    def _remember_recent_project(self, workspace: str) -> None:
+        workspace = str(Path(workspace).expanduser().resolve())
+        store = QSettings(APP_ORGANIZATION, APP_NAME)
+        raw = store.value("projects/recent", [])
+        current = [raw] if isinstance(raw, str) and raw else [str(value) for value in (raw or []) if str(value)]
+        values = [workspace, *[value for value in current if value != workspace]][:12]
+        store.setValue("projects/recent", values)
+        store.sync()
+        self._load_recent_projects()
+        index = self.research_recent_projects.findText(workspace)
+        if index >= 0:
+            self.research_recent_projects.setCurrentIndex(index)
+
+    def _research_open_recent(self) -> None:
+        workspace = self.research_recent_projects.currentText().strip()
+        if not workspace:
+            return
+        self.research_workspace.setText(workspace)
+        self._research_workspace_open()
+
+    def _research_workspace_refresh(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation("workspace-research-status", {"workspace": workspace}, False)
+
+    def _research_subproject_add(self) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace:
+            return
+        name = self.research_subproject_name.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Missing subproject", "Enter a subproject name.")
+            return
+        self.run_operation(
+            "workspace-subproject-add",
+            {
+                "workspace": workspace,
+                "name": name,
+                "parent_subproject_id": self.research_subproject_parent.text().strip(),
+                "tags": split_terms(self.research_subproject_tags.text()),
+            },
+            False,
+        )
+
+    def _research_listening_add(self) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace:
+            return
+        name = self.research_listen_name.text().strip()
+        terms = split_terms(self.research_listen_terms.text())
+        sources = self.research_listen_sources.selected()
+        if not name or not terms:
+            QMessageBox.warning(self, "Incomplete listening post", "Enter a listening-post name and at least one query term.")
+            return
+        self.run_operation(
+            "workspace-listening-upsert",
+            {
+                "workspace": workspace,
+                "name": name,
+                "query_terms": terms,
+                "sources": sources,
+                "cadence": self.research_listen_cadence.value(),
+            },
+            False,
+        )
+
+    def _research_reference_files_dropped(self, paths: list[str]) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace:
+            return
+        self.run_operation(
+            "workspace-layers-import",
+            {
+                "workspace": workspace,
+                "sources": paths,
+                "layer_type": "institution",
+            },
+            False,
+        )
+
+    def _research_reference_map(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation("workspace-reference-map", {"workspace": workspace}, False)
+
+    def _research_share_export(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation("workspace-share-export", {"workspace": workspace}, False)
+
+    def _research_share_import(self) -> None:
+        share_file, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import SUGAR project",
+            self.settings.default_output(),
+            "SUGAR project share (*.zip);;ZIP archives (*.zip)",
+        )
+        if not share_file:
+            return
+        destination = QFileDialog.getExistingDirectory(
+            self,
+            "Choose destination for imported project",
+            self.settings.default_output(),
+        )
+        if not destination:
+            return
+        self.run_operation(
+            "workspace-share-import",
+            {
+                "workspace": self._research_workspace_value() or destination,
+                "share_file": share_file,
+                "destination": destination,
+            },
+            False,
+        )
+
+    @staticmethod
+    def _populate_readonly_table(table: QTableWidget, rows: list[list[str]]) -> None:
+        table.setRowCount(0)
+        for values in rows:
+            row = table.rowCount()
+            table.insertRow(row)
+            for column, value in enumerate(values):
+                table.setItem(row, column, QTableWidgetItem(str(value)))
+
+    def _render_research_workspace(self, payload: dict[str, Any]) -> None:
+        dashboard = payload.get("dashboard") or payload.get("research") or {}
+        if isinstance(dashboard, dict):
+            self.research_workspace_summary.setText(
+                " · ".join(
+                    [
+                        f"{dashboard.get('subproject_count', 0)} subprojects",
+                        f"{dashboard.get('search_count', 0)} saved searches",
+                        f"{dashboard.get('active_listening_post_count', 0)} active listening posts",
+                        f"{dashboard.get('reference_layer_count', 0)} reference layers",
+                        f"{dashboard.get('collaborator_count', 0)} collaborators",
+                    ]
+                )
+            )
+        subprojects = payload.get("subprojects")
+        if isinstance(subprojects, list):
+            self._populate_readonly_table(
+                self.research_subprojects_table,
+                [
+                    [
+                        item.get("subproject_id", ""),
+                        item.get("name", ""),
+                        item.get("status", ""),
+                        item.get("parent_subproject_id", ""),
+                    ]
+                    for item in subprojects if isinstance(item, dict)
+                ],
+            )
+        listening = payload.get("listening_posts")
+        if isinstance(listening, list):
+            self._populate_readonly_table(
+                self.research_listening_table,
+                [
+                    [
+                        item.get("listening_post_id", ""),
+                        item.get("name", ""),
+                        ", ".join(item.get("sources") or []),
+                        item.get("cadence", ""),
+                        item.get("status", ""),
+                    ]
+                    for item in listening if isinstance(item, dict)
+                ],
+            )
+        history = payload.get("search_history")
+        if isinstance(history, list):
+            self._populate_readonly_table(
+                self.research_history_table,
+                [
+                    [
+                        item.get("started_at", ""),
+                        ", ".join(item.get("query_terms") or []),
+                        ", ".join(item.get("sources") or []),
+                        "" if item.get("result_count") is None else item.get("result_count"),
+                        item.get("status", ""),
+                        item.get("subproject_id", ""),
+                    ]
+                    for item in reversed(history) if isinstance(item, dict)
+                ],
+            )
+        layers = payload.get("reference_layers")
+        if isinstance(layers, list):
+            self._populate_readonly_table(
+                self.research_layers_table,
+                [
+                    [
+                        item.get("layer_id", ""),
+                        item.get("name", ""),
+                        item.get("layer_type", ""),
+                        item.get("source", ""),
+                        item.get("subproject_id", ""),
+                    ]
+                    for item in layers if isinstance(item, dict)
+                ],
+            )
+
     def _research_workspace_value(self) -> str:
         return self.research_workspace.text().strip()
 
@@ -1197,6 +1409,7 @@ class StatePage(QWidget):
         workspace = self._require_research_workspace()
         if not workspace: return
         manifest = Path(workspace).expanduser() / "sugar-project.json"
+        self._remember_recent_project(workspace)
         if manifest.is_file():
             self.run_operation("workspace-status",{"workspace":workspace},False)
         else:
@@ -1371,6 +1584,47 @@ class StatePage(QWidget):
 
     def handle_backend_event(self, payload: dict[str, Any]) -> None:
         event = payload.get("event")
+        if event == "workspace_status":
+            root = str(payload.get("root") or self._research_workspace_value())
+            if root:
+                self._remember_recent_project(root)
+            self._render_research_workspace(payload)
+            return
+        if event == "workspace_research":
+            self._render_research_workspace(payload)
+            return
+        if event == "workspace_subproject":
+            item = payload.get("subproject") or {}
+            if isinstance(item, dict):
+                rows = []
+                for row in range(self.research_subprojects_table.rowCount()):
+                    rows.append([
+                        self.research_subprojects_table.item(row, column).text()
+                        if self.research_subprojects_table.item(row, column) else ""
+                        for column in range(4)
+                    ])
+                rows.append([item.get("subproject_id",""), item.get("name",""), item.get("status",""), item.get("parent_subproject_id","")])
+                self._populate_readonly_table(self.research_subprojects_table, rows)
+            self._render_research_workspace(payload)
+            return
+        if event == "workspace_listening_post":
+            self._render_research_workspace(payload)
+            return
+        if event == "workspace_reference_layers":
+            items = payload.get("reference_layers") or []
+            if isinstance(items, list):
+                self._populate_readonly_table(
+                    self.research_layers_table,
+                    [[item.get("layer_id",""), item.get("name",""), item.get("layer_type",""), item.get("source",""), item.get("subproject_id","")] for item in items if isinstance(item, dict)]
+                )
+            self._render_research_workspace(payload)
+            return
+        if event == "workspace_share_imported":
+            imported = str(payload.get("workspace") or "")
+            if imported:
+                self.research_workspace.setText(imported)
+                self._remember_recent_project(imported)
+            return
         if event == "handoff-complete":
             outputs = payload.get("outputs") or []
             if outputs:
