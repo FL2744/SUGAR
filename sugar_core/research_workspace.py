@@ -815,6 +815,14 @@ class ResearchWorkspaceManager:
                     previous_keys = set()
 
         outputs = run_search(config, secrets or {}, progress=progress)
+        # run_search persists its own search-history event. Reload before mutating the
+        # listening-post state so this manager cannot overwrite that concurrent save.
+        self.state = json.loads(self.state_path.read_text(encoding="utf-8"))
+        self._validate_state()
+        raw = next(
+            item for item in self.state["listening_posts"]
+            if item.get("listening_post_id") == listening_post_id
+        )
         current_records: list[PostRecord] = []
         if outputs:
             try:
