@@ -381,9 +381,17 @@ def _run_workspace_operation(
         try:
             outputs = run_search(effective, secrets, progress=progress_event)
         except Exception:
-            research.mark_listening_post_run(listening_post_id, success=False)
+            latest_research = ResearchWorkspaceState.open(
+                workspace.root,
+                project_id=workspace.manifest.project_id,
+            )
+            latest_research.mark_listening_post_run(listening_post_id, success=False)
             raise
-        updated = research.mark_listening_post_run(listening_post_id, success=True)
+        latest_research = ResearchWorkspaceState.open(
+            workspace.root,
+            project_id=workspace.manifest.project_id,
+        )
+        updated = latest_research.mark_listening_post_run(listening_post_id, success=True)
         emit("workspace_listening_post_run", listening_post=asdict(updated), outputs=outputs)
         return outputs
 
