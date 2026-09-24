@@ -488,7 +488,6 @@ class WorkspaceHubPage(QWidget):
         if not self.projects_root.text():
             self.projects_root.setText(str(Path(self.workspace).parent))
         self._hub("dashboard")
-        self.load_history()
 
     def refresh_projects(self) -> None:
         root = self.projects_root.text()
@@ -773,7 +772,6 @@ class WorkspaceHubPage(QWidget):
                 self.workspace_field.setText(path)
                 self.activate_workspace_callback(path)
                 self._hub("dashboard")
-                self.load_history()
             return
         if event != "workspace_hub_data":
             return
@@ -796,7 +794,7 @@ class WorkspaceHubPage(QWidget):
                 f"{data.get('pending_review')} items pending review · {data.get('child_count')} subprojects · "
                 f"Last activity {data.get('last_activity', 'unknown')}"
             )
-            self._hub("project-history", limit=500)
+            self.load_history()
         elif action == "project-history":
             self.history_rows = data if isinstance(data, list) else []
             self.project_history_table.setRowCount(len(self.history_rows))

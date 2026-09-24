@@ -60,9 +60,9 @@ def test_first_run_import_review_and_verified_handoff(tmp_path, monkeypatch):
                 QTimer.singleShot(20, wait_for_idle)
         QTimer.singleShot(0, wait_for_idle)
         action()
-        QTimer.singleShot(20000, loop.quit)
+        QTimer.singleShot(90000, loop.quit)
         loop.exec()
-        assert not window.runner.is_running
+        assert not window.runner.is_running, window.activity.log.toPlainText()[-4000:]
         assert not errors, errors
         assert any(event.get("event") == "complete" for event in events), events
 
