@@ -169,5 +169,30 @@ def import_project_share(path: str | Path, destination: str | Path) -> str:
             except ValueError as exc:
                 raise ValueError("Unsafe path in project share.") from exc
         archive.extractall(destination_root)
-    SugarWorkspace.open(target)
+    workspace = SugarWorkspace.open(target)
+    share_manifest_path = target / SHARE_MANIFEST
+    if share_manifest_path.is_file():
+        share_manifest = json.loads(share_manifest_path.read_text(encoding="utf-8"))
+        for raw in share_manifest.get("external_artifacts_included") or []:
+            if not isinstance(raw, dict):
+                continue
+            shared_path = str(raw.get("shared_path") or "").strip()
+            kind = str(raw.get("kind") or "shared_external").strip() or "shared_external"
+            if not shared_path:
+                continue
+            imported_path = (target / shared_path).resolve()
+            try:
+                imported_path.relative_to(target)
+            except ValueError:
+                continue
+            if imported_path.is_file():
+                workspace.register_artifact(
+                    kind,
+                    imported_path,
+                    label=f"Imported shared external: {imported_path.name}",
+                    metadata={
+                        "operation": "project_share_import",
+                        "original_external_path": str(raw.get("original_path") or ""),
+                    },
+                )
     return str(target)
