@@ -6,6 +6,12 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Added
 
+- persistent analyst-facing project state in `sugar-research.json`, including nested subprojects, automatically saved search history, executable listening posts, reusable reference layers, and collaboration metadata;
+- whole-project verified ZIP sharing/import that is distinct from evidence-focused research handoffs and excludes local runtime state/secrets;
+- generic institution/reference-layer lifecycle support for active, closed, renamed, relocated, planned, and unknown sites, with opening/closure dates, coordinates, handles, and source references;
+- multi-layer reference workspace maps with CSV/Excel/JSON/JSONL/GeoJSON ingestion, historical closed-site rendering, and map metadata;
+- speaker-preserving conversation/thread HTML views that retain public handles and explicit reply relationships;
+- Windows project-workspace controls for recent projects, subprojects, listening posts, search history, drag-and-drop reference layers, maps, conversations, and project sharing; macOS exposes the same persistent-project operations from Research Project;
 - added a reusable `ingest`/Public URL workflow for collector surfaces that support known-item retrieval, with normalized CSV/XLSX/metadata outputs and the same workspace/provenance contract as search;
 - added fail-closed public WeChat Official Account article ingestion for `mp.weixin.qq.com` URLs, including stable article identity, account/publish metadata, source provenance, same-origin redirect validation, deterministic fixtures, and Windows/macOS Public URL UI;
 - WeChat capability metadata deliberately advertises known-item ingestion only; keyword discovery, private WeChat surfaces, automated login state, challenge solving, and access-control bypass remain unsupported;
