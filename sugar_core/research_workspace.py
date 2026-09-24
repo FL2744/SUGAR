@@ -334,6 +334,20 @@ class ResearchWorkspaceState:
         self.save()
         return post
 
+    def mark_listening_post_run(self, listening_post_id: str, *, success: bool) -> ListeningPost:
+        key = _clean(listening_post_id)
+        try:
+            post = self.listening_posts[key]
+        except KeyError as exc:
+            raise KeyError(f"Unknown listening post: {key}") from exc
+        now = _utc_now()
+        post.last_run_at = now
+        if success:
+            post.last_success_at = now
+        post.updated_at = now
+        self.save()
+        return post
+
     def upsert_reference_layer(self, layer: ReferenceLayer) -> ReferenceLayer:
         if layer.subproject_id and layer.subproject_id not in self.subprojects:
             raise ValueError(f"Unknown subproject: {layer.subproject_id}")
