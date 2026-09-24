@@ -96,6 +96,16 @@ If a project is copied to another machine without `.sugar/workspace.sqlite3`, op
 
 See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the workspace schema, layout, portability rules, Python API, and desktop bridge operations.
 
+### Persistent analyst workspace
+
+Projects also carry a portable `sugar-research.json` analyst layer for **subprojects, lifecycle-aware institutions, reusable reference/map layers, saved listening posts, actual search history, collaborator/reviewer metadata, saved views, and project sharing**. Search history records what was actually collected (terms, sources, bounds, counts, outputs) alongside the existing strategy/plan audit trail.
+
+Reference layers can be imported from CSV, JSONL, JSON/GeoJSON, or XLSX and combined on a project map. Closed institutions remain historical data rather than disappearing; they render distinctly (including a closed-site `☠` marker in the project map) while retaining closure dates and source evidence. Conversation views preserve individual public handles/speakers and reply ancestry instead of flattening a thread into one text stream.
+
+Listening posts save a set of public entities/handles/terms and reuse the normal fail-closed collection pipeline when run, producing ordinary provenance-preserving artifacts plus a delta of newly observed record identities. Portable `.sugarproject.zip` sharing includes project-local data and SHA-256 integrity hashes while excluding runtime credentials, caches, the rebuildable local SQLite index, and external artifacts.
+
+See [`docs/research-workspace.md`](docs/research-workspace.md) for commands, data formats, sharing behavior, monitoring semantics, and UI coverage.
+
 ## Collection
 
 | Source | Current supported surface |
@@ -208,6 +218,7 @@ For the State/Diplomacy Lab delivery target, the versioned product contract live
 
 - [`docs/architecture.md`](docs/architecture.md) — current system architecture and engineering rules
 - [`docs/project-workspaces.md`](docs/project-workspaces.md) — persistent project-workspace contract
+- [`docs/research-workspace.md`](docs/research-workspace.md) — subprojects, institution lifecycle, reference layers, listening posts, history, conversations, and project sharing
 - [`docs/collector-interface.md`](docs/collector-interface.md) — collector capabilities and normalization contract
 - [`docs/importer-interface.md`](docs/importer-interface.md) ? external-data normalization and provenance contract
 - [`docs/research-requirements.md`](docs/research-requirements.md) ? research requirements and bounded adaptive search planning
