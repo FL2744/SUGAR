@@ -33,7 +33,8 @@ def test_reference_layer_map_keeps_closed_institutions(tmp_path: Path) -> None:
     assert metadata["layers"][0]["status_counts"] == {"active": 1, "closed": 1}
     html = Path(output).read_text(encoding="utf-8")
     assert "Closed Center" in html
-    assert "☠" in html
+    assert metadata["closed_symbol"] == "☠"
+    assert "Closed Center" in html
 
 
 def test_whole_project_share_round_trip(tmp_path: Path) -> None:
