@@ -1113,24 +1113,76 @@ a{color:#235fa8}
             else self.workspace.path_for("exports") / f"{_slug(self.workspace.manifest.name)}.sugarproject.zip"
         )
         target.parent.mkdir(parents=True, exist_ok=True)
+
         local_files: dict[str, Path] = {}
-        for essential in (self.workspace.manifest_path, self.workspace.catalog_path, self.state_path):
-            if essential.is_file():
-                local_files[essential.relative_to(self.workspace.root).as_posix()] = essential
+        if self.workspace.manifest_path.is_file():
+            local_files[self.workspace.manifest_path.name] = self.workspace.manifest_path
+
         omitted_external: list[dict[str, Any]] = []
         for artifact in self.workspace.list_artifacts():
+            if artifact.kind == "project_share":
+                continue
             path = self.workspace.artifact_absolute_path(artifact)
             if artifact.external:
-                omitted_external.append({"kind": artifact.kind, "path": artifact.path, "label": artifact.label})
+                omitted_external.append(
+                    {
+                        "kind": artifact.kind,
+                        "label": artifact.label,
+                        "reason": "external artifact is not packaged",
+                    }
+                )
                 continue
             if path.is_file() and path != target:
                 relative = path.relative_to(self.workspace.root).as_posix()
-                if not relative.startswith(".sugar/"):
+                if not relative.startswith(".sugar/") and relative not in {
+                    self.workspace.catalog_path.name,
+                    self.state_path.name,
+                }:
                     local_files[relative] = path
+
+        # The portable catalog intentionally excludes external absolute paths and old
+        # project-share archives. Receiving analysts still see an explicit omission
+        # list in the share manifest without inheriting another machine's filesystem.
+        catalog_payload = self.workspace.export_catalog()
+        catalog_payload["artifacts"] = [
+            item
+            for item in catalog_payload.get("artifacts", [])
+            if not bool(item.get("external")) and str(item.get("kind") or "") != "project_share"
+        ]
+
+        # External reference layers are valid in a working project, but their absolute
+        # source paths are machine-local. Retain the layer metadata while redacting the
+        # unusable path in the portable copy.
+        research_payload = json.loads(json.dumps(self.state, ensure_ascii=False))
+        for layer in research_payload.get("reference_layers", []):
+            source = Path(str(layer.get("source_path") or ""))
+            if source.is_absolute():
+                layer["source_path"] = ""
+                layer["external_omitted"] = True
+
+        virtual_files = {
+            self.workspace.catalog_path.name: (
+                json.dumps(catalog_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8"),
+            self.state_path.name: (
+                json.dumps(research_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8"),
+        }
+
         files = [
             {"path": relative, "sha256": _file_sha256(path), "size": path.stat().st_size}
             for relative, path in sorted(local_files.items())
         ]
+        files.extend(
+            {
+                "path": relative,
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "size": len(payload),
+            }
+            for relative, payload in sorted(virtual_files.items())
+        )
+        files.sort(key=lambda item: item["path"])
+
         manifest = {
             "schema_version": "1.0",
             "created_at": _utc_now(),
@@ -1138,19 +1190,32 @@ a{color:#235fa8}
             "project_name": self.workspace.manifest.name,
             "files": files,
             "omitted_external_artifacts": omitted_external,
-            "notes": "Credentials and the rebuildable local .sugar database/cache are not included.",
+            "notes": (
+                "Credentials, machine-local external paths, prior project-share archives, "
+                "and the rebuildable local .sugar database/cache are not included."
+            ),
         }
         with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr(SHARE_MANIFEST_FILENAME, json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+            archive.writestr(
+                SHARE_MANIFEST_FILENAME,
+                json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            )
             for relative, path in sorted(local_files.items()):
                 archive.write(path, relative)
+            for relative, payload in sorted(virtual_files.items()):
+                archive.writestr(relative, payload)
+
         self.workspace.register_artifact(
             "project_share",
             target,
             label="Portable shared project",
             metadata={"files": len(files), "omitted_external_artifacts": len(omitted_external)},
         )
-        self._append_history("project_shared", output=str(target), files=len(files))
+        self._append_history(
+            "project_shared",
+            output=self._portable_file_value(target),
+            files=len(files),
+        )
         self._save()
         return str(target)
 
