@@ -11,6 +11,7 @@ from .llm import ARC_BASE_URL, LLMConfig, create_client
 from .media_artifacts import attach_media_citation, build_media_citation, ingest_media
 from .workspace_hub import run_workspace_hub as run_research_workspace_hub
 from .observation_storage import load_observations
+from .reference_registry import list_entities, list_lifecycle, list_relationships, registry_paths
 from .research_intelligence import (
     apply_next_evidence_recommendation,
     build_content_lineage,
@@ -694,7 +695,26 @@ def _run_desktop_analytic_operation(
         assessments = load_state_assessments(assessment_path) if assessment_path else []
         alias_path = _optional_input_path(config, "entity_aliases", workspace)
         aliases = load_entity_aliases(alias_path) if alias_path else None
-        report = build_temporal_evidence_graph(observations, assessments, entity_aliases=aliases)
+        registry_entities = list_entities(workspace) if workspace else []
+        registry_relationships = list_relationships(workspace) if workspace else []
+        registry_lifecycle = list_lifecycle(workspace) if workspace else []
+        if workspace is not None:
+            paths = registry_paths(workspace)
+            registry_inputs = [paths[key] for key in ("entities", "relationships", "lifecycle") if paths[key].is_file()]
+            config["_pipeline_inputs"] = [str(path) for path in registry_inputs]
+            config["_pipeline_parameters"] = {
+                "registry_entity_count": len(registry_entities),
+                "registry_relationship_count": len(registry_relationships),
+                "registry_lifecycle_count": len(registry_lifecycle),
+            }
+        report = build_temporal_evidence_graph(
+            observations,
+            assessments,
+            entity_aliases=aliases,
+            registry_entities=registry_entities,
+            registry_relationships=registry_relationships,
+            registry_lifecycle=registry_lifecycle,
+        )
         target = _output_path(
             config, "output_file", "temporal_evidence_graph.json",
             workspace=workspace, workspace_key="intelligence",

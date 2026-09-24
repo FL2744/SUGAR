@@ -303,12 +303,31 @@ class WorkspaceHubPage(QWidget):
             self.relation_type.addItem(value.replace("_", " ").title(), value)
         self.relation_evidence = QLineEdit()
         self.relation_evidence.setPlaceholderText("Relationship evidence URL")
+        self.relation_valid_from = QLineEdit()
+        self.relation_valid_from.setPlaceholderText("Valid from (YYYY-MM-DD, optional)")
+        self.relation_valid_to = QLineEdit()
+        self.relation_valid_to.setPlaceholderText("Valid to (YYYY-MM-DD, optional)")
+        self.relation_review_state = QComboBox()
+        for value in ("unreviewed", "human_verified", "needs_followup", "rejected"):
+            self.relation_review_state.addItem(value.replace("_", " ").title(), value)
+        self.relation_note = QLineEdit()
+        self.relation_note.setPlaceholderText("Analyst note (optional)")
         relation_row.addWidget(self.relation_source, 1)
         relation_row.addWidget(self.relation_type)
         relation_row.addWidget(self.relation_target, 1)
         relation_row.addWidget(self.relation_evidence, 2)
         relation_row.addWidget(self._button("Add relationship", self.add_relationship))
         manual.layout.addLayout(relation_row)
+        temporal_row = QHBoxLayout()
+        temporal_row.addWidget(self.relation_valid_from)
+        temporal_row.addWidget(self.relation_valid_to)
+        temporal_row.addWidget(self.relation_review_state)
+        temporal_row.addWidget(self.relation_note, 2)
+        manual.layout.addLayout(temporal_row)
+        temporal_hint = QLabel("Relationship dates are source-backed valid time. Leave them blank when the source does not establish when the relationship began or ended.")
+        temporal_hint.setObjectName("hint")
+        temporal_hint.setWordWrap(True)
+        manual.layout.addWidget(temporal_hint)
         layout.addWidget(manual)
         self.tabs.addTab(page, "Institution registry")
 
@@ -691,7 +710,9 @@ class WorkspaceHubPage(QWidget):
             QMessageBox.warning(self, "Relationship evidence", "Choose two entities and provide a source URL for the relationship.")
             return
         self._hub("registry-relationship", source_entity_id=source, target_entity_id=target,
-                  relationship_type=self.relation_type.currentData(), evidence_refs=[{"source_url": evidence}])
+                  relationship_type=self.relation_type.currentData(), evidence_refs=[{"source_url": evidence}],
+                  valid_from=self.relation_valid_from.text().strip(), valid_to=self.relation_valid_to.text().strip(),
+                  review_state=self.relation_review_state.currentData(), note=self.relation_note.text().strip())
 
     def _append_map_layers(self, paths: list[str]) -> None:
         current = _split(self.map_layers.toPlainText())

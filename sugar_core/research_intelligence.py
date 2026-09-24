@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlsplit
@@ -520,30 +520,183 @@ def build_temporal_evidence_graph(
     assessments: Iterable[StateAssessment] = (),
     *,
     entity_aliases: dict[str, Any] | None = None,
+    registry_entities: Iterable[dict[str, Any]] = (),
+    registry_relationships: Iterable[dict[str, Any]] = (),
+    registry_lifecycle: Iterable[dict[str, Any]] = (),
 ) -> dict[str, Any]:
-    """Create a provenance-carrying entity/event graph without inferring actor-to-actor ties."""
+    """Create an evidence graph from observations and explicitly sourced registry relationships."""
     observation_rows = list(observations)
     assessment_by_id = {item.observation_id: item for item in assessments}
+    registry_rows = [dict(row) for row in registry_entities if isinstance(row, dict)]
+    relationship_rows = [dict(row) for row in registry_relationships if isinstance(row, dict)]
+    lifecycle_rows = [dict(row) for row in registry_lifecycle if isinstance(row, dict)]
     nodes: dict[str, dict[str, Any]] = {}
     edges: dict[tuple[str, str, str], dict[str, Any]] = {}
     normalized_aliases: dict[str, set[str]] = defaultdict(set)
     canonical_labels: dict[str, str] = {}
+
+    def normalize_label(value: Any) -> str:
+        return " ".join(_clean(value).casefold().split())
+
+    def dedupe_refs(values: Any) -> list[Any]:
+        rows = values if isinstance(values, list) else [values] if values else []
+        keyed: dict[str, Any] = {}
+        for value in rows:
+            if not isinstance(value, (str, dict)) or not value:
+                continue
+            key = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+            keyed.setdefault(key, value)
+        return [keyed[key] for key in sorted(keyed)]
+
+    def temporal_bounds(raw_start: Any, raw_end: Any) -> dict[str, str]:
+        start = _clean(raw_start)
+        end = _clean(raw_end)
+        parsed_start = ""
+        parsed_end = ""
+        invalid = False
+        for raw, field in ((start, "start"), (end, "end")):
+            if not raw:
+                continue
+            try:
+                parsed = date.fromisoformat(raw)
+                if parsed.isoformat() != raw:
+                    raise ValueError("non-canonical date")
+            except ValueError:
+                invalid = True
+                continue
+            if field == "start":
+                parsed_start = raw
+            else:
+                parsed_end = raw
+        if parsed_start and parsed_end and parsed_end < parsed_start:
+            invalid = True
+        if invalid:
+            parsed_start = parsed_end = ""
+        state = "invalid_source_dates" if invalid else "sourced_bounds" if parsed_start or parsed_end else "unspecified"
+        return {
+            "valid_from": parsed_start,
+            "valid_to": parsed_end,
+            "valid_from_raw": start,
+            "valid_to_raw": end,
+            "valid_time_state": state,
+        }
+
+    named_registry_rows = [row for row in registry_rows if _clean(row.get("entity_id")) and _clean(row.get("name"))]
+    registry_name_counts: dict[str, int] = defaultdict(int)
+    for row in named_registry_rows:
+        registry_name_counts[normalize_label(row.get("name"))] += 1
+    registry_identity_by_id: dict[str, str] = {}
+    registry_label_by_id: dict[str, str] = {}
+    registry_aliases_by_id: dict[str, list[str]] = {}
+    for row in named_registry_rows:
+        registry_id = _clean(row.get("entity_id"))
+        label = _clean(row.get("name"))
+        name_key = normalize_label(label)
+        identity_key = name_key if registry_name_counts[name_key] == 1 else f"registry-id:{registry_id}"
+        registry_identity_by_id[registry_id] = identity_key
+        registry_label_by_id[registry_id] = label
+        verified_aliases: list[str] = []
+        for claim in row.get("claims", []):
+            if not isinstance(claim, dict) or claim.get("field") != "aliases":
+                continue
+            if claim.get("review_state") != "human_verified":
+                continue
+            values = claim.get("value") if isinstance(claim.get("value"), list) else [claim.get("value")]
+            verified_aliases.extend(_clean(value) for value in values if _clean(value))
+        registry_aliases_by_id[registry_id] = sorted(set(verified_aliases), key=str.casefold)
+        normalized_aliases[name_key].add(identity_key)
+        canonical_labels[identity_key] = label
+        for alias in verified_aliases:
+            alias_key = normalize_label(alias)
+            if alias_key:
+                normalized_aliases[alias_key].add(identity_key)
+
     for canonical, raw_aliases in (entity_aliases or {}).items():
         canonical_label = _clean(canonical)
         if not canonical_label:
             continue
-        canonical_key = " ".join(canonical_label.casefold().split())
-        canonical_labels[canonical_key] = canonical_label
-        normalized_aliases[canonical_key].add(canonical_key)
+        canonical_name_key = normalize_label(canonical_label)
+        registry_targets = normalized_aliases.get(canonical_name_key, set())
+        canonical_key = next(iter(registry_targets)) if len(registry_targets) == 1 else canonical_name_key
+        canonical_labels.setdefault(canonical_key, canonical_label)
+        normalized_aliases[canonical_name_key].add(canonical_key)
         aliases = raw_aliases if isinstance(raw_aliases, list) else [raw_aliases]
         for alias in aliases:
-            alias_key = " ".join(_clean(alias).casefold().split())
+            alias_key = normalize_label(alias)
             if alias_key:
                 normalized_aliases[alias_key].add(canonical_key)
     alias_resolution = {
         alias: next(iter(targets)) for alias, targets in normalized_aliases.items() if len(targets) == 1
     }
     ambiguous_aliases = sorted(alias for alias, targets in normalized_aliases.items() if len(targets) > 1)
+
+    for registry_id, identity_key in registry_identity_by_id.items():
+        entity_id = _stable_id("entity", identity_key)
+        row = next(item for item in named_registry_rows if _clean(item.get("entity_id")) == registry_id)
+        name_resolution = (row.get("resolved_fields") or {}).get("name", {})
+        nodes[entity_id] = {
+            "node_id": entity_id,
+            "node_type": "entity",
+            "label": registry_label_by_id[registry_id],
+            "normalized_key": identity_key,
+            "roles": ["registry"],
+            "observation_ids": [],
+            "evidence_refs": [],
+            "observed_names": [],
+            "registry_entity_ids": [registry_id],
+            "registry_aliases": registry_aliases_by_id[registry_id],
+            "registry_identity_state": str(name_resolution.get("state") or "unknown"),
+            "identity_basis": "registry_id_for_duplicate_names" if identity_key.startswith("registry-id:") else "unique_registry_name",
+            "entity_type": _clean(row.get("entity_type")),
+            "network": _clean(row.get("network")),
+            "status": _clean(row.get("status")),
+            "country": _clean(row.get("country")),
+            "city": _clean(row.get("city")),
+        }
+
+        claims = row.get("claims", [])
+        for claim_index, claim in enumerate(claims if isinstance(claims, list) else []):
+            if not isinstance(claim, dict):
+                continue
+            field = _clean(claim.get("field"))
+            if not field:
+                continue
+            claim_key = _clean(claim.get("claim_id")) or f"{field}:{claim_index}"
+            claim_node_id = _stable_id("registry-claim", registry_id, claim_key)
+            bounds = temporal_bounds(claim.get("valid_from"), claim.get("valid_to"))
+            value = claim.get("value")
+            label_value = json.dumps(value, ensure_ascii=False, sort_keys=True) if isinstance(value, (list, dict)) else _clean(value)
+            resolution = (row.get("resolved_fields") or {}).get(field, {})
+            refs = dedupe_refs(claim.get("evidence_refs"))
+            nodes[claim_node_id] = {
+                "node_id": claim_node_id,
+                "node_type": "claim",
+                "claim_source": "reference_registry",
+                "label": f"{field}: {label_value}",
+                "field": field,
+                "value": value,
+                "field_resolution_state": str(resolution.get("state") or "unknown"),
+                "review_state": str(claim.get("review_state") or "unreviewed"),
+                "reviewer": _clean(claim.get("reviewer")),
+                "review_note": _clean(claim.get("review_note")),
+                "registry_entity_id": registry_id,
+                "observed_at": _clean(claim.get("observed_at")),
+                **bounds,
+                "evidence_refs": refs,
+            }
+            edge_key = (claim_node_id, entity_id, "registry_claim")
+            edges[edge_key] = {
+                "edge_id": _stable_id("edge", *edge_key),
+                "source": claim_node_id,
+                "target": entity_id,
+                "predicate": "claim_about_entity",
+                "observed_at": _clean(claim.get("observed_at")),
+                **bounds,
+                "time_basis": "Source-linked claim validity dates are retained only when supplied as ISO calendar dates.",
+                "evidence_refs": refs,
+                "review_state": str(claim.get("review_state") or "unreviewed"),
+                "registry_entity_id": registry_id,
+            }
 
     for observation in observation_rows:
         event_id = _stable_id("event", observation.observation_id)
@@ -578,7 +731,7 @@ def build_temporal_evidence_graph(
             clean_label = _clean(label)
             if not clean_label:
                 continue
-            matched_key = " ".join(clean_label.casefold().split())
+            matched_key = normalize_label(clean_label)
             canonical_key = alias_resolution.get(matched_key, matched_key)
             canonical_label = canonical_labels.get(canonical_key, clean_label)
             entity_id = _stable_id("entity", canonical_key)
@@ -591,6 +744,8 @@ def build_temporal_evidence_graph(
                 "observation_ids": [],
                 "evidence_refs": [],
                 "observed_names": [],
+                "registry_entity_ids": [],
+                "registry_aliases": [],
                 "identity_basis": "human_supplied_alias" if canonical_key != matched_key else "case_and_whitespace_normalization",
             })
             if clean_label not in entity["observed_names"]:
@@ -650,22 +805,110 @@ def build_temporal_evidence_graph(
                     "review_state": claim.review_state,
                 }
 
+    unresolved_registry_relationships: list[dict[str, Any]] = []
+    for relationship_index, relationship in enumerate(relationship_rows):
+        source_registry_id = _clean(relationship.get("source_entity_id"))
+        target_registry_id = _clean(relationship.get("target_entity_id"))
+        missing = [registry_id for registry_id in (source_registry_id, target_registry_id) if registry_id not in registry_identity_by_id]
+        relationship_id = _clean(relationship.get("relationship_id")) or f"relationship-{relationship_index}"
+        if missing:
+            unresolved_registry_relationships.append({
+                "relationship_id": relationship_id,
+                "missing_entity_ids": sorted(set(missing)),
+                "reason": "Relationship endpoint is absent from the included registry entities.",
+            })
+            continue
+        source_id = _stable_id("entity", registry_identity_by_id[source_registry_id])
+        target_id = _stable_id("entity", registry_identity_by_id[target_registry_id])
+        bounds = temporal_bounds(relationship.get("valid_from"), relationship.get("valid_to"))
+        predicate = _clean(relationship.get("relationship_type")).casefold() or "other"
+        edge_key = (source_id, target_id, f"registry_relationship:{relationship_id}")
+        edges[edge_key] = {
+            "edge_id": _stable_id("edge", "registry_relationship", relationship_id),
+            "source": source_id,
+            "target": target_id,
+            "predicate": predicate,
+            "edge_source": "reference_registry",
+            "relationship_id": relationship_id,
+            "observed_at": _clean(relationship.get("observed_at")),
+            **bounds,
+            "time_basis": "Explicit registry validity bounds; observed_at records when SUGAR captured the relationship.",
+            "evidence_refs": dedupe_refs(relationship.get("evidence_refs")),
+            "review_state": str(relationship.get("review_state") or "unreviewed"),
+            "reviewer": _clean(relationship.get("reviewer")),
+            "note": _clean(relationship.get("note")),
+        }
+
+    unresolved_registry_lifecycle: list[dict[str, Any]] = []
+    for lifecycle_index, lifecycle in enumerate(lifecycle_rows):
+        registry_id = _clean(lifecycle.get("entity_id"))
+        if registry_id not in registry_identity_by_id:
+            unresolved_registry_lifecycle.append({
+                "event_id": _clean(lifecycle.get("event_id")) or f"lifecycle-{lifecycle_index}",
+                "missing_entity_id": registry_id,
+            })
+            continue
+        entity_id = _stable_id("entity", registry_identity_by_id[registry_id])
+        event_key = _clean(lifecycle.get("event_id")) or f"{registry_id}:{lifecycle.get('event_type')}:{lifecycle_index}"
+        event_id = _stable_id("lifecycle", event_key)
+        effective_date = _clean(lifecycle.get("effective_date"))
+        bounds = temporal_bounds(effective_date, "")
+        refs = dedupe_refs(lifecycle.get("evidence_refs"))
+        event_type = _clean(lifecycle.get("event_type")) or "status_claim"
+        nodes[event_id] = {
+            "node_id": event_id,
+            "node_type": "lifecycle_event",
+            "label": event_type.replace("_", " ").title(),
+            "registry_entity_id": registry_id,
+            "previous_status": _clean(lifecycle.get("previous_status")),
+            "status": _clean(lifecycle.get("status")),
+            "observed_at": _clean(lifecycle.get("observed_at")),
+            "effective_date": effective_date,
+            **bounds,
+            "evidence_refs": refs,
+            "review_state": str(lifecycle.get("review_state") or "unreviewed"),
+            "reviewer": _clean(lifecycle.get("reviewer")),
+        }
+        edge_key = (entity_id, event_id, "registry_lifecycle")
+        edges[edge_key] = {
+            "edge_id": _stable_id("edge", *edge_key),
+            "source": entity_id,
+            "target": event_id,
+            "predicate": "has_lifecycle_event",
+            "observed_at": _clean(lifecycle.get("observed_at")),
+            **bounds,
+            "time_basis": "The source-backed effective_date is valid time; observed_at is capture time.",
+            "evidence_refs": refs,
+            "review_state": str(lifecycle.get("review_state") or "unreviewed"),
+            "reviewer": _clean(lifecycle.get("reviewer")),
+        }
+
     for node in nodes.values():
         if node.get("node_type") == "entity":
             node["roles"].sort()
             node["observation_ids"].sort()
             node["observed_names"].sort(key=str.casefold)
+            node["registry_entity_ids"] = sorted(set(node.get("registry_entity_ids", [])))
     return {
         "schema_version": RESEARCH_INTELLIGENCE_SCHEMA,
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "nodes": sorted(nodes.values(), key=lambda value: value["node_id"]),
         "edges": sorted(edges.values(), key=lambda value: value["edge_id"]),
         "ambiguous_alias_keys_not_merged": ambiguous_aliases,
+        "registry_summary": {
+            "entities_included": len(named_registry_rows),
+            "relationships_included": len(relationship_rows) - len(unresolved_registry_relationships),
+            "lifecycle_events_included": len(lifecycle_rows) - len(unresolved_registry_lifecycle),
+            "unresolved_relationships": len(unresolved_registry_relationships),
+            "unresolved_lifecycle_events": len(unresolved_registry_lifecycle),
+        },
+        "unresolved_registry_relationships": unresolved_registry_relationships,
+        "unresolved_registry_lifecycle_events": unresolved_registry_lifecycle,
         "guardrails": [
-            "Edges connect named entities to evidence-bearing observations; co-appearance does not imply a direct relationship.",
-            "Entity matching folds case and whitespace by default. Only human-supplied, unambiguous aliases are merged; ambiguous aliases remain separate.",
-            "Analyst-reviewed claims are retained as evidence-bearing nodes; they are not converted into actor-to-actor edges.",
-            "Observed timestamps are retained as reported; no valid-from/valid-to interval is inferred.",
+            "Observation co-appearance does not imply a direct relationship; entity-to-entity edges come only from explicit evidence-backed registry relationships.",
+            "Entity matching folds case and whitespace by default. Only unique registry names and unambiguous human-reviewed aliases are joined; ambiguous aliases remain separate.",
+            "Registry claims, relationships, and lifecycle events keep evidence references, review state, and reviewer attribution.",
+            "Valid-time bounds come only from source-linked dates explicitly recorded in the registry. observed_at is retained as capture time and never substituted for valid time.",
             "Unreviewed, rejected, and AI-triaged records remain labeled and should not be treated as verified facts.",
         ],
     }

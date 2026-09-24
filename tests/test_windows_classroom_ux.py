@@ -60,6 +60,15 @@ def test_windows_exposes_generic_public_item_ingestion_without_fake_wechat_searc
     assert 'SourceSelector(SOURCES)' in app
 
 
+def test_windows_registry_relationships_capture_review_state_and_valid_time() -> None:
+    hub = (ROOT / "SUGAR-Windows" / "workspace_hub.py").read_text(encoding="utf-8")
+    for field in ("relation_valid_from", "relation_valid_to", "relation_review_state", "relation_note"):
+        assert f"self.{field}" in hub
+    assert 'valid_from=self.relation_valid_from.text().strip()' in hub
+    assert 'review_state=self.relation_review_state.currentData()' in hub
+    assert "source-backed valid time" in hub
+
+
 def test_windows_state_workflow_starts_with_research_question_and_portable_handoff() -> None:
     app = (ROOT / "SUGAR-Windows" / "app.py").read_text(encoding="utf-8")
     assert 'tabs.addTab(self._research_project_tab(), "Research Project")' in app

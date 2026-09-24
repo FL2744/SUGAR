@@ -43,16 +43,17 @@ The output shows source URLs, hosts, platforms, languages, publication times, an
 
 ```bash
 sugar-intel graph observations.csv --assessments reviewed.jsonl \
-  --entity-aliases entity-aliases.json --output evidence-graph.json
+  --entity-aliases entity-aliases.json --workspace ./team-project \
+  --output evidence-graph.json
 ```
 
-The graph contains entity nodes, observation/event nodes, reviewed claim nodes, and evidence references. Edges from named entities point to the observations that mention them; co-appearance does not create a direct relationship between entities. An optional JSON alias registry can map a canonical name to analyst-reviewed aliases:
+The graph contains entity, observation/event, claim, and lifecycle nodes. With `--workspace` (or the project selected in either desktop), it also loads the project's source-backed registry claims, relationships, and lifecycle history. Explicit registry relationships become direct entity-to-entity edges with their review state and evidence references; co-appearance in an observation never creates such an edge. Unique registry names and unambiguous human-verified registry aliases can join observations to registry entities. An optional JSON alias registry can map a canonical name to analyst-reviewed aliases:
 
 ```json
 {"entities":[{"canonical_name":"American University of Central Asia","aliases":["AUCA","АУЦА"]}]}
 ```
 
-Only unambiguous supplied aliases are joined. Ambiguous alias keys are reported and left separate. Claims keep their review state and cited evidence. A timestamp does not establish when a relationship began or ended, so `valid_from` and `valid_to` remain empty unless a future schema records sourced bounds explicitly.
+Only unambiguous supplied aliases are joined. Ambiguous alias keys are reported and left separate. Registry claims and relationships keep their review state, reviewer, and cited evidence. ISO calendar dates entered as relationship bounds or lifecycle effective dates populate `valid_from` and `valid_to`; invalid, reversed, or absent dates remain visibly unavailable. Observation and registry capture timestamps remain separate from valid time. Relationships whose endpoint entities are missing are reported rather than silently dropped.
 
 ## Test finding sensitivity
 
@@ -66,7 +67,7 @@ This is descriptive corpus sensitivity, not a universal confidence score or caus
 
 ## Desktop use
 
-Both the Windows and macOS clients expose these operations under **Intelligence → Research Quality** or the corresponding section in the Research Project workflow. Select the project folder to use registered artifacts. The optional hypothesis JSON can be selected explicitly. Results are written to the project's intelligence output directory and registered in its artifact catalog.
+Both the Windows and macOS clients expose these operations under **Intelligence → Research Quality** or the corresponding section in the Research Project workflow. The graph automatically includes the selected project's entity registry, evidence-backed relationships, and lifecycle dates, and records those registry files as pipeline inputs. The optional hypothesis JSON can be selected explicitly. Results are written to the project's intelligence output directory and registered in its artifact catalog.
 
 ## Optional DuckDB and Parquet analytics
 
@@ -148,7 +149,7 @@ The pipeline report never replays an operation automatically. Only derivations r
 | Goal | Available now | Remaining boundary |
 | --- | --- | --- |
 | Next-best evidence | Inspectable weighted components and paused analyst proposals | Expected live yield, access, and real cost remain explicitly unestimated |
-| Temporal graph | Entity, event, reviewed-claim, evidence, timestamp, and manual alias nodes | No automatic multilingual entity resolution or sourced valid-time intervals |
+| Temporal graph | Entity, event, reviewed-claim, lifecycle, explicit relationship, evidence, sourced valid-time, and manual alias nodes | No automatic multilingual entity resolution; unknown or unsupported dates remain unknown |
 | Multimodal evidence | Local hash preservation, metadata probe, supplied OCR/transcripts, timestamped observation citations | No built-in OCR/ASR/keyframes or automatic visual entity extraction |
 | Hypothesis collection loop | Discriminating collection needs become bounded paused branches | Collection and reassessment still require analyst action |
 | Multi-analyst merge | Project merge, canonical-record deduplication, provenance, review conflict report | No shared live/cloud editing |

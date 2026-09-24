@@ -34,6 +34,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - added project merging with canonical-record deduplication, contributor provenance, preserved analyst artifacts, explicit review-conflict reports, and combined corpus/query-duplication summaries;
 - added hash-based artifact derivation metadata, stale-state propagation, an upstream-first incremental rebuild report, and a six-case offline research-calibration suite;
 - advanced the temporal evidence graph with human-supplied alias resolution, ambiguous-alias reporting, claim/evidence nodes, and media timestamp references; ResearchObservation is now schema 1.4.
+- connected source-backed project-registry claims, relationships, and lifecycle events to the temporal evidence graph; Windows and macOS now capture relationship review state and optional sourced valid-time dates, with pipeline freshness tracking the registry inputs.
 
 ### Changed
 

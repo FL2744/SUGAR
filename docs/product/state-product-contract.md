@@ -73,11 +73,12 @@ The original integration-first sequence below is retained as historical design c
 
 - external CSV/JSONL data enters through canonical import, with a saved requirement, approved strategy, bounded search plan, review, and portable handoff;
 - research-intelligence operations recommend a next collection action, preserve hypothesis proposals as paused branches, track text-similarity candidates, build a provenance-bearing entity/event graph, and run verified-evidence sensitivity checks;
+- the temporal graph can combine observations with evidence-backed registry claims, typed relationships, and lifecycle events; only explicitly supplied ISO calendar dates populate valid-time bounds;
 - analyst projects can merge while retaining contributor artifacts and assessment conflicts, and desktop analytic outputs can report hash-based freshness and rebuild order;
 - local media preservation, timestamped evidence citations, sanitized saved-page import, local lexical search, and explicitly opted-in remote embedding search are available in the shared core and both desktop workflows;
 - optional DuckDB/Parquet analysis and a fixed offline calibration suite are available.
 
-Known product gaps remain: OCR/ASR/keyframes are supplied externally rather than generated; capture is an HTML import flow rather than a browser extension; embeddings require an explicitly selected compatible remote service; pipeline reports do not replay builds and cover registered desktop derivations; and the six-case calibration suite does not establish field accuracy. Direct Department APIs, cloud collaboration, fully automatic alias resolution, and universal confidence scoring are still outside the product boundary.
+Known product gaps remain: OCR/ASR/keyframes are supplied externally rather than generated; capture is an HTML import flow rather than a browser extension; embeddings require an explicitly selected compatible remote service; pipeline reports do not replay builds and cover registered desktop derivations; temporal entity resolution still needs reviewed aliases; and the six-case calibration suite does not establish field accuracy. Direct Department APIs, cloud collaboration, and universal confidence scoring are still outside the product boundary.
 
 ## Original initial engineering sequence (historical)
 

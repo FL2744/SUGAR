@@ -12,6 +12,7 @@ from .columnar import build_parquet_dataset, query_parquet_dataset, save_query_r
 from .llm import ARC_BASE_URL, LLMConfig, create_client
 from .media_artifacts import attach_media_citation, build_media_citation, ingest_media
 from .observation_storage import load_observations
+from .reference_registry import list_entities, list_lifecycle, list_relationships
 from .research_intelligence import (
     build_content_lineage,
     load_entity_aliases,
@@ -37,6 +38,7 @@ from .state_longitudinal import save_longitudinal_comparison
 from .state_tradecraft import save_tradecraft_audit
 from .state_workflow import load_state_assessments
 from .triage_io import load_post_records
+from .workspace import SugarWorkspace
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -107,11 +109,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     graph = sub.add_parser(
         "graph",
-        help="Build a temporal entity-to-observation graph with evidence and review state.",
+        help="Build an evidence graph with sourced project-registry relationships and valid-time dates.",
     )
     graph.add_argument("observations")
     graph.add_argument("--assessments")
     graph.add_argument("--entity-aliases", help="Optional human-reviewed canonical-name to aliases JSON registry.")
+    graph.add_argument("--workspace", help="Include evidence-backed relationships and lifecycle events from a SUGAR project.")
     graph.add_argument("--output", required=True)
 
     robustness = sub.add_parser(
@@ -316,7 +319,15 @@ def main(argv=None) -> int:
         observations = load_observations(args.observations)
         assessments = load_state_assessments(args.assessments) if args.assessments else []
         aliases = load_entity_aliases(args.entity_aliases) if args.entity_aliases else None
-        report = build_temporal_evidence_graph(observations, assessments, entity_aliases=aliases)
+        workspace = SugarWorkspace.open(args.workspace) if args.workspace else None
+        report = build_temporal_evidence_graph(
+            observations,
+            assessments,
+            entity_aliases=aliases,
+            registry_entities=list_entities(workspace) if workspace else [],
+            registry_relationships=list_relationships(workspace) if workspace else [],
+            registry_lifecycle=list_lifecycle(workspace) if workspace else [],
+        )
         print(save_research_intelligence(report, args.output))
         return 0
 

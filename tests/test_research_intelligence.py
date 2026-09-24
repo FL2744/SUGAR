@@ -196,6 +196,49 @@ def test_temporal_graph_keeps_entity_to_observation_provenance_without_direct_ti
     assert all("valid-time interval" in edge["time_basis"] for edge in graph["edges"])
 
 
+def test_registry_graph_keeps_duplicate_names_unmerged_and_invalid_dates_visible():
+    observation = ResearchObservation(
+        observation_type="program",
+        title="Shared organization activity",
+        summary="A record names an organization with a non-unique registry name.",
+        institution_name="Shared Organization",
+        evidence=[EvidenceReference(url="https://example.org/activity")],
+    )
+    graph = build_temporal_evidence_graph(
+        [observation],
+        registry_entities=[
+            {"entity_id": "org-a", "name": "Shared Organization", "entity_type": "organization"},
+            {"entity_id": "org-b", "name": "Shared Organization", "entity_type": "organization"},
+            {"entity_id": "org-c", "name": "Partner Organization", "entity_type": "organization"},
+        ],
+        registry_relationships=[{
+            "relationship_id": "rel-a-c",
+            "source_entity_id": "org-a",
+            "target_entity_id": "org-c",
+            "relationship_type": "partner_of",
+            "valid_from": "2024-99-01",
+            "valid_to": "2023-01-01",
+            "evidence_refs": [{"source_url": "https://example.org/relationship"}],
+        }],
+    )
+    shared_registry_nodes = [
+        node for node in graph["nodes"]
+        if node.get("node_type") == "entity" and node.get("registry_entity_ids")
+        and node.get("label") == "Shared Organization"
+    ]
+    assert len(shared_registry_nodes) == 2
+    observed_shared = next(
+        node for node in graph["nodes"]
+        if node.get("node_type") == "entity" and observation.observation_id in node.get("observation_ids", [])
+    )
+    assert not observed_shared.get("registry_entity_ids")
+    assert "shared organization" in graph["ambiguous_alias_keys_not_merged"]
+    edge = next(item for item in graph["edges"] if item.get("relationship_id") == "rel-a-c")
+    assert edge["valid_time_state"] == "invalid_source_dates"
+    assert edge["valid_from"] == edge["valid_to"] == ""
+    assert edge["valid_from_raw"] == "2024-99-01"
+
+
 def test_robustness_is_verified_only_and_reports_leave_one_factor_out_changes():
     verified = ResearchObservation(
         observation_type="program",

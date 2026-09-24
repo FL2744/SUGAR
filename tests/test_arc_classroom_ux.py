@@ -121,6 +121,18 @@ def test_mac_defaults_to_question_first_research_project_workflow():
         assert f'Button("{label}")' in mac
 
 
+def test_mac_registry_relationships_capture_review_state_and_valid_time():
+    mac = (ROOT / "SUGAR-macOS" / "Sources" / "ContentView.swift").read_text(encoding="utf-8")
+    for field in (
+        "relationshipValidFrom", "relationshipValidTo", "relationshipReviewState", "relationshipNote",
+    ):
+        assert f"@State private var {field}" in mac
+    assert '"valid_from": relationshipValidFrom' in mac
+    assert '"valid_to": relationshipValidTo' in mac
+    assert '"review_state": relationshipReviewState' in mac
+    assert "Build Temporal Evidence Graph" in mac
+
+
 def test_bridge_exposes_llm_connection_check():
     import sugar_bridge
     assert "llm-check" in sugar_bridge.ALL_OPERATIONS

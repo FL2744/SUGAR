@@ -1599,7 +1599,7 @@ class IntelligencePage(QWidget):
         cite_grid=QGridLayout(); cite_grid.addWidget(LabeledRow("Preserved media manifest",self.media_manifest),0,0); cite_grid.addWidget(LabeledRow("Observation ID",self.media_observation_id),0,1)
         cite_grid.addWidget(LabeledRow("Start time",self.media_start),1,0); cite_grid.addWidget(LabeledRow("End time",self.media_end),1,1); cite_grid.addWidget(LabeledRow("Quote / description",self.media_quote),2,0,1,2)
         media.layout.addLayout(cite_grid); media.layout.addWidget(QPushButton("Attach Timestamped Citation to New Observations File",clicked=self._attach_media)); layout.addWidget(media)
-        note=QLabel("These local, deterministic checks expose their inputs and limits. Recommendations never start collection; lineage candidates do not prove copying; graph links point to evidence-bearing observations; robustness uses human-verified, brief-eligible evidence.")
+        note=QLabel("These local, deterministic checks expose their inputs and limits. Recommendations never start collection; lineage candidates do not prove copying; graph relationships come from sourced registry records and event links cite observations; robustness uses human-verified, brief-eligible evidence.")
         note.setObjectName("hint"); note.setWordWrap(True); layout.addWidget(note); layout.addStretch(1); return page
 
     def _quality_workspace_config(self)->dict[str,Any]|None:

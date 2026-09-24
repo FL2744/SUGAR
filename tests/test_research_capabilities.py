@@ -5,12 +5,14 @@ import wave
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from sugar_core.analyst_capture import capture_saved_page
 from sugar_core.calibration import run_calibration_suite
 from sugar_core.media_artifacts import build_media_citation, ingest_media
 from sugar_core.models import PostRecord
 from sugar_core.observation_storage import load_observations, save_observations
 from sugar_core.observations import EvidenceReference, ResearchObservation
+from sugar_core.reference_registry import add_relationship, upsert_entity
 from sugar_core.research_intelligence import build_temporal_evidence_graph
 from sugar_core.semantic_search import (
     build_semantic_index,
@@ -19,6 +21,7 @@ from sugar_core.semantic_search import (
     search_lexical,
     search_semantic_index,
 )
+from sugar_core.state_intel_cli import main as state_intel_cli_main
 from sugar_core.workspace import SugarWorkspace
 from sugar_core.desktop_ops import run_desktop_analytic_operation
 from sugar_core import desktop_ops
@@ -128,6 +131,101 @@ def test_manual_aliases_and_media_citations_remain_evidence_bound() -> None:
     assert set(institution["observed_names"]) == {"AUCA", "American University of Central Asia"}
     media_event = next(node for node in graph["nodes"] if node.get("observation_id") == observations[1].observation_id)
     assert media_event["evidence_refs"] == ["https://example.org/two", "media:media_abc#t=01:13-01:22"]
+
+
+def test_workspace_graph_includes_sourced_registry_relationships_and_lifecycle(tmp_path: Path) -> None:
+    workspace = SugarWorkspace.create(tmp_path / "temporal-project", name="Temporal Project")
+    source = upsert_entity(
+        workspace,
+        {"entity_id": "center-a", "name": "Example Center", "entity_type": "institution",
+         "aliases": ["EC"], "status": "active", "opened_date": "2020-03-14"},
+        evidence_refs=[{"source_url": "https://example.org/center", "source_row": 2}],
+        actor="Analyst One",
+        review_state="human_verified",
+    )
+    target = upsert_entity(
+        workspace,
+        {"entity_id": "program-b", "name": "Example Advising Program", "entity_type": "program"},
+        evidence_refs=["https://example.org/advising"],
+        actor="Analyst One",
+        review_state="human_verified",
+    )
+    relationship = add_relationship(
+        workspace,
+        source_entity_id=source["entity_id"],
+        target_entity_id=target["entity_id"],
+        relationship_type="partner_of",
+        evidence_refs=[{"source_url": "https://example.org/partnership", "document_date": "2021-01-01"}],
+        actor="Analyst One",
+        review_state="human_verified",
+        valid_from="2021-01-01",
+        valid_to="2024-12-31",
+        note="The source lists the two entities as program partners.",
+    )
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        add_relationship(
+            workspace,
+            source_entity_id=source["entity_id"],
+            target_entity_id=target["entity_id"],
+            relationship_type="partner_of",
+            evidence_refs=["https://example.org/invalid-date"],
+            valid_from="2021-1-1",
+        )
+    with pytest.raises(ValueError, match="on or after"):
+        add_relationship(
+            workspace,
+            source_entity_id=source["entity_id"],
+            target_entity_id=target["entity_id"],
+            relationship_type="partner_of",
+            evidence_refs=["https://example.org/reversed-date"],
+            valid_from="2024-01-01",
+            valid_to="2023-12-31",
+        )
+
+    observation = ResearchObservation(
+        observation_type="program",
+        title="Example Center advising activity",
+        summary="The center describes an advising program.",
+        institution_name="EC",
+        evidence=[EvidenceReference(url="https://example.org/activity", published_at="2023-04-01T09:00:00Z")],
+        verification_state="human_verified",
+        reviewer="Analyst One",
+    )
+    observations_path = workspace.path_for("observations") / "observations.csv"
+    save_observations([observation], observations_path)
+    workspace.register_artifact("observations", observations_path)
+
+    outputs = run_desktop_analytic_operation("intel-evidence-graph", {"workspace": str(workspace.root)})
+    graph = json.loads(Path(outputs[0]).read_text(encoding="utf-8"))
+    registry_entities = [node for node in graph["nodes"] if node.get("registry_entity_ids")]
+    center = next(node for node in registry_entities if "center-a" in node["registry_entity_ids"])
+    assert observation.observation_id in center["observation_ids"]
+    relation_edge = next(edge for edge in graph["edges"] if edge.get("relationship_id") == relationship["relationship_id"])
+    assert relation_edge["predicate"] == "partner_of"
+    assert (relation_edge["valid_from"], relation_edge["valid_to"]) == ("2021-01-01", "2024-12-31")
+    assert relation_edge["review_state"] == "human_verified"
+    assert relation_edge["evidence_refs"][0]["source_url"] == "https://example.org/partnership"
+    lifecycle = next(node for node in graph["nodes"] if node["node_type"] == "lifecycle_event")
+    assert lifecycle["valid_from"] == "2020-03-14"
+    assert lifecycle["evidence_refs"][0]["source_url"] == "https://example.org/center"
+    assert graph["registry_summary"] == {
+        "entities_included": 2,
+        "relationships_included": 1,
+        "lifecycle_events_included": 1,
+        "unresolved_relationships": 0,
+        "unresolved_lifecycle_events": 0,
+    }
+    pipeline = workspace.latest_artifact("intelligence").metadata["pipeline"]
+    tracked_inputs = {Path(item["path"]).name for item in pipeline["inputs"]}
+    assert {"relationships.jsonl", "lifecycle.jsonl"} <= tracked_inputs
+
+    cli_output = tmp_path / "cli-temporal-graph.json"
+    assert state_intel_cli_main([
+        "graph", str(observations_path), "--workspace", str(workspace.root), "--output", str(cli_output),
+    ]) == 0
+    cli_graph = json.loads(cli_output.read_text(encoding="utf-8"))
+    assert cli_graph["registry_summary"] == graph["registry_summary"]
+    assert any(edge.get("relationship_id") == relationship["relationship_id"] for edge in cli_graph["edges"])
 
 
 def test_capture_media_and_timestamp_attachment_desktop_workflow(tmp_path: Path) -> None:

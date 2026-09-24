@@ -91,6 +91,10 @@ struct WorkspaceHubView: View {
     @State private var relationshipTargetID = ""
     @State private var relationshipType = "partner_of"
     @State private var relationshipEvidenceURL = ""
+    @State private var relationshipValidFrom = ""
+    @State private var relationshipValidTo = ""
+    @State private var relationshipReviewState = "unreviewed"
+    @State private var relationshipNote = ""
     @State private var mapSourceFile = ""
     @State private var mapLayers = ""
     @State private var mapAsOfDate = ""
@@ -380,12 +384,29 @@ struct WorkspaceHubView: View {
                         HStack {
                             TextField("Source entity ID", text: $relationshipSourceID)
                             TextField("Target entity ID", text: $relationshipTargetID)
-                            TextField("Relationship type", text: $relationshipType)
+                            Picker("Relationship", selection: $relationshipType) {
+                                ForEach(["hosts", "hosted_by", "partner_of", "affiliated_with", "member_of", "successor_to", "associated_account", "delivers", "sponsors", "serves", "located_at", "other"], id: \.self) { value in
+                                    Text(value.replacingOccurrences(of: "_", with: " ").capitalized).tag(value)
+                                }
+                            }.frame(width: 190)
                         }
                         HStack {
                             TextField("Relationship evidence URL", text: $relationshipEvidenceURL)
                             Button("Add relationship") { addRelationship() }
                         }
+                        HStack {
+                            TextField("Valid from (YYYY-MM-DD, optional)", text: $relationshipValidFrom)
+                            TextField("Valid to (YYYY-MM-DD, optional)", text: $relationshipValidTo)
+                            Picker("Review", selection: $relationshipReviewState) {
+                                Text("Unreviewed").tag("unreviewed")
+                                Text("Human verified").tag("human_verified")
+                                Text("Needs follow-up").tag("needs_followup")
+                                Text("Rejected").tag("rejected")
+                            }.frame(width: 170)
+                        }
+                        TextField("Analyst note (optional)", text: $relationshipNote)
+                        Text("Dates represent source-backed valid time. Leave them blank when a source does not establish the relationship period.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }
             }.padding(12)
@@ -640,7 +661,9 @@ struct WorkspaceHubView: View {
     private func addRelationship() {
         guard !relationshipSourceID.isEmpty, !relationshipTargetID.isEmpty, !relationshipEvidenceURL.isEmpty else { return }
         hub("registry-relationship", ["source_entity_id": relationshipSourceID, "target_entity_id": relationshipTargetID,
-            "relationship_type": relationshipType, "evidence_refs": [["source_url": relationshipEvidenceURL]]])
+            "relationship_type": relationshipType, "evidence_refs": [["source_url": relationshipEvidenceURL]],
+            "valid_from": relationshipValidFrom, "valid_to": relationshipValidTo,
+            "review_state": relationshipReviewState, "note": relationshipNote])
     }
 
     private func buildMap() {
@@ -1177,7 +1200,7 @@ struct ResearchProjectView: View {
                     }
                 }
                 .disabled(model.isRunning || cleanWorkspace.isEmpty)
-                Text("Lineage shows text-similarity candidates, not proof of copying. Graph edges link entities to evidence-bearing observations; they do not infer direct ties. Robustness reports leave-one-source-out changes on human-verified, brief-eligible evidence.")
+                Text("Lineage shows text-similarity candidates, not proof of copying. Graph relationship edges use sourced registry entries and retain supplied valid dates; event links cite observations. Co-appearance does not create a relationship. Robustness reports leave-one-source-out changes on human-verified, brief-eligible evidence.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -90,6 +90,19 @@ def _clean(value: Any) -> str:
     return "" if text.casefold() in {"nan", "none", "null"} else text
 
 
+def _relationship_date(value: Any, field: str) -> str:
+    text = _clean(value)
+    if not text:
+        return ""
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        raise ValueError(f"{field} must use YYYY-MM-DD.")
+    try:
+        date.fromisoformat(text)
+    except ValueError as exc:
+        raise ValueError(f"{field} must be a real YYYY-MM-DD calendar date.") from exc
+    return text
+
+
 def _list(value: Any) -> list[str]:
     if value is None:
         return []
@@ -525,6 +538,8 @@ def _record_entity(
         "reason": _clean(reason), "observed_at": observed_at or _now(), "evidence_refs": refs,
     })
     workspace.register_artifact("reference_registry", paths["entities"], label="Evidence-backed entity registry")
+    if paths["lifecycle"].is_file():
+        workspace.register_artifact("reference_lifecycle", paths["lifecycle"], label="Evidence-backed entity lifecycle events")
     return entity
 
 
@@ -560,6 +575,12 @@ def add_relationship(
     kind = _clean(relationship_type).casefold()
     if kind not in RELATIONSHIP_TYPES:
         raise ValueError(f"relationship_type must be one of: {', '.join(sorted(RELATIONSHIP_TYPES))}")
+    if review_state not in {"unreviewed", "human_verified", "needs_followup", "rejected"}:
+        raise ValueError("Unsupported relationship review state.")
+    start_date = _relationship_date(valid_from, "valid_from")
+    end_date = _relationship_date(valid_to, "valid_to")
+    if start_date and end_date and end_date < start_date:
+        raise ValueError("valid_to must be on or after valid_from.")
     source_id, target_id = _clean(source_entity_id), _clean(target_entity_id)
     if not source_id or not target_id or source_id == target_id:
         raise ValueError("Relationships require two different entity IDs.")
@@ -572,7 +593,7 @@ def add_relationship(
         raise ValueError("Relationships require at least one evidence reference.")
     path = registry_paths(workspace)["relationships"]
     rows = _jsonl(path)
-    key = (source_id, target_id, kind, _clean(valid_from), _clean(valid_to))
+    key = (source_id, target_id, kind, start_date, end_date)
     existing = next((row for row in rows if (
         row.get("source_entity_id"), row.get("target_entity_id"), row.get("relationship_type"),
         row.get("valid_from", ""), row.get("valid_to", "")
@@ -587,7 +608,7 @@ def add_relationship(
         relationship = {
             "relationship_id": str(uuid.uuid4()), "source_entity_id": source_id,
             "target_entity_id": target_id, "relationship_type": kind, "evidence_refs": refs,
-            "valid_from": _clean(valid_from), "valid_to": _clean(valid_to), "note": _clean(note),
+            "valid_from": start_date, "valid_to": end_date, "note": _clean(note),
             "observed_at": _now(), "review_state": review_state,
             "reviewer": _clean(actor) if review_state == "human_verified" else "",
             "created_at": _now(), "updated_at": _now(),
