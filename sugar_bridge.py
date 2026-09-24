@@ -39,6 +39,8 @@ from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_in
 from sugar_core.weibo_qualification import run_weibo_qualification
 from sugar_core.weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
 from sugar_core.workspace import SugarWorkspace
+from sugar_core.reference_map import create_reference_workspace_map
+from sugar_core.workspace_share import export_project_share, import_project_share, verify_project_share
 from sugar_core.research_workspace import (
     CollaborationMember,
     ListeningPost,
@@ -65,6 +67,10 @@ WORKSPACE_OPERATIONS = {
     "workspace-listening-upsert",
     "workspace-layer-upsert",
     "workspace-collaborator-upsert",
+    "workspace-reference-map",
+    "workspace-share-export",
+    "workspace-share-verify",
+    "workspace-share-import",
 }
 BASE_OPERATIONS = {
     "search",
@@ -343,6 +349,64 @@ def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
         ))
         emit("workspace_collaborator", collaborator=asdict(item), dashboard=research.dashboard())
         return [str(research.path)]
+
+    if command == "workspace-reference-map":
+        selected_ids = {str(value) for value in (config.get("layer_ids") or []) if str(value)}
+        layers = []
+        for layer in research.reference_layers.values():
+            if selected_ids and layer.layer_id not in selected_ids:
+                continue
+            source = Path(layer.source).expanduser()
+            if not source.is_absolute():
+                source = workspace.root / source
+            layers.append((layer.name, source, layer.field_mapping))
+        if not layers:
+            raise ValueError("No reference layers are registered for this project.")
+        raw_output = str(config.get("output_file") or "").strip()
+        target = Path(raw_output).expanduser().resolve() if raw_output else workspace.path_for("maps") / "reference_workspace.html"
+        output = create_reference_workspace_map(
+            layers,
+            target,
+            title=str(config.get("title") or f"{workspace.manifest.name} — Reference Workspace"),
+            closed_symbol=str(config.get("closed_symbol") or "☠"),
+        )
+        metadata = str(Path(output).with_suffix(Path(output).suffix + ".metadata.json"))
+        workspace.register_artifact("map", output, metadata={"operation": command})
+        if Path(metadata).is_file():
+            workspace.register_artifact("map_metadata", metadata, metadata={"operation": command})
+        emit("workspace_reference_map", output=output, layers=len(layers))
+        return [output, metadata]
+
+    if command == "workspace-share-export":
+        raw_output = str(config.get("output_file") or "").strip()
+        target = Path(raw_output).expanduser().resolve() if raw_output else workspace.path_for("exports") / f"{workspace.root.name}.sugar-project.zip"
+        output = export_project_share(
+            workspace.root,
+            target,
+            include_external_artifacts=bool(config.get("include_external_artifacts", False)),
+        )
+        workspace.register_artifact("project_share", output, metadata={"operation": command})
+        emit("workspace_share", output=output)
+        return [output]
+
+    if command == "workspace-share-verify":
+        share_file = str(config.get("share_file") or config.get("file") or "").strip()
+        if not share_file:
+            raise ValueError("share_file is required.")
+        result = verify_project_share(share_file)
+        emit("workspace_share_verification", **result)
+        if not result.get("valid"):
+            raise ValueError("Project share verification failed: " + "; ".join(result.get("errors") or []))
+        return [str(Path(share_file).expanduser().resolve())]
+
+    if command == "workspace-share-import":
+        share_file = str(config.get("share_file") or config.get("file") or "").strip()
+        destination = str(config.get("destination") or "").strip()
+        if not share_file or not destination:
+            raise ValueError("share_file and destination are required.")
+        imported = import_project_share(share_file, destination)
+        emit("workspace_share_imported", workspace=imported)
+        return [imported]
 
     artifact_path = str(config.get("artifact") or config.get("artifact_path") or "").strip()
     if not artifact_path:
