@@ -34,7 +34,7 @@ Each observation has a stable `observation_id`, type, short title/summary, obser
 
 Location is explicitly epistemic rather than just geographic. `location_basis` records whether a location came from a profile, AI inference, human verification, or another method; `location_confidence` records uncertainty separately from coordinates.
 
-Evidence references preserve the source URL when available and can also preserve a platform/native-ID identity for social-media material. An observation may carry multiple evidence references.
+Evidence references preserve the source URL when available and can also preserve a platform/native-ID identity for social-media material. They can carry the source language (from detected or platform language metadata when converted from a `PostRecord`) and a preserved-media artifact ID with a timestamp locator. An observation may carry multiple evidence references. ResearchObservation schema 1.4 adds media citation fields; schema 1.3 and older files without those fields still load.
 
 ## Verification states
 

@@ -125,6 +125,8 @@ def register_workspace_outputs(
     *,
     operation: str,
     kind: str | None = None,
+    inputs: Iterable[str | Path] = (),
+    parameters: dict[str, Any] | None = None,
 ) -> list[ArtifactRecord]:
     if workspace is None:
         return []
@@ -134,11 +136,23 @@ def register_workspace_outputs(
         if not path.exists():
             continue
         artifact_kind = kind or classify_workspace_output(path, operation=operation)
+        metadata: dict[str, Any] = {"operation": operation}
+        input_paths = [Path(value).expanduser().resolve() for value in inputs]
+        if input_paths:
+            from .workspace_pipeline import derivation_metadata
+
+            metadata["pipeline"] = derivation_metadata(
+                workspace,
+                path,
+                input_paths,
+                operation=operation,
+                parameters=parameters,
+            )
         records.append(
             workspace.register_artifact(
                 artifact_kind,
                 path,
-                metadata={"operation": operation},
+                metadata=metadata,
             )
         )
     return records

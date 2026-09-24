@@ -67,7 +67,21 @@ SUGAR should distinguish two profiles rather than forcing one environment to sat
 
 The two profiles must share one core implementation. A State profile is not a fork.
 
-## Highest-value engineering sequence
+## Current capability status in SUGAR 1.3.0
+
+The original integration-first sequence below is retained as historical design context. The current repository now supports the following product paths:
+
+- external CSV/JSONL data enters through canonical import, with a saved requirement, approved strategy, bounded search plan, review, and portable handoff;
+- research-intelligence operations recommend a next collection action, preserve hypothesis proposals as paused branches, track text-similarity candidates, build a provenance-bearing entity/event graph, and run verified-evidence sensitivity checks;
+- analyst projects can merge while retaining contributor artifacts and assessment conflicts, and desktop analytic outputs can report hash-based freshness and rebuild order;
+- local media preservation, timestamped evidence citations, sanitized saved-page import, local lexical search, and explicitly opted-in remote embedding search are available in the shared core and both desktop workflows;
+- optional DuckDB/Parquet analysis and a fixed offline calibration suite are available.
+
+Known product gaps remain: OCR/ASR/keyframes are supplied externally rather than generated; capture is an HTML import flow rather than a browser extension; embeddings require an explicitly selected compatible remote service; pipeline reports do not replay builds and cover registered desktop derivations; and the six-case calibration suite does not establish field accuracy. Direct Department APIs, cloud collaboration, fully automatic alias resolution, and universal confidence scoring are still outside the product boundary.
+
+## Original initial engineering sequence (historical)
+
+The numbered sequence below documents the early integration-first plan. Use the current capability and remaining-gap summary above when assessing the 1.3.0 product state.
 
 ### 1. External data ingestion
 
@@ -169,4 +183,3 @@ Until a sponsor provides a concrete requirement, do not spend the remaining proj
 ## Definition of a credible handoff
 
 The repository is ready for a serious State handoff when a new user on a clean machine can install SUGAR, open or create a project, enter a research requirement, import an external dataset or use an available collector, inspect the generated search/collection logic, review evidence-backed findings and limitations, and export a portable evidence package without access to Virginia Tech systems or knowledge of the internal codebase.
-

@@ -13,6 +13,8 @@ Use this index to find the current design or methodology document for the part o
 - [`evidence-lineage.md`](evidence-lineage.md) — finding-to-observation-to-source-record provenance and contradiction links.
 - [`product/state-product-contract.md`](product/state-product-contract.md) — State delivery boundary, integration posture, and implementation sequence.
 - [`../product/requirements/state_product.v1.json`](../product/requirements/state_product.v1.json) — machine-readable State product requirements and acceptance criteria enforced by tests.
+- [`../product/backlog.md`](../product/backlog.md) — persistent external-environment research workspace contract and implementation boundaries.
+- [`research-workspace.md`](research-workspace.md) — operator guide for projects, history, registry, data, maps, listening posts, conversations, and portable exchange.
 - [`adr/0001-state-integration-first-boundary.md`](adr/0001-state-integration-first-boundary.md) — decision record establishing the integration-first State delivery architecture.
 - [`project-workspaces.md`](project-workspaces.md) — persistent project manifest/artifact-registry contract and automatic workflow routing.
 - [`release-process.md`](release-process.md) — versioning, CI, packaged-app inspection, research-integrity review, and release checklist.
@@ -43,6 +45,7 @@ Use this index to find the current design or methodology document for the part o
 - [`state-department-workflow.md`](state-department-workflow.md) — end-to-end State evidence-to-brief methodology and integrity rules.
 - [`state-analytic-intelligence.md`](state-analytic-intelligence.md) — deterministic and structured analytic-intelligence products.
 - [`state-agentic-deep-mode.md`](state-agentic-deep-mode.md) — iterative LLM-assisted synthesis mode and its safeguards.
+- [`research-intelligence-feedback.md`](research-intelligence-feedback.md) — next-evidence recommendations, evidence graph, lineage, robustness, DuckDB/Parquet, semantic retrieval, analyst capture, media citations, project merge, pipeline freshness, and calibration limits.
 
 ## Historical context
 

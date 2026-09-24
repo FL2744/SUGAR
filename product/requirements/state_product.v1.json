@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "product": "SUGAR State delivery profile",
   "status": "proposed",
-  "updated": "2026-09-17",
+  "updated": "2026-09-24",
   "north_star": "A portable, auditable research-orchestration and evidence workbench that can operate standalone and can ingest from or hand off to Department systems without requiring Virginia Tech infrastructure.",
   "deployment_assumptions": [
     "Virginia Tech ARC is a development/classroom convenience, not an end-product dependency.",
@@ -44,7 +44,7 @@
       "priority": "P0",
       "category": "deployment",
       "title": "No Virginia Tech runtime dependency",
-      "status": "partially_met",
+      "status": "met",
       "requirement": "The delivered State profile must not require Virginia Tech ARC, Virginia Tech credentials, ARC OnDemand, or any Virginia Tech-only service for normal operation.",
       "acceptance": [
         "A clean Windows or macOS installation can launch and perform non-LLM workflows without Virginia Tech credentials.",
@@ -309,7 +309,7 @@
       "priority": "P1",
       "category": "handoff",
       "title": "Maintainer handoff package",
-      "status": "not_met",
+      "status": "partially_met",
       "requirement": "The final repository must let a technically competent maintainer understand deployment, extension points, schemas, tests, and known limitations without relying on the original student team.",
       "acceptance": [
         "Architecture, product contract, collector interface, data schemas, release process, and security boundaries are indexed from repository documentation.",
@@ -318,6 +318,90 @@
         "Release artifacts include version and license information."
       ],
       "verification": "cold handoff rehearsal"
+    },
+    {
+      "id": "STATE-P2-001",
+      "priority": "P2",
+      "category": "research_intelligence",
+      "title": "Inspectable next-best-evidence recommendations",
+      "status": "met",
+      "requirement": "Recommend bounded research collection actions from requirement gaps, hypotheses, and observed search yield without hiding the score basis or starting collection automatically.",
+      "acceptance": [
+        "Report exposes weighted scope, hypothesis, relevance, novelty, duplicate, and source-diversity components plus missing-measure handling.",
+        "Hypothesis-derived actions enter the saved plan as paused branches and require analyst approval before collection.",
+        "Budget is bounded by analyst-set query and record caps, and unmeasured yield/access/cost is not presented as a prediction."
+      ],
+      "verification": "research intelligence fixture and plan transition tests"
+    },
+    {
+      "id": "STATE-P2-002",
+      "priority": "P2",
+      "category": "evidence_integrity",
+      "title": "Content lineage and provenance-bearing temporal graph",
+      "status": "partially_met",
+      "requirement": "Surface potential duplicate origins and connect evidence-bearing claims, named entities, and observations through reviewable temporal references.",
+      "acceptance": [
+        "Exact and near-duplicate text candidates retain source IDs and similarity basis without declaring independent origins.",
+        "Graph nodes and edges retain evidence references, observed timestamps, and review state.",
+        "Only unambiguous human-supplied entity aliases are joined; missing valid-time bounds remain unspecified."
+      ],
+      "verification": "lineage, alias, claim-provenance, and graph citation tests"
+    },
+    {
+      "id": "STATE-P2-003",
+      "priority": "P2",
+      "category": "collaboration",
+      "title": "Merge separate analyst research projects",
+      "status": "met",
+      "requirement": "Combine independent project artifacts and canonical evidence while preserving contributor provenance and surfacing incompatible human assessments.",
+      "acceptance": [
+        "Identical artifact bytes and canonical platform/native-ID records are deduplicated with contributor provenance preserved.",
+        "Different human review decisions remain individually preserved and are excluded from any unambiguous combined assessment view.",
+        "Report identifies schema differences, duplicate query work, corpus distribution, and missing artifacts without treating missing coverage as zero results."
+      ],
+      "verification": "multi-workspace merge fixture with duplicate records and conflicting reviewers"
+    },
+    {
+      "id": "STATE-P2-004",
+      "priority": "P2",
+      "category": "multimodal_evidence",
+      "title": "Preserve and cite analyst-supplied media",
+      "status": "partially_met",
+      "requirement": "Preserve local image, audio, and video evidence with integrity metadata and precise citations, without crossing access boundaries.",
+      "acceptance": [
+        "Media manifests include SHA-256, media type, retrieval time, parent record, source URL, and available duration/dimension metadata.",
+        "Supplied transcript/OCR derivatives retain provenance and review state; timestamped media locators can be attached to observations.",
+        "Workflow does not automate authentication or claim OCR, transcription, or keyframe functions that are not installed."
+      ],
+      "verification": "media manifest, timestamp locator, and access-boundary tests"
+    },
+    {
+      "id": "STATE-P2-005",
+      "priority": "P2",
+      "category": "semantic_retrieval",
+      "title": "Search accumulated evidence",
+      "status": "partially_met",
+      "requirement": "Retrieve source evidence by local terms or cross-lingual semantic similarity while keeping retrieval scores separate from evidentiary judgments.",
+      "acceptance": [
+        "Offline lexical search remains local and marks its limits.",
+        "Remote embedding indexing/search requires an explicit opt-in, keeps source language and original citation, and labels vectors as retrieval aids only.",
+        "Index refresh reuses unchanged document vectors and removes records no longer present in the canonical input."
+      ],
+      "verification": "offline search, embedding fixture, index refresh, and consent-gate tests"
+    },
+    {
+      "id": "STATE-P2-006",
+      "priority": "P2",
+      "category": "reproducibility",
+      "title": "Incremental artifact freshness and calibration",
+      "status": "partially_met",
+      "requirement": "Track analytic input/output hashes and provide regression cases that make research-system changes measurable.",
+      "acceptance": [
+        "Registered desktop derivations report fresh, changed, missing, and stale-upstream states with an upstream-first rebuild order.",
+        "Calibration command runs an offline fixed gold set and reports exact component checks and known scope limits.",
+        "Pipeline report does not claim to cover unregistered CLI artifacts or replay operations that require analyst input."
+      ],
+      "verification": "dependency invalidation tests and fixed calibration gold set"
     }
   ],
   "public_state_systems_to_treat_as_context_not_dependencies": [

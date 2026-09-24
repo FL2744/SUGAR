@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlparse
 
+from .models import PostRecord
 from .observations import ResearchObservation
+from .research_intelligence import build_content_lineage
 from .state_schema import StateAssessment
 from .utils import utc_iso
 
@@ -191,6 +193,8 @@ def analytic_tensions(
 def build_tradecraft_audit(
     observations: Iterable[ResearchObservation],
     assessments: Iterable[StateAssessment],
+    *,
+    records: Iterable[PostRecord] | None = None,
 ) -> dict[str, Any]:
     observations, assessments = list(observations), list(assessments)
     observation_map = {row.observation_id: row for row in observations}
@@ -216,7 +220,7 @@ def build_tradecraft_audit(
     )
     digital = sum(obs.observation_type == "digital_post" for obs, _ in verified)
     offline = sum(obs.observation_type != "digital_post" for obs, _ in verified)
-    return {
+    result = {
         "generated_at": utc_iso(),
         "corpus": {
             "observations": len(observations),
@@ -258,17 +262,30 @@ def build_tradecraft_audit(
             "Analytic tensions are review prompts, not automatic findings that an assessment is wrong.",
         ],
     }
+    if records is not None:
+        content_lineage = build_content_lineage(records)
+        result["content_lineage"] = {
+            "records_with_text": content_lineage["records_with_text"],
+            "candidate_pair_count": content_lineage["candidate_pair_count"],
+            "candidate_pair_generation_truncated": content_lineage["candidate_pair_generation_truncated"],
+            "clusters": content_lineage["clusters"],
+            "candidate_pairs": content_lineage["candidate_pairs"],
+            "guardrails": content_lineage["method"]["guardrails"],
+        }
+    return result
 
 
 def save_tradecraft_audit(
     observations: Iterable[ResearchObservation],
     assessments: Iterable[StateAssessment],
     output_file: str | Path,
+    *,
+    records: Iterable[PostRecord] | None = None,
 ) -> str:
     target = Path(output_file).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        json.dumps(build_tradecraft_audit(observations, assessments), ensure_ascii=False, indent=2, sort_keys=True),
+        json.dumps(build_tradecraft_audit(observations, assessments, records=records), ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     return str(target)

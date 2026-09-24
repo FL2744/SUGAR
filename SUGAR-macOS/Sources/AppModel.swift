@@ -50,6 +50,12 @@ final class AppModel: ObservableObject {
     @Published var researchStrategyTask = ""
     @Published var researchStrategyReviewState = ""
     @Published var researchStrategySummary = ""
+    @Published var activeWorkspace = NSHomeDirectory() + "/Documents/SUGAR/Projects/State-Research-Project"
+    @Published var workspaceHubAction = ""
+    @Published var workspaceHubData: Any = [:]
+    @Published var workspaceHubJSON = ""
+    @Published var workspaceHubRevision = 0
+    @Published var workspaceHubResults: [String: Any] = [:]
     @Published var xToken = KeychainStore.read("xBearerToken")
     @Published var openAIKey = KeychainStore.read(LLMProvider.openAI.keychainAccount)
     @Published var arcKey = KeychainStore.read(LLMProvider.arc.keychainAccount)
@@ -58,6 +64,7 @@ final class AppModel: ObservableObject {
     private var previousKeyAssigned = false
     private var rawBackendLog = ""
     private var activeTask: Task<Int32, Error>?
+    private var queuedWorkspaceOperations: [(String, [String: Any])] = []
 
     func cancel() {
         guard isRunning, let activeTask, !activeTask.isCancelled else { return }
@@ -112,7 +119,13 @@ final class AppModel: ObservableObject {
     }
 
     func run(command: String, config: [String: Any]) {
-        guard !isRunning else { return }
+        if isRunning {
+            if command == "workspace-hub" {
+                queuedWorkspaceOperations.append((command, config))
+                log += "\nQueued workspace action until the current operation finishes.\n"
+            }
+            return
+        }
         if let issue = preflight(command: command, config: config) {
             log = issue
             return
@@ -199,6 +212,16 @@ final class AppModel: ObservableObject {
             }
             activeTask = nil
             isRunning = false
+            runNextWorkspaceOperation()
+        }
+    }
+
+    private func runNextWorkspaceOperation() {
+        guard !isRunning, !queuedWorkspaceOperations.isEmpty else { return }
+        let (command, config) = queuedWorkspaceOperations.removeFirst()
+        Task { @MainActor in
+            await Task.yield()
+            run(command: command, config: config)
         }
     }
 
@@ -277,9 +300,11 @@ final class AppModel: ObservableObject {
                     return "Cannot use the selected output folder because it is not writable: \(path)"
                 }
             }
-        } else if let source = config["source_file"] as? String,
-                  !FileManager.default.isReadableFile(atPath: source) {
-            return "Cannot read the selected source file: \(source)"
+        } else if let rawSource = config["source_file"] as? String {
+            let source = rawSource.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !source.isEmpty && !FileManager.default.isReadableFile(atPath: source) {
+                return "Cannot read the selected source file: \(source)"
+            }
         }
         return nil
     }
@@ -290,6 +315,27 @@ final class AppModel: ObservableObject {
             guard let data = line.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let event = json["event"] as? String else {
+                continue
+            }
+            if event == "workspace_status" {
+                if let path = json["root"] as? String, !path.isEmpty { activeWorkspace = path }
+                continue
+            }
+            if event == "workspace_hub_data" {
+                workspaceHubAction = json["action"] as? String ?? ""
+                workspaceHubData = json["data"] ?? [:]
+                workspaceHubResults[workspaceHubAction] = workspaceHubData
+                if workspaceHubAction == "project-import",
+                   let data = workspaceHubData as? [String: Any], let destination = data["destination"] as? String {
+                    activeWorkspace = destination
+                }
+                if let value = json["data"], let encoded = try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys]),
+                   let text = String(data: encoded, encoding: .utf8) {
+                    workspaceHubJSON = text
+                } else {
+                    workspaceHubJSON = ""
+                }
+                workspaceHubRevision += 1
                 continue
             }
             if event == "strategy-review" {

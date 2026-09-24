@@ -1,6 +1,6 @@
 # SUGAR project workspaces
 
-SUGAR 1.2 introduces a persistent project workspace so a research effort can keep its evidence, reference layers, reviewed assessments, maps, reports, and analytic outputs together without collapsing them into one opaque database.
+SUGAR 1.2 introduced a persistent project workspace so a research effort can keep its evidence, reference layers, reviewed assessments, maps, reports, and analytic outputs together without collapsing them into one opaque database. SUGAR 1.3 adds multi-project history, subprojects, the entity/reference registry, saved monitoring, data inspection, and portable project exchange; see [`research-workspace.md`](research-workspace.md) for the complete operator workflow.
 
 ## Design goals
 
@@ -158,8 +158,11 @@ Bridge protocol 3 exposes the workspace primitives:
 - `workspace-init`
 - `workspace-status`
 - `workspace-register`
+- `workspace-hub` for project navigation/history, subprojects, registry and dataset operations, listening posts, conversation views, and portable project bundles
 
 State/intelligence desktop operations also consume the same workspace implementation. Desktop applications should pass the workspace path and use typed operations rather than reimplementing manifest, artifact-discovery, or SQLite logic.
+
+The `sugar-project` command also supports `projects`, `dashboard`, `history`, `subproject`, `export-project`, `import-project`, `registry`, `registry-preview`, `registry-import`, `registry-export`, `reference-template`, `monitor-list`, `monitor-add`, `monitor-feed`, `monitor-review`, `monitor-run-due`, and `conversation-view`. See [`research-workspace.md`](research-workspace.md) for workflow examples and evidence semantics.
 
 ## Portability and collaboration
 

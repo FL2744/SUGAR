@@ -44,6 +44,20 @@ def _json_list(value: Any) -> list[str]:
     return []
 
 
+def _json_value_list(value: Any) -> list[Any]:
+    if _missing(value) or value == "":
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return [value] if value.strip() else []
+        return parsed if isinstance(parsed, list) else []
+    return []
+
+
 def _json_dict(value: Any) -> dict[str, Any]:
     if _missing(value) or value == "":
         return {}
@@ -94,6 +108,9 @@ def post_record_from_mapping(row: Mapping[str, Any]) -> PostRecord:
         parent_record_key=str(_first(row, "parent_record_key")),
         thread_root_key=str(_first(row, "thread_root_key")),
         conversation_id=str(_first(row, "conversation_id")),
+        reply_to_actor=str(_first(row, "reply_to_actor")),
+        quoted_record_key=str(_first(row, "quoted_record_key")),
+        mentioned_actors=[dict(item) if isinstance(item, dict) else {"handle": str(item)} for item in _json_value_list(_first(row, "mentioned_actors", default=[]))],
         source_mode=str(_first(row, "source_mode", default="api")),
         source_host=str(_first(row, "source_host")),
         source_url=str(_first(row, "source_url")),

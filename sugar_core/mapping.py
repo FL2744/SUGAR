@@ -40,6 +40,7 @@ class MapOptions:
     show_minimap: bool = True
     show_measure_control: bool = True
     show_mouse_position: bool = True
+    as_of_date: str = ""
 
 
 @dataclass
@@ -222,10 +223,15 @@ def _normalize_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
             )
             verification = _first(row, "verification_state") or "unreviewed"
             activity_status = _first(row, "activity_status") or "unknown"
+            explicit_status = bool(_first(row, "activity_status", "status"))
+            lifecycle_date = _first(row, "status_date", "closure_date", "closed_date", "effective_date")
+            lifecycle_source = _safe_url(_first(row, "status_source_url", "lifecycle_source_url"))
             location_basis = _first(row, "location_basis") or "unknown"
             location_confidence = _numeric(row.get("location_confidence"))
             ai_confidence = _numeric(row.get("ai_confidence"))
             source_url = _safe_url(_first(row, "primary_source_url"))
+            registry_id = _first(row, "registry_id", "entity_id")
+            evidence_urls = _json_list(row.get("evidence_urls", ""))
             platform = ""
             source_mode = "research_observation"
             triage_labels = _json_list(row.get("triage_labels", ""))
@@ -243,26 +249,31 @@ def _normalize_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
                 title += f" — {author}"
             summary = _first(row, "translated_text", "translated_en", "original_text")
             date_value = _first(row, "published_at", "date_iso")
-            location = _first(row, "inferred_location", "author_location")
-            country = ""
-            region = ""
-            city = ""
-            institution = ""
-            program = ""
+            country = _first(row, "country")
+            region = _first(row, "region")
+            city = _first(row, "city")
+            location = _first(row, "inferred_location", "author_location", "location_label") or ", ".join(part for part in (city, region, country) if part)
+            institution = _first(row, "institution_name")
+            program = _first(row, "program_name", "program")
             actors = [author] if author else []
-            audiences = []
+            audiences = _json_list(row.get("audiences", ""))
             themes = []
             overlap = []
             overlap_note = ""
             spatial_matches = []
             verification = "source_record"
-            activity_status = "unknown"
+            activity_status = _first(row, "status", "activity_status") or "unknown"
+            explicit_status = bool(_first(row, "status", "activity_status"))
+            lifecycle_date = _first(row, "status_date", "closure_date", "closed_date", "effective_date")
+            lifecycle_source = _safe_url(_first(row, "status_source_url", "lifecycle_source_url"))
             location_basis = _first(row, "location_source") or (
                 "ai_inferred" if _first(row, "inferred_location") else "unknown"
             )
             location_confidence = _numeric(row.get("location_confidence"))
             ai_confidence = None
             source_url = _safe_url(_first(row, "canonical_url", "post_url", "source_url"))
+            registry_id = _first(row, "registry_id", "entity_id")
+            evidence_urls = _json_list(row.get("evidence_urls", ""))
             source_mode = _first(row, "source_mode")
             triage_labels = []
 
@@ -283,16 +294,36 @@ def _normalize_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
                 "_program": program,
                 "_actors": actors,
                 "_audiences": audiences,
+                "_normalized_audiences": _list_text(_json_list(row.get("normalized_audiences", ""))),
+                "_audience_descriptions": _list_text(_json_list(row.get("audience_descriptions", ""))),
+                "_normalized_delivery_modes": _list_text(_json_list(row.get("normalized_delivery_modes", ""))),
+                "_delivery_mode_descriptions": _list_text(_json_list(row.get("delivery_mode_descriptions", ""))),
                 "_themes": themes,
+                "_aliases": _list_text(_json_list(row.get("aliases", ""))),
+                "_program_domains": _list_text(_json_list(row.get("program_domains", ""))),
+                "_normalized_program_domains": _list_text(_json_list(row.get("normalized_program_domains", ""))),
+                "_program_descriptions": _list_text(_json_list(row.get("program_descriptions", ""))),
+                "_delivery_modes": _list_text(_json_list(row.get("delivery_modes", ""))),
+                "_coverage_scope": _list_text(_json_list(row.get("coverage_scope", ""))),
+                "_account_handles": _list_text(_json_list(row.get("accounts", ""))),
+                "_relationships": _list_text(_json_list(row.get("relationship_summary", row.get("relationships", "")))),
+                "_location_precision": _first(row, "location_precision", "precision") or "unknown",
                 "_us_overlap": overlap,
                 "_overlap_note": overlap_note,
                 "_spatial_matches": spatial_matches,
                 "_verification": verification.casefold(),
                 "_activity_status": activity_status.casefold(),
+                "_status_explicit": explicit_status,
+                "_lifecycle_date": lifecycle_date,
+                "_lifecycle_source": lifecycle_source,
+                "_opened_date": _first(row, "opened_date", "opening_date", "valid_from"),
+                "_closed_date": _first(row, "closed_date", "closure_date", "valid_to"),
                 "_location_basis": location_basis,
                 "_location_confidence": location_confidence,
                 "_ai_confidence": ai_confidence,
                 "_source_url": source_url,
+                "_registry_id": registry_id,
+                "_evidence_urls": evidence_urls,
                 "_source_mode": source_mode,
                 "_triage_labels": triage_labels,
                 "latitude": float(row["latitude"]),
@@ -324,6 +355,27 @@ def _normalize_reference_rows(df: pd.DataFrame) -> pd.DataFrame:
                 "_summary": _first(row, "summary", "description", "note", "notes"),
                 "_location": location,
                 "_source_url": _safe_url(_first(row, "url", "source_url", "primary_source_url", "website")),
+                "_entity_id": _first(row, "entity_id", "site_id", "reference_id", "id"),
+                "_status": (_first(row, "status", "activity_status") or "unknown").casefold(),
+                "_status_explicit": bool(_first(row, "status", "activity_status")),
+                "_status_date": _first(row, "status_date", "closure_date", "closed_date", "effective_date"),
+                "_status_source": _safe_url(_first(row, "status_source_url", "lifecycle_source_url")),
+                "_opened_date": _first(row, "opened_date", "opening_date", "valid_from"),
+                "_closed_date": _first(row, "closed_date", "closure_date", "valid_to"),
+                "_aliases": _list_text(_json_list(row.get("aliases", ""))),
+                "_programs": _list_text(_json_list(row.get("program_domains", ""))),
+                "_program_descriptions": _list_text(_json_list(row.get("program_descriptions", ""))),
+                "_normalized_program_domains": _list_text(_json_list(row.get("normalized_program_domains", ""))),
+                "_audiences": _list_text(_json_list(row.get("audiences", ""))),
+                "_audience_descriptions": _list_text(_json_list(row.get("audience_descriptions", ""))),
+                "_normalized_audiences": _list_text(_json_list(row.get("normalized_audiences", ""))),
+                "_delivery_mode_descriptions": _list_text(_json_list(row.get("delivery_mode_descriptions", ""))),
+                "_normalized_delivery_modes": _list_text(_json_list(row.get("normalized_delivery_modes", ""))),
+                "_delivery_modes": _list_text(_json_list(row.get("delivery_modes", ""))),
+                "_coverage_scope": _list_text(_json_list(row.get("coverage_scope", ""))),
+                "_account_handles": _list_text(_json_list(row.get("accounts", ""))),
+                "_relationships": _list_text(_json_list(row.get("relationship_summary", row.get("relationships", "")))),
+                "_location_precision": _first(row, "location_precision", "precision") or "unknown",
                 "latitude": float(row["latitude"]),
                 "longitude": float(row["longitude"]),
             }
@@ -372,6 +424,7 @@ def _popup_html(row: pd.Series, max_chars: int) -> str:
     location = structured_location or _clean(row.get("_location"))
     kind = _clean(row.get("_kind")).replace("_", " ").title()
     verification = _clean(row.get("_verification")).replace("_", " ").title()
+    status = _clean(row.get("_activity_status")).replace("_", " ").title()
     observed = _clean(row.get("_date_raw"))
     institution = _clean(row.get("_institution"))
     program = _clean(row.get("_program"))
@@ -398,6 +451,14 @@ def _popup_html(row: pd.Series, max_chars: int) -> str:
         lines.append(f"<div><b>Location:</b> {esc(location)}</div>")
     if observed:
         lines.append(f"<div><b>Observed:</b> {esc(observed)}</div>")
+    if bool(row.get("_status_explicit")) and status:
+        lines.append(f"<div><b>Institution / record status:</b> {esc(status)}</div>")
+        if _clean(row.get("_lifecycle_date")):
+            lines.append(f"<div><b>Status date:</b> {esc(row.get('_lifecycle_date'))}</div>")
+        lifecycle_source = _safe_url(row.get("_lifecycle_source"))
+        if lifecycle_source:
+            safe_lifecycle = html.escape(lifecycle_source, quote=True)
+            lines.append(f"<div><a href='{safe_lifecycle}' target='_blank' rel='noopener noreferrer'>Open status evidence ↗</a></div>")
     if institution:
         lines.append(f"<div><b>Institution:</b> {esc(institution)}</div>")
     if program:
@@ -406,6 +467,21 @@ def _popup_html(row: pd.Series, max_chars: int) -> str:
         lines.append(f"<div><b>Actors:</b> {esc(actors)}</div>")
     if audiences:
         lines.append(f"<div><b>Audiences:</b> {esc(audiences)}</div>")
+    for label, key in (("Aliases", "_aliases"), ("Programs / services", "_program_domains"),
+                       ("Source program descriptions", "_program_descriptions"),
+                       ("Normalized program domains", "_normalized_program_domains"),
+                       ("Source audience descriptions", "_audience_descriptions"),
+                       ("Normalized audiences", "_normalized_audiences"),
+                       ("Source delivery descriptions", "_delivery_mode_descriptions"),
+                       ("Normalized delivery modes", "_normalized_delivery_modes"),
+                       ("Delivery modes", "_delivery_modes"), ("Service geography", "_coverage_scope"),
+                       ("Accounts / channels", "_account_handles"), ("Related entities", "_relationships")):
+        value = _clean(row.get(key))
+        if value:
+            lines.append(f"<div><b>{label}:</b> {esc(value)}</div>")
+    precision = _clean(row.get("_location_precision"))
+    if precision and precision.casefold() != "unknown":
+        lines.append(f"<div><b>Location precision:</b> {esc(precision)}</div>")
     if themes:
         lines.append(f"<div><b>Themes:</b> {esc(themes)}</div>")
     if triage:
@@ -443,6 +519,13 @@ def _popup_html(row: pd.Series, max_chars: int) -> str:
         lines.append(
             f"<div><a href='{safe_link}' target='_blank' rel='noopener noreferrer'>Open source evidence ↗</a></div>"
         )
+    registry_id = _clean(row.get("_registry_id"))
+    if registry_id:
+        lines.append(f"<div><b>Registry ID:</b> {esc(registry_id)}</div>")
+    other_evidence = [url for url in (row.get("_evidence_urls") or []) if _safe_url(url) and _safe_url(url) != source_url]
+    for index, evidence_url in enumerate(other_evidence[:8], start=1):
+        safe_evidence = html.escape(_safe_url(evidence_url), quote=True)
+        lines.append(f"<div><a href='{safe_evidence}' target='_blank' rel='noopener noreferrer'>Open supporting registry evidence {index} ↗</a></div>")
     lines.append(f"<div class='sugar-popup-id'>{esc(row.get('_record_id'))}</div>")
     lines.append("</div>")
     return "".join(lines)
@@ -460,8 +543,32 @@ def _reference_popup_html(row: pd.Series, layer_name: str, max_chars: int) -> st
         f"<div class='sugar-popup-title'>{title}</div>",
         f"<div class='sugar-popup-meta'><b>Reference — {html.escape(layer_name)}</b> · {category}</div>",
     ]
+    status = _clean(row.get("_status"))
+    if status:
+        lines.append(f"<div><b>Status:</b> {html.escape(status.replace('_', ' ').title(), quote=True)}</div>")
+    status_date = _clean(row.get("_status_date"))
+    if status_date:
+        lines.append(f"<div><b>Status date:</b> {html.escape(status_date, quote=True)}</div>")
+    entity_id = _clean(row.get("_entity_id"))
+    if entity_id:
+        lines.append(f"<div><b>Registry ID:</b> {html.escape(entity_id, quote=True)}</div>")
+    for label, key in (("Aliases", "_aliases"), ("Programs / services", "_programs"),
+                       ("Source program descriptions", "_program_descriptions"),
+                       ("Normalized program domains", "_normalized_program_domains"),
+                       ("Audiences", "_audiences"), ("Source audience descriptions", "_audience_descriptions"),
+                       ("Normalized audiences", "_normalized_audiences"),
+                       ("Source delivery descriptions", "_delivery_mode_descriptions"),
+                       ("Normalized delivery modes", "_normalized_delivery_modes"),
+                       ("Delivery modes", "_delivery_modes"), ("Service geography", "_coverage_scope"),
+                       ("Accounts / channels", "_account_handles"), ("Related entities", "_relationships")):
+        value = _clean(row.get(key))
+        if value:
+            lines.append(f"<div><b>{label}:</b> {html.escape(value, quote=True)}</div>")
     if location:
         lines.append(f"<div><b>Location:</b> {location}</div>")
+    precision = _clean(row.get("_location_precision"))
+    if precision and precision.casefold() != "unknown":
+        lines.append(f"<div><b>Location precision:</b> {html.escape(precision, quote=True)}</div>")
     if summary:
         lines.append(f"<div class='sugar-popup-summary'>{html.escape(summary, quote=True)}</div>")
     source_url = _safe_url(row.get("_source_url"))
@@ -470,6 +577,10 @@ def _reference_popup_html(row: pd.Series, layer_name: str, max_chars: int) -> st
         lines.append(
             f"<div><a href='{safe_link}' target='_blank' rel='noopener noreferrer'>Open reference source ↗</a></div>"
         )
+    status_source = _safe_url(row.get("_status_source"))
+    if status_source and status_source != source_url:
+        safe_status = html.escape(status_source, quote=True)
+        lines.append(f"<div><a href='{safe_status}' target='_blank' rel='noopener noreferrer'>Open status evidence ↗</a></div>")
     lines.append("</div>")
     return "".join(lines)
 
@@ -477,7 +588,9 @@ def _reference_popup_html(row: pd.Series, layer_name: str, max_chars: int) -> st
 def _tooltip(row: pd.Series) -> str:
     title = _clean(row.get("_title")) or _clean(row.get("_record_id"))
     location = _clean(row.get("_location")) or _clean(row.get("_country"))
-    return html.escape(f"{title} — {location}" if location else title, quote=True)
+    status = _clean(row.get("_activity_status")) if bool(row.get("_status_explicit")) else ""
+    suffix = f" — {status.replace('_', ' ').title()}" if status else ""
+    return html.escape((f"{title} — {location}" if location else title) + suffix, quote=True)
 
 
 def _row_color(row: pd.Series, dataset_type: str) -> str:
@@ -561,7 +674,7 @@ def _summary_stats(
     }
 
 
-def _panel_html(stats: dict[str, Any], title: str, subtitle: str) -> str:
+def _panel_html(stats: dict[str, Any], title: str, subtitle: str, as_of_date: str = "") -> str:
     coverage = 100.0 * stats["mapped_rows"] / max(1, stats["source_rows"])
     dataset_label = (
         "Research observations"
@@ -592,6 +705,8 @@ def _panel_html(stats: dict[str, Any], title: str, subtitle: str) -> str:
     <div id="sugar-map-panel" class="sugar-map-panel">
       <div class="sugar-panel-title">{html.escape(title)}</div>
       <div class="sugar-panel-subtitle">{html.escape(subtitle)}</div>
+      {f'<div><b>View date:</b> {html.escape(as_of_date)}</div>' if as_of_date else ''}
+      {"<div class='sugar-panel-note'>Historical map views use documented opening/closure dates and dated activity. They do not reconstruct unknown historical locations or infer missing lifecycle dates.</div>" if as_of_date else ""}
       <div class="sugar-panel-type">{html.escape(dataset_label)}</div>
       {''.join(rows)}
       <div class="sugar-panel-note">Heat intensity represents mapped record density, not influence, sentiment, audience size, institutional strength, or causal effect. Computed proximity is distance only and is not a strategic-overlap finding.</div>
@@ -673,17 +788,35 @@ def _add_record_marker(
     import folium
 
     marker_color = color or _row_color(row, dataset_type)
-    folium.CircleMarker(
-        [float(row["latitude"]), float(row["longitude"])],
-        radius=radius,
-        color=marker_color,
-        weight=weight,
-        fill=fill,
-        fill_color=marker_color,
-        fill_opacity=0.76 if fill else 0.0,
-        popup=folium.Popup(_popup_html(row, max_popup_chars), max_width=470),
-        tooltip=_tooltip(row),
-    ).add_to(container)
+    if bool(row.get("_status_explicit")) and _clean(row.get("_activity_status")) in {"closed", "renamed", "relocated", "unknown"}:
+        status = _clean(row.get("_activity_status"))
+        symbol = {"closed": "×", "renamed": "↻", "relocated": "↗", "unknown": "?"}.get(status, "×")
+        label = html.escape(f"{_clean(row.get('_title'))} — {status.replace('_', ' ')}", quote=True)
+        icon_html = (
+            f"<span role='img' aria-label='{label}' title='{label}' "
+            "style='display:flex;align-items:center;justify-content:center;width:23px;height:23px;"
+            "border-radius:50%;background:#e2e8f0;border:2px solid #64748b;color:#334155;"
+            "font:700 20px/20px sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.35)'>"
+            f"{symbol}</span>"
+        )
+        folium.Marker(
+            [float(row["latitude"]), float(row["longitude"])],
+            icon=folium.DivIcon(html=icon_html, icon_size=(23, 23), icon_anchor=(11, 11)),
+            popup=folium.Popup(_popup_html(row, max_popup_chars), max_width=470),
+            tooltip=_tooltip(row),
+        ).add_to(container)
+    else:
+        folium.CircleMarker(
+            [float(row["latitude"]), float(row["longitude"])],
+            radius=radius,
+            color=marker_color,
+            weight=weight,
+            fill=fill,
+            fill_color=marker_color,
+            fill_opacity=0.76 if fill else 0.0,
+            popup=folium.Popup(_popup_html(row, max_popup_chars), max_width=470),
+            tooltip=_tooltip(row),
+        ).add_to(container)
 
 
 def create_map(
@@ -704,12 +837,41 @@ def create_map(
 
     options = options or MapOptions()
     work, dataset_type = _normalize_rows(df)
+    as_of = str(options.as_of_date or "").strip()
+    if as_of:
+        cutoff = pd.to_datetime(as_of, errors="coerce", utc=True)
+        if pd.isna(cutoff):
+            raise ValueError("Map as-of date must be a valid YYYY-MM-DD date.")
+        cutoff = cutoff.normalize() + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
+        if dataset_type == "research_observations":
+            work = work.loc[work["_date"].isna() | work["_date"].le(cutoff)].copy()
+        else:
+            event_date = pd.to_datetime(work["_date_raw"], errors="coerce", utc=True)
+            keep = event_date.isna() | event_date.le(cutoff)
+            opened = pd.to_datetime(work["_opened_date"], errors="coerce", utc=True)
+            keep &= opened.isna() | opened.le(cutoff)
+            closed = pd.to_datetime(work["_closed_date"].where(work["_closed_date"].astype(str).str.strip() != "", work["_lifecycle_date"]), errors="coerce", utc=True)
+            future_rename_or_relocation = work["_activity_status"].isin(["renamed", "relocated"]) & closed.notna() & closed.gt(cutoff)
+            keep &= ~future_rename_or_relocation
+            future_closure = work["_activity_status"].eq("closed") & closed.notna() & closed.gt(cutoff)
+            work.loc[future_closure, "_activity_status"] = "active"
+            work = work.loc[keep].copy()
     if work.empty:
         raise ValueError("No valid coordinates are available to map.")
 
     normalized_references: list[tuple[ReferenceLayer, pd.DataFrame]] = []
     for reference in reference_layers or []:
-        normalized_references.append((reference, _normalize_reference_rows(reference.frame)))
+        normalized = _normalize_reference_rows(reference.frame)
+        if as_of and not normalized.empty:
+            opened = pd.to_datetime(normalized["_opened_date"], errors="coerce", utc=True)
+            closed = pd.to_datetime(normalized["_closed_date"].where(normalized["_closed_date"].astype(str).str.strip() != "", normalized["_status_date"]), errors="coerce", utc=True)
+            keep = opened.isna() | opened.le(cutoff)
+            future_rename_or_relocation = normalized["_status"].isin(["renamed", "relocated"]) & closed.notna() & closed.gt(cutoff)
+            keep &= ~future_rename_or_relocation
+            future_closure = normalized["_status"].eq("closed") & closed.notna() & closed.gt(cutoff)
+            normalized.loc[future_closure, "_status"] = "active"
+            normalized = normalized.loc[keep].copy()
+        normalized_references.append((reference, normalized))
 
     if dataset_type == "research_observations":
         analysis_work = work.loc[~work["_verification"].eq("rejected")].copy()
@@ -876,24 +1038,28 @@ def create_map(
             options={"disableClusteringAtZoom": options.cluster_disable_at_zoom},
         ).add_to(m)
         for _, row in normalized.iterrows():
-            folium.CircleMarker(
-                [float(row["latitude"]), float(row["longitude"])],
-                radius=8,
-                color=color,
-                weight=2.5,
-                dash_array="4,3",
-                fill=True,
-                fill_color="#ffffff",
-                fill_opacity=0.82,
-                popup=folium.Popup(
-                    _reference_popup_html(row, reference.name, options.max_popup_chars),
-                    max_width=470,
-                ),
-                tooltip=html.escape(
-                    f"{reference.name}: {_clean(row.get('_title'))}",
-                    quote=True,
-                ),
-            ).add_to(cluster)
+            status = _clean(row.get("_status"))
+            tooltip = html.escape(f"{reference.name}: {_clean(row.get('_title'))}" + (f" — {status.title()}" if row.get("_status_explicit") else ""), quote=True)
+            popup = folium.Popup(_reference_popup_html(row, reference.name, options.max_popup_chars), max_width=470)
+            if bool(row.get("_status_explicit")) and status in {"closed", "renamed", "relocated", "unknown"}:
+                symbol = {"closed": "×", "renamed": "↻", "relocated": "↗", "unknown": "?"}.get(status, "×")
+                label = html.escape(f"{_clean(row.get('_title'))} — {status}", quote=True)
+                icon_html = (
+                    f"<span role='img' aria-label='{label}' title='{label}' "
+                    "style='display:flex;align-items:center;justify-content:center;width:23px;height:23px;"
+                    "border-radius:50%;background:#e2e8f0;border:2px solid #64748b;color:#334155;"
+                    "font:700 20px/20px sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.35)'>"
+                    f"{symbol}</span>"
+                )
+                folium.Marker([float(row["latitude"]), float(row["longitude"])],
+                              icon=folium.DivIcon(html=icon_html, icon_size=(23, 23), icon_anchor=(11, 11)),
+                              popup=popup, tooltip=tooltip).add_to(cluster)
+            else:
+                folium.CircleMarker(
+                    [float(row["latitude"]), float(row["longitude"])], radius=8, color=color, weight=2.5,
+                    dash_array="4,3", fill=True, fill_color="#ffffff", fill_opacity=0.82,
+                    popup=popup, tooltip=tooltip,
+                ).add_to(cluster)
 
     if not analysis_work.empty:
         all_points = _heat_points(analysis_work)
@@ -990,7 +1156,7 @@ def create_map(
 
     stats = _summary_stats(work, dataset_type, len(df), reference_total)
     m.get_root().html.add_child(folium.Element(_style_html()))
-    m.get_root().html.add_child(folium.Element(_panel_html(stats, options.title, options.subtitle)))
+    m.get_root().html.add_child(folium.Element(_panel_html(stats, options.title, options.subtitle, as_of)))
     m.get_root().html.add_child(folium.Element(_legend_html(analysis_work, dataset_type, normalized_references)))
     folium.LayerControl(collapsed=False, position="topright").add_to(m)
 

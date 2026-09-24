@@ -14,7 +14,7 @@ from .utils import safe_cell, utc_iso
 
 PREFERRED_COLUMNS = [
     "platform", "native_id", "record_key", "content_type", "parent_record_key", "thread_root_key",
-    "conversation_id", "published_at", "author_handle", "author_name", "author_location",
+    "conversation_id", "reply_to_actor", "quoted_record_key", "mentioned_actors", "published_at", "author_handle", "author_name", "author_location",
     "platform_language", "detected_language", "inferred_location", "location_confidence",
     "location_source", "location_reason", "latitude", "longitude", "original_text", "translated_text",
     "canonical_url", "engagement", "query_matches", "query", "source_mode", "source_host", "source_url",

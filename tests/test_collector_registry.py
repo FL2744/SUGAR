@@ -38,7 +38,7 @@ def test_record_key_and_relationships_are_exported():
     assert exported["parent_record_key"] == "weibo:parent"
     assert exported["thread_root_key"] == "weibo:root"
     assert exported["conversation_id"] == "root"
-    assert exported["schema_version"] == "1.2"
+    assert exported["schema_version"] == "1.3"
 
 
 def test_relationship_columns_are_prominent_in_dataset_exports():

@@ -40,6 +40,9 @@ FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "conversation_id": ("thread_id", "conversation", "root_id"),
     "parent_record_key": ("parent_id", "parent_record"),
     "thread_root_key": ("thread_root_id", "root_record"),
+    "reply_to_actor": ("reply_to_handle", "reply_to_username", "in_reply_to_user"),
+    "quoted_record_key": ("quote_id", "quoted_id", "quoted_record"),
+    "mentioned_actors": ("mentions", "mentioned_accounts", "mentioned_users"),
     "raw_stats": ("metrics", "statistics", "stats"),
     "engagement": ("engagement_metrics",),
     "handling": (
@@ -106,6 +109,20 @@ def _json_list(value: Any) -> list[str]:
             return [_clean(value)]
         if isinstance(parsed, list):
             return [_clean(item) for item in parsed if not _is_blank(item)]
+    return []
+
+
+def _json_value_list(value: Any) -> list[Any]:
+    if _is_blank(value):
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return [_clean(value)]
+        return parsed if isinstance(parsed, list) else []
     return []
 
 
@@ -362,6 +379,9 @@ def normalize_external_row(row: Mapping[str, Any], spec: ImportSpec) -> tuple[Po
         parent_record_key=_clean(resolved.get("parent_record_key")),
         thread_root_key=_clean(resolved.get("thread_root_key")),
         conversation_id=_clean(resolved["conversation_id"]),
+        reply_to_actor=_clean(resolved.get("reply_to_actor")),
+        quoted_record_key=_clean(resolved.get("quoted_record_key")),
+        mentioned_actors=[dict(item) if isinstance(item, dict) else {"handle": _clean(item)} for item in _json_value_list(resolved.get("mentioned_actors"))],
         source_mode=f"external_import:{spec.source_system or 'external'}",
         source_host=_clean(resolved["source_host"]) or _clean(spec.source_system),
         source_url=_clean(resolved["source_url"]),

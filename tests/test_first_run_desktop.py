@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import wave
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "SUGAR-Windows"))
 from app import MainWindow  # noqa: E402
 from backend import BackendRunner  # noqa: E402
+from sugar_core.observation_storage import load_observations  # noqa: E402
+from sugar_core.workspace import SugarWorkspace  # noqa: E402
+from sugar_core.workspace_runtime import latest_workspace_artifact_path  # noqa: E402
 
 
 def test_first_run_import_review_and_verified_handoff(tmp_path, monkeypatch):
@@ -48,7 +52,13 @@ def test_first_run_import_review_and_verified_handoff(tmp_path, monkeypatch):
         del events[:]
         del errors[:]
         loop = QEventLoop()
-        window.runner.finished.connect(loop.quit)
+        def wait_for_idle():
+            if (not window.runner.is_running and not window._workspace_operation_queue
+                    and not window._workspace_operation_scheduled):
+                loop.quit()
+            else:
+                QTimer.singleShot(20, wait_for_idle)
+        QTimer.singleShot(0, wait_for_idle)
         action()
         QTimer.singleShot(20000, loop.quit)
         loop.exec()
@@ -104,4 +114,52 @@ def test_first_run_import_review_and_verified_handoff(tmp_path, monkeypatch):
     assert manifest["counts"]["records"] == 1
     assert manifest["counts"]["observations"] == 1
     assert window.settings_page.secrets()["llm_api_key"] == ""
+
+    intelligence_scroll = window.stack.widget(window.pages["Intelligence"])
+    intelligence = intelligence_scroll.widget()
+    assert intelligence is not None
+    intelligence.quality_workspace.setText(str(project))
+    step(intelligence._next_evidence)
+    step(intelligence._content_lineage)
+    step(intelligence._evidence_graph)
+    step(intelligence._robustness)
+    intelligence.semantic_query.setText("public education program students")
+    step(intelligence._semantic_search)
+    intelligence.capture_html.setText(str(source.with_suffix(".html")))
+    source.with_suffix(".html").write_text(
+        "<html><head><title>Public Program</title></head><body><p>Public education activity for students.</p></body></html>",
+        encoding="utf-8",
+    )
+    intelligence.capture_url.setText("https://example.org/public-program")
+    step(intelligence._capture_page)
+
+    media_file = tmp_path / "program-audio.wav"
+    with wave.open(str(media_file), "wb") as audio:
+        audio.setnchannels(1); audio.setsampwidth(2); audio.setframerate(8000); audio.writeframes(b"\0\0" * 8000 * 5)
+    transcript = tmp_path / "program-audio.vtt"
+    transcript.write_text("WEBVTT\n\n00:00:02.000 --> 00:00:04.000\nThe speaker describes the program.\n", encoding="utf-8")
+    intelligence.media_file.setText(str(media_file))
+    intelligence.media_transcript.setText(str(transcript))
+    step(intelligence._ingest_media)
+    project_workspace = SugarWorkspace.open(project)
+    manifest_artifact = project_workspace.latest_artifact("media_manifest")
+    assert manifest_artifact is not None
+    manifest_path = project_workspace.artifact_absolute_path(manifest_artifact)
+    observation_path = latest_workspace_artifact_path(project_workspace, "observations")
+    assert observation_path is not None
+    observation = load_observations(observation_path)[0]
+    intelligence.media_manifest.setText(str(manifest_path))
+    intelligence.media_observation_id.setText(observation.observation_id)
+    intelligence.media_start.setText("00:02")
+    intelligence.media_end.setText("00:04")
+    intelligence.media_quote.setText("The speaker describes the program.")
+    step(intelligence._attach_media)
+    attached_observations = latest_workspace_artifact_path(project_workspace, "observations")
+    assert attached_observations is not None
+    assert any(item.media_artifact_id for item in load_observations(attached_observations)[0].evidence)
+    for filename in (
+        "next_evidence_recommendation.json", "content_lineage.json", "temporal_evidence_graph.json",
+        "finding_robustness.json", "semantic_evidence_search.json",
+    ):
+        assert (project / "outputs" / "intelligence" / filename).is_file()
     window.close()

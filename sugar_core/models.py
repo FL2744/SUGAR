@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-SCHEMA_VERSION = "1.2"
+SCHEMA_VERSION = "1.3"
 COLLECTOR_VERSION = "sugar-core-1.1"
 
 
@@ -24,6 +24,9 @@ class PostRecord:
     parent_record_key: str = ""
     thread_root_key: str = ""
     conversation_id: str = ""
+    reply_to_actor: str = ""
+    quoted_record_key: str = ""
+    mentioned_actors: list[dict[str, str]] = field(default_factory=list)
     source_mode: str = "api"
     source_host: str = ""
     source_url: str = ""
@@ -102,6 +105,7 @@ class PostRecord:
         data["record_key"] = self.record_key
         data["query_matches"] = json.dumps(self.query_matches, ensure_ascii=False)
         data["engagement"] = json.dumps(self.engagement, sort_keys=True)
+        data["mentioned_actors"] = json.dumps(self.mentioned_actors, ensure_ascii=False, sort_keys=True)
         data["raw_stats"] = json.dumps(self.raw_stats, ensure_ascii=False, sort_keys=True)
         data.update({
             "tweet_id": self.tweet_id,
@@ -129,6 +133,8 @@ def merge_record(existing: PostRecord, incoming: PostRecord) -> PostRecord:
         "parent_record_key",
         "thread_root_key",
         "conversation_id",
+        "reply_to_actor",
+        "quoted_record_key",
     ):
         if not getattr(existing, attr) and getattr(incoming, attr):
             setattr(existing, attr, getattr(incoming, attr))

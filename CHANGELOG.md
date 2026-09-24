@@ -2,9 +2,16 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
-## Unreleased
+## 1.3.0 — 2026-09-24
 
 ### Added
+
+- added the shared Research Workspace in Windows and macOS with project switching, subprojects, dashboards/history, registry and dataset inspection, reference map layers, conversation context, listening-post review, and portable project exchange;
+- added a provenance-preserving generic institution/service registry with CSV/TSV/XLSX/XLS/JSON/GeoJSON import preview, explicit field mapping, row validation, lifecycle/conflict history, similar-name review suggestions, relationship evidence, dimension-by-dimension comparison, and blank network templates;
+- added versioned exact-label normalization for sourced program domains, audiences, and delivery modes while retaining original source wording and leaving unclassified values visible rather than guessing;
+- added filterable and exportable underlying datasets, historical as-of map views, actor-aware conversation reconstruction, saved query monitoring with deduplicated new/changed material, and auditable analyst review state;
+- added hash-verified portable project bundles with safe import staging and path portability for recorded history; bundle exchange excludes credential material and is asynchronous;
+- documented the research workspace's implementation boundary, including that generated templates do not contain an authoritative maintained institution inventory and that SUGAR does not replace OASIS/MODE or estimate outcomes from public activity;
 
 - added a reusable `ingest`/Public URL workflow for collector surfaces that support known-item retrieval, with normalized CSV/XLSX/metadata outputs and the same workspace/provenance contract as search;
 - added fail-closed public WeChat Official Account article ingestion for `mp.weixin.qq.com` URLs, including stable article identity, account/publish metadata, source provenance, same-origin redirect validation, deterministic fixtures, and Windows/macOS Public URL UI;
@@ -17,6 +24,16 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - durable per-source collection coverage that distinguishes success, successful zero-result searches, partial collection, unavailable access, and collector failure; adaptive branches pause when every requested source is inaccessible, and coverage limitations propagate into State briefs and handoff packages.
 - portable root-level `sugar-artifacts.json` workspace catalogs now preserve registered evidence, requirements/search plans, review state, limitations, and outputs independently of the local SQLite index; moved projects can rebuild `.sugar/workspace.sqlite3` from the catalog while retaining missing/external artifact state, and handoff components are registered individually.
 - explicit evidence-lineage indexes now connect State claims and sponsor-support findings to observations, source evidence identities, canonical records, and dataset provenance; exact structured contradictions are enumerated separately, raw/import metadata survives triage, and handoff verification checks semantic lineage consistency as well as file hashes.
+- added a transparent next-evidence ranking that combines uncovered requirement scope, hypothesis collection needs, and measured branch relevance, novelty, duplicates, and source counts; selected proposals are saved as paused, auditable plan branches for analyst review.
+- added content-similarity lineage candidates, evidence-linked temporal entity/event graphs, and leave-one-source/factor-out sensitivity reports over human-verified State evidence; each output records its method and limits.
+- added an optional DuckDB/Parquet path that streams canonical CSV/JSONL datasets into platform-partitioned Zstandard Parquet and supports bounded SQL queries without loading the corpus into pandas.
+- extended observation evidence references with source-language metadata and added corresponding research-quality controls to both desktop clients.
+- added hash-linked media manifests, local preservation, optional analyst-supplied OCR/transcripts, timestamped citations, and observation attachment for image/audio/video evidence;
+- added a saved-page capture path that stores sanitized visible text and public media references while removing scripts, hidden controls, and credential-like values;
+- added offline lexical evidence search and opt-in cross-lingual embedding indexes, with local index reuse and query/corpus transmission disclosed in both desktop clients;
+- added project merging with canonical-record deduplication, contributor provenance, preserved analyst artifacts, explicit review-conflict reports, and combined corpus/query-duplication summaries;
+- added hash-based artifact derivation metadata, stale-state propagation, an upstream-first incremental rebuild report, and a six-case offline research-calibration suite;
+- advanced the temporal evidence graph with human-supplied alias resolution, ambiguous-alias reporting, claim/evidence nodes, and media timestamp references; ResearchObservation is now schema 1.4.
 
 ### Changed
 

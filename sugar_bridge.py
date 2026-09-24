@@ -8,6 +8,7 @@ import os
 import platform
 import sys
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 for stream in (sys.stdout, sys.stderr):
@@ -92,6 +93,28 @@ def _redact_runtime_secrets(value: Any) -> Any:
     if isinstance(value, tuple):
         return [_redact_runtime_secrets(item) for item in value]
     return value
+
+
+def _history_run_status(outputs: list[str], default: str = "succeeded") -> str:
+    """Classify completed collector runs from the emitted coverage record."""
+    coverage_path = next((Path(item) for item in outputs if str(item).endswith(".coverage.json")), None)
+    if coverage_path is None or not coverage_path.is_file():
+        return default
+    try:
+        payload = json.loads(coverage_path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return default
+    sources = payload.get("sources", {})
+    rows = list(sources.values()) if isinstance(sources, dict) else sources if isinstance(sources, list) else []
+    statuses = [str(row.get("status") or "").casefold() for row in rows if isinstance(row, dict)]
+    if not statuses:
+        return default
+    if all(status in {"zero_result", "zero-results"} for status in statuses):
+        return "zero_result"
+    failed = {"failed", "unavailable", "blocked", "partial", "denied", "rate_limited"}
+    if any(status in failed for status in statuses):
+        return "partial" if any(status not in failed for status in statuses) else "failed"
+    return default
 
 
 def emit(event: str, **values: Any) -> None:
@@ -287,10 +310,15 @@ def main(argv=None) -> int:
     if not args.config:
         parser.error(f"--config is required for {args.command}")
 
+    config: dict[str, Any] = {}
+    secrets: dict[str, str] = {}
+    run_started_at = ""
     try:
         emit("backend", **backend_info())
         config = load_config(args.config)
         secrets = secrets_from_environment()
+        from sugar_core.workspace_memory import log_project_event, record_project_run, utc_now
+        run_started_at = utc_now()
         if args.command == "llm-check":
             outputs = _run_llm_check(config, secrets)
         elif args.command in WORKSPACE_OPERATIONS:
@@ -390,9 +418,53 @@ def main(argv=None) -> int:
                 secrets,
                 progress=progress_event,
             )
+        if args.command == "research-plan-update" and str(config.get("workspace") or "").strip():
+            from sugar_core.workspace import SugarWorkspace
+            from sugar_core.workspace_memory import log_search_plan_change
+            active_workspace = SugarWorkspace.open(config["workspace"])
+            log_search_plan_change(
+                active_workspace,
+                branch_id=str(config.get("branch_id") or ""),
+                query=str(config.get("query") or ""),
+                status=str(config.get("status") or ""),
+                rationale=str(config.get("rationale") or ""),
+                actor=str(config.get("actor") or "analyst"),
+                reason=str(config.get("reason") or ""),
+            )
+        if args.command not in WORKSPACE_OPERATIONS and args.command not in {"workspace-hub", "llm-check"}:
+            active_workspace = workspace_from_config(config)
+            if active_workspace is not None:
+                record_project_run(active_workspace, command=args.command, config=config, outputs=outputs,
+                                   status=_history_run_status(outputs), started_at=run_started_at)
+        elif args.command == "workspace-hub" and str(config.get("action") or "dashboard") not in {"project-list", "project-import"}:
+            active_workspace = workspace_from_config(config)
+            if active_workspace is not None:
+                log_project_event(active_workspace, "workspace_hub_action", {
+                    "action": str(config.get("action") or "dashboard"),
+                    "source_file": Path(str(config.get("source_file") or "")).name,
+                    "output_count": len(outputs),
+                    "parameters": _redact_runtime_secrets({key: value for key, value in config.items()
+                                                          if key not in {"workspace", "actor"}}),
+                }, actor=str(config.get("actor") or "analyst"))
         emit("complete", outputs=outputs)
         return 0
     except Exception as exc:
+        try:
+            active_workspace = workspace_from_config(config)
+            if active_workspace is not None and args.command not in (WORKSPACE_OPERATIONS | {"workspace-hub", "llm-check"}):
+                from sugar_core.workspace_memory import record_project_run
+                record_project_run(active_workspace, command=args.command, config=config, status="failed",
+                                   error=str(_redact_runtime_secrets(str(exc))), started_at=run_started_at)
+            elif active_workspace is not None and args.command == "workspace-hub" and str(config.get("action") or "dashboard") not in {"project-list", "project-import"}:
+                from sugar_core.workspace_memory import log_project_event
+                log_project_event(active_workspace, "workspace_hub_action_failed", {
+                    "action": str(config.get("action") or "dashboard"),
+                    "parameters": _redact_runtime_secrets({key: value for key, value in config.items()
+                                                          if key not in {"workspace", "actor"}}),
+                    "error": str(_redact_runtime_secrets(str(exc))),
+                }, actor=str(config.get("actor") or "analyst"))
+        except Exception:
+            pass
         emit("error", message=str(exc), exception=type(exc).__name__)
         return 1
 

@@ -8,7 +8,7 @@ from typing import Any, Iterable
 
 from .models import PostRecord
 
-OBSERVATION_SCHEMA_VERSION = "1.2"
+OBSERVATION_SCHEMA_VERSION = "1.4"
 
 OBSERVATION_TYPES = {
     "institution",
@@ -116,6 +116,9 @@ class EvidenceReference:
     collected_at: str = field(default_factory=_utc_now_iso)
     archived_url: str = ""
     note: str = ""
+    language: str = ""
+    media_artifact_id: str = ""
+    media_locator: str = ""
 
     def __post_init__(self) -> None:
         self.url = _clean(self.url)
@@ -127,6 +130,9 @@ class EvidenceReference:
         self.collected_at = _clean(self.collected_at) or _utc_now_iso()
         self.archived_url = _clean(self.archived_url)
         self.note = _clean(self.note)
+        self.language = _clean(self.language).casefold()
+        self.media_artifact_id = _clean(self.media_artifact_id)
+        self.media_locator = _clean(self.media_locator)
         if not self.url and not (self.platform and self.native_id):
             raise ValueError("Evidence requires a URL or a platform/native_id identity.")
 
@@ -490,6 +496,7 @@ def observation_from_post(record: PostRecord, *, summary: str | None = None) -> 
         published_at=record.published_at,
         collected_at=record.collected_at,
         note=f"Collected via {record.source_mode}" if record.source_mode else "",
+        language=record.detected_language or record.platform_language,
     )
     location_basis = "ai_inferred" if record.inferred_location else ("profile" if record.author_location else "unknown")
     location_label = record.inferred_location or record.author_location

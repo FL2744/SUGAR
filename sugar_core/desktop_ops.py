@@ -1,11 +1,33 @@
 from __future__ import annotations
 
 import json
+import hashlib
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from .llm import ARC_BASE_URL, LLMConfig
+from .analyst_capture import capture_saved_page
+from .llm import ARC_BASE_URL, LLMConfig, create_client
+from .media_artifacts import attach_media_citation, build_media_citation, ingest_media
+from .workspace_hub import run_workspace_hub as run_research_workspace_hub
 from .observation_storage import load_observations
+from .research_intelligence import (
+    apply_next_evidence_recommendation,
+    build_content_lineage,
+    load_entity_aliases,
+    build_next_evidence_recommendation,
+    build_robustness_report,
+    build_temporal_evidence_graph,
+)
+from .research_requirements import load_requirement, load_search_plan, save_search_plan
+from .semantic_search import (
+    build_semantic_index,
+    load_semantic_index,
+    refresh_semantic_index,
+    save_semantic_index,
+    search_lexical,
+    search_semantic_index,
+)
 from .state_aggregate import save_state_rollups
 from .state_conflict_package import package_from_files_with_conflicts
 from .state_conflict_review import (
@@ -38,6 +60,7 @@ from .state_workflow import (
     save_state_assessments,
     write_us_presence_template,
 )
+from .triage_io import load_post_records
 from .workspace import SugarWorkspace
 from .workspace_runtime import (
     latest_workspace_artifact_path,
@@ -46,6 +69,38 @@ from .workspace_runtime import (
 )
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
+
+_PIPELINE_CONTEXT: ContextVar[tuple[str, dict[str, Any], SugarWorkspace | None] | None] = ContextVar(
+    "sugar_desktop_pipeline_context", default=None
+)
+
+_INPUT_ARTIFACTS: dict[str, dict[str, tuple[str, ...]]] = {
+    "state-package": {
+        "observations": ("observations",), "assessments": ("state_assessments",),
+        "us_sites": (), "source_conflicts": ("source_conflicts",), "entities": ("reference",),
+        "previous_assessments": ("state_assessments",),
+    },
+    "state-map": {"observations": ("observations",), "assessments": ("state_assessments",), "us_sites": ()},
+    "state-triage": {"observations": ("observations",)},
+    "state-review-export": {"observations": ("observations",), "assessments": ("state_assessments",), "source_conflicts": ("source_conflicts",)},
+    "state-review-apply": {"assessments": ("state_assessments",), "workbook": ("state_review",), "observations": ("observations",), "source_conflicts": ("source_conflicts",)},
+    "state-audit": {"observations": ("observations",), "assessments": ("state_assessments",)},
+    "state-diff": {"previous": (), "current": ("state_assessments",)},
+    "state-query-plan": {"entities": ("reference",)},
+    "intel-packet": {"observations": ("observations",), "assessments": ("state_assessments",)},
+    "intel-tradecraft": {"observations": ("observations",), "assessments": ("state_assessments",), "records": ("evidence", "raw_collection")},
+    "intel-synthesize": {"observations": ("observations",), "assessments": ("state_assessments",)},
+    "intel-hypotheses": {"synthesis": ("intelligence",)},
+    "intel-next-evidence": {"requirement": ("research_requirement",), "plan": ("search_plan",), "hypotheses": ("intelligence",)},
+    "intel-content-lineage": {"records": ("evidence", "raw_collection")},
+    "intel-evidence-graph": {"observations": ("observations",), "assessments": ("state_assessments",), "entity_aliases": ()},
+    "intel-media-ingest": {"media_file": (), "transcript": (), "ocr": ()},
+    "intel-media-attach": {"observations": ("observations",), "media_manifest": ("media_manifest",)},
+    "intel-capture-page": {"html_file": ()},
+    "intel-semantic-search": {"records": ("evidence", "raw_collection")},
+    "intel-robustness": {"observations": ("observations",), "assessments": ("state_assessments",)},
+    "intel-compare": {"previous": (), "current": ("intelligence",)},
+}
 
 DESKTOP_STATE_OPERATIONS = {
     "state-package",
@@ -66,9 +121,19 @@ DESKTOP_INTEL_OPERATIONS = {
     "intel-synthesize",
     "intel-hypotheses",
     "intel-compare",
+    "intel-next-evidence",
+    "intel-content-lineage",
+    "intel-evidence-graph",
+    "intel-robustness",
+    "intel-media-ingest",
+    "intel-media-attach",
+    "intel-capture-page",
+    "intel-semantic-search",
 }
 
-DESKTOP_ANALYTIC_OPERATIONS = DESKTOP_STATE_OPERATIONS | DESKTOP_INTEL_OPERATIONS
+DESKTOP_WORKSPACE_OPERATIONS = {"workspace-hub"}
+
+DESKTOP_ANALYTIC_OPERATIONS = DESKTOP_STATE_OPERATIONS | DESKTOP_INTEL_OPERATIONS | DESKTOP_WORKSPACE_OPERATIONS
 
 
 def _notify(progress: ProgressCallback | None, event: str, **values: Any) -> None:
@@ -206,7 +271,42 @@ def _register(
     kind: str | None = None,
 ) -> list[str]:
     values = [str(Path(value).expanduser().resolve()) for value in outputs]
-    register_workspace_outputs(workspace, values, operation=operation, kind=kind)
+    context = _PIPELINE_CONTEXT.get()
+    inputs: list[Path] = []
+    parameters: dict[str, Any] = {}
+    if context is not None:
+        active_operation, config, active_workspace = context
+        if active_operation == operation:
+            for key, kinds in _INPUT_ARTIFACTS.get(operation, {}).items():
+                raw = str(config.get(key) or "").strip()
+                if raw:
+                    path = Path(raw).expanduser().resolve()
+                    if path.is_file():
+                        inputs.append(path)
+                elif kinds:
+                    artifact = latest_workspace_artifact_path(active_workspace, kinds)
+                    if artifact is not None:
+                        inputs.append(artifact)
+            for raw in config.get("_pipeline_inputs") or []:
+                path = Path(str(raw)).expanduser().resolve()
+                if path.is_file():
+                    inputs.append(path)
+            excluded = set(_INPUT_ARTIFACTS.get(operation, {})) | {
+                "workspace", "output_file", "observations_output_file", "source_conflicts_output_file",
+                "output_directory", "cache_dir", "geocode_cache", "llm",
+                "query",
+                "_pipeline_inputs", "_pipeline_parameters",
+            }
+            parameters = {
+                key: value for key, value in config.items()
+                if key not in excluded and not any(token in key.casefold() for token in ("path", "file", "directory"))
+                and isinstance(value, (str, int, float, bool, list, dict, type(None)))
+            }
+            if isinstance(config.get("_pipeline_parameters"), dict):
+                parameters.update(config["_pipeline_parameters"])
+    register_workspace_outputs(
+        workspace, values, operation=operation, kind=kind, inputs=inputs, parameters=parameters
+    )
     return values
 
 
@@ -328,7 +428,7 @@ def _run_state_package(
     return list(dict.fromkeys(str(Path(value).resolve()) for value in outputs))
 
 
-def run_desktop_analytic_operation(
+def _run_desktop_analytic_operation(
     operation: str,
     config: dict[str, Any],
     secrets: dict[str, str] | None = None,
@@ -510,8 +610,10 @@ def run_desktop_analytic_operation(
     if operation == "intel-tradecraft":
         observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
         assessments = load_state_assessments(_required_path(config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)))
+        records_path = _optional_input_path(config, "records", workspace, workspace_kinds=("evidence", "raw_collection"))
+        records = load_post_records(records_path) if records_path else None
         target = _output_path(config, "output_file", "tradecraft_audit.json", workspace=workspace, workspace_key="intelligence")
-        return _register(workspace, [save_tradecraft_audit(observations, assessments, target)], operation=operation, kind="intelligence")
+        return _register(workspace, [save_tradecraft_audit(observations, assessments, target, records=records)], operation=operation, kind="intelligence")
 
     if operation == "intel-synthesize":
         observations = load_observations(_required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",)))
@@ -541,6 +643,185 @@ def run_desktop_analytic_operation(
         )
         return _register(workspace, outputs, operation=operation, kind="intelligence")
 
+    if operation == "intel-next-evidence":
+        requirement_path = _required_path(
+            config, "requirement", workspace=workspace, workspace_kinds=("research_requirement",)
+        )
+        plan_path = _required_path(
+            config, "plan", workspace=workspace, workspace_kinds=("search_plan",)
+        )
+        hypothesis_path = _optional_input_path(
+            config, "hypotheses", workspace, workspace_kinds=("intelligence",)
+        )
+        hypothesis_payload = None
+        if hypothesis_path:
+            hypothesis_payload = json.loads(hypothesis_path.read_text(encoding="utf-8-sig"))
+        plan = load_search_plan(plan_path)
+        payload = build_next_evidence_recommendation(
+            load_requirement(requirement_path),
+            plan,
+            hypotheses=hypothesis_payload,
+            max_queries=int(config.get("max_queries", 10)),
+            max_records_per_query=int(config.get("max_records_per_query", 300)),
+        )
+        apply_next_evidence_recommendation(plan, payload)
+        save_search_plan(plan, plan_path)
+        target = _output_path(
+            config, "output_file", "next_evidence_recommendation.json",
+            workspace=workspace, workspace_key="intelligence",
+        )
+        return _register(workspace, [_write_json(target, payload)], operation=operation, kind="intelligence")
+
+    if operation == "intel-content-lineage":
+        records_path = _required_path(config, "records", workspace=workspace, workspace_kinds=("evidence", "raw_collection"))
+        report = build_content_lineage(
+            load_post_records(records_path),
+            similarity_threshold=float(config.get("similarity_threshold", 0.82)),
+        )
+        target = _output_path(
+            config, "output_file", "content_lineage.json",
+            workspace=workspace, workspace_key="intelligence",
+        )
+        return _register(workspace, [_write_json(target, report)], operation=operation, kind="intelligence")
+
+    if operation == "intel-evidence-graph":
+        observations = load_observations(_required_path(
+            config, "observations", workspace=workspace, workspace_kinds=("observations",)
+        ))
+        assessment_path = _optional_input_path(
+            config, "assessments", workspace, workspace_kinds=("state_assessments",)
+        )
+        assessments = load_state_assessments(assessment_path) if assessment_path else []
+        alias_path = _optional_input_path(config, "entity_aliases", workspace)
+        aliases = load_entity_aliases(alias_path) if alias_path else None
+        report = build_temporal_evidence_graph(observations, assessments, entity_aliases=aliases)
+        target = _output_path(
+            config, "output_file", "temporal_evidence_graph.json",
+            workspace=workspace, workspace_key="intelligence",
+        )
+        return _register(workspace, [_write_json(target, report)], operation=operation, kind="intelligence")
+
+    if operation == "intel-robustness":
+        observations = load_observations(_required_path(
+            config, "observations", workspace=workspace, workspace_kinds=("observations",)
+        ))
+        assessments = load_state_assessments(_required_path(
+            config, "assessments", workspace=workspace, workspace_kinds=("state_assessments",)
+        ))
+        report = build_robustness_report(observations, assessments)
+        target = _output_path(
+            config, "output_file", "finding_robustness.json",
+            workspace=workspace, workspace_key="intelligence",
+        )
+        return _register(workspace, [_write_json(target, report)], operation=operation, kind="intelligence")
+
+    if operation == "intel-media-ingest":
+        if workspace is None:
+            raise ValueError("Media preservation requires a SUGAR project workspace.")
+        manifest = ingest_media(
+            _required_path(config, "media_file"),
+            workspace.root,
+            source_url=str(config.get("source_url") or ""),
+            parent_record_id=str(config.get("parent_record_id") or ""),
+            language=str(config.get("language") or ""),
+            transcript_file=_optional_input_path(config, "transcript", workspace),
+            ocr_file=_optional_input_path(config, "ocr", workspace),
+        )
+        media_root = workspace.root / "media"
+        return [
+            str(media_root / manifest["stored_path"]),
+            str(media_root / f"{manifest['artifact_id']}.json"),
+            *(str(media_root / item["path"]) for item in manifest["derivatives"]),
+        ]
+
+    if operation == "intel-media-attach":
+        observations = _required_path(config, "observations", workspace=workspace, workspace_kinds=("observations",))
+        media_manifest = _required_path(config, "media_manifest", workspace=workspace, workspace_kinds=("media_manifest",))
+        observation_id = str(config.get("observation_id") or "").strip()
+        start = str(config.get("media_start") or "").strip()
+        end = str(config.get("media_end") or "").strip()
+        if not observation_id or not start or not end:
+            raise ValueError("observation_id, media_start, and media_end are required to attach a media citation.")
+        citation = build_media_citation(media_manifest, start=start, end=end, quote=str(config.get("quote") or ""))
+        target = _output_path(
+            config, "output_file", "observations_with_media_citations.csv",
+            workspace=workspace, workspace_key="observations",
+        )
+        output = attach_media_citation(
+            observations, target, observation_id=observation_id, citation=citation, quote=str(config.get("quote") or "")
+        )
+        return _register(workspace, [output], operation=operation, kind="observations")
+
+    if operation == "intel-semantic-search":
+        records_path = _required_path(config, "records", workspace=workspace, workspace_kinds=("evidence", "raw_collection"))
+        records = load_post_records(records_path)
+        query = str(config.get("query") or "").strip()
+        if not query:
+            raise ValueError("Enter a search query.")
+        top_k = int(config.get("top_k", 20))
+        if bool(config.get("remote_embeddings", False)):
+            if workspace is None:
+                raise ValueError("Cross-lingual embedding search requires a SUGAR workspace to keep its index reusable.")
+            model = str(config.get("embedding_model") or "text-embedding-3-small").strip()
+            llm_spec = config.get("llm") or {}
+            provider = str(llm_spec.get("provider") or "openai").strip().casefold()
+            base_url = str(llm_spec.get("base_url") or "").strip()
+            api_key = str(secrets.get("llm_api_key") or "").strip()
+            if not api_key:
+                raise ValueError("Configure the LLM API key before enabling remote embeddings.")
+            if provider == "arc" and not base_url:
+                base_url = ARC_BASE_URL
+            if provider == "custom" and not base_url:
+                raise ValueError("A base URL is required for a custom embedding endpoint.")
+            client = create_client(LLMConfig(provider=provider, model=model, api_key=api_key, base_url=base_url))
+            current_index_path = latest_workspace_artifact_path(workspace, "semantic_index")
+            if current_index_path is not None:
+                index = refresh_semantic_index(
+                    load_semantic_index(current_index_path), records, client,
+                    model=model, provider=provider, base_url=base_url,
+                )
+            else:
+                index = build_semantic_index(records, client, model=model, provider=provider, base_url=base_url)
+            index_target = workspace.path_for("intelligence") / "evidence_semantic_index.json.gz"
+            save_semantic_index(index, index_target)
+            register_workspace_outputs(
+                workspace, [index_target], operation=operation, kind="semantic_index",
+                inputs=[records_path], parameters={"provider": provider, "model": model},
+            )
+            report = search_semantic_index(
+                index, query, client, model=model, provider=provider, base_url=base_url, top_k=top_k,
+            )
+            config["_pipeline_inputs"] = [str(index_target)]
+            config["_pipeline_parameters"] = {
+                "retrieval_mode": "cross_lingual_embedding",
+                "query_sha256": hashlib.sha256(query.encode("utf-8")).hexdigest(),
+                "embedding_model": model,
+                "embedding_provider": provider,
+            }
+        else:
+            report = search_lexical(records, query, top_k=top_k)
+            config["_pipeline_parameters"] = {
+                "retrieval_mode": "local_lexical",
+                "query_sha256": hashlib.sha256(query.encode("utf-8")).hexdigest(),
+            }
+        target = _output_path(
+            config, "output_file", "semantic_evidence_search.json",
+            workspace=workspace, workspace_key="intelligence",
+        )
+        return _register(
+            workspace, [_write_json(target, report)], operation=operation, kind="intelligence"
+        )
+
+    if operation == "intel-capture-page":
+        if workspace is None:
+            raise ValueError("Page capture requires a SUGAR project workspace.")
+        result = capture_saved_page(
+            _required_path(config, "html_file"),
+            source_url=str(config.get("source_url") or ""),
+            workspace_path=workspace.root,
+        )
+        return [result["record_file"], result["snapshot_file"]]
+
     previous = _required_path(config, "previous", workspace=workspace)
     current = _required_path(config, "current", workspace=workspace, workspace_kinds=("intelligence",))
     target = _output_path(config, "output_file", "intelligence_comparison.json", workspace=workspace, workspace_key="intelligence")
@@ -551,3 +832,20 @@ def run_desktop_analytic_operation(
         kind=str(config.get("kind") or "synthesis"),
     )
     return _register(workspace, [output], operation=operation, kind="intelligence")
+
+
+def run_desktop_analytic_operation(
+    operation: str,
+    config: dict[str, Any],
+    secrets: dict[str, str] | None = None,
+    progress: ProgressCallback | None = None,
+) -> list[str]:
+    """Run an analytic operation and record its input hashes for incremental rebuilds."""
+    if operation == "workspace-hub":
+        return run_research_workspace_hub(config, secrets, progress=progress)
+    workspace = workspace_from_config(config)
+    token = _PIPELINE_CONTEXT.set((operation, config, workspace))
+    try:
+        return _run_desktop_analytic_operation(operation, config, secrets, progress)
+    finally:
+        _PIPELINE_CONTEXT.reset(token)

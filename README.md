@@ -6,7 +6,7 @@
 
 SUGAR is a cross-platform public-source research system for collecting social-media material, preserving provenance, organizing evidence, conducting spatial and structured analysis, and producing reviewable research products. The public engine is target-neutral; project-specific targets, query plans, and case data belong in non-public project configuration.
 
-Current package version: **1.2.6**.
+Current package version: **1.3.0**.
 
 License: **Apache License 2.0**. Copyright 2026 Alejandro Grenier and contributors.
 
@@ -25,6 +25,12 @@ Completed or intermediate research can be exported with `sugar handoff` as a por
 State packages and portable handoffs also emit explicit evidence-lineage indexes so analytic claims can be traced through observation/evidence identities to canonical source records and collection/import context where available. Structured contradictory sources remain separate from supporting evidence rather than being flattened into one citation list.
 
 Use `sugar lineage ...` to build a standalone lineage index and `sugar verify-lineage ...` to run semantic integrity checks without creating a full handoff.
+
+The `sugar-intel` research-quality tools rank bounded next-collection actions from measured plan yield and hypothesis collection needs, identify text-similarity lineage candidates, build evidence-linked temporal entity/event graphs, and test how verified-corpus summaries change when one source or factor is removed. New query proposals are saved paused for analyst review; similarity is not treated as proof of copying, entity co-appearance does not create a direct relationship, and sensitivity output is not a confidence score. See [`docs/research-intelligence-feedback.md`](docs/research-intelligence-feedback.md).
+
+Research projects can also merge separate analyst workspaces with `sugar-project merge`, preserving contributor artifacts and review decisions while deduplicating matching canonical records and surfacing assessment conflicts. `sugar-project pipeline` reports hash-based artifact freshness and rebuild order. The desktop clients also support local lexical search, optional cross-lingual embedding retrieval with a clear remote-content opt-in, sanitized analyst capture from saved HTML, and hash-preserved media with timestamped citations. `sugar-intel calibrate` runs a fixed offline gold-case suite. These workflows and their limits are documented in [`docs/research-intelligence-feedback.md`](docs/research-intelligence-feedback.md).
+
+For larger datasets, `python -m pip install 'sugar-osint[analytics]'` enables a DuckDB/Parquet build and bounded SQL-query path that reads CSV/JSONL directly without pandas materialization.
 
 SUGAR deliberately distinguishes **presence, activity, reach, engagement, outcomes, and causal influence**. It does not manufacture a universal influence score or treat collection density as influence.
 
@@ -95,6 +101,14 @@ Research files remain ordinary CSV/XLSX/JSONL/GeoJSON/HTML/Word/PDF files rather
 If a project is copied to another machine without `.sugar/workspace.sqlite3`, opening it rebuilds the local artifact index from `sugar-artifacts.json`; registered missing files remain visible as missing, and deliberately external references remain marked external.
 
 See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the workspace schema, layout, portability rules, Python API, and desktop bridge operations.
+
+## Persistent research workspace
+
+The **Research Workspace** page in both desktop clients brings multi-project navigation, subprojects, run and plan-change history, evidence-backed institution/service registries, inspectable data tables, reusable map layers, conversation context, and persistent listening posts into one analyst workflow. The shared `sugar-project` CLI supports project dashboards/history, reference-data import/export, monitor scheduling/review, conversation reconstruction, and integrity-checked project bundles. Monitoring can be run manually or by an approved operating-system scheduler; in-app polling is opt-in.
+
+SUGAR includes blank registry schemas for American Spaces, EducationUSA, language education centers, technical training workshops, and custom networks. It does not present those schemas as an authoritative current inventory; analysts supply source-backed datasets and record their scope and coverage limits. The tool keeps American Spaces and EducationUSA distinct, reports comparison dimensions separately, and preserves evidence and uncertainty without scoring popularity, effectiveness, or causal influence.
+
+See [`docs/research-workspace.md`](docs/research-workspace.md) for the supported workflow, field/evidence rules, command examples, monitoring setup, bundle behavior, and current boundaries.
 
 ## Collection
 
@@ -208,6 +222,7 @@ For the State/Diplomacy Lab delivery target, the versioned product contract live
 
 - [`docs/architecture.md`](docs/architecture.md) — current system architecture and engineering rules
 - [`docs/project-workspaces.md`](docs/project-workspaces.md) — persistent project-workspace contract
+- [`docs/research-workspace.md`](docs/research-workspace.md) — persistent research workspace and meeting-feedback implementation guide
 - [`docs/collector-interface.md`](docs/collector-interface.md) — collector capabilities and normalization contract
 - [`docs/importer-interface.md`](docs/importer-interface.md) ? external-data normalization and provenance contract
 - [`docs/research-requirements.md`](docs/research-requirements.md) ? research requirements and bounded adaptive search planning
@@ -226,6 +241,7 @@ For the State/Diplomacy Lab delivery target, the versioned product contract live
 - [`docs/spatial-overlap.md`](docs/spatial-overlap.md) — reference-network proximity analysis
 - [`docs/state-department-workflow.md`](docs/state-department-workflow.md) — State workflow and integrity rules
 - [`docs/state-analytic-intelligence.md`](docs/state-analytic-intelligence.md) — structured analytic products
+- [`docs/research-intelligence-feedback.md`](docs/research-intelligence-feedback.md) — next-evidence ranking, content lineage, temporal evidence graph, and finding sensitivity
 - [`docs/state-agentic-deep-mode.md`](docs/state-agentic-deep-mode.md) — iterative synthesis mode
 
 ## Development and contribution

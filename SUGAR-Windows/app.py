@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 
 from backend import BackendRunner
 from widgets import Card, EnumCombo, LabeledRow, NumberField, PasswordField, PathField, SourceSelector, StatusPill
+from workspace_hub import WorkspaceHubPage
 
 APP_NAME = "SUGAR"
 APP_ORGANIZATION = "Virginia Tech Diplomacy Lab"
@@ -1537,7 +1538,7 @@ class IntelligencePage(QWidget):
     def __init__(self,run:Callable[[str,dict[str,Any],bool],None],settings:SettingsPage)->None:
         super().__init__(); self.run_operation=run; self.settings=settings
         root=QVBoxLayout(self); root.setContentsMargins(24,20,24,24); root.addWidget(page_header("Analytic Intelligence","Measure the corpus first, audit epistemic debt, then run bounded specialist agents, evidence-neighborhood refinement, integration, red-team critique and longitudinal comparison."))
-        tabs=QTabWidget(); tabs.addTab(self._deterministic_tab(),"Packet & Tradecraft"); tabs.addTab(self._synthesis_tab(),"Agentic Synthesis"); tabs.addTab(self._hypothesis_tab(),"Competing Hypotheses"); tabs.addTab(self._compare_tab(),"Longitudinal"); root.addWidget(tabs,1)
+        tabs=QTabWidget(); tabs.addTab(self._deterministic_tab(),"Packet & Tradecraft"); tabs.addTab(self._research_quality_tab(),"Research Quality"); tabs.addTab(self._synthesis_tab(),"Agentic Synthesis"); tabs.addTab(self._hypothesis_tab(),"Competing Hypotheses"); tabs.addTab(self._compare_tab(),"Longitudinal"); root.addWidget(tabs,1)
 
     def _base_inputs(self):
         obs=PathField(mode="file",extensions=("csv","xlsx","jsonl")); assessments=PathField(mode="file",extensions=("jsonl",)); return obs,assessments
@@ -1556,6 +1557,109 @@ class IntelligencePage(QWidget):
     def _tradecraft(self)->None:
         if not self._require_base(self.intel_obs,self.intel_assess): return
         out=self.trade_out.text() or str(Path(self.settings.default_output())/"tradecraft_audit.json"); self.run_operation("intel-tradecraft",{"observations":self.intel_obs.text(),"assessments":self.intel_assess.text(),"output_file":out},False)
+
+    def _research_quality_tab(self)->QWidget:
+        page=QWidget(); layout=QVBoxLayout(page); layout.setContentsMargins(16,16,16,16); layout.setSpacing(12)
+        self.quality_workspace=PathField(mode="directory",placeholder="Choose an existing SUGAR project folder")
+        self.quality_hypotheses=PathField(mode="file",extensions=("json",))
+        self.quality_aliases=PathField(mode="file",extensions=("json",))
+        self.capture_html=PathField(mode="file",extensions=("html","htm"))
+        self.capture_url=QLineEdit(); self.media_file=PathField(mode="file",extensions=("png","jpg","jpeg","webp","mp4","mov","m4v","mp3","wav","m4a"))
+        self.media_transcript=PathField(mode="file",extensions=("vtt","srt","txt")); self.media_ocr=PathField(mode="file",extensions=("txt",))
+        self.media_url=QLineEdit(); self.media_language=QLineEdit(); self.media_parent=QLineEdit()
+        self.media_manifest=PathField(mode="file",extensions=("json",)); self.media_observation_id=QLineEdit(); self.media_start=QLineEdit(); self.media_end=QLineEdit(); self.media_quote=QLineEdit()
+        self.semantic_query=QLineEdit(); self.semantic_top_k=NumberField(1,500,20); self.remote_embeddings=QCheckBox("Use remote multilingual embeddings (send query and changed corpus text to configured provider)")
+        self.quality_queries=NumberField(1,100,10); self.quality_records=NumberField(1,10000,300)
+        layout.addWidget(LabeledRow("Project folder",self.quality_workspace,"Uses the saved requirement, search plan, evidence, observations, and assessments."))
+        layout.addWidget(LabeledRow("Hypothesis matrix (optional)",self.quality_hypotheses,"Add collection-needed actions from a competing-hypothesis or synthesis JSON."))
+        grid=QGridLayout(); grid.addWidget(LabeledRow("Query budget",self.quality_queries),0,0); grid.addWidget(LabeledRow("Max records per query",self.quality_records),0,1); layout.addLayout(grid)
+        actions=QGridLayout()
+        actions.addWidget(primary_button("Recommend Next Collection",self._next_evidence),0,0)
+        actions.addWidget(QPushButton("Analyze Source Text Lineage",clicked=self._content_lineage),0,1)
+        actions.addWidget(QPushButton("Build Temporal Evidence Graph",clicked=self._evidence_graph),1,0)
+        actions.addWidget(QPushButton("Test Finding Robustness",clicked=self._robustness),1,1)
+        layout.addLayout(actions)
+        search=Card("Search evidence in the project")
+        search.layout.addWidget(LabeledRow("Search question or phrase",self.semantic_query))
+        search.layout.addWidget(LabeledRow("Maximum results",self.semantic_top_k))
+        search.layout.addWidget(self.remote_embeddings)
+        search.layout.addWidget(primary_button("Search Evidence",self._semantic_search)); layout.addWidget(search)
+        layout.addWidget(LabeledRow("Human-reviewed entity aliases (optional JSON)",self.quality_aliases,"Use canonical names mapped to analyst-verified aliases."))
+        capture=Card("Capture a page you can access")
+        capture.layout.addWidget(LabeledRow("Saved HTML page",self.capture_html,"Scripts, hidden controls, and credential-like values are removed before evidence is saved."))
+        capture.layout.addWidget(LabeledRow("Original public/authorized URL",self.capture_url))
+        capture.layout.addWidget(primary_button("Save Sanitized Page to Project",self._capture_page))
+        layout.addWidget(capture)
+        media=Card("Preserve image, audio, or video evidence")
+        media.layout.addWidget(LabeledRow("Media file",self.media_file))
+        media.layout.addWidget(LabeledRow("Source URL (optional)",self.media_url))
+        media_row=QGridLayout(); media_row.addWidget(LabeledRow("Transcript / subtitles (optional)",self.media_transcript),0,0); media_row.addWidget(LabeledRow("OCR text (optional)",self.media_ocr),0,1)
+        media_row.addWidget(LabeledRow("Language",self.media_language),1,0); media_row.addWidget(LabeledRow("Parent record ID",self.media_parent),1,1)
+        media.layout.addLayout(media_row); media.layout.addWidget(primary_button("Preserve Media and Derivatives",self._ingest_media))
+        cite_grid=QGridLayout(); cite_grid.addWidget(LabeledRow("Preserved media manifest",self.media_manifest),0,0); cite_grid.addWidget(LabeledRow("Observation ID",self.media_observation_id),0,1)
+        cite_grid.addWidget(LabeledRow("Start time",self.media_start),1,0); cite_grid.addWidget(LabeledRow("End time",self.media_end),1,1); cite_grid.addWidget(LabeledRow("Quote / description",self.media_quote),2,0,1,2)
+        media.layout.addLayout(cite_grid); media.layout.addWidget(QPushButton("Attach Timestamped Citation to New Observations File",clicked=self._attach_media)); layout.addWidget(media)
+        note=QLabel("These local, deterministic checks expose their inputs and limits. Recommendations never start collection; lineage candidates do not prove copying; graph links point to evidence-bearing observations; robustness uses human-verified, brief-eligible evidence.")
+        note.setObjectName("hint"); note.setWordWrap(True); layout.addWidget(note); layout.addStretch(1); return page
+
+    def _quality_workspace_config(self)->dict[str,Any]|None:
+        workspace=self.quality_workspace.text().strip()
+        if not workspace:
+            QMessageBox.warning(self,"Missing project","Choose a SUGAR project folder with its saved research artifacts."); return None
+        return {"workspace":workspace}
+
+    def _next_evidence(self)->None:
+        config=self._quality_workspace_config()
+        if config is None: return
+        config.update({"max_queries":self.quality_queries.value(),"max_records_per_query":self.quality_records.value()})
+        if self.quality_hypotheses.text().strip(): config["hypotheses"]=self.quality_hypotheses.text().strip()
+        self.run_operation("intel-next-evidence",config,False)
+
+    def _content_lineage(self)->None:
+        config=self._quality_workspace_config()
+        if config is not None: self.run_operation("intel-content-lineage",config,False)
+
+    def _evidence_graph(self)->None:
+        config=self._quality_workspace_config()
+        if config is not None:
+            if self.quality_aliases.text().strip(): config["entity_aliases"]=self.quality_aliases.text().strip()
+            self.run_operation("intel-evidence-graph",config,False)
+
+    def _robustness(self)->None:
+        config=self._quality_workspace_config()
+        if config is not None: self.run_operation("intel-robustness",config,False)
+
+    def _semantic_search(self)->None:
+        config=self._quality_workspace_config()
+        if config is None: return
+        if not self.semantic_query.text().strip(): QMessageBox.warning(self,"Missing query","Enter words or a research question."); return
+        config.update({"query":self.semantic_query.text().strip(),"top_k":self.semantic_top_k.value(),"remote_embeddings":self.remote_embeddings.isChecked()})
+        if self.remote_embeddings.isChecked():
+            config["llm"]={"provider":self.settings.provider.value(),"model":"text-embedding-3-small","base_url":self.settings.base_url.text().strip()}
+        self.run_operation("intel-semantic-search",config,False)
+
+    def _capture_page(self)->None:
+        config=self._quality_workspace_config()
+        if config is None: return
+        if not self.capture_html.text() or not self.capture_url.text().strip(): QMessageBox.warning(self,"Missing page details","Choose a saved HTML page and enter its original public or authorized URL."); return
+        config.update({"html_file":self.capture_html.text(),"source_url":self.capture_url.text().strip()})
+        self.run_operation("intel-capture-page",config,False)
+
+    def _ingest_media(self)->None:
+        config=self._quality_workspace_config()
+        if config is None: return
+        if not self.media_file.text(): QMessageBox.warning(self,"Missing media","Choose an image, audio, or video file."); return
+        config.update({"media_file":self.media_file.text(),"source_url":self.media_url.text().strip(),"language":self.media_language.text().strip(),"parent_record_id":self.media_parent.text().strip()})
+        if self.media_transcript.text(): config["transcript"]=self.media_transcript.text()
+        if self.media_ocr.text(): config["ocr"]=self.media_ocr.text()
+        self.run_operation("intel-media-ingest",config,False)
+
+    def _attach_media(self)->None:
+        config=self._quality_workspace_config()
+        if config is None: return
+        if not self.media_manifest.text() or not self.media_observation_id.text().strip() or not self.media_start.text().strip() or not self.media_end.text().strip(): QMessageBox.warning(self,"Missing citation details","Choose a media manifest and provide an observation ID plus start and end times."); return
+        config.update({"media_manifest":self.media_manifest.text(),"observation_id":self.media_observation_id.text().strip(),"media_start":self.media_start.text().strip(),"media_end":self.media_end.text().strip(),"quote":self.media_quote.text().strip()})
+        self.run_operation("intel-media-attach",config,False)
 
     def _synthesis_tab(self)->QWidget:
         page=QWidget(); layout=QVBoxLayout(page); layout.setContentsMargins(16,16,16,16); self.syn_obs,self.syn_assess=self._base_inputs(); self.syn_country=QLineEdit(); self.syn_case=QLineEdit(); self.syn_depth=EnumCombo((("Quick","quick"),("Standard","standard"),("Deep iterative","deep"))); self.syn_depth.setCurrentIndex(1); self.syn_workers=NumberField(1,16,4); self.syn_name=QLineEdit("analytic_intelligence"); self.syn_output=PathField(mode="directory"); self.syn_output.setText(self.settings.default_output())
@@ -1644,19 +1748,21 @@ class MainWindow(QMainWindow):
     def __init__(self,*,smoke:bool=False)->None:
         super().__init__(); self.setWindowTitle("SUGAR — State Research Workbench"); self.resize(1380,900); self.setMinimumSize(1080,720); self._close_after_cancel=False; icon=resource_path("sugar-logo.png");
         if icon.is_file(): self.setWindowIcon(QIcon(str(icon)))
-        self.runner=BackendRunner(self); self._diagnostics:dict[str,Any]={}; self.pages:dict[str,int]={}
+        self.runner=BackendRunner(self); self._diagnostics:dict[str,Any]={}; self.pages:dict[str,int]={}; self._workspace_operation_queue:list[tuple[str,dict[str,Any],bool]]=[]; self._workspace_operation_scheduled=False
         self.settings_page=SettingsPage(); self.home=HomePage()
         self.state_page=StatePage(self.run_operation,self.settings_page)
+        self.workspace_hub=WorkspaceHubPage(self.run_workspace_operation,self._activate_workspace,self.state_page.research_workspace.text().strip())
         central=QWidget(); outer=QHBoxLayout(central); outer.setContentsMargins(0,0,0,0); outer.setSpacing(0)
         sidebar=QFrame(); sidebar.setObjectName("sidebar"); sidebar.setFixedWidth(210); side=QVBoxLayout(sidebar); side.setContentsMargins(8,16,8,12); brand=QLabel("SUGAR"); brand.setObjectName("brand"); sub=QLabel("State Research Workbench"); sub.setObjectName("brandSub"); side.addWidget(brand); side.addWidget(sub); side.addSpacing(12); self.nav=QListWidget(); self.nav.setObjectName("nav"); side.addWidget(self.nav,1); version=QLabel("Evidence-first OSINT + analysis"); version.setObjectName("brandSub"); version.setWordWrap(True); side.addWidget(version); outer.addWidget(sidebar)
         self.stack=QStackedWidget(); outer.addWidget(self.stack,1); self.setCentralWidget(central)
-        page_defs=[("Home",self.home),("Collect",CollectPage(self.run_operation,self.settings_page)),("Weibo",WeiboPage(self.run_operation,self.settings_page)),("State Workflow",self.state_page),("Intelligence",IntelligencePage(self.run_operation,self.settings_page)),("Maps & Reports",ReportsPage(self.run_operation,self.settings_page)),("Settings",self.settings_page)]
+        page_defs=[("Home",self.home),("Collect",CollectPage(self.run_operation,self.settings_page)),("Weibo",WeiboPage(self.run_operation,self.settings_page)),("State Workflow",self.state_page),("Research Workspace",self.workspace_hub),("Intelligence",IntelligencePage(self.run_operation,self.settings_page)),("Maps & Reports",ReportsPage(self.run_operation,self.settings_page)),("Settings",self.settings_page)]
         for name,page in page_defs:
             self.pages[name]=self.stack.count(); self.nav.addItem(QListWidgetItem(name)); self.stack.addWidget(scroll_page(page))
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex); self.nav.setCurrentRow(0); self.home.navigate.connect(self.navigate)
         self.activity=ActivityDock(self); self.addDockWidget(Qt.BottomDockWidgetArea,self.activity); self.activity.cancel_requested.connect(self.runner.cancel)
-        self.runner.event.connect(self._event); self.runner.event.connect(self.state_page.handle_backend_event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.runner.running_changed.connect(self._finish_pending_close); self.settings_page.diagnostics_requested.connect(self._diagnostics_run); self.settings_page.arc_test_requested.connect(self._arc_test_run)
+        self.runner.event.connect(self._event); self.runner.event.connect(self.state_page.handle_backend_event); self.runner.event.connect(self.workspace_hub.handle_backend_event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.runner.running_changed.connect(self._finish_pending_close); self.runner.finished.connect(self._run_queued_workspace_operation); self.settings_page.diagnostics_requested.connect(self._diagnostics_run); self.settings_page.arc_test_requested.connect(self._arc_test_run)
         self._build_menu()
+        self._monitor_timer=QTimer(self); self._monitor_timer.setInterval(60000); self._monitor_timer.timeout.connect(self._auto_run_due_monitors); self._monitor_timer.start()
         if not smoke:
             QTimer.singleShot(150,self._diagnostics_run)
             QTimer.singleShot(450,self._show_getting_started)
@@ -1664,7 +1770,7 @@ class MainWindow(QMainWindow):
     def _build_menu(self)->None:
         bar=self.menuBar(); file_menu=bar.addMenu("File"); open_output=QAction("Open default output folder",self); open_output.triggered.connect(lambda:QDesktopServices.openUrl(QUrl.fromLocalFile(self.settings_page.default_output()))); file_menu.addAction(open_output); file_menu.addSeparator(); quit_action=QAction("Exit",self); quit_action.triggered.connect(self.close); file_menu.addAction(quit_action)
         tools=bar.addMenu("Tools"); diag=QAction("Backend diagnostics",self); diag.triggered.connect(self._diagnostics_run); tools.addAction(diag); cancel=QAction("Cancel current operation",self); cancel.triggered.connect(self.runner.cancel); tools.addAction(cancel)
-        help_menu=bar.addMenu("Help"); getting_started=QAction("Getting Started",self); getting_started.triggered.connect(lambda: self._show_getting_started(True)); help_menu.addAction(getting_started)
+        help_menu=bar.addMenu("Help"); getting_started=QAction("Getting Started",self); getting_started.triggered.connect(lambda: self._show_getting_started(True)); help_menu.addAction(getting_started); guide=QAction("Research Workspace guide",self); guide.triggered.connect(self._show_workspace_guide); help_menu.addAction(guide)
 
     def _show_getting_started(self, force: bool = False)->None:
         store=QSettings(APP_ORGANIZATION,APP_NAME)
@@ -1676,9 +1782,9 @@ class MainWindow(QMainWindow):
         box.setTextFormat(Qt.RichText)
         box.setText(
             "<b>Recommended first run</b><br><br>"
-            "<b>1.</b> Open <b>State Workflow → Research Project</b> and create or open a portable project.<br><br>"
-            "<b>2.</b> Save the research question and build the inspectable search plan. Import, project inspection, human review, and export work without any LLM or Virginia Tech credentials.<br><br>"
-            "<b>3.</b> Configure an LLM only if you need AI assistance. OpenAI and custom OpenAI-compatible providers are supported; Virginia Tech ARC is an optional classroom/development integration.<br><br>"
+            "<b>1.</b> Open <b>Research Workspace</b> to create or switch projects, inspect saved work, and create country or institution subprojects.<br><br>"
+            "<b>2.</b> Add source-backed institution reference data, review field mappings, build layered maps, and save listening posts for recurring collection.<br><br>"
+            "<b>3.</b> Use <b>State Workflow</b> to write the research question, build the search plan, review evidence, and prepare a handoff. These core workflows work without an LLM key.<br><br>"
             "<b>Source credentials:</b> only configure a source credential when you intentionally use that source and are authorized to do so."
         )
         check=QCheckBox("Don't show this automatically again")
@@ -1691,6 +1797,38 @@ class MainWindow(QMainWindow):
 
     def navigate(self,name:str)->None:
         if name in self.pages: self.nav.setCurrentRow(self.pages[name])
+
+    def _activate_workspace(self, path: str) -> None:
+        self.state_page.research_workspace.setText(path)
+        self.state_page.research_project_name.setText(Path(path).name.replace("-", " "))
+
+    def _show_workspace_guide(self) -> None:
+        self.navigate("Research Workspace")
+        self.workspace_hub.tabs.setCurrentIndex(5)
+
+    def run_workspace_operation(self, command: str, config: dict[str, Any], requires_llm: bool = False) -> None:
+        if self.runner.is_running:
+            self._workspace_operation_queue.append((command, dict(config), requires_llm))
+            self.activity.log.appendPlainText(f"\nQueued {command} until the current operation finishes.")
+            return
+        self.run_operation(command, config, requires_llm)
+
+    def _run_queued_workspace_operation(self, _exit_code: int) -> None:
+        if self.runner.is_running or self._workspace_operation_scheduled or not self._workspace_operation_queue:
+            return
+        command, config, requires_llm = self._workspace_operation_queue.pop(0)
+        self._workspace_operation_scheduled = True
+        def launch() -> None:
+            self._workspace_operation_scheduled = False
+            self.run_operation(command, config, requires_llm)
+        QTimer.singleShot(0, launch)
+
+    def _auto_run_due_monitors(self) -> None:
+        workspace = self.workspace_hub.workspace
+        if (not self.workspace_hub.auto_monitoring.isChecked() or self.runner.is_running or not workspace
+                or not (Path(workspace) / "sugar-project.json").is_file()):
+            return
+        self.workspace_hub._hub("monitor-run-due", max_monitors=25)
 
     def run_operation(self,command:str,config:dict[str,Any],requires_llm:bool=False)->None:
         if self.runner.is_running: QMessageBox.information(self,"SUGAR is busy","Cancel or finish the current operation before starting another."); return
@@ -1761,8 +1899,8 @@ class MainWindow(QMainWindow):
         self.settings_page.save(); event.accept()
 
     def smoke_check(self)->None:
-        assert len(self.pages)==7
-        assert "Intelligence" in self.pages and "State Workflow" in self.pages
+        assert len(self.pages)==8
+        assert "Intelligence" in self.pages and "State Workflow" in self.pages and "Research Workspace" in self.pages
         assert self.runner is not None
 
 
