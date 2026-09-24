@@ -74,6 +74,7 @@ class PathField(QWidget):
         self.mode = mode
         self.extensions = tuple(extensions)
         self.save_extension = save_extension
+        self.setAcceptDrops(True)
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(6)
@@ -90,6 +91,35 @@ class PathField(QWidget):
 
     def setText(self, value: str) -> None:
         self.edit.setText(value)
+
+    def dragEnterEvent(self, event) -> None:
+        urls = event.mimeData().urls() if event.mimeData().hasUrls() else []
+        local = [Path(url.toLocalFile()) for url in urls if url.isLocalFile()]
+        if local and self._drop_compatible(local[0]):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event) -> None:
+        urls = event.mimeData().urls() if event.mimeData().hasUrls() else []
+        local = [Path(url.toLocalFile()) for url in urls if url.isLocalFile()]
+        if local and self._drop_compatible(local[0]):
+            self.setText(str(local[0].resolve()))
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def _drop_compatible(self, path: Path) -> bool:
+        if self.mode == "directory":
+            return path.is_dir()
+        if self.mode == "save":
+            return False
+        if not path.is_file():
+            return False
+        if not self.extensions:
+            return True
+        allowed = {f".{value.lstrip('.').casefold()}" for value in self.extensions}
+        return path.suffix.casefold() in allowed
 
     def browse(self) -> None:
         if self.mode == "directory":
