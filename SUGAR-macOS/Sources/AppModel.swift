@@ -39,6 +39,17 @@ struct ResearchStrategyDimensionView: Identifiable, Equatable {
     var id: String { dimensionID }
 }
 
+struct ResearchListeningPostView: Identifiable, Equatable {
+    let listeningPostID: String
+    let name: String
+    let sources: [String]
+    let cadence: String
+    let status: String
+    let lastSuccessAt: String
+
+    var id: String { listeningPostID }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var isRunning = false
@@ -50,6 +61,8 @@ final class AppModel: ObservableObject {
     @Published var researchStrategyTask = ""
     @Published var researchStrategyReviewState = ""
     @Published var researchStrategySummary = ""
+    @Published var researchWorkspaceSummary = "Open a project to load persistent research state."
+    @Published var researchListeningPosts: [ResearchListeningPostView] = []
     @Published var xToken = KeychainStore.read("xBearerToken")
     @Published var openAIKey = KeychainStore.read(LLMProvider.openAI.keychainAccount)
     @Published var arcKey = KeychainStore.read(LLMProvider.arc.keychainAccount)
@@ -290,6 +303,38 @@ final class AppModel: ObservableObject {
             guard let data = line.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let event = json["event"] as? String else {
+                continue
+            }
+            if event == "workspace_status" || event == "workspace_research" {
+                let dashboard = (json["dashboard"] as? [String: Any])
+                    ?? (json["research"] as? [String: Any])
+                    ?? [:]
+                let subprojects = dashboard["subproject_count"] as? Int ?? 0
+                let searches = dashboard["search_count"] as? Int ?? 0
+                let listening = dashboard["active_listening_post_count"] as? Int ?? 0
+                let layers = dashboard["reference_layer_count"] as? Int ?? 0
+                let collaborators = dashboard["collaborator_count"] as? Int ?? 0
+                researchWorkspaceSummary = "(subprojects) subprojects • (searches) saved searches • (listening) active listening posts • (layers) reference layers • (collaborators) collaborators"
+                if let posts = json["listening_posts"] as? [[String: Any]] {
+                    researchListeningPosts = posts.compactMap { post in
+                        guard let id = post["listening_post_id"] as? String, !id.isEmpty else { return nil }
+                        return ResearchListeningPostView(
+                            listeningPostID: id,
+                            name: post["name"] as? String ?? "",
+                            sources: post["sources"] as? [String] ?? [],
+                            cadence: post["cadence"] as? String ?? "manual",
+                            status: post["status"] as? String ?? "",
+                            lastSuccessAt: post["last_success_at"] as? String ?? ""
+                        )
+                    }
+                }
+                continue
+            }
+            if event == "workspace_listening_post_run",
+               let post = json["listening_post"] as? [String: Any] {
+                let name = post["name"] as? String ?? "Listening post"
+                let success = post["last_success_at"] as? String ?? ""
+                researchWorkspaceSummary = "(name) completed" + (success.isEmpty ? "" : " • last success (success)")
                 continue
             }
             if event == "strategy-review" {
