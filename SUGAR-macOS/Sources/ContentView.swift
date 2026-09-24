@@ -692,7 +692,10 @@ struct ActivityView: View {
                 Spacer()
                 Button("Copy Support Log") { model.copyLog() }
                     .disabled(model.log.isEmpty)
-                if model.isRunning { ProgressView().controlSize(.small) }
+                if model.isRunning {
+                    ProgressView().controlSize(.small)
+                    Button("Cancel") { model.cancel() }
+                }
             }
             ScrollViewReader { proxy in
                 ScrollView {
@@ -712,6 +715,10 @@ struct ActivityView: View {
                         Text("Outputs:")
                         ForEach(model.outputs, id: \.self) { path in
                             Button(URL(fileURLWithPath: path).lastPathComponent) { model.reveal(path) }
+                                .help(path)
+                                .contextMenu {
+                                    Button("Copy path") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(path, forType: .string) }
+                                }
                         }
                     }
                 }
@@ -827,8 +834,10 @@ struct SearchView: View {
     }
 
     private func commaList(_ value: String) -> [String] {
-        value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        var seen = Set<String>()
+        return value.split(whereSeparator: { $0 == "," || $0.isNewline })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
     }
 
     private func runSearch() {

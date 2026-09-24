@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, Signal
+from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Signal
 
 
 class BackendRunner(QObject):
@@ -32,6 +32,8 @@ class BackendRunner(QObject):
         self._stderr_buffer = ""
         self._config_path: Path | None = None
         self._active_command = ""
+        self._cancel_requested = False
+        self._error_reported = False
 
     @property
     def is_running(self) -> bool:
@@ -65,6 +67,9 @@ class BackendRunner(QObject):
         self._stdout_buffer = ""
         self._stderr_buffer = ""
         self._active_command = command
+        self._cancel_requested = False
+        self._error_reported = False
+        self.outputs_changed.emit([])
 
         program, prefix = self._bridge_location()
         arguments = [*prefix, command]
@@ -105,11 +110,15 @@ class BackendRunner(QObject):
         self.process.start()
 
     def cancel(self) -> None:
-        if not self.is_running:
+        if not self.is_running or self._cancel_requested:
             return
+        self._cancel_requested = True
         self.event.emit({"event": "cancel_requested", "operation": self._active_command})
         self.process.terminate()
-        if not self.process.waitForFinished(2500):
+        QTimer.singleShot(2500, self._kill_if_running)
+
+    def _kill_if_running(self) -> None:
+        if self._cancel_requested and self.is_running:
             self.process.kill()
 
     def _read_stdout(self) -> None:
@@ -144,10 +153,12 @@ class BackendRunner(QObject):
             outputs = [str(value) for value in payload.get("outputs") or [] if str(value)]
             self.outputs_changed.emit(outputs)
         elif payload.get("event") == "error":
+            self._error_reported = True
             self.error.emit(str(payload.get("message") or "SUGAR operation failed."))
 
     def _process_error(self, error: QProcess.ProcessError) -> None:
         if error == QProcess.FailedToStart:
+            self._error_reported = True
             self.error.emit(
                 "The SUGAR backend could not start. Reinstall the Windows package or set SUGAR_BRIDGE to a valid bridge executable."
             )
@@ -159,10 +170,15 @@ class BackendRunner(QObject):
             self.event.emit({"event": "backend_stderr", "message": self._stderr_buffer.strip()})
         self._stdout_buffer = ""
         self._stderr_buffer = ""
+        if self._cancel_requested:
+            self.event.emit({"event": "cancelled", "operation": self._active_command})
+        elif (exit_code != 0 or _status == QProcess.CrashExit) and not self._error_reported:
+            self.error.emit(f"{self._active_command or 'SUGAR'} stopped unexpectedly (exit code {exit_code}). Check the Activity log for details.")
         self.running_changed.emit(False)
         self.finished.emit(int(exit_code))
         self._cleanup_config()
         self._active_command = ""
+        self._cancel_requested = False
 
     def _cleanup_config(self) -> None:
         if self._config_path is None:

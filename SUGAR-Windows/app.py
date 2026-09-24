@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
+from datetime import date
 from pathlib import Path
 from typing import Any, Callable
 
@@ -36,7 +38,7 @@ from PySide6.QtWidgets import (
 )
 
 from backend import BackendRunner
-from widgets import Card, EnumCombo, LabeledRow, NumberField, OutputChip, PasswordField, PathField, SourceSelector, StatusPill
+from widgets import Card, EnumCombo, LabeledRow, NumberField, PasswordField, PathField, SourceSelector, StatusPill
 
 APP_NAME = "SUGAR"
 APP_ORGANIZATION = "Virginia Tech Diplomacy Lab"
@@ -170,6 +172,23 @@ def split_terms(text: str) -> list[str]:
             values.append(value)
             seen.add(key)
     return values
+
+
+def date_range_error(since: str, until: str) -> str | None:
+    for label, value in (("Since", since), ("Until", until)):
+        if value and (not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value) or not _valid_date(value)):
+            return f"{label} must be a valid date in YYYY-MM-DD format."
+    if since and until and since > until:
+        return "Since must be on or before Until."
+    return None
+
+
+def _valid_date(value: str) -> bool:
+    try:
+        date.fromisoformat(value)
+        return True
+    except ValueError:
+        return False
 
 
 def primary_button(label: str, callback: Callable[[], None]) -> QPushButton:
@@ -574,6 +593,10 @@ class CollectPage(QWidget):
         if not sources or not terms:
             QMessageBox.warning(self, "Missing input", "Select at least one source and enter at least one search term.")
             return
+        issue = date_range_error(self.since.text().strip(), self.until.text().strip())
+        if issue:
+            QMessageBox.warning(self, "Invalid date range", issue)
+            return
         config = {
             "sources": sources,
             "terms": terms,
@@ -654,7 +677,7 @@ class CollectPage(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(16, 16, 16, 16)
         self.harvest_sources = SourceSelector(SOURCES)
-        self.harvest_sources.boxes["weibo"].setChecked(True)
+        self.harvest_sources.boxes["bilibili"].setChecked(True)
         self.harvest_terms = QTextEdit()
         self.harvest_terms.setPlaceholderText("One query per line. Use a reproducible research matrix rather than a single deep query.")
         self.harvest_terms.setMaximumHeight(120)
@@ -672,7 +695,7 @@ class CollectPage(QWidget):
         self.task_delay.setRange(0, 60)
         self.task_delay.setValue(1.0)
         self.task_delay.setSuffix(" s")
-        self.harvest_name = QLineEdit("state_weibo_campaign")
+        self.harvest_name = QLineEdit("research_campaign")
         self.harvest_output = PathField(mode="directory")
         self.harvest_output.setText(self.settings.default_output())
 
@@ -706,6 +729,10 @@ class CollectPage(QWidget):
         sources = self.harvest_sources.selected()
         if not sources or not terms:
             QMessageBox.warning(self, "Missing input", "Select at least one source and enter a query plan.")
+            return
+        issue = date_range_error(self.harvest_since.text().strip(), self.harvest_until.text().strip())
+        if issue:
+            QMessageBox.warning(self, "Invalid date range", issue)
             return
         target = self.harvest_target.value()
         config = {
@@ -1549,9 +1576,21 @@ class ActivityDock(QDockWidget):
         super().__init__("Activity & Outputs",parent); self.setObjectName("activityDock"); shell=QWidget(); root=QVBoxLayout(shell); root.setContentsMargins(10,8,10,8); root.setSpacing(6)
         top=QHBoxLayout(); self.status=QLabel("Ready"); self.status.setObjectName("muted"); self.progress=QProgressBar(); self.progress.setRange(0,1); self.progress.setValue(0); self.progress.setMaximumWidth(240); self.cancel=QPushButton("Cancel"); self.cancel.setProperty("danger",True); self.cancel.setEnabled(False); self.cancel.clicked.connect(self.cancel_requested); self.copy=QPushButton("Copy log"); self.clear=QPushButton("Clear"); top.addWidget(self.status); top.addStretch(1); top.addWidget(self.progress); top.addWidget(self.cancel); top.addWidget(self.copy); top.addWidget(self.clear); root.addLayout(top)
         self.log=QPlainTextEdit(); self.log.setReadOnly(True); self.log.setMaximumBlockCount(5000); self.log.setMinimumHeight(105); root.addWidget(self.log,1)
-        self.output_host=QWidget(); self.output_layout=QHBoxLayout(self.output_host); self.output_layout.setContentsMargins(0,0,0,0); self.output_layout.addWidget(QLabel("Outputs:")); self.output_layout.addStretch(1); root.addWidget(self.output_host)
+        self.output_host=QWidget(); self.output_layout=QHBoxLayout(self.output_host); self.output_layout.setContentsMargins(0,0,0,0)
+        self.output_count=QLabel("Outputs: none"); self.output_choice=QComboBox(); self.output_choice.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon); self.output_choice.setMinimumContentsLength(24); self.output_choice.setEnabled(False)
+        self.open_output=QPushButton("Open location"); self.open_output.setEnabled(False); self.open_output.clicked.connect(self._open_selected_output)
+        self.copy_output=QPushButton("Copy path"); self.copy_output.setEnabled(False); self.copy_output.clicked.connect(lambda: QApplication.clipboard().setText(self.output_choice.currentData() or ""))
+        self.output_choice.currentIndexChanged.connect(self._update_output_tooltip)
+        self.output_layout.addWidget(self.output_count); self.output_layout.addWidget(self.output_choice,1); self.output_layout.addWidget(self.open_output); self.output_layout.addWidget(self.copy_output); root.addWidget(self.output_host)
         self.setWidget(shell); self.copy.clicked.connect(self._copy); self.clear.clicked.connect(self.log.clear)
     def _copy(self)->None: QApplication.clipboard().setText(self.log.toPlainText())
+    def _open_selected_output(self)->None:
+        path=self.output_choice.currentData()
+        if path:
+            target=Path(path)
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(target if target.is_dir() else target.parent)))
+    def _update_output_tooltip(self)->None:
+        self.output_choice.setToolTip(self.output_choice.currentData() or "")
     def set_running(self,running:bool)->None:
         self.cancel.setEnabled(running); self.status.setText("Running…" if running else "Ready"); self.progress.setRange(0,0 if running else 1); self.progress.setValue(0 if running else 1)
     def set_progress(self,current:int,total:int)->None:
@@ -1559,6 +1598,7 @@ class ActivityDock(QDockWidget):
     def append_event(self,payload:dict[str,Any])->None:
         event=str(payload.get("event") or "event")
         if event in {"backend","diagnostics"}: return
+        if event=="cancel_requested": self.status.setText("Cancelling…"); self.cancel.setEnabled(False)
         if event=="complete": message="Completed successfully."
         elif event=="error": message=f"ERROR: {payload.get('message','Unknown error')}"
         elif event=="backend_stderr": message=f"backend: {payload.get('message','')}"
@@ -1571,18 +1611,15 @@ class ActivityDock(QDockWidget):
         if isinstance(payload.get("current"),int) and isinstance(payload.get("total"),int): self.set_progress(int(payload["current"]),int(payload["total"]))
         elif isinstance(payload.get("index"),int) and isinstance(payload.get("total"),int): self.set_progress(int(payload["index"]),int(payload["total"]))
     def set_outputs(self,paths:list[str])->None:
-        while self.output_layout.count()>0:
-            item=self.output_layout.takeAt(0); widget=item.widget();
-            if widget: widget.deleteLater()
-        self.output_layout.addWidget(QLabel("Outputs:"))
-        for path in paths[:12]: self.output_layout.addWidget(OutputChip(path))
-        if len(paths)>12: self.output_layout.addWidget(QLabel(f"+{len(paths)-12} more"))
-        self.output_layout.addStretch(1)
+        self.output_choice.clear()
+        for path in paths: self.output_choice.addItem(Path(path).name or path, path)
+        self.output_count.setText(f"Outputs: {len(paths)}" if paths else "Outputs: none")
+        for widget in (self.output_choice,self.open_output,self.copy_output): widget.setEnabled(bool(paths))
 
 
 class MainWindow(QMainWindow):
     def __init__(self,*,smoke:bool=False)->None:
-        super().__init__(); self.setWindowTitle("SUGAR — State Research Workbench"); self.resize(1380,900); self.setMinimumSize(1080,720); icon=resource_path("sugar-logo.png");
+        super().__init__(); self.setWindowTitle("SUGAR — State Research Workbench"); self.resize(1380,900); self.setMinimumSize(1080,720); self._close_after_cancel=False; icon=resource_path("sugar-logo.png");
         if icon.is_file(): self.setWindowIcon(QIcon(str(icon)))
         self.runner=BackendRunner(self); self._diagnostics:dict[str,Any]={}; self.pages:dict[str,int]={}
         self.settings_page=SettingsPage(); self.home=HomePage()
@@ -1595,7 +1632,7 @@ class MainWindow(QMainWindow):
             self.pages[name]=self.stack.count(); self.nav.addItem(QListWidgetItem(name)); self.stack.addWidget(scroll_page(page))
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex); self.nav.setCurrentRow(0); self.home.navigate.connect(self.navigate)
         self.activity=ActivityDock(self); self.addDockWidget(Qt.BottomDockWidgetArea,self.activity); self.activity.cancel_requested.connect(self.runner.cancel)
-        self.runner.event.connect(self._event); self.runner.event.connect(self.state_page.handle_backend_event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.settings_page.diagnostics_requested.connect(self._diagnostics_run); self.settings_page.arc_test_requested.connect(self._arc_test_run)
+        self.runner.event.connect(self._event); self.runner.event.connect(self.state_page.handle_backend_event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.runner.running_changed.connect(self._finish_pending_close); self.settings_page.diagnostics_requested.connect(self._diagnostics_run); self.settings_page.arc_test_requested.connect(self._arc_test_run)
         self._build_menu()
         if not smoke:
             QTimer.singleShot(150,self._diagnostics_run)
@@ -1690,11 +1727,14 @@ class MainWindow(QMainWindow):
         self.home.diagnostic_failure(message) if not self._diagnostics else None
         QMessageBox.critical(self,"SUGAR operation failed",message)
 
+    def _finish_pending_close(self,running:bool)->None:
+        if not running and self._close_after_cancel: QTimer.singleShot(0,self.close)
+
     def closeEvent(self,event)->None:
         if self.runner.is_running:
             choice=QMessageBox.question(self,"Operation running","A SUGAR operation is still running. Cancel it and exit?",QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
             if choice!=QMessageBox.Yes: event.ignore(); return
-            self.runner.cancel()
+            self._close_after_cancel=True; self.runner.cancel(); event.ignore(); return
         self.settings_page.save(); event.accept()
 
     def smoke_check(self)->None:

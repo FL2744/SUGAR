@@ -57,6 +57,13 @@ final class AppModel: ObservableObject {
     @Published private(set) var legacyLLMKey = KeychainStore.read("llmAPIKey")
     private var previousKeyAssigned = false
     private var rawBackendLog = ""
+    private var activeTask: Task<Int32, Error>?
+
+    func cancel() {
+        guard isRunning, let activeTask, !activeTask.isCancelled else { return }
+        log += "\nCancelling operation…\n"
+        activeTask.cancel()
+    }
 
     func assignPreviousKey(to provider: LLMProvider) {
         switch provider {
@@ -169,21 +176,28 @@ final class AppModel: ObservableObject {
         outputs = []
         rawBackendLog = ""
         log = "Starting \(command)…\n\(Self.appDiagnostics())\n"
+        let operation = Task.detached {
+            try await Self.execute(command: command, configData: configData, secrets: secrets) { line in
+                self.rawBackendLog += line
+                self.consumeBackendEvent(line)
+                self.log += Self.renderBackendLog(line) + "\n"
+                self.outputs = Self.outputPaths(from: self.rawBackendLog)
+            }
+        }
+        activeTask = operation
         Task {
             do {
-                let result = try await Task.detached {
-                    try await Self.execute(command: command, configData: configData, secrets: secrets) { line in
-                        self.rawBackendLog += line
-                        self.consumeBackendEvent(line)
-                        self.log += Self.renderBackendLog(line) + "\n"
-                        self.outputs = Self.outputPaths(from: self.rawBackendLog)
-                    }
-                }.value
+                let result = try await operation.value
                 outputs = Self.outputPaths(from: rawBackendLog)
-                log += result == 0 ? "\nOperation completed.\n" : "\nOperation failed (exit code \(result)).\n"
+                if operation.isCancelled {
+                    log += "\nOperation cancelled.\n"
+                } else {
+                    log += result == 0 ? "\nOperation completed.\n" : "\nOperation failed (exit code \(result)).\n"
+                }
             } catch {
-                log += "\n\(error.localizedDescription)"
+                log += operation.isCancelled ? "\nOperation cancelled.\n" : "\n\(error.localizedDescription)"
             }
+            activeTask = nil
             isRunning = false
         }
     }
@@ -223,6 +237,25 @@ final class AppModel: ObservableObject {
     }
 
     private func preflight(command: String, config: [String: Any]) -> String? {
+        if command == "search" || command == "research-requirement" || command == "research-collect" {
+            let since = (config["since"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let until = (config["until"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            for (label, value) in [("Start", since), ("End", until)] where !value.isEmpty {
+                let pattern = #"^\d{4}-\d{2}-\d{2}$"#
+                let formatter = DateFormatter()
+                formatter.calendar = Calendar(identifier: .gregorian)
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone(secondsFromGMT: 0)
+                formatter.dateFormat = "yyyy-MM-dd"
+                formatter.isLenient = false
+                if value.range(of: pattern, options: .regularExpression) == nil || formatter.date(from: value) == nil {
+                    return "\(label) must be a valid date in YYYY-MM-DD format."
+                }
+            }
+            if !since.isEmpty && !until.isEmpty && since > until {
+                return "Start must be on or before End."
+            }
+        }
         if command == "search" || command == "research-collect" {
             let sources = (config["sources"] as? [String]) ?? []
             if sources.contains("x") && xToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

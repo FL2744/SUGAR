@@ -21,6 +21,8 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 ### Changed
 
 - imported URL-only records retain their canonical `record_key` when converted to research observations, canonical JSONL is accepted by shared result loading, and triage loading preserves parent/thread/conversation relationships.
+- Windows collection validates date ranges before starting, makes all generated outputs selectable, and defaults resumable harvest to a public Bilibili source; backend cancellation no longer blocks the window, and unexpected backend exits now show an actionable error.
+- macOS adds cancellation to Activity, validates search date ranges, accepts newline-separated search terms, and exposes full output paths for copying.
 
 ## 1.2.6 — 2026-09-17
 
