@@ -11,7 +11,7 @@ SUGAR projects now preserve analyst workflow state in addition to evidence artif
 - **Collaboration metadata** — named project participants/review roles without storing credentials.
 - **Conversation products** — readable thread views that preserve distinct handles/speakers and explicit reply relationships.
 
-The public SUGAR engine remains target-neutral. Project-specific target lists—such as a comprehensive Confucius Institute/Center registry—belong in project reference data rather than being hard-coded into the application.
+The public SUGAR engine remains target-neutral. Project-specific target lists—such as a comprehensive specific institution registry—belong in project reference data rather than being hard-coded into the application.
 
 ## Institution lifecycle data
 
@@ -71,8 +71,8 @@ sugar-project subproject-add ./team4 "Kyrgyzstan" \
   --tag institutions --tag central-asia
 
 sugar-project listening-add ./team4 "Institution watch" \
-  --term "Confucius Institute" \
-  --term "孔子学院" \
+  --term "Example Cultural Institute" \
+  --term "Local-language alias" \
   --source weibo \
   --source bilibili \
   --cadence weekly
