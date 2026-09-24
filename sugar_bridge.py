@@ -66,6 +66,7 @@ WORKSPACE_OPERATIONS = {
     "workspace-search-record",
     "workspace-listening-upsert",
     "workspace-layer-upsert",
+    "workspace-layers-import",
     "workspace-collaborator-upsert",
     "workspace-reference-map",
     "workspace-share-export",
@@ -337,6 +338,39 @@ def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
             metadata=dict(config.get("metadata") or {}),
         ))
         emit("workspace_reference_layer", reference_layer=asdict(item), dashboard=research.dashboard())
+        return [str(research.path)]
+
+    if command == "workspace-layers-import":
+        sources = [str(value).strip() for value in (config.get("sources") or []) if str(value).strip()]
+        if not sources:
+            raise ValueError("At least one reference-layer source is required.")
+        imported = []
+        for source_value in sources:
+            source = Path(source_value).expanduser().resolve()
+            if not source.is_file():
+                raise FileNotFoundError(source)
+            try:
+                stored_source = source.relative_to(workspace.root).as_posix()
+            except ValueError:
+                stored_source = str(source)
+            item = research.upsert_reference_layer(ReferenceLayer(
+                name=source.stem,
+                source=stored_source,
+                layer_type=str(config.get("layer_type") or "institution"),
+                subproject_id=str(config.get("subproject_id") or ""),
+                visible_by_default=bool(config.get("visible_by_default", True)),
+                style=dict(config.get("style") or {}),
+                field_mapping=dict(config.get("field_mapping") or {}),
+                metadata={"imported_via": "desktop_drop", **dict(config.get("metadata") or {})},
+            ))
+            imported.append(asdict(item))
+            workspace.register_artifact(
+                "reference",
+                source,
+                label=item.name,
+                metadata={"layer_id": item.layer_id, "layer_type": item.layer_type},
+            )
+        emit("workspace_reference_layers", reference_layers=imported, dashboard=research.dashboard())
         return [str(research.path)]
 
     if command == "workspace-collaborator-upsert":
