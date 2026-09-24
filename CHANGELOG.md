@@ -6,6 +6,13 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Added
 
+- persistent analyst-facing project memory layered on the existing portable workspace: nested subprojects, lifecycle-aware institution registries, arbitrary reference/map layers, saved listening posts, actual collection/search history, collaborator metadata, saved views, conversation reconstruction, and integrity-hashed project sharing;
+- project maps now retain closed institutions as historical entities and distinguish them with a closed-site marker while preserving opening/closure dates and source URLs; imported CSV/JSONL/JSON/GeoJSON/XLSX reference datasets can coexist as independently toggleable layers;
+- saved listening posts can combine terms, public handles, and linked institution identities, run through the normal provenance/coverage-preserving collectors, and emit a delta of newly observed record identities;
+- project conversation views preserve separate public handles/speakers and reply ancestry rather than flattening thread dialogue;
+- Windows adds a dedicated Projects workbench with recent-project switching, subprojects, institution/reference intake, drag-and-drop path inputs, listening posts, searchable history, conversation products, sharing, and embedded workflow help; macOS exposes the same core project-memory workflows inside Research Project;
+- `sugar-project` adds research-status, subproject/collaborator management, institution and layer import, listening-post management, history search, project mapping, conversation rendering, share/import, and end-user workflow help.
+
 - added a reusable `ingest`/Public URL workflow for collector surfaces that support known-item retrieval, with normalized CSV/XLSX/metadata outputs and the same workspace/provenance contract as search;
 - added fail-closed public WeChat Official Account article ingestion for `mp.weixin.qq.com` URLs, including stable article identity, account/publish metadata, source provenance, same-origin redirect validation, deterministic fixtures, and Windows/macOS Public URL UI;
 - WeChat capability metadata deliberately advertises known-item ingestion only; keyword discovery, private WeChat surfaces, automated login state, challenge solving, and access-control bypass remain unsupported;
