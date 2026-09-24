@@ -198,6 +198,43 @@ def primary_button(label: str, callback: Callable[[], None]) -> QPushButton:
     return button
 
 
+class DropFilesList(QListWidget):
+    files_dropped = Signal(list)
+
+    def __init__(self, extensions: tuple[str, ...]) -> None:
+        super().__init__()
+        self.extensions = {("." + value.lstrip(".")).casefold() for value in extensions}
+        self.setAcceptDrops(True)
+        self.setMinimumHeight(86)
+        self.setToolTip("Drop one or more reference datasets here.")
+
+    def dragEnterEvent(self, event) -> None:
+        urls = event.mimeData().urls() if event.mimeData().hasUrls() else []
+        if any(Path(url.toLocalFile()).suffix.casefold() in self.extensions for url in urls):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event) -> None:
+        self.dragEnterEvent(event)
+
+    def dropEvent(self, event) -> None:
+        paths = []
+        for url in event.mimeData().urls():
+            path = Path(url.toLocalFile())
+            if path.is_file() and path.suffix.casefold() in self.extensions:
+                value = str(path.resolve())
+                if value not in paths:
+                    paths.append(value)
+        if not paths:
+            event.ignore()
+            return
+        self.clear()
+        self.addItems(paths)
+        self.files_dropped.emit(paths)
+        event.acceptProposedAction()
+
+
 class SettingsPage(QWidget):
     diagnostics_requested = Signal()
     arc_test_requested = Signal()
@@ -913,8 +950,91 @@ class StatePage(QWidget):
         self.research_project_name = QLineEdit("State Research Project")
         project_grid = QGridLayout(); project_grid.addWidget(LabeledRow("Project folder", self.research_workspace),0,0,1,2); project_grid.addWidget(LabeledRow("Project name", self.research_project_name),1,0)
         project.layout.addLayout(project_grid)
-        project_actions = QHBoxLayout(); project_actions.addWidget(primary_button("Create / Open Project", self._research_workspace_open)); project_actions.addStretch(1); project.layout.addLayout(project_actions)
+        project_actions = QHBoxLayout(); project_actions.addWidget(primary_button("Create / Open Project", self._research_workspace_open)); project_actions.addWidget(QPushButton("Refresh Project", clicked=self._research_workspace_refresh)); project_actions.addStretch(1); project.layout.addLayout(project_actions)
+        recent_row = QHBoxLayout()
+        self.research_recent_projects = QComboBox()
+        self._load_recent_projects()
+        recent_row.addWidget(QLabel("Recent projects"))
+        recent_row.addWidget(self.research_recent_projects, 1)
+        recent_open = QPushButton("Switch Project")
+        recent_open.clicked.connect(self._research_open_recent)
+        recent_row.addWidget(recent_open)
+        project.layout.addLayout(recent_row)
         layout.addWidget(project)
+
+        workspace_tools = Card(
+            "Project workspace",
+            "Persistent research memory for subprojects, saved searches, listening posts, reference datasets, maps, and whole-project sharing.",
+        )
+        self.research_workspace_summary = QLabel("Open a project to load its research state.")
+        self.research_workspace_summary.setObjectName("muted")
+        self.research_workspace_summary.setWordWrap(True)
+        workspace_tools.layout.addWidget(self.research_workspace_summary)
+
+        sub_grid = QGridLayout()
+        self.research_subproject_name = QLineEdit()
+        self.research_subproject_name.setPlaceholderText("e.g. Confucius Institutes — Kyrgyzstan")
+        self.research_subproject_parent = QLineEdit()
+        self.research_subproject_parent.setPlaceholderText("Optional parent subproject ID")
+        self.research_subproject_tags = QLineEdit()
+        self.research_subproject_tags.setPlaceholderText("Optional tags, comma separated")
+        sub_grid.addWidget(LabeledRow("New subproject", self.research_subproject_name), 0, 0)
+        sub_grid.addWidget(LabeledRow("Parent", self.research_subproject_parent), 0, 1)
+        sub_grid.addWidget(LabeledRow("Tags", self.research_subproject_tags), 1, 0)
+        sub_add = primary_button("Add Subproject", self._research_subproject_add)
+        sub_grid.addWidget(sub_add, 1, 1)
+        workspace_tools.layout.addLayout(sub_grid)
+
+        listen_grid = QGridLayout()
+        self.research_listen_name = QLineEdit()
+        self.research_listen_name.setPlaceholderText("Listening post name")
+        self.research_listen_terms = QLineEdit()
+        self.research_listen_terms.setPlaceholderText("Queries / aliases, comma separated")
+        self.research_listen_sources = SourceSelector(SOURCES)
+        self.research_listen_sources.boxes["bilibili"].setChecked(True)
+        self.research_listen_cadence = EnumCombo((("Manual", "manual"), ("Daily", "daily"), ("Weekly", "weekly"), ("Monthly", "monthly")))
+        listen_grid.addWidget(LabeledRow("Listening post", self.research_listen_name), 0, 0)
+        listen_grid.addWidget(LabeledRow("Terms", self.research_listen_terms), 0, 1)
+        listen_grid.addWidget(LabeledRow("Sources", self.research_listen_sources), 1, 0)
+        listen_grid.addWidget(LabeledRow("Cadence", self.research_listen_cadence), 1, 1)
+        listen_add = primary_button("Save Listening Post", self._research_listening_add)
+        listen_grid.addWidget(listen_add, 2, 1)
+        workspace_tools.layout.addLayout(listen_grid)
+
+        self.research_reference_drop = DropFilesList(("csv", "xlsx", "xls", "json", "jsonl", "geojson"))
+        self.research_reference_drop.files_dropped.connect(self._research_reference_files_dropped)
+        workspace_tools.layout.addWidget(
+            LabeledRow(
+                "Reference layers",
+                self.research_reference_drop,
+                "Drop institution/site datasets here. Common name, latitude/longitude, and lifecycle-status fields are detected automatically. Closed institutions are retained historically.",
+            )
+        )
+        layer_actions = QHBoxLayout()
+        layer_actions.addWidget(QPushButton("Build Reference Map", clicked=self._research_reference_map))
+        layer_actions.addWidget(QPushButton("Export Shareable Project", clicked=self._research_share_export))
+        layer_actions.addStretch(1)
+        workspace_tools.layout.addLayout(layer_actions)
+
+        self.research_workspace_tabs = QTabWidget()
+        self.research_subprojects_table = QTableWidget(0, 4)
+        self.research_subprojects_table.setHorizontalHeaderLabels(["ID", "Name", "Status", "Parent"])
+        self.research_listening_table = QTableWidget(0, 5)
+        self.research_listening_table.setHorizontalHeaderLabels(["ID", "Name", "Sources", "Cadence", "Status"])
+        self.research_history_table = QTableWidget(0, 6)
+        self.research_history_table.setHorizontalHeaderLabels(["Time", "Terms", "Sources", "Results", "Status", "Subproject"])
+        self.research_layers_table = QTableWidget(0, 5)
+        self.research_layers_table.setHorizontalHeaderLabels(["ID", "Name", "Type", "Source", "Subproject"])
+        for table in (self.research_subprojects_table, self.research_listening_table, self.research_history_table, self.research_layers_table):
+            table.setEditTriggers(QTableWidget.NoEditTriggers)
+            table.setSelectionBehavior(QTableWidget.SelectRows)
+            table.setMinimumHeight(170)
+        self.research_workspace_tabs.addTab(self.research_subprojects_table, "Subprojects")
+        self.research_workspace_tabs.addTab(self.research_listening_table, "Listening Posts")
+        self.research_workspace_tabs.addTab(self.research_history_table, "Search History")
+        self.research_workspace_tabs.addTab(self.research_layers_table, "Reference Layers")
+        workspace_tools.layout.addWidget(self.research_workspace_tabs)
+        layout.addWidget(workspace_tools)
 
         question = Card("2. Research question", "Define what you are trying to answer before collecting. SUGAR turns this into a versioned requirement and an inspectable bounded search plan.")
         self.research_question = QTextEdit(); self.research_question.setPlaceholderText("Example: How are public-facing cultural and educational programs expanding across the target geography, and what evidence supports that assessment?"); self.research_question.setMaximumHeight(92)
