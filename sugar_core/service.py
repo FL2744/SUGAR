@@ -13,6 +13,7 @@ from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
 from .mapping import MapOptions, ReferenceLayer, create_map, load_map_frame
 from .observation_storage import load_observations, observations_to_frame, save_observations
 from .reporting import create_analysis_report
+from .research_workspace import record_workspace_search
 from .spatial import (
     SpatialOverlapConfig,
     analyze_spatial_overlap,
@@ -210,6 +211,7 @@ def run_search(
         str(coverage_path),
     ]
     register_workspace_outputs(workspace, outputs, operation="search", kind="raw_collection")
+    record_workspace_search(workspace, config, outputs, operation="search", result_count=len(records))
     _notify(progress, "saved", outputs=outputs)
     return outputs
 
