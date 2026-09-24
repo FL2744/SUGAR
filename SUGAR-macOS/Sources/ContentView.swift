@@ -78,6 +78,16 @@ struct ResearchProjectView: View {
     @State private var handoffName = "sugar-handoff"
     @State private var handoffOutput = ""
     @State private var verificationBundle = ""
+    @State private var subprojectName = ""
+    @State private var subprojectParent = ""
+    @State private var institutionFile = ""
+    @State private var referenceLayerFile = ""
+    @State private var referenceLayerName = ""
+    @State private var listeningName = ""
+    @State private var listeningTerms = ""
+    @State private var listeningID = ""
+    @State private var conversationFile = ""
+    @State private var historyFilter = ""
 
     var body: some View {
         Form {
@@ -495,6 +505,152 @@ struct ResearchProjectView: View {
                     }
                     .disabled(model.isRunning || verificationBundle.isEmpty)
                 }
+            }
+
+            Section("7. Project memory & subprojects") {
+                Text("Keep country, institution, or thematic tracks inside one portable project while retaining their own search and monitoring context.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    TextField("Subproject name", text: $subprojectName)
+                    TextField("Optional parent subproject ID", text: $subprojectParent)
+                    Button("Add") {
+                        model.run(command: "workspace-subproject-add", config: [
+                            "workspace": cleanWorkspace,
+                            "name": subprojectName.trimmingCharacters(in: .whitespacesAndNewlines),
+                            "parent_id": subprojectParent.trimmingCharacters(in: .whitespacesAndNewlines),
+                        ])
+                    }
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty || subprojectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                HStack {
+                    TextField("Search project history", text: $historyFilter)
+                    Button("Search History") {
+                        model.run(command: "workspace-history", config: [
+                            "workspace": cleanWorkspace,
+                            "query": historyFilter.trimmingCharacters(in: .whitespacesAndNewlines),
+                        ])
+                    }
+                    Button("Refresh Project Status") {
+                        model.run(command: "workspace-research-status", config: ["workspace": cleanWorkspace])
+                    }
+                }
+                .disabled(model.isRunning || cleanWorkspace.isEmpty)
+            }
+
+            Section("8. Institutions & map layers") {
+                Text("Institution lifecycle is preserved, including closed, renamed, and relocated sites. Closed institutions remain visible on project maps with a distinct ☠ marker.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    TextField("Institution dataset", text: $institutionFile)
+                    Button("Choose…") {
+                        if let url = chooseFile(["csv", "jsonl", "json", "geojson", "xlsx"]) {
+                            institutionFile = url.path
+                        }
+                    }
+                    Button("Import Institutions") {
+                        model.run(command: "workspace-institutions-import", config: [
+                            "workspace": cleanWorkspace,
+                            "input_file": institutionFile,
+                        ])
+                    }
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty || institutionFile.isEmpty)
+                }
+                HStack {
+                    TextField("Reference layer file", text: $referenceLayerFile)
+                    Button("Choose…") {
+                        if let url = chooseFile(["csv", "jsonl", "json", "geojson", "xlsx"]) {
+                            referenceLayerFile = url.path
+                        }
+                    }
+                }
+                HStack {
+                    TextField("Layer name", text: $referenceLayerName)
+                    Button("Add Layer") {
+                        model.run(command: "workspace-layer-add", config: [
+                            "workspace": cleanWorkspace,
+                            "input_file": referenceLayerFile,
+                            "name": referenceLayerName.trimmingCharacters(in: .whitespacesAndNewlines),
+                        ])
+                    }
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty || referenceLayerFile.isEmpty)
+                    Button("Build Project Map") {
+                        model.run(command: "workspace-map", config: ["workspace": cleanWorkspace])
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                }
+            }
+
+            Section("9. Listening post") {
+                Text("Saved monitoring definitions feed normal SUGAR collection back into the project and record what is new since the prior run.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("Listening-post name", text: $listeningName)
+                TextEditor(text: $listeningTerms)
+                    .frame(minHeight: 64)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5)
+                            .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                    )
+                Text("Enter one term or handle per line.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Save Listening Post") {
+                        model.run(command: "workspace-listening-add", config: [
+                            "workspace": cleanWorkspace,
+                            "name": listeningName.trimmingCharacters(in: .whitespacesAndNewlines),
+                            "query_terms": commaList(listeningTerms.replacingOccurrences(of: "\n", with: ",")),
+                            "sources": selectedSources.isEmpty ? ["bilibili"] : selectedSources,
+                            "cadence": "manual",
+                        ])
+                    }
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty || listeningName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    TextField("Listening-post ID", text: $listeningID)
+                    Button("Run") {
+                        model.run(command: "workspace-listening-run", config: [
+                            "workspace": cleanWorkspace,
+                            "listening_post_id": listeningID.trimmingCharacters(in: .whitespacesAndNewlines),
+                        ])
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty || listeningID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+
+            Section("10. Conversations & sharing") {
+                Text("Conversation view keeps handles/speakers separate and reconstructs reply ancestry when source data provides parent/thread links.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    TextField("SUGAR records dataset", text: $conversationFile)
+                    Button("Choose…") {
+                        if let url = chooseFile(["csv", "xlsx", "jsonl"]) { conversationFile = url.path }
+                    }
+                    Button("Build Conversation View") {
+                        model.run(command: "workspace-conversations", config: [
+                            "workspace": cleanWorkspace,
+                            "records": conversationFile,
+                        ])
+                    }
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty || conversationFile.isEmpty)
+                }
+                HStack {
+                    Button("Export Shared Project") {
+                        model.run(command: "workspace-share", config: ["workspace": cleanWorkspace])
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button("Workflow Help") {
+                        model.run(command: "workspace-help", config: [:])
+                    }
+                    Spacer()
+                }
+                .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                Text("Shared project bundles include project-local evidence, state, reference layers, and integrity hashes. Credentials, caches, and the rebuildable local index are excluded.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
