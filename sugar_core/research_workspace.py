@@ -1218,6 +1218,8 @@ def record_workspace_search(
             "until": config.get("until") or "",
             "max_posts_per_query": config.get("max_posts_per_query"),
             "max_pages_per_query": config.get("max_pages_per_query"),
+            "research_requirement_id": config.get("research_requirement_id") or "",
+            "plan_branch_ids": config.get("plan_branch_ids") or [],
         },
     )
 
