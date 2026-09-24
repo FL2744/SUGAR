@@ -465,6 +465,17 @@ class ResearchWorkspaceManager:
         )
         temporary.replace(self.state_path)
 
+    def _portable_file_value(self, value: str | Path) -> str:
+        path = Path(value).expanduser()
+        if not path.is_absolute():
+            return path.as_posix()
+        stored, external = self.workspace._portable_path(path.resolve())
+        return stored if not external else str(path.resolve())
+
+    def _resolve_file_value(self, value: str | Path) -> Path:
+        path = Path(value).expanduser()
+        return path.resolve() if path.is_absolute() else (self.workspace.root / path).resolve()
+
     def _append_history(self, event: str, **details: Any) -> dict[str, Any]:
         entry = {
             "history_id": f"history_{uuid.uuid4().hex[:16]}",
@@ -741,7 +752,7 @@ class ResearchWorkspaceManager:
             sources=[value.casefold() for value in _clean_list(sources)],
             filters=filters or {},
             result_count=result_count,
-            outputs=_clean_list(outputs),
+            outputs=[self._portable_file_value(value) for value in _clean_list(outputs)],
         )
         self._save()
         return entry
@@ -801,7 +812,7 @@ class ResearchWorkspaceManager:
         previous_keys: set[str] = set()
         previous_outputs = list(raw.get("last_outputs") or [])
         if previous_outputs:
-            previous_path = Path(previous_outputs[0]).expanduser()
+            previous_path = self._resolve_file_value(previous_outputs[0])
             if previous_path.is_file():
                 try:
                     previous_keys = {record.record_key for record in load_post_records(previous_path)}
@@ -834,7 +845,7 @@ class ResearchWorkspaceManager:
             "current_record_count": len(current_keys),
             "new_record_count": len(new_keys),
             "new_record_keys": new_keys,
-            "collection_outputs": outputs,
+            "collection_outputs": [self._portable_file_value(value) for value in outputs],
         }
         delta_path.write_text(json.dumps(delta_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         self.workspace.register_artifact(
@@ -847,15 +858,15 @@ class ResearchWorkspaceManager:
         raw["updated_at"] = raw["last_run_at"]
         raw["last_result_count"] = len(current_records)
         raw["last_new_count"] = len(new_keys)
-        raw["last_outputs"] = outputs
+        raw["last_outputs"] = [self._portable_file_value(value) for value in outputs]
         self._append_history(
             "listening_post_run",
             listening_post_id=listening_post_id,
             subproject_id=str(raw.get("subproject_id") or ""),
             result_count=len(current_records),
             new_record_count=len(new_keys),
-            outputs=outputs,
-            delta=str(delta_path),
+            outputs=[self._portable_file_value(value) for value in outputs],
+            delta=self._portable_file_value(delta_path),
         )
         self._save()
         return {
@@ -1018,7 +1029,7 @@ class ResearchWorkspaceManager:
         )
         self.workspace.register_artifact("map", target, label="Project reference map", metadata={"operation": "workspace-map"})
         self.workspace.register_artifact("map_metadata", metadata, label="Project map metadata", metadata={"operation": "workspace-map"})
-        self._append_history("project_map_created", output=str(target), subproject_id=_clean(subproject_id))
+        self._append_history("project_map_created", output=self._portable_file_value(target), subproject_id=_clean(subproject_id))
         self._save()
         return [str(target), str(metadata)]
 
@@ -1090,7 +1101,7 @@ a{color:#235fa8}
             records_file=str(Path(records_file).expanduser().resolve()),
             threads=len(threads),
             subproject_id=_clean(subproject_id),
-            output=str(html_path),
+            output=self._portable_file_value(html_path),
         )
         self._save()
         return [str(html_path), str(json_path)]
