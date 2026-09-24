@@ -78,6 +78,13 @@ struct ResearchProjectView: View {
     @State private var handoffName = "sugar-handoff"
     @State private var handoffOutput = ""
     @State private var verificationBundle = ""
+    @State private var subprojectName = ""
+    @State private var subprojectParent = ""
+    @State private var subprojectTags = ""
+    @State private var listeningName = ""
+    @State private var listeningTerms = ""
+    @State private var listeningCadence = "manual"
+    @State private var selectedListeningPostID = ""
 
     var body: some View {
         Form {
@@ -106,6 +113,112 @@ struct ResearchProjectView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(model.isRunning || cleanWorkspace.isEmpty)
                 }
+            }
+
+            Section("1b. Project memory & sharing") {
+                Text(model.researchWorkspaceSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Button("Refresh Project") {
+                        model.run(command: "workspace-research-status", config: ["workspace": cleanWorkspace])
+                    }
+                    Button("Reference Map") {
+                        model.run(command: "workspace-reference-map", config: ["workspace": cleanWorkspace])
+                    }
+                    Button("Conversation View") {
+                        model.run(command: "workspace-conversation-view", config: ["workspace": cleanWorkspace])
+                    }
+                    Spacer()
+                }
+                .disabled(model.isRunning || cleanWorkspace.isEmpty)
+
+                Divider()
+                TextField("New subproject", text: $subprojectName)
+                HStack {
+                    TextField("Optional parent subproject ID", text: $subprojectParent)
+                    TextField("Tags, comma separated", text: $subprojectTags)
+                    Button("Add Subproject") {
+                        model.run(command: "workspace-subproject-add", config: [
+                            "workspace": cleanWorkspace,
+                            "name": subprojectName.trimmingCharacters(in: .whitespacesAndNewlines),
+                            "parent_subproject_id": subprojectParent.trimmingCharacters(in: .whitespacesAndNewlines),
+                            "tags": commaList(subprojectTags),
+                        ])
+                    }
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty || subprojectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                Divider()
+                TextField("Listening post name", text: $listeningName)
+                HStack {
+                    TextField("Terms / aliases, comma separated", text: $listeningTerms)
+                    Picker("Cadence", selection: $listeningCadence) {
+                        Text("Manual").tag("manual")
+                        Text("Daily").tag("daily")
+                        Text("Weekly").tag("weekly")
+                        Text("Monthly").tag("monthly")
+                    }
+                    .pickerStyle(.menu)
+                    Button("Save Listening Post") {
+                        model.run(command: "workspace-listening-upsert", config: [
+                            "workspace": cleanWorkspace,
+                            "name": listeningName.trimmingCharacters(in: .whitespacesAndNewlines),
+                            "query_terms": commaList(listeningTerms),
+                            "sources": selectedSources,
+                            "cadence": listeningCadence,
+                        ])
+                    }
+                    .disabled(model.isRunning || cleanWorkspace.isEmpty || listeningName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || commaList(listeningTerms).isEmpty)
+                }
+                if !model.researchListeningPosts.isEmpty {
+                    HStack {
+                        Picker("Saved listening post", selection: $selectedListeningPostID) {
+                            Text("Choose…").tag("")
+                            ForEach(model.researchListeningPosts) { post in
+                                Text("(post.name) — (post.status)").tag(post.listeningPostID)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        Button("Run") {
+                            model.run(command: "workspace-listening-run", config: [
+                                "workspace": cleanWorkspace,
+                                "listening_post_id": selectedListeningPostID,
+                            ])
+                        }
+                        .disabled(model.isRunning || selectedListeningPostID.isEmpty)
+                    }
+                }
+
+                Divider()
+                HStack {
+                    Button("Add Reference Layers…") {
+                        let urls = chooseFiles(["csv", "xlsx", "xls", "json", "jsonl", "geojson"])
+                        guard !urls.isEmpty else { return }
+                        model.run(command: "workspace-layers-import", config: [
+                            "workspace": cleanWorkspace,
+                            "sources": urls.map(\.path),
+                            "layer_type": "institution",
+                        ])
+                    }
+                    Button("Export Shareable Project") {
+                        model.run(command: "workspace-share-export", config: ["workspace": cleanWorkspace])
+                    }
+                    Button("Import Shared Project…") {
+                        guard let share = chooseFile(["zip"]),
+                              let destination = chooseDirectory() else { return }
+                        model.run(command: "workspace-share-import", config: [
+                            "share_file": share.path,
+                            "destination": destination.path,
+                        ])
+                    }
+                    Spacer()
+                }
+                .disabled(model.isRunning || cleanWorkspace.isEmpty)
+                Text("Reference layers accept CSV, Excel, JSON, JSONL, and GeoJSON. Historical/closed institutions stay in the project and can render with a distinct closed-site symbol.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("2. Research question") {
@@ -1070,6 +1183,15 @@ private extension View {
     panel.canChooseDirectories = true
     panel.canChooseFiles = false
     return panel.runModal() == .OK ? panel.url : nil
+}
+
+@MainActor func chooseFiles(_ extensions: [String]) -> [URL] {
+    let panel = NSOpenPanel()
+    panel.allowedContentTypes = extensions.compactMap { UTType(filenameExtension: $0) }
+    panel.canChooseDirectories = false
+    panel.canChooseFiles = true
+    panel.allowsMultipleSelection = true
+    return panel.runModal() == .OK ? panel.urls : []
 }
 
 @MainActor func saveFile(_ extensionName: String) -> URL? {

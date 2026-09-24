@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDockWidget,
     QDoubleSpinBox,
+    QFileDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -196,6 +197,43 @@ def primary_button(label: str, callback: Callable[[], None]) -> QPushButton:
     button.setProperty("primary", True)
     button.clicked.connect(callback)
     return button
+
+
+class DropFilesList(QListWidget):
+    files_dropped = Signal(list)
+
+    def __init__(self, extensions: tuple[str, ...]) -> None:
+        super().__init__()
+        self.extensions = {("." + value.lstrip(".")).casefold() for value in extensions}
+        self.setAcceptDrops(True)
+        self.setMinimumHeight(86)
+        self.setToolTip("Drop one or more reference datasets here.")
+
+    def dragEnterEvent(self, event) -> None:
+        urls = event.mimeData().urls() if event.mimeData().hasUrls() else []
+        if any(Path(url.toLocalFile()).suffix.casefold() in self.extensions for url in urls):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event) -> None:
+        self.dragEnterEvent(event)
+
+    def dropEvent(self, event) -> None:
+        paths = []
+        for url in event.mimeData().urls():
+            path = Path(url.toLocalFile())
+            if path.is_file() and path.suffix.casefold() in self.extensions:
+                value = str(path.resolve())
+                if value not in paths:
+                    paths.append(value)
+        if not paths:
+            event.ignore()
+            return
+        self.clear()
+        self.addItems(paths)
+        self.files_dropped.emit(paths)
+        event.acceptProposedAction()
 
 
 class SettingsPage(QWidget):
@@ -913,8 +951,97 @@ class StatePage(QWidget):
         self.research_project_name = QLineEdit("State Research Project")
         project_grid = QGridLayout(); project_grid.addWidget(LabeledRow("Project folder", self.research_workspace),0,0,1,2); project_grid.addWidget(LabeledRow("Project name", self.research_project_name),1,0)
         project.layout.addLayout(project_grid)
-        project_actions = QHBoxLayout(); project_actions.addWidget(primary_button("Create / Open Project", self._research_workspace_open)); project_actions.addStretch(1); project.layout.addLayout(project_actions)
+        project_actions = QHBoxLayout(); project_actions.addWidget(primary_button("Create / Open Project", self._research_workspace_open)); project_actions.addWidget(QPushButton("Refresh Project", clicked=self._research_workspace_refresh)); project_actions.addStretch(1); project.layout.addLayout(project_actions)
+        recent_row = QHBoxLayout()
+        self.research_recent_projects = QComboBox()
+        self._load_recent_projects()
+        recent_row.addWidget(QLabel("Recent projects"))
+        recent_row.addWidget(self.research_recent_projects, 1)
+        recent_open = QPushButton("Switch Project")
+        recent_open.clicked.connect(self._research_open_recent)
+        recent_row.addWidget(recent_open)
+        project.layout.addLayout(recent_row)
         layout.addWidget(project)
+
+        workspace_tools = Card(
+            "Project workspace",
+            "Persistent research memory for subprojects, saved searches, listening posts, reference datasets, maps, and whole-project sharing.",
+        )
+        self.research_workspace_summary = QLabel("Open a project to load its research state.")
+        self.research_workspace_summary.setObjectName("muted")
+        self.research_workspace_summary.setWordWrap(True)
+        workspace_tools.layout.addWidget(self.research_workspace_summary)
+
+        sub_grid = QGridLayout()
+        self.research_subproject_name = QLineEdit()
+        self.research_subproject_name.setPlaceholderText("e.g. Regional institutions")
+        self.research_subproject_parent = QLineEdit()
+        self.research_subproject_parent.setPlaceholderText("Optional parent subproject ID")
+        self.research_subproject_tags = QLineEdit()
+        self.research_subproject_tags.setPlaceholderText("Optional tags, comma separated")
+        sub_grid.addWidget(LabeledRow("New subproject", self.research_subproject_name), 0, 0)
+        sub_grid.addWidget(LabeledRow("Parent", self.research_subproject_parent), 0, 1)
+        sub_grid.addWidget(LabeledRow("Tags", self.research_subproject_tags), 1, 0)
+        sub_add = primary_button("Add Subproject", self._research_subproject_add)
+        sub_grid.addWidget(sub_add, 1, 1)
+        workspace_tools.layout.addLayout(sub_grid)
+
+        listen_grid = QGridLayout()
+        self.research_listen_name = QLineEdit()
+        self.research_listen_name.setPlaceholderText("Listening post name")
+        self.research_listen_terms = QLineEdit()
+        self.research_listen_terms.setPlaceholderText("Queries / aliases, comma separated")
+        self.research_listen_sources = SourceSelector(SOURCES)
+        self.research_listen_sources.boxes["bilibili"].setChecked(True)
+        self.research_listen_cadence = EnumCombo((("Manual", "manual"), ("Daily", "daily"), ("Weekly", "weekly"), ("Monthly", "monthly")))
+        listen_grid.addWidget(LabeledRow("Listening post", self.research_listen_name), 0, 0)
+        listen_grid.addWidget(LabeledRow("Terms", self.research_listen_terms), 0, 1)
+        listen_grid.addWidget(LabeledRow("Sources", self.research_listen_sources), 1, 0)
+        listen_grid.addWidget(LabeledRow("Cadence", self.research_listen_cadence), 1, 1)
+        listen_add = primary_button("Save Listening Post", self._research_listening_add)
+        listen_grid.addWidget(listen_add, 2, 1)
+        workspace_tools.layout.addLayout(listen_grid)
+
+        self.research_reference_drop = DropFilesList(("csv", "xlsx", "xls", "json", "jsonl", "geojson"))
+        self.research_reference_drop.files_dropped.connect(self._research_reference_files_dropped)
+        workspace_tools.layout.addWidget(
+            LabeledRow(
+                "Reference layers",
+                self.research_reference_drop,
+                "Drop institution/site datasets here. Common name, latitude/longitude, and lifecycle-status fields are detected automatically. Closed institutions are retained historically.",
+            )
+        )
+        layer_actions = QHBoxLayout()
+        layer_actions.addWidget(QPushButton("Build Reference Map", clicked=self._research_reference_map))
+        layer_actions.addWidget(QPushButton("Export Shareable Project", clicked=self._research_share_export))
+        layer_actions.addWidget(QPushButton("Import Shared Project", clicked=self._research_share_import))
+        layer_actions.addStretch(1)
+        workspace_tools.layout.addLayout(layer_actions)
+
+        self.research_workspace_tabs = QTabWidget()
+        self.research_subprojects_table = QTableWidget(0, 4)
+        self.research_subprojects_table.setHorizontalHeaderLabels(["ID", "Name", "Status", "Parent"])
+        self.research_listening_table = QTableWidget(0, 5)
+        self.research_listening_table.setHorizontalHeaderLabels(["ID", "Name", "Sources", "Cadence", "Status"])
+        self.research_history_table = QTableWidget(0, 6)
+        self.research_history_table.setHorizontalHeaderLabels(["Time", "Terms", "Sources", "Results", "Status", "Subproject"])
+        self.research_layers_table = QTableWidget(0, 5)
+        self.research_layers_table.setHorizontalHeaderLabels(["ID", "Name", "Type", "Source", "Subproject"])
+        for table in (self.research_subprojects_table, self.research_listening_table, self.research_history_table, self.research_layers_table):
+            table.setEditTriggers(QTableWidget.NoEditTriggers)
+            table.setSelectionBehavior(QTableWidget.SelectRows)
+            table.setMinimumHeight(170)
+        self.research_workspace_tabs.addTab(self.research_subprojects_table, "Subprojects")
+        self.research_workspace_tabs.addTab(self.research_listening_table, "Listening Posts")
+        self.research_workspace_tabs.addTab(self.research_history_table, "Search History")
+        self.research_workspace_tabs.addTab(self.research_layers_table, "Reference Layers")
+        workspace_tools.layout.addWidget(self.research_workspace_tabs)
+        workspace_actions = QHBoxLayout()
+        workspace_actions.addWidget(QPushButton("Run Selected Listening Post", clicked=self._research_listening_run))
+        workspace_actions.addWidget(QPushButton("Build Conversation View", clicked=self._research_conversation_view))
+        workspace_actions.addStretch(1)
+        workspace_tools.layout.addLayout(workspace_actions)
+        layout.addWidget(workspace_tools)
 
         question = Card("2. Research question", "Define what you are trying to answer before collecting. SUGAR turns this into a versioned requirement and an inspectable bounded search plan.")
         self.research_question = QTextEdit(); self.research_question.setPlaceholderText("Example: How are public-facing cultural and educational programs expanding across the target geography, and what evidence supports that assessment?"); self.research_question.setMaximumHeight(92)
@@ -1063,6 +1190,246 @@ class StatePage(QWidget):
         layout.addWidget(finish); layout.addStretch(1)
         return page
 
+    def _load_recent_projects(self) -> None:
+        store = QSettings(APP_ORGANIZATION, APP_NAME)
+        raw = store.value("projects/recent", [])
+        if isinstance(raw, str):
+            values = [raw] if raw else []
+        else:
+            values = [str(value) for value in (raw or []) if str(value)]
+        self.research_recent_projects.clear()
+        self.research_recent_projects.addItems(values)
+
+    def _remember_recent_project(self, workspace: str) -> None:
+        workspace = str(Path(workspace).expanduser().resolve())
+        store = QSettings(APP_ORGANIZATION, APP_NAME)
+        raw = store.value("projects/recent", [])
+        current = [raw] if isinstance(raw, str) and raw else [str(value) for value in (raw or []) if str(value)]
+        values = [workspace, *[value for value in current if value != workspace]][:12]
+        store.setValue("projects/recent", values)
+        store.sync()
+        self._load_recent_projects()
+        index = self.research_recent_projects.findText(workspace)
+        if index >= 0:
+            self.research_recent_projects.setCurrentIndex(index)
+
+    def _research_open_recent(self) -> None:
+        workspace = self.research_recent_projects.currentText().strip()
+        if not workspace:
+            return
+        self.research_workspace.setText(workspace)
+        self._research_workspace_open()
+
+    def _research_workspace_refresh(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation("workspace-research-status", {"workspace": workspace}, False)
+
+    def _research_subproject_add(self) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace:
+            return
+        name = self.research_subproject_name.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Missing subproject", "Enter a subproject name.")
+            return
+        self.run_operation(
+            "workspace-subproject-add",
+            {
+                "workspace": workspace,
+                "name": name,
+                "parent_subproject_id": self.research_subproject_parent.text().strip(),
+                "tags": split_terms(self.research_subproject_tags.text()),
+            },
+            False,
+        )
+
+    def _research_listening_add(self) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace:
+            return
+        name = self.research_listen_name.text().strip()
+        terms = split_terms(self.research_listen_terms.text())
+        sources = self.research_listen_sources.selected()
+        if not name or not terms:
+            QMessageBox.warning(self, "Incomplete listening post", "Enter a listening-post name and at least one query term.")
+            return
+        self.run_operation(
+            "workspace-listening-upsert",
+            {
+                "workspace": workspace,
+                "name": name,
+                "query_terms": terms,
+                "sources": sources,
+                "cadence": self.research_listen_cadence.value(),
+            },
+            False,
+        )
+
+    def _selected_listening_post_id(self) -> str:
+        row = self.research_listening_table.currentRow()
+        if row < 0:
+            return ""
+        item = self.research_listening_table.item(row, 0)
+        return item.text().strip() if item is not None else ""
+
+    def _research_listening_run(self) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace:
+            return
+        listening_post_id = self._selected_listening_post_id()
+        if not listening_post_id:
+            QMessageBox.information(self, "Choose a listening post", "Select a listening-post row first.")
+            return
+        self.run_operation(
+            "workspace-listening-run",
+            {
+                "workspace": workspace,
+                "listening_post_id": listening_post_id,
+                "mastodon_url": self.settings.mastodon_url.text().strip() or "https://mastodon.social",
+            },
+            False,
+        )
+
+    def _research_conversation_view(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation("workspace-conversation-view", {"workspace": workspace}, False)
+
+    def _research_reference_files_dropped(self, paths: list[str]) -> None:
+        workspace = self._require_research_workspace()
+        if not workspace:
+            return
+        self.run_operation(
+            "workspace-layers-import",
+            {
+                "workspace": workspace,
+                "sources": paths,
+                "layer_type": "institution",
+            },
+            False,
+        )
+
+    def _research_reference_map(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation("workspace-reference-map", {"workspace": workspace}, False)
+
+    def _research_share_export(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace:
+            self.run_operation("workspace-share-export", {"workspace": workspace}, False)
+
+    def _research_share_import(self) -> None:
+        share_file, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import SUGAR project",
+            self.settings.default_output(),
+            "SUGAR project share (*.zip);;ZIP archives (*.zip)",
+        )
+        if not share_file:
+            return
+        destination = QFileDialog.getExistingDirectory(
+            self,
+            "Choose destination for imported project",
+            self.settings.default_output(),
+        )
+        if not destination:
+            return
+        self.run_operation(
+            "workspace-share-import",
+            {
+                "workspace": self._research_workspace_value() or destination,
+                "share_file": share_file,
+                "destination": destination,
+            },
+            False,
+        )
+
+    @staticmethod
+    def _populate_readonly_table(table: QTableWidget, rows: list[list[str]]) -> None:
+        table.setRowCount(0)
+        for values in rows:
+            row = table.rowCount()
+            table.insertRow(row)
+            for column, value in enumerate(values):
+                table.setItem(row, column, QTableWidgetItem(str(value)))
+
+    def _render_research_workspace(self, payload: dict[str, Any]) -> None:
+        dashboard = payload.get("dashboard") or payload.get("research") or {}
+        if isinstance(dashboard, dict):
+            self.research_workspace_summary.setText(
+                " · ".join(
+                    [
+                        f"{dashboard.get('subproject_count', 0)} subprojects",
+                        f"{dashboard.get('search_count', 0)} saved searches",
+                        f"{dashboard.get('active_listening_post_count', 0)} active listening posts",
+                        f"{dashboard.get('reference_layer_count', 0)} reference layers",
+                        f"{dashboard.get('collaborator_count', 0)} collaborators",
+                    ]
+                )
+            )
+        subprojects = payload.get("subprojects")
+        if isinstance(subprojects, list):
+            self._populate_readonly_table(
+                self.research_subprojects_table,
+                [
+                    [
+                        item.get("subproject_id", ""),
+                        item.get("name", ""),
+                        item.get("status", ""),
+                        item.get("parent_subproject_id", ""),
+                    ]
+                    for item in subprojects if isinstance(item, dict)
+                ],
+            )
+        listening = payload.get("listening_posts")
+        if isinstance(listening, list):
+            self._populate_readonly_table(
+                self.research_listening_table,
+                [
+                    [
+                        item.get("listening_post_id", ""),
+                        item.get("name", ""),
+                        ", ".join(item.get("sources") or []),
+                        item.get("cadence", ""),
+                        item.get("status", ""),
+                    ]
+                    for item in listening if isinstance(item, dict)
+                ],
+            )
+        history = payload.get("search_history")
+        if isinstance(history, list):
+            self._populate_readonly_table(
+                self.research_history_table,
+                [
+                    [
+                        item.get("started_at", ""),
+                        ", ".join(item.get("query_terms") or []),
+                        ", ".join(item.get("sources") or []),
+                        "" if item.get("result_count") is None else item.get("result_count"),
+                        item.get("status", ""),
+                        item.get("subproject_id", ""),
+                    ]
+                    for item in reversed(history) if isinstance(item, dict)
+                ],
+            )
+        layers = payload.get("reference_layers")
+        if isinstance(layers, list):
+            self._populate_readonly_table(
+                self.research_layers_table,
+                [
+                    [
+                        item.get("layer_id", ""),
+                        item.get("name", ""),
+                        item.get("layer_type", ""),
+                        item.get("source", ""),
+                        item.get("subproject_id", ""),
+                    ]
+                    for item in layers if isinstance(item, dict)
+                ],
+            )
+
     def _research_workspace_value(self) -> str:
         return self.research_workspace.text().strip()
 
@@ -1077,6 +1444,7 @@ class StatePage(QWidget):
         workspace = self._require_research_workspace()
         if not workspace: return
         manifest = Path(workspace).expanduser() / "sugar-project.json"
+        self._remember_recent_project(workspace)
         if manifest.is_file():
             self.run_operation("workspace-status",{"workspace":workspace},False)
         else:
@@ -1251,6 +1619,60 @@ class StatePage(QWidget):
 
     def handle_backend_event(self, payload: dict[str, Any]) -> None:
         event = payload.get("event")
+        if event == "workspace_status":
+            root = str(payload.get("root") or self._research_workspace_value())
+            if root:
+                self._remember_recent_project(root)
+            self._render_research_workspace(payload)
+            return
+        if event == "workspace_research":
+            self._render_research_workspace(payload)
+            return
+        if event == "workspace_subproject":
+            item = payload.get("subproject") or {}
+            if isinstance(item, dict):
+                rows = []
+                for row in range(self.research_subprojects_table.rowCount()):
+                    rows.append([
+                        self.research_subprojects_table.item(row, column).text()
+                        if self.research_subprojects_table.item(row, column) else ""
+                        for column in range(4)
+                    ])
+                rows.append([item.get("subproject_id",""), item.get("name",""), item.get("status",""), item.get("parent_subproject_id","")])
+                self._populate_readonly_table(self.research_subprojects_table, rows)
+            self._render_research_workspace(payload)
+            return
+        if event == "workspace_listening_post":
+            item = payload.get("listening_post") or {}
+            if isinstance(item, dict):
+                self._populate_readonly_table(
+                    self.research_listening_table,
+                    [[item.get("listening_post_id",""), item.get("name",""), ", ".join(item.get("sources") or []), item.get("cadence",""), item.get("status","")]]
+                )
+            self._render_research_workspace(payload)
+            return
+        if event == "workspace_listening_post_run":
+            item = payload.get("listening_post") or {}
+            if isinstance(item, dict):
+                self.research_workspace_summary.setText(
+                    f"Listening post {item.get('name','')} completed · last success {item.get('last_success_at','')}"
+                )
+            return
+        if event == "workspace_reference_layers":
+            items = payload.get("reference_layers") or []
+            if isinstance(items, list):
+                self._populate_readonly_table(
+                    self.research_layers_table,
+                    [[item.get("layer_id",""), item.get("name",""), item.get("layer_type",""), item.get("source",""), item.get("subproject_id","")] for item in items if isinstance(item, dict)]
+                )
+            self._render_research_workspace(payload)
+            return
+        if event == "workspace_share_imported":
+            imported = str(payload.get("workspace") or "")
+            if imported:
+                self.research_workspace.setText(imported)
+                self._remember_recent_project(imported)
+            return
         if event == "handoff-complete":
             outputs = payload.get("outputs") or []
             if outputs:

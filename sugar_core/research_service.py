@@ -13,6 +13,7 @@ from .observation_storage import load_observations, save_observations
 from .observations import observation_from_post
 from .plan_execution import execute_search_plan
 from .plan_feedback import apply_triage_feedback
+from .research_workspace import ResearchWorkspaceState, SearchHistoryEntry
 from .research_requirements import (
     ResearchRequirement,
     SearchPlan,
@@ -657,6 +658,7 @@ def collect_research_plan(
     if not sources:
         raise ValueError("Choose at least one collection source or set preferred sources in the research requirement.")
     _notify(progress, "plan-collection-started", branches=sum(branch.status in {"planned", "approved"} for branch in plan.branches), sources=sources)
+    collection_started_at = _utc_now()
     result = execute_search_plan(
         requirement,
         plan,
@@ -689,6 +691,35 @@ def collect_research_plan(
                 "coverage_status": result.coverage_status,
             },
         )
+        research_state = ResearchWorkspaceState.open(
+            workspace.root,
+            project_id=workspace.manifest.project_id,
+        )
+        executed_queries = []
+        for branch_id in result.executed_branch_ids:
+            try:
+                executed_queries.append(plan.branch(branch_id).query)
+            except (KeyError, ValueError):
+                continue
+        if executed_queries:
+            research_state.record_search(
+                SearchHistoryEntry(
+                    query_terms=executed_queries,
+                    sources=sources,
+                    subproject_id=str(config.get("subproject_id") or ""),
+                    research_question=requirement.question,
+                    started_at=collection_started_at,
+                    completed_at=_utc_now(),
+                    result_count=result.records,
+                    status=str(result.coverage_status or "complete"),
+                    collection_id=f"plan:{plan.requirement_id}",
+                    metadata={
+                        "requirement_id": requirement.requirement_id,
+                        "executed_branch_ids": list(result.executed_branch_ids),
+                        "plan_file": str(Path(saved_plan).resolve()),
+                    },
+                )
+            )
     outputs = [*result.outputs, str(Path(saved_plan).resolve())]
     _notify_plan_review(progress, plan, saved_plan)
     _notify(progress, "plan-collection-complete", records=result.records, coverage_status=result.coverage_status, outputs=outputs)

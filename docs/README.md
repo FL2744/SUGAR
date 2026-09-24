@@ -50,3 +50,5 @@ Use this index to find the current design or methodology document for the part o
 - [`../CHANGELOG.md`](../CHANGELOG.md) — release/integration history.
 
 When documentation and code disagree, treat that as a defect: behavior changes should update the relevant methodology/design document in the same pull request.
+
+- [Persistent research workspaces](persistent-research-workspace.md) — subprojects, saved search history, listening posts, reusable reference layers, conversation views, and whole-project sharing.

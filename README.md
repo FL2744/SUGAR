@@ -78,7 +78,9 @@ SUGAR never installs or upgrades packages at runtime.
 
 ## Project workspaces
 
-SUGAR 1.2 adds persistent project workspaces. A workspace keeps a portable `sugar-project.json` identity/layout manifest, a portable `sugar-artifacts.json` evidentiary catalog, a rebuildable local `.sugar/workspace.sqlite3` index, and standardized locations for raw collection, research observations, reference layers, State assessments, maps, reports, and intelligence outputs.
+SUGAR 1.2 adds persistent project workspaces. A workspace keeps a portable `sugar-project.json` identity/layout manifest, a portable `sugar-artifacts.json` evidentiary catalog, a portable `sugar-research.json` analyst-workflow state file, a rebuildable local `.sugar/workspace.sqlite3` index, and standardized locations for raw collection, research observations, reference layers, State assessments, maps, reports, and intelligence outputs.
+
+Projects can contain nested subprojects, saved search history, executable listening posts, reusable reference layers, collaboration metadata, and speaker-preserving conversation views. Whole projects can be exported as verified share ZIPs independently of evidence-focused handoff bundles. Windows supports multi-file drag-and-drop for reference datasets; macOS exposes the same project operations through the shared bridge.
 
 ```bash
 sugar-project init ./team4 \
@@ -94,7 +96,7 @@ Research files remain ordinary CSV/XLSX/JSONL/GeoJSON/HTML/Word/PDF files rather
 
 If a project is copied to another machine without `.sugar/workspace.sqlite3`, opening it rebuilds the local artifact index from `sugar-artifacts.json`; registered missing files remain visible as missing, and deliberately external references remain marked external.
 
-See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the workspace schema, layout, portability rules, Python API, and desktop bridge operations.
+See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the base workspace schema and [`docs/persistent-research-workspace.md`](docs/persistent-research-workspace.md) for subprojects, history, listening posts, reference layers, conversation views, and project sharing.
 
 ## Collection
 
@@ -208,6 +210,7 @@ For the State/Diplomacy Lab delivery target, the versioned product contract live
 
 - [`docs/architecture.md`](docs/architecture.md) — current system architecture and engineering rules
 - [`docs/project-workspaces.md`](docs/project-workspaces.md) — persistent project-workspace contract
+- [`docs/persistent-research-workspace.md`](docs/persistent-research-workspace.md) — subprojects, history, listening posts, reference layers, conversations, and project sharing
 - [`docs/collector-interface.md`](docs/collector-interface.md) — collector capabilities and normalization contract
 - [`docs/importer-interface.md`](docs/importer-interface.md) ? external-data normalization and provenance contract
 - [`docs/research-requirements.md`](docs/research-requirements.md) ? research requirements and bounded adaptive search planning

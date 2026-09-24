@@ -127,6 +127,8 @@ class SugarWorkspace:
         workspace._write_manifest(manifest)
         workspace._initialize_database()
         workspace._write_catalog()
+        from .research_workspace import ResearchWorkspaceState
+        ResearchWorkspaceState.create(target, project_id=manifest.project_id)
         return workspace
 
     @classmethod
@@ -173,6 +175,8 @@ class SugarWorkspace:
             workspace._restore_catalog()
         elif not workspace.catalog_path.is_file():
             workspace._write_catalog()
+        from .research_workspace import ResearchWorkspaceState
+        ResearchWorkspaceState.open(workspace.root, project_id=workspace.manifest.project_id)
         return workspace
 
     @classmethod
@@ -280,6 +284,8 @@ class SugarWorkspace:
             counts[artifact.kind] = counts.get(artifact.kind, 0) + 1
             missing += int(not artifact.exists)
             external += int(artifact.external)
+        from .research_workspace import ResearchWorkspaceState
+        research_state = ResearchWorkspaceState.open(self.root, project_id=self.manifest.project_id)
         return {
             "schema_version": self.manifest.schema_version,
             "database_schema_version": DATABASE_SCHEMA_VERSION,
@@ -297,6 +303,8 @@ class SugarWorkspace:
             "artifact_counts": dict(sorted(counts.items())),
             "missing_artifacts": missing,
             "external_artifacts": external,
+            "research_state": str(research_state.path),
+            "research": research_state.dashboard(),
         }
 
     def artifact_absolute_path(self, artifact: ArtifactRecord) -> Path:

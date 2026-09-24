@@ -7,6 +7,7 @@ import json
 import os
 import platform
 import sys
+from pathlib import Path
 from dataclasses import asdict
 from typing import Any
 
@@ -39,6 +40,17 @@ from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_in
 from sugar_core.weibo_qualification import run_weibo_qualification
 from sugar_core.weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
 from sugar_core.workspace import SugarWorkspace
+from sugar_core.conversation_view import save_conversation_view
+from sugar_core.reference_map import create_reference_workspace_map
+from sugar_core.workspace_share import export_project_share, import_project_share, verify_project_share
+from sugar_core.research_workspace import (
+    CollaborationMember,
+    ListeningPost,
+    ReferenceLayer,
+    ResearchWorkspaceState,
+    SearchHistoryEntry,
+    Subproject,
+)
 from sugar_core.workspace_runtime import (
     choose_output_directory,
     register_workspace_outputs,
@@ -47,7 +59,24 @@ from sugar_core.workspace_runtime import (
 
 BRIDGE_PROTOCOL_VERSION = 3
 _ACTIVE_SECRET_VALUES: set[str] = set()
-WORKSPACE_OPERATIONS = {"workspace-init", "workspace-status", "workspace-register"}
+WORKSPACE_OPERATIONS = {
+    "workspace-init",
+    "workspace-status",
+    "workspace-register",
+    "workspace-research-status",
+    "workspace-subproject-add",
+    "workspace-search-record",
+    "workspace-listening-upsert",
+    "workspace-listening-run",
+    "workspace-conversation-view",
+    "workspace-layer-upsert",
+    "workspace-layers-import",
+    "workspace-collaborator-upsert",
+    "workspace-reference-map",
+    "workspace-share-export",
+    "workspace-share-verify",
+    "workspace-share-import",
+}
 BASE_OPERATIONS = {
     "search",
     "ingest",
@@ -227,7 +256,12 @@ def _workspace_path(config: dict[str, Any]) -> str:
     return value
 
 
-def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
+def _run_workspace_operation(
+    command: str,
+    config: dict[str, Any],
+    secrets: dict[str, str] | None = None,
+) -> list[str]:
+    secrets = secrets or {}
     if command == "workspace-init":
         workspace = SugarWorkspace.create(
             _workspace_path(config),
@@ -238,10 +272,254 @@ def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
         emit("workspace_status", **workspace.status())
         return [str(workspace.manifest_path), str(workspace.database_path)]
 
+    if command == "workspace-share-verify":
+        share_file = str(config.get("share_file") or config.get("file") or "").strip()
+        if not share_file:
+            raise ValueError("share_file is required.")
+        result = verify_project_share(share_file)
+        emit("workspace_share_verification", **result)
+        if not result.get("valid"):
+            raise ValueError("Project share verification failed: " + "; ".join(result.get("errors") or []))
+        return [str(Path(share_file).expanduser().resolve())]
+
+    if command == "workspace-share-import":
+        share_file = str(config.get("share_file") or config.get("file") or "").strip()
+        destination = str(config.get("destination") or "").strip()
+        if not share_file or not destination:
+            raise ValueError("share_file and destination are required.")
+        imported = import_project_share(share_file, destination)
+        emit("workspace_share_imported", workspace=imported)
+        return [imported]
+
     workspace = SugarWorkspace.open(_workspace_path(config))
     if command == "workspace-status":
         emit("workspace_status", **workspace.status())
         return [str(workspace.manifest_path)]
+
+    research = ResearchWorkspaceState.open(workspace.root, project_id=workspace.manifest.project_id)
+    if command == "workspace-research-status":
+        emit(
+            "workspace_research",
+            dashboard=research.dashboard(),
+            subprojects=[asdict(item) for item in research.subprojects.values()],
+            search_history=[asdict(item) for item in research.search_history],
+            listening_posts=[asdict(item) for item in research.listening_posts.values()],
+            reference_layers=[asdict(item) for item in research.reference_layers.values()],
+            collaborators=[asdict(item) for item in research.collaborators.values()],
+        )
+        return [str(research.path)]
+
+    if command == "workspace-subproject-add":
+        item = research.add_subproject(Subproject(
+            name=str(config.get("name") or ""),
+            description=str(config.get("description") or ""),
+            parent_subproject_id=str(config.get("parent_subproject_id") or ""),
+            status=str(config.get("status") or "active"),
+            tags=list(config.get("tags") or []),
+        ))
+        emit("workspace_subproject", subproject=asdict(item), dashboard=research.dashboard())
+        return [str(research.path)]
+
+    if command == "workspace-search-record":
+        item = research.record_search(SearchHistoryEntry(
+            query_terms=list(config.get("query_terms") or []),
+            sources=list(config.get("sources") or []),
+            subproject_id=str(config.get("subproject_id") or ""),
+            research_question=str(config.get("research_question") or ""),
+            started_at=str(config.get("started_at") or ""),
+            completed_at=str(config.get("completed_at") or ""),
+            result_count=config.get("result_count"),
+            status=str(config.get("status") or "complete"),
+            collection_id=str(config.get("collection_id") or ""),
+            notes=str(config.get("notes") or ""),
+            metadata=dict(config.get("metadata") or {}),
+        ))
+        emit("workspace_search_history", entry=asdict(item), dashboard=research.dashboard())
+        return [str(research.path)]
+
+    if command == "workspace-listening-upsert":
+        item = research.upsert_listening_post(ListeningPost(
+            listening_post_id=str(config.get("listening_post_id") or ""),
+            name=str(config.get("name") or ""),
+            query_terms=list(config.get("query_terms") or []),
+            sources=list(config.get("sources") or []),
+            subproject_id=str(config.get("subproject_id") or ""),
+            entity_ids=list(config.get("entity_ids") or []),
+            status=str(config.get("status") or "active"),
+            cadence=str(config.get("cadence") or "manual"),
+            baseline_start=str(config.get("baseline_start") or ""),
+            metadata=dict(config.get("metadata") or {}),
+        ))
+        emit("workspace_listening_post", listening_post=asdict(item), dashboard=research.dashboard())
+        return [str(research.path)]
+
+    if command == "workspace-listening-run":
+        listening_post_id = str(config.get("listening_post_id") or "").strip()
+        if not listening_post_id:
+            raise ValueError("listening_post_id is required.")
+        try:
+            post = research.listening_posts[listening_post_id]
+        except KeyError as exc:
+            raise ValueError(f"Unknown listening post: {listening_post_id}") from exc
+        if post.status != "active":
+            raise ValueError("Only active listening posts can run.")
+        if not post.query_terms:
+            raise ValueError("This listening post has no query terms to execute.")
+        effective = {
+            "workspace": str(workspace.root),
+            "sources": post.sources,
+            "terms": post.query_terms,
+            "subproject_id": post.subproject_id,
+            "research_question": f"Listening post: {post.name}",
+            "max_posts_per_query": max(1, int(config.get("max_posts_per_query") or 20)),
+            "max_pages_per_query": max(1, int(config.get("max_pages_per_query") or 1)),
+            "continue_on_source_error": bool(config.get("continue_on_source_error", True)),
+            "translate_posts": bool(config.get("translate_posts", False)),
+            "infer_locations": bool(config.get("infer_locations", False)),
+            "mastodon_url": str(config.get("mastodon_url") or "https://mastodon.social"),
+        }
+        try:
+            outputs = run_search(effective, secrets, progress=progress_event)
+        except Exception:
+            latest_research = ResearchWorkspaceState.open(
+                workspace.root,
+                project_id=workspace.manifest.project_id,
+            )
+            latest_research.mark_listening_post_run(listening_post_id, success=False)
+            raise
+        latest_research = ResearchWorkspaceState.open(
+            workspace.root,
+            project_id=workspace.manifest.project_id,
+        )
+        updated = latest_research.mark_listening_post_run(listening_post_id, success=True)
+        emit("workspace_listening_post_run", listening_post=asdict(updated), outputs=outputs)
+        return outputs
+
+    if command == "workspace-conversation-view":
+        raw_source = str(config.get("source_file") or "").strip()
+        source: Path | None = Path(raw_source).expanduser().resolve() if raw_source else None
+        if source is None:
+            for kind in ("raw_collection", "evidence", "import"):
+                for artifact in workspace.list_artifacts(kind):
+                    candidate = workspace.artifact_absolute_path(artifact)
+                    if candidate.is_file() and candidate.suffix.casefold() in {".csv", ".xlsx", ".xls", ".json", ".jsonl"}:
+                        source = candidate
+                        break
+                if source is not None:
+                    break
+        if source is None or not source.is_file():
+            raise ValueError("No conversation-capable project dataset was found.")
+        raw_output = str(config.get("output_file") or "").strip()
+        target = Path(raw_output).expanduser().resolve() if raw_output else workspace.path_for("reports") / "conversation-view.html"
+        output = save_conversation_view(
+            source,
+            target,
+            title=str(config.get("title") or f"{workspace.manifest.name} — Conversations"),
+        )
+        metadata = str(Path(output).with_suffix(Path(output).suffix + ".metadata.json"))
+        workspace.register_artifact("conversation_view", output, metadata={"operation": command, "source_file": str(source)})
+        if Path(metadata).is_file():
+            workspace.register_artifact("conversation_metadata", metadata, metadata={"operation": command})
+        emit("workspace_conversation_view", output=output, source_file=str(source))
+        return [output, metadata]
+
+    if command == "workspace-layer-upsert":
+        item = research.upsert_reference_layer(ReferenceLayer(
+            layer_id=str(config.get("layer_id") or ""),
+            name=str(config.get("name") or ""),
+            source=str(config.get("source") or ""),
+            layer_type=str(config.get("layer_type") or "custom"),
+            subproject_id=str(config.get("subproject_id") or ""),
+            visible_by_default=bool(config.get("visible_by_default", True)),
+            style=dict(config.get("style") or {}),
+            field_mapping=dict(config.get("field_mapping") or {}),
+            metadata=dict(config.get("metadata") or {}),
+        ))
+        emit("workspace_reference_layer", reference_layer=asdict(item), dashboard=research.dashboard())
+        return [str(research.path)]
+
+    if command == "workspace-layers-import":
+        sources = [str(value).strip() for value in (config.get("sources") or []) if str(value).strip()]
+        if not sources:
+            raise ValueError("At least one reference-layer source is required.")
+        imported = []
+        for source_value in sources:
+            source = Path(source_value).expanduser().resolve()
+            if not source.is_file():
+                raise FileNotFoundError(source)
+            try:
+                stored_source = source.relative_to(workspace.root).as_posix()
+            except ValueError:
+                stored_source = str(source)
+            item = research.upsert_reference_layer(ReferenceLayer(
+                name=source.stem,
+                source=stored_source,
+                layer_type=str(config.get("layer_type") or "institution"),
+                subproject_id=str(config.get("subproject_id") or ""),
+                visible_by_default=bool(config.get("visible_by_default", True)),
+                style=dict(config.get("style") or {}),
+                field_mapping=dict(config.get("field_mapping") or {}),
+                metadata={"imported_via": "desktop_drop", **dict(config.get("metadata") or {})},
+            ))
+            imported.append(asdict(item))
+            workspace.register_artifact(
+                "reference",
+                source,
+                label=item.name,
+                metadata={"layer_id": item.layer_id, "layer_type": item.layer_type},
+            )
+        emit("workspace_reference_layers", reference_layers=imported, dashboard=research.dashboard())
+        return [str(research.path)]
+
+    if command == "workspace-collaborator-upsert":
+        item = research.upsert_collaborator(CollaborationMember(
+            member_id=str(config.get("member_id") or ""),
+            display_name=str(config.get("display_name") or ""),
+            role=str(config.get("role") or "analyst"),
+            contact=str(config.get("contact") or ""),
+            metadata=dict(config.get("metadata") or {}),
+        ))
+        emit("workspace_collaborator", collaborator=asdict(item), dashboard=research.dashboard())
+        return [str(research.path)]
+
+    if command == "workspace-reference-map":
+        selected_ids = {str(value) for value in (config.get("layer_ids") or []) if str(value)}
+        layers = []
+        for layer in research.reference_layers.values():
+            if selected_ids and layer.layer_id not in selected_ids:
+                continue
+            source = Path(layer.source).expanduser()
+            if not source.is_absolute():
+                source = workspace.root / source
+            layers.append((layer.name, source, layer.field_mapping))
+        if not layers:
+            raise ValueError("No reference layers are registered for this project.")
+        raw_output = str(config.get("output_file") or "").strip()
+        target = Path(raw_output).expanduser().resolve() if raw_output else workspace.path_for("maps") / "reference_workspace.html"
+        output = create_reference_workspace_map(
+            layers,
+            target,
+            title=str(config.get("title") or f"{workspace.manifest.name} — Reference Workspace"),
+            closed_symbol=str(config.get("closed_symbol") or "☠"),
+        )
+        metadata = str(Path(output).with_suffix(Path(output).suffix + ".metadata.json"))
+        workspace.register_artifact("map", output, metadata={"operation": command})
+        if Path(metadata).is_file():
+            workspace.register_artifact("map_metadata", metadata, metadata={"operation": command})
+        emit("workspace_reference_map", output=output, layers=len(layers))
+        return [output, metadata]
+
+    if command == "workspace-share-export":
+        raw_output = str(config.get("output_file") or "").strip()
+        target = Path(raw_output).expanduser().resolve() if raw_output else workspace.path_for("exports") / f"{workspace.root.name}.sugar-project.zip"
+        output = export_project_share(
+            workspace.root,
+            target,
+            include_external_artifacts=bool(config.get("include_external_artifacts", False)),
+        )
+        workspace.register_artifact("project_share", output, metadata={"operation": command})
+        emit("workspace_share", output=output)
+        return [output]
 
     artifact_path = str(config.get("artifact") or config.get("artifact_path") or "").strip()
     if not artifact_path:
@@ -294,7 +572,7 @@ def main(argv=None) -> int:
         if args.command == "llm-check":
             outputs = _run_llm_check(config, secrets)
         elif args.command in WORKSPACE_OPERATIONS:
-            outputs = _run_workspace_operation(args.command, config)
+            outputs = _run_workspace_operation(args.command, config, secrets)
         elif args.command == "search":
             outputs = run_search(config, secrets, progress=progress_event)
         elif args.command == "ingest":
