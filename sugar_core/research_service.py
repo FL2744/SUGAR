@@ -672,6 +672,7 @@ def collect_research_plan(
             "x_search_mode": str(config.get("x_search_mode") or "recent"),
             "mastodon_url": str(config.get("mastodon_url") or "https://mastodon.social"),
             "continue_on_source_error": bool(config.get("continue_on_source_error", True)),
+            "subproject_id": str(config.get("subproject_id") or ""),
         },
         secrets=secrets,
         progress=progress,
