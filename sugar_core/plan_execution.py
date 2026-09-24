@@ -58,6 +58,9 @@ def execute_search_plan(
         "continue_on_source_error": bool(config.get("continue_on_source_error", True)),
         "translate_posts": bool(config.get("translate_posts", False)),
         "infer_locations": bool(config.get("infer_locations", False)),
+        "subproject_id": str(config.get("subproject_id") or ""),
+        "research_requirement_id": requirement.requirement_id,
+        "plan_branch_ids": [branch.branch_id for branch in branches],
     })
     outputs = run_search(effective, secrets or {}, progress=progress)
     csv_path = next((Path(path) for path in outputs if Path(path).suffix.casefold() == ".csv"), None)
