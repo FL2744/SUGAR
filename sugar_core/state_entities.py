@@ -21,6 +21,7 @@ ENTITY_TYPES = {
 }
 
 WATCH_PRIORITIES = {"low", "normal", "high", "urgent"}
+ENTITY_LIFECYCLE_STATUSES = {"active", "closed", "renamed", "relocated", "planned", "unknown"}
 
 
 def _clean(value: Any) -> str:
@@ -60,6 +61,13 @@ class MonitoredEntity:
     query_terms: list[str] = field(default_factory=list)
     priority: str = "normal"
     active: bool = True
+    lifecycle_status: str = "active"
+    opened_at: str = ""
+    closed_at: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
+    handles: list[str] = field(default_factory=list)
+    source_refs: list[str] = field(default_factory=list)
     notes: str = ""
 
     def __post_init__(self) -> None:
@@ -81,6 +89,26 @@ class MonitoredEntity:
         self.priority = _clean(self.priority).casefold() or "normal"
         if self.priority not in WATCH_PRIORITIES:
             raise ValueError(f"Unsupported entity priority: {self.priority}")
+        self.lifecycle_status = _clean(self.lifecycle_status).casefold() or ("active" if self.active else "closed")
+        if self.lifecycle_status not in ENTITY_LIFECYCLE_STATUSES:
+            raise ValueError(f"Unsupported entity lifecycle status: {self.lifecycle_status}")
+        self.active = bool(self.active) and self.lifecycle_status not in {"closed"}
+        self.opened_at = _clean(self.opened_at)
+        self.closed_at = _clean(self.closed_at)
+        if self.latitude not in (None, ""):
+            self.latitude = float(self.latitude)
+            if not -90 <= self.latitude <= 90:
+                raise ValueError("Entity latitude must be between -90 and 90.")
+        else:
+            self.latitude = None
+        if self.longitude not in (None, ""):
+            self.longitude = float(self.longitude)
+            if not -180 <= self.longitude <= 180:
+                raise ValueError("Entity longitude must be between -180 and 180.")
+        else:
+            self.longitude = None
+        self.handles = _clean_list(self.handles)
+        self.source_refs = _clean_list(self.source_refs)
         self.notes = _clean(self.notes)
         self.entity_id = _clean(self.entity_id) or _entity_id(self.entity_type, self.canonical_name, self.country)
 
@@ -196,6 +224,13 @@ def load_entity_registry(path: str | Path) -> EntityRegistry:
                 query_terms=_list_cell(row.get("query_terms")),
                 priority=_clean(row.get("priority")) or "normal",
                 active=_clean(row.get("active")).casefold() not in {"false", "0", "no", "inactive"},
+                lifecycle_status=_clean(row.get("lifecycle_status")) or ("active" if _clean(row.get("active")).casefold() not in {"false", "0", "no", "inactive"} else "closed"),
+                opened_at=_clean(row.get("opened_at")),
+                closed_at=_clean(row.get("closed_at")),
+                latitude=row.get("latitude") if _clean(row.get("latitude")) else None,
+                longitude=row.get("longitude") if _clean(row.get("longitude")) else None,
+                handles=_list_cell(row.get("handles")),
+                source_refs=_list_cell(row.get("source_refs")),
                 notes=_clean(row.get("notes")),
             )
         )
@@ -214,14 +249,15 @@ def save_entity_registry(registry: EntityRegistry, path: str | Path) -> str:
         target = target.with_suffix(".csv")
     fields = [
         "entity_id", "canonical_name", "entity_type", "aliases", "native_names", "country", "city",
-        "parent_entity_id", "official_urls", "social_urls", "languages", "query_terms", "priority", "active", "notes",
+        "parent_entity_id", "official_urls", "social_urls", "languages", "query_terms", "priority", "active",
+        "lifecycle_status", "opened_at", "closed_at", "latitude", "longitude", "handles", "source_refs", "notes",
     ]
     with target.open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
         for entity in registry.entities.values():
             raw = asdict(entity)
-            for key in ("aliases", "native_names", "official_urls", "social_urls", "languages", "query_terms"):
+            for key in ("aliases", "native_names", "official_urls", "social_urls", "languages", "query_terms", "handles", "source_refs"):
                 raw[key] = "; ".join(raw[key])
             writer.writerow(raw)
     return str(target.resolve())
@@ -241,7 +277,12 @@ def write_entity_template(path: str | Path) -> str:
                 languages=["English", "Spanish", "Local language"],
                 query_terms=["Example program name"],
                 priority="high",
-                notes="Replace this row with verified entities and aliases; aliases are discovery aids, not proof of sponsor support.",
+                lifecycle_status="active",
+                latitude=38.8951,
+                longitude=-77.0364,
+                handles=["@example"],
+                source_refs=["https://example.org/source"],
+                notes="Replace this row with verified entities and aliases; preserve closed/renamed institutions with lifecycle dates rather than deleting them.",
             )
         ]
     )
