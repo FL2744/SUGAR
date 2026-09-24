@@ -974,7 +974,7 @@ class StatePage(QWidget):
 
         sub_grid = QGridLayout()
         self.research_subproject_name = QLineEdit()
-        self.research_subproject_name.setPlaceholderText("e.g. Confucius Institutes — Kyrgyzstan")
+        self.research_subproject_name.setPlaceholderText("e.g. Regional institutions")
         self.research_subproject_parent = QLineEdit()
         self.research_subproject_parent.setPlaceholderText("Optional parent subproject ID")
         self.research_subproject_tags = QLineEdit()
