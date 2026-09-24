@@ -38,6 +38,20 @@ from .observations import (
     observation_from_post,
     observations_from_posts,
 )
+from .research_workspace import (
+    Collaborator,
+    InstitutionRecord,
+    ListeningPost,
+    ReferenceLayer as WorkspaceReferenceLayer,
+    ResearchWorkspaceManager,
+    SavedView,
+    Subproject,
+    build_conversation_threads,
+    import_project_bundle,
+    inspect_reference_file,
+    record_workspace_search,
+    user_support_payload,
+)
 from .requirement_compiler import (
     RESEARCH_STRATEGY_SCHEMA_VERSION,
     RESEARCH_STRATEGY_WORKFLOW,
@@ -196,6 +210,18 @@ __all__ = [
     "ArtifactRecord",
     "SugarWorkspace",
     "open_workspace",
+    "ResearchWorkspaceManager",
+    "Subproject",
+    "InstitutionRecord",
+    "WorkspaceReferenceLayer",
+    "ListeningPost",
+    "Collaborator",
+    "SavedView",
+    "inspect_reference_file",
+    "build_conversation_threads",
+    "record_workspace_search",
+    "import_project_bundle",
+    "user_support_payload",
 ]
 
 __version__ = "1.2.6"
