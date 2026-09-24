@@ -464,12 +464,6 @@ class ResearchWorkspaceManager:
             encoding="utf-8",
         )
         temporary.replace(self.state_path)
-        self.workspace.register_artifact(
-            "research_workspace",
-            self.state_path,
-            label="Research workspace state",
-            metadata={"schema_version": RESEARCH_WORKSPACE_SCHEMA_VERSION},
-        )
 
     def _append_history(self, event: str, **details: Any) -> dict[str, Any]:
         entry = {
