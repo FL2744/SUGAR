@@ -39,6 +39,7 @@ from sugar_core.weibo_investigation import investigate_weibo_seed, save_weibo_in
 from sugar_core.weibo_qualification import run_weibo_qualification
 from sugar_core.weibo_seed_harvest import SeedHarvestConfig, run_weibo_seed_harvest
 from sugar_core.workspace import SugarWorkspace
+from sugar_core.conversation_view import save_conversation_view
 from sugar_core.reference_map import create_reference_workspace_map
 from sugar_core.workspace_share import export_project_share, import_project_share, verify_project_share
 from sugar_core.research_workspace import (
@@ -65,6 +66,8 @@ WORKSPACE_OPERATIONS = {
     "workspace-subproject-add",
     "workspace-search-record",
     "workspace-listening-upsert",
+    "workspace-listening-run",
+    "workspace-conversation-view",
     "workspace-layer-upsert",
     "workspace-layers-import",
     "workspace-collaborator-upsert",
@@ -252,7 +255,12 @@ def _workspace_path(config: dict[str, Any]) -> str:
     return value
 
 
-def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
+def _run_workspace_operation(
+    command: str,
+    config: dict[str, Any],
+    secrets: dict[str, str] | None = None,
+) -> list[str]:
+    secrets = secrets or {}
     if command == "workspace-init":
         workspace = SugarWorkspace.create(
             _workspace_path(config),
@@ -343,6 +351,68 @@ def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
         ))
         emit("workspace_listening_post", listening_post=asdict(item), dashboard=research.dashboard())
         return [str(research.path)]
+
+    if command == "workspace-listening-run":
+        listening_post_id = str(config.get("listening_post_id") or "").strip()
+        if not listening_post_id:
+            raise ValueError("listening_post_id is required.")
+        try:
+            post = research.listening_posts[listening_post_id]
+        except KeyError as exc:
+            raise ValueError(f"Unknown listening post: {listening_post_id}") from exc
+        if post.status != "active":
+            raise ValueError("Only active listening posts can run.")
+        if not post.query_terms:
+            raise ValueError("This listening post has no query terms to execute.")
+        effective = {
+            "workspace": str(workspace.root),
+            "sources": post.sources,
+            "terms": post.query_terms,
+            "subproject_id": post.subproject_id,
+            "research_question": f"Listening post: {post.name}",
+            "max_posts_per_query": max(1, int(config.get("max_posts_per_query") or 20)),
+            "max_pages_per_query": max(1, int(config.get("max_pages_per_query") or 1)),
+            "continue_on_source_error": bool(config.get("continue_on_source_error", True)),
+            "translate_posts": bool(config.get("translate_posts", False)),
+            "infer_locations": bool(config.get("infer_locations", False)),
+            "mastodon_url": str(config.get("mastodon_url") or "https://mastodon.social"),
+        }
+        try:
+            outputs = run_search(effective, secrets, progress=progress_event)
+        except Exception:
+            research.mark_listening_post_run(listening_post_id, success=False)
+            raise
+        updated = research.mark_listening_post_run(listening_post_id, success=True)
+        emit("workspace_listening_post_run", listening_post=asdict(updated), outputs=outputs)
+        return outputs
+
+    if command == "workspace-conversation-view":
+        raw_source = str(config.get("source_file") or "").strip()
+        source: Path | None = Path(raw_source).expanduser().resolve() if raw_source else None
+        if source is None:
+            for kind in ("raw_collection", "evidence", "import"):
+                for artifact in workspace.list_artifacts(kind):
+                    candidate = workspace.artifact_absolute_path(artifact)
+                    if candidate.is_file() and candidate.suffix.casefold() in {".csv", ".xlsx", ".xls", ".json", ".jsonl"}:
+                        source = candidate
+                        break
+                if source is not None:
+                    break
+        if source is None or not source.is_file():
+            raise ValueError("No conversation-capable project dataset was found.")
+        raw_output = str(config.get("output_file") or "").strip()
+        target = Path(raw_output).expanduser().resolve() if raw_output else workspace.path_for("reports") / "conversation-view.html"
+        output = save_conversation_view(
+            source,
+            target,
+            title=str(config.get("title") or f"{workspace.manifest.name} — Conversations"),
+        )
+        metadata = str(Path(output).with_suffix(Path(output).suffix + ".metadata.json"))
+        workspace.register_artifact("conversation_view", output, metadata={"operation": command, "source_file": str(source)})
+        if Path(metadata).is_file():
+            workspace.register_artifact("conversation_metadata", metadata, metadata={"operation": command})
+        emit("workspace_conversation_view", output=output, source_file=str(source))
+        return [output, metadata]
 
     if command == "workspace-layer-upsert":
         item = research.upsert_reference_layer(ReferenceLayer(
@@ -493,7 +563,7 @@ def main(argv=None) -> int:
         if args.command == "llm-check":
             outputs = _run_llm_check(config, secrets)
         elif args.command in WORKSPACE_OPERATIONS:
-            outputs = _run_workspace_operation(args.command, config)
+            outputs = _run_workspace_operation(args.command, config, secrets)
         elif args.command == "search":
             outputs = run_search(config, secrets, progress=progress_event)
         elif args.command == "ingest":
