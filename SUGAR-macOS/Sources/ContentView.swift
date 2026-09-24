@@ -88,6 +88,8 @@ struct ResearchProjectView: View {
     @State private var listeningID = ""
     @State private var conversationFile = ""
     @State private var historyFilter = ""
+    @State private var sharedProjectBundle = ""
+    @State private var sharedProjectDestination = ""
 
     var body: some View {
         Form {
@@ -651,6 +653,30 @@ struct ResearchProjectView: View {
                 Text("Shared project bundles include project-local evidence, state, reference layers, and integrity hashes. Credentials, caches, and the rebuildable local index are excluded.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Divider()
+                HStack {
+                    TextField("Shared .sugarproject.zip", text: $sharedProjectBundle)
+                    Button("Choose…") {
+                        if let url = chooseFile(["zip"]) { sharedProjectBundle = url.path }
+                    }
+                }
+                HStack {
+                    TextField("Import destination", text: $sharedProjectDestination)
+                    Button("Choose…") {
+                        if let url = chooseDirectory() { sharedProjectDestination = url.path }
+                    }
+                    Button("Import & Verify") {
+                        model.run(command: "workspace-share-import", config: [
+                            "bundle": sharedProjectBundle,
+                            "destination": sharedProjectDestination,
+                        ])
+                    }
+                    .disabled(
+                        model.isRunning
+                        || sharedProjectBundle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || sharedProjectDestination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
+                }
             }
         }
         .formStyle(.grouped)
