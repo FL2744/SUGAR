@@ -23,11 +23,11 @@ def test_research_workspace_state_round_trip(tmp_path: Path) -> None:
 
     parent = state.add_subproject(Subproject(name="Institutions", tags=["reference"]))
     child = state.add_subproject(
-        Subproject(name="Kyrgyzstan", parent_subproject_id=parent.subproject_id)
+        Subproject(name="Example Region", parent_subproject_id=parent.subproject_id)
     )
     state.record_search(
         SearchHistoryEntry(
-            query_terms=["Confucius Institute", "孔子学院"],
+            query_terms=["Cultural Institute", "Local-language institute alias"],
             sources=["bilibili", "weibo"],
             subproject_id=child.subproject_id,
             research_question="Where are relevant institutions active?",
@@ -37,7 +37,7 @@ def test_research_workspace_state_round_trip(tmp_path: Path) -> None:
     post = state.upsert_listening_post(
         ListeningPost(
             name="CI watch",
-            query_terms=["Confucius Institute"],
+            query_terms=["Cultural Institute"],
             sources=["weibo"],
             subproject_id=child.subproject_id,
             cadence="weekly",
