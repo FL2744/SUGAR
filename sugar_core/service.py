@@ -13,6 +13,7 @@ from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
 from .mapping import MapOptions, ReferenceLayer, create_map, load_map_frame
 from .observation_storage import load_observations, observations_to_frame, save_observations
 from .reporting import create_analysis_report
+from .research_workspace import ResearchWorkspaceState, SearchHistoryEntry
 from .spatial import (
     SpatialOverlapConfig,
     analyze_spatial_overlap,
@@ -210,6 +211,32 @@ def run_search(
         str(coverage_path),
     ]
     register_workspace_outputs(workspace, outputs, operation="search", kind="raw_collection")
+    if workspace is not None:
+        research_state = ResearchWorkspaceState.open(
+            workspace.root,
+            project_id=workspace.manifest.project_id,
+        )
+        research_state.record_search(
+            SearchHistoryEntry(
+                query_terms=terms,
+                sources=sources,
+                subproject_id=str(config.get("subproject_id") or ""),
+                research_question=str(config.get("research_question") or ""),
+                started_at=min(
+                    (entry.started_at for entry in coverage if entry.started_at),
+                    default=utc_iso(),
+                ),
+                completed_at=utc_iso(),
+                result_count=len(records),
+                status="partial" if any(entry.status in {"partial", "unavailable", "failure"} for entry in coverage) else "complete",
+                collection_id=csv_path.stem,
+                metadata={
+                    "since": config.get("since") or None,
+                    "until": config.get("until") or None,
+                    "coverage_file": str(coverage_path),
+                },
+            )
+        )
     _notify(progress, "saved", outputs=outputs)
     return outputs
 
