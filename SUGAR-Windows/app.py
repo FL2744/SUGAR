@@ -1037,10 +1037,10 @@ class StatePage(QWidget):
         self.research_import_system = QLineEdit("external")
         self.research_posts = NumberField(1,1000,20); self.research_pages = NumberField(1,100,1)
         egrid=QGridLayout(); egrid.addWidget(LabeledRow("Existing CSV / JSONL",self.research_import_file,"Optional. Import lets SUGAR start from data collected in another authorized system without recollecting it."),0,0,1,2); egrid.addWidget(LabeledRow("Source system",self.research_import_system),1,0); egrid.addWidget(LabeledRow("Posts per query",self.research_posts),1,1); egrid.addWidget(LabeledRow("Pages per query",self.research_pages),2,1); evidence.layout.addLayout(egrid)
-        eactions=QHBoxLayout(); eactions.addWidget(primary_button("Run Search Plan",self._research_collect)); eactions.addWidget(QPushButton("Import Existing Dataset",clicked=self._research_import)); eactions.addWidget(QPushButton("Triage into ResearchObservations",clicked=self._research_triage)); eactions.addStretch(1); evidence.layout.addLayout(eactions)
+        eactions=QHBoxLayout(); eactions.addWidget(primary_button("Run Search Plan",self._research_collect)); eactions.addWidget(QPushButton("Import Existing Dataset",clicked=self._research_import)); eactions.addWidget(QPushButton("Prepare Manual Review (no AI key)",clicked=self._research_prepare_review)); eactions.addWidget(QPushButton("AI Triage",clicked=self._research_triage)); eactions.addStretch(1); evidence.layout.addLayout(eactions)
         layout.addWidget(evidence)
 
-        finish = Card("4. Human review and handoff", "AI triage and State assessments remain suggestions until a named analyst reviews the underlying observation and any analytic claims. The review workbook applies those decisions through SUGAR's verification gates before handoff.")
+        finish = Card("4. Human review and handoff", "Prepare Manual Review creates unreviewed source-grounded observations and blank assessments without an AI key. Review the underlying evidence and record analyst decisions in the exported workbook before handoff.")
         review_actions=QHBoxLayout()
         review_actions.addWidget(QPushButton("Prepare State Assessment Suggestions",clicked=self._research_state_triage))
         review_actions.addWidget(QPushButton("Export Human Review Workbook",clicked=self._research_review_export))
@@ -1057,6 +1057,9 @@ class StatePage(QWidget):
         finish.layout.addWidget(LabeledRow("Handoff name",self.research_handoff_name))
         finish.layout.addWidget(LabeledRow("Handoff parent folder",self.research_handoff_output))
         factions=QHBoxLayout(); factions.addWidget(QPushButton("Apply Evidence Feedback to Plan",clicked=self._research_feedback)); factions.addWidget(primary_button("Export Verified Handoff",self._research_handoff)); factions.addStretch(1); finish.layout.addLayout(factions)
+        self.research_handoff_bundle = PathField(mode="directory", placeholder="Exported handoff folder")
+        finish.layout.addWidget(LabeledRow("Handoff folder to verify", self.research_handoff_bundle))
+        finish.layout.addWidget(QPushButton("Verify Handoff", clicked=self._research_handoff_verify))
         layout.addWidget(finish); layout.addStretch(1)
         return page
 
@@ -1085,6 +1088,10 @@ class StatePage(QWidget):
         question = self.research_question.toPlainText().strip()
         if not question:
             QMessageBox.warning(self,"Missing question","Write the research question before creating the requirement.")
+            return
+        issue = date_range_error(self.research_since.text().strip(), self.research_until.text().strip())
+        if issue:
+            QMessageBox.warning(self, "Invalid date range", issue)
             return
         self.run_operation("research-requirement",{
             "workspace":workspace,"question":question,"geographies":self.research_geographies.text(),"known_entities":self.research_entities.text(),
@@ -1244,6 +1251,11 @@ class StatePage(QWidget):
 
     def handle_backend_event(self, payload: dict[str, Any]) -> None:
         event = payload.get("event")
+        if event == "handoff-complete":
+            outputs = payload.get("outputs") or []
+            if outputs:
+                self.research_handoff_bundle.setText(str(outputs[0]))
+            return
         if event == "strategy-review":
             self.research_strategy_task.setText(str(payload.get("analytic_task") or ""))
             concepts = payload.get("concepts") or []
@@ -1366,6 +1378,10 @@ class StatePage(QWidget):
         workspace = self._require_research_workspace()
         if workspace: self.run_operation("research-triage",{"workspace":workspace,"llm":self.settings.llm_config()},True)
 
+    def _research_prepare_review(self) -> None:
+        workspace = self._require_research_workspace()
+        if workspace: self.run_operation("research-prepare-review", {"workspace":workspace}, False)
+
     def _research_feedback(self) -> None:
         workspace = self._require_research_workspace()
         if workspace: self.run_operation("research-feedback",{"workspace":workspace},False)
@@ -1399,6 +1415,13 @@ class StatePage(QWidget):
         config={"workspace":workspace,"name":self.research_handoff_name.text().strip() or "sugar-handoff","create_zip":True}
         if self.research_handoff_output.text(): config["output_directory"]=self.research_handoff_output.text()
         self.run_operation("research-handoff",config,False)
+
+    def _research_handoff_verify(self) -> None:
+        bundle = self.research_handoff_bundle.text()
+        if not bundle:
+            QMessageBox.warning(self, "Missing handoff", "Choose an exported handoff folder to verify.")
+            return
+        self.run_operation("research-handoff-verify", {"bundle_directory":bundle}, False)
 
     def _package_tab(self) -> QWidget:
         page = QWidget(); layout = QVBoxLayout(page); layout.setContentsMargins(16,16,16,16)

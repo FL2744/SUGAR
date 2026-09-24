@@ -61,6 +61,7 @@ def test_bridge_advertises_typed_desktop_operations():
         "research-plan-review",
         "research-plan-update",
         "research-import",
+        "research-prepare-review",
         "research-collect",
         "research-triage",
         "research-feedback",

@@ -152,6 +152,13 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: .\SUGAR-Windows\dist\SUGAR\SUGAR.exe --smoke-test
+      - name: Packaged first-run research workflow
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $env:SUGAR_E2E_BRIDGE = (Resolve-Path .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe).Path
+          python -m pytest -q tests/test_first_run_desktop.py --basetemp $env:RUNNER_TEMP\sugar-first-run-tests
       - name: Packaged analysis smoke test
         shell: pwsh
         run: |

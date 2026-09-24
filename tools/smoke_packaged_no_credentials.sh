@@ -32,6 +32,12 @@ partner,1,https://example.invalid/1,Example public program record,Research use o
 CSV
 printf '{"workspace":"%s","source_file":"%s/partner.csv","source_system":"partner-export","output_file":"%s/raw/partner"}\n' "$PROJECT" "$ROOT" "$PROJECT" > "$ROOT/import.json"
 "$BRIDGE" research-import --config "$ROOT/import.json"
+printf '{"workspace":"%s"}\n' "$PROJECT" > "$ROOT/prepare-review.json"
+"$BRIDGE" research-prepare-review --config "$ROOT/prepare-review.json"
+printf '{"workspace":"%s","name":"first-run-handoff"}\n' "$PROJECT" > "$ROOT/handoff.json"
+"$BRIDGE" research-handoff --config "$ROOT/handoff.json"
+printf '{"bundle_directory":"%s/exports/first-run-handoff"}\n' "$PROJECT" > "$ROOT/verify.json"
+"$BRIDGE" research-handoff-verify --config "$ROOT/verify.json"
 "$BRIDGE" workspace-status --config "$ROOT/workspace.json"
 
 test -s "$PROJECT/sugar-project.json"
@@ -40,5 +46,9 @@ test -s "$PROJECT/state/research-strategy.json"
 test -s "$PROJECT/state/search-plan.json"
 test -s "$PROJECT/raw/partner.jsonl"
 test -s "$PROJECT/raw/partner.import.json"
+test -s "$PROJECT/state/research-observations.csv"
+test -s "$PROJECT/state/state-assessments.jsonl"
+test -s "$PROJECT/exports/first-run-handoff/verification.json"
+grep -q '"status": "pass"' "$PROJECT/exports/first-run-handoff/verification.json"
 
 echo "PASS: packaged no-credential research workflow"

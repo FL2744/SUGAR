@@ -5,6 +5,7 @@ import json
 import re
 import shutil
 import tempfile
+import time
 import zipfile
 from collections import Counter
 from dataclasses import asdict, dataclass
@@ -233,6 +234,18 @@ def _copy_named(source: str | Path, destination_directory: Path, *, preferred_na
     return target
 
 
+def _publish_staged_path(source: Path, target: Path) -> None:
+    """Allow brief Windows file-indexer locks after writing a new bundle."""
+    for attempt in range(6):
+        try:
+            source.replace(target)
+            return
+        except PermissionError:
+            if target.exists() or attempt == 5:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+
+
 def _artifact(root: Path, path: Path, role: str) -> HandoffArtifact:
     return HandoffArtifact(
         role=role,
@@ -416,9 +429,9 @@ def build_handoff_bundle(
                 for path in sorted(staging_root.rglob("*")):
                     if path.is_file():
                         archive_file.write(path, arcname=(Path(bundle_name) / path.relative_to(staging_root)).as_posix())
-        staging_root.replace(final_root)
+        _publish_staged_path(staging_root, final_root)
         if create_zip:
-            staged_archive.replace(archive_path)
+            _publish_staged_path(staged_archive, archive_path)
             archive = str(archive_path)
         staging_parent.rmdir()
         return HandoffResult(

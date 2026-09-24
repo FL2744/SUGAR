@@ -438,14 +438,12 @@ def run_desktop_analytic_operation(
                 workbook,
                 observation_target,
             )
+            _register(workspace, observation_outputs[1:2], operation=operation, kind="observation_view")
+            _register(workspace, observation_outputs[2:], operation=operation, kind="observation_metadata")
             outputs.extend(
-                _register(
-                    workspace,
-                    observation_outputs,
-                    operation=operation,
-                    kind="observations",
-                )
+                _register(workspace, observation_outputs[:1], operation=operation, kind="observations")
             )
+            outputs.extend(observation_outputs[1:])
 
         if source_conflicts is not None:
             raw_conflict_output = str(config.get("source_conflicts_output_file") or "").strip()

@@ -23,6 +23,9 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - imported URL-only records retain their canonical `record_key` when converted to research observations, canonical JSONL is accepted by shared result loading, and triage loading preserves parent/thread/conversation relationships.
 - Windows collection validates date ranges before starting, makes all generated outputs selectable, and defaults resumable harvest to a public Bilibili source; backend cancellation no longer blocks the window, and unexpected backend exits now show an actionable error.
 - macOS adds cancellation to Activity, validates search date ranges, accepts newline-separated search terms, and exposes full output paths for copying.
+- Windows and macOS research projects can now prepare unreviewed observations and blank State assessments directly from imported or collected records without an AI key; the Windows project page can verify its exported handoff in place.
+- applying a human review workbook now keeps the reviewed CSV as the active observations artifact, so later handoff and audits do not mistake the workbook or metadata JSON for the dataset.
+- handoff publishing tolerates brief Windows file-indexer locks while moving its completed staging directory into place.
 
 ## 1.2.6 — 2026-09-17
 

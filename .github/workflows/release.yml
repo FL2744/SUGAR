@@ -62,6 +62,13 @@ jobs:
       - name: Validate no-credential State workflow
         shell: pwsh
         run: .\tools\smoke_packaged_no_credentials.ps1 -Bridge .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe
+      - name: Validate first-run research workflow
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $env:SUGAR_E2E_BRIDGE = (Resolve-Path .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe).Path
+          python -m pytest -q tests/test_first_run_desktop.py --basetemp $env:RUNNER_TEMP\sugar-first-run-tests
       - uses: actions/upload-artifact@v7
         with:
           name: release-windows-x64

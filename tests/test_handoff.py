@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from sugar_core import handoff
 from sugar_core.handoff import build_handoff_bundle, verify_handoff_bundle
 from sugar_core.models import PostRecord
 from sugar_core.observations import observation_from_post
@@ -23,6 +24,26 @@ from sugar_core.state_workflow import blank_state_assessments, save_state_packag
 from sugar_core.source_conflicts import SourceClaim, SourceConflict, save_source_conflicts
 from sugar_core.state_schema import AnalyticClaim, StateAssessment
 from sugar_core.state_workflow import save_state_assessments
+
+
+def test_bundle_publish_retries_a_transient_file_lock(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "staged"
+    target = tmp_path / "published"
+    source.mkdir()
+    original = Path.replace
+    attempts = 0
+
+    def temporarily_locked(path, destination):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise PermissionError("Temporary indexer lock")
+        return original(path, destination)
+
+    monkeypatch.setattr(Path, "replace", temporarily_locked)
+    handoff._publish_staged_path(source, target)
+    assert attempts == 2
+    assert target.is_dir()
 
 
 def _inputs(tmp_path: Path):

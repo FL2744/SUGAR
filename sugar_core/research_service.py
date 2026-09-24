@@ -9,7 +9,8 @@ from typing import Any, Callable, Iterable
 from .handoff import build_handoff_bundle, verify_handoff_bundle
 from .importers import import_external_dataset
 from .llm import ARC_BASE_URL, LLMConfig
-from .observation_storage import load_observations
+from .observation_storage import load_observations, save_observations
+from .observations import observation_from_post
 from .plan_execution import execute_search_plan
 from .plan_feedback import apply_triage_feedback
 from .research_requirements import (
@@ -31,6 +32,8 @@ from .requirement_compiler import (
     save_research_strategy,
 )
 from .search_planner import expand_initial_plan_with_llm
+from .state_schema import StateAssessment
+from .state_workflow import save_state_assessments
 from .triage import DEFAULT_PROJECT_CONTEXT
 from .triage_io import load_post_records, triage_dataset
 from .workspace_runtime import (
@@ -587,6 +590,54 @@ def import_research_dataset(
     )
     register_workspace_outputs(workspace, outputs, operation="external-import")
     _notify(progress, "saved", outputs=outputs)
+    return outputs
+
+
+def prepare_manual_review(
+    config: dict[str, Any],
+    *,
+    progress: ProgressCallback | None = None,
+) -> list[str]:
+    """Copy source-grounded records into unreviewed observation and assessment drafts."""
+    workspace = optional_workspace(config.get("workspace"))
+    records_path = _required_path(
+        config, "records_file", workspace=workspace, kinds=("evidence", "raw_collection", "import")
+    )
+    observations_path = _path(config.get("observations_output_file")) or (
+        workspace.path_for("state") / "research-observations.csv"
+        if workspace is not None else records_path.with_name(records_path.stem + ".observations.csv")
+    )
+    observations_path = observations_path.with_suffix(".csv")
+    assessments_path = _path(config.get("assessments_output_file")) or (
+        workspace.path_for("state") / "state-assessments.jsonl"
+        if workspace is not None else records_path.with_name(records_path.stem + ".assessments.jsonl")
+    )
+    existing = [path for path in (observations_path, observations_path.with_suffix(".xlsx"),
+                                  observations_path.with_suffix(".metadata.json"), assessments_path) if path.exists()]
+    if existing:
+        raise ValueError(
+            "Manual review drafts already exist. Use the existing review files or choose new output paths; "
+            f"SUGAR will not overwrite {existing[0]}."
+        )
+    records = load_post_records(records_path)
+    if not records:
+        raise ValueError("The selected dataset has no records to prepare for manual review.")
+    observations = [observation_from_post(record) for record in records]
+    _notify(progress, "manual-review-preparing", records=len(records), source_file=str(records_path))
+    save_observations(observations, observations_path)
+    assessment_output = save_state_assessments(
+        [StateAssessment(observation_id=observation.observation_id) for observation in observations],
+        assessments_path,
+    )
+    observation_outputs = [str(path.resolve()) for path in (
+        observations_path, observations_path.with_suffix(".xlsx"), observations_path.with_suffix(".metadata.json")
+    )]
+    register_workspace_outputs(workspace, observation_outputs[1:2], operation="research-prepare-review", kind="observation_view")
+    register_workspace_outputs(workspace, observation_outputs[2:], operation="research-prepare-review", kind="observation_metadata")
+    register_workspace_outputs(workspace, observation_outputs[:1], operation="research-prepare-review", kind="observations")
+    register_workspace_outputs(workspace, [assessment_output], operation="research-prepare-review", kind="state_assessments")
+    outputs = [*observation_outputs, assessment_output]
+    _notify(progress, "manual-review-ready", records=len(records), outputs=outputs)
     return outputs
 
 

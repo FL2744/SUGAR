@@ -377,6 +377,15 @@ struct ResearchProjectView: View {
                 }
 
                 Divider()
+                Text("Prepare unreviewed, source-grounded observations and blank State assessments for human review without an AI key. Existing review files are never overwritten.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Prepare Manual Review (no AI key)") {
+                    model.run(command: "research-prepare-review", config: ["workspace": cleanWorkspace])
+                }
+                .disabled(model.isRunning || cleanWorkspace.isEmpty)
+
+                Divider()
                 Picker("Triage LLM provider", selection: $llmSelection.provider) {
                     ForEach(LLMProvider.allCases) { provider in
                         Text(provider.title).tag(provider)
@@ -417,7 +426,7 @@ struct ResearchProjectView: View {
             }
 
             Section("4. Human review and verified handoff") {
-                Text("AI triage and State assessment suggestions remain unverified until a named analyst reviews the underlying observation and analytic claims. Export one review workbook, make the human decisions, save it, and apply those decisions through SUGAR's verification gates.")
+                Text("Manual drafts and AI suggestions remain unverified until a named analyst reviews the underlying evidence and any analytic claims. Export one review workbook, make the human decisions, save it, and apply them through SUGAR's verification gates.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {

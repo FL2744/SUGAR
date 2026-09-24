@@ -27,6 +27,7 @@ from sugar_core.research_service import (
     create_research_requirement,
     export_research_handoff,
     import_research_dataset,
+    prepare_manual_review,
     review_research_plan,
     review_research_strategy,
     triage_research_records,
@@ -58,6 +59,7 @@ BASE_OPERATIONS = {
     "research-plan-review",
     "research-plan-update",
     "research-import",
+    "research-prepare-review",
     "research-collect",
     "research-triage",
     "research-feedback",
@@ -313,6 +315,8 @@ def main(argv=None) -> int:
             outputs = update_research_plan_branch(config, progress=progress_event)
         elif args.command == "research-import":
             outputs = import_research_dataset(config, progress=progress_event)
+        elif args.command == "research-prepare-review":
+            outputs = prepare_manual_review(config, progress=progress_event)
         elif args.command == "research-collect":
             outputs = collect_research_plan(config, secrets, progress=progress_event)
         elif args.command == "research-triage":

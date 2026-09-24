@@ -10,10 +10,12 @@ from sugar_core import research_service
 from sugar_core.models import PostRecord
 from sugar_core.observations import observation_from_post
 from sugar_core.observation_storage import save_observations
+from sugar_core.observation_storage import load_observations
 from sugar_core.storage import save_records
 from sugar_core.source_conflicts import SourceClaim, SourceConflict, save_source_conflicts
 from sugar_core.state_schema import AnalyticClaim, StateAssessment
 from sugar_core.state_workflow import save_state_assessments
+from sugar_core.state_workflow import load_state_assessments
 from sugar_core.triage_io import load_post_records
 from sugar_core.workspace import SugarWorkspace
 from sugar_core.workspace_runtime import latest_workspace_artifact_path
@@ -320,6 +322,34 @@ def test_approved_compiled_strategy_is_preserved_in_portable_handoff(tmp_path: P
     )
     result = json.loads(Path(verification[0]).read_text(encoding="utf-8"))
     assert result["status"] == "pass"
+
+
+def test_manual_review_preparation_from_import_is_unreviewed_and_preserves_source(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    source = tmp_path / "partner.csv"
+    source.write_text(
+        "platform,native_id,canonical_url,original_text\n"
+        "partner,1,https://example.org/1,Public program announcement\n",
+        encoding="utf-8",
+    )
+    research_service.import_research_dataset({
+        "workspace": str(workspace.root), "source_file": str(source), "source_system": "partner-export"
+    })
+    outputs = research_service.prepare_manual_review({"workspace": str(workspace.root)})
+    observations_path = latest_workspace_artifact_path(workspace, "observations")
+    assessments_path = latest_workspace_artifact_path(workspace, "state_assessments")
+    assert observations_path is not None and observations_path.suffix == ".csv"
+    assert assessments_path is not None and assessments_path.suffix == ".jsonl"
+    assert len(outputs) == 4
+    observation = load_observations(observations_path)[0]
+    assessment = load_state_assessments(assessments_path)[0]
+    assert observation.summary == "Public program announcement"
+    assert observation.evidence[0].url == "https://example.org/1"
+    assert observation.verification_state == "unreviewed"
+    assert assessment.observation_id == observation.observation_id
+    assert assessment.review_state == "unreviewed"
+    with pytest.raises(ValueError, match="will not overwrite"):
+        research_service.prepare_manual_review({"workspace": str(workspace.root)})
 
 
 def test_feedback_and_handoff_can_resolve_workspace_artifacts(tmp_path: Path) -> None:
