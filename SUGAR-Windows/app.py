@@ -1640,6 +1640,542 @@ class ActivityDock(QDockWidget):
         for widget in (self.output_choice,self.open_output,self.copy_output): widget.setEnabled(bool(paths))
 
 
+
+class ProjectsPage(QWidget):
+    """Analyst-facing project memory, monitoring, reference-data, and sharing workspace."""
+
+    def __init__(self, run: Callable[[str, dict[str, Any], bool], None], settings: SettingsPage) -> None:
+        super().__init__()
+        self.run_operation = run
+        self.settings = settings
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 20, 24, 24)
+        root.setSpacing(14)
+        root.addWidget(page_header(
+            "Projects",
+            "Persistent research memory: subprojects, institutions, reference layers, listening posts, conversations, history, and portable sharing.",
+        ))
+
+        project = Card(
+            "Current project",
+            "Switch between project folders without losing search provenance. SUGAR stores project state inside the portable workspace; credentials remain outside it.",
+        )
+        chooser = QGridLayout()
+        self.project_workspace = PathField(mode="directory")
+        self.project_workspace.setText(str(Path.home() / "Documents" / "SUGAR" / "Projects" / "Research-Project"))
+        self.project_name = QLineEdit("Research Project")
+        self.recent_projects = QComboBox()
+        self.recent_projects.setMinimumWidth(320)
+        self._load_recent_projects()
+        self.recent_projects.activated.connect(self._select_recent_project)
+        chooser.addWidget(LabeledRow("Project folder", self.project_workspace), 0, 0, 1, 2)
+        chooser.addWidget(LabeledRow("Project name (for new folders)", self.project_name), 1, 0)
+        chooser.addWidget(LabeledRow("Recent projects", self.recent_projects), 1, 1)
+        project.layout.addLayout(chooser)
+        buttons = QHBoxLayout()
+        buttons.addWidget(primary_button("Create / Open", self._open_project))
+        buttons.addWidget(QPushButton("Refresh", clicked=self._refresh))
+        buttons.addWidget(QPushButton("Workflow Help", clicked=lambda: self.run_operation("workspace-help", {}, False)))
+        buttons.addStretch(1)
+        project.layout.addLayout(buttons)
+        self.project_status = QLabel("Open a project to see its research state.")
+        self.project_status.setWordWrap(True)
+        self.project_status.setObjectName("muted")
+        project.layout.addWidget(self.project_status)
+        root.addWidget(project)
+
+        tabs = QTabWidget()
+        tabs.addTab(self._structure_tab(), "Structure")
+        tabs.addTab(self._data_tab(), "Institutions & Layers")
+        tabs.addTab(self._listening_tab(), "Listening Posts")
+        tabs.addTab(self._history_tab(), "History")
+        tabs.addTab(self._conversation_tab(), "Conversations")
+        tabs.addTab(self._share_tab(), "Share")
+        root.addWidget(tabs, 1)
+
+    def _workspace(self) -> str:
+        return self.project_workspace.text().strip()
+
+    def _require_workspace(self) -> str | None:
+        value = self._workspace()
+        if not value:
+            QMessageBox.warning(self, "Project required", "Choose or enter a SUGAR project folder first.")
+            return None
+        return value
+
+    def _load_recent_projects(self) -> None:
+        store = QSettings(APP_ORGANIZATION, APP_NAME)
+        values = store.value("projects/recent", [], type=list) or []
+        self.recent_projects.clear()
+        self.recent_projects.addItem("Choose a recent project…", "")
+        for value in values:
+            text = str(value).strip()
+            if text:
+                self.recent_projects.addItem(text, text)
+
+    def _remember_project(self, workspace: str) -> None:
+        workspace = str(Path(workspace).expanduser())
+        store = QSettings(APP_ORGANIZATION, APP_NAME)
+        values = [str(value) for value in (store.value("projects/recent", [], type=list) or []) if str(value).strip()]
+        values = [workspace] + [value for value in values if value != workspace]
+        store.setValue("projects/recent", values[:12])
+        store.sync()
+        self._load_recent_projects()
+
+    def _select_recent_project(self, index: int) -> None:
+        value = str(self.recent_projects.itemData(index) or "").strip()
+        if value:
+            self.project_workspace.setText(value)
+            self._refresh()
+
+    def _open_project(self) -> None:
+        workspace = self._require_workspace()
+        if not workspace:
+            return
+        self._remember_project(workspace)
+        manifest = Path(workspace).expanduser() / "sugar-project.json"
+        if manifest.is_file():
+            self.run_operation("workspace-research-status", {"workspace": workspace}, False)
+        else:
+            self.run_operation(
+                "workspace-init",
+                {
+                    "workspace": workspace,
+                    "name": self.project_name.text().strip() or "Research Project",
+                    "exist_ok": True,
+                },
+                False,
+            )
+
+    def _refresh(self) -> None:
+        workspace = self._require_workspace()
+        if workspace:
+            self._remember_project(workspace)
+            self.run_operation("workspace-research-status", {"workspace": workspace}, False)
+
+    def _structure_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        card = Card(
+            "Subprojects",
+            "Use nested tracks for countries, institutions, thematic questions, or other bounded workstreams. They share one project evidence base but retain their own monitoring/history labels.",
+        )
+        self.subproject_name = QLineEdit()
+        self.subproject_name.setPlaceholderText("e.g., Kyrgyzstan / AUCA / Confucius Institute network")
+        self.subproject_parent = QLineEdit()
+        self.subproject_parent.setPlaceholderText("Optional parent subproject ID")
+        self.subproject_description = QTextEdit()
+        self.subproject_description.setMaximumHeight(80)
+        self.subproject_description.setPlaceholderText("Scope and purpose")
+        form = QGridLayout()
+        form.addWidget(LabeledRow("Name", self.subproject_name), 0, 0)
+        form.addWidget(LabeledRow("Parent ID", self.subproject_parent), 0, 1)
+        form.addWidget(LabeledRow("Description", self.subproject_description), 1, 0, 1, 2)
+        card.layout.addLayout(form)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        row.addWidget(primary_button("Add Subproject", self._add_subproject))
+        card.layout.addLayout(row)
+        self.last_subproject = QLabel("")
+        self.last_subproject.setObjectName("muted")
+        self.last_subproject.setWordWrap(True)
+        card.layout.addWidget(self.last_subproject)
+        layout.addWidget(card)
+
+        collaborators = Card(
+            "Collaboration metadata",
+            "Record who owns, edits, or reviews the project. This does not create a cloud account or grant access; the role travels with shared project context.",
+        )
+        self.collab_name = QLineEdit()
+        self.collab_email = QLineEdit()
+        self.collab_role = QComboBox()
+        self.collab_role.addItems(["viewer", "reviewer", "editor", "owner"])
+        grid = QGridLayout()
+        grid.addWidget(LabeledRow("Name", self.collab_name), 0, 0)
+        grid.addWidget(LabeledRow("Email (optional)", self.collab_email), 0, 1)
+        grid.addWidget(LabeledRow("Role", self.collab_role), 1, 0)
+        collaborators.layout.addLayout(grid)
+        collaborators.layout.addWidget(QPushButton("Save Collaborator", clicked=self._add_collaborator))
+        layout.addWidget(collaborators)
+        layout.addStretch(1)
+        return page
+
+    def _add_subproject(self) -> None:
+        workspace = self._require_workspace()
+        name = self.subproject_name.text().strip()
+        if not workspace or not name:
+            QMessageBox.warning(self, "Subproject name required", "Enter a subproject name.")
+            return
+        self.run_operation(
+            "workspace-subproject-add",
+            {
+                "workspace": workspace,
+                "name": name,
+                "description": self.subproject_description.toPlainText().strip(),
+                "parent_id": self.subproject_parent.text().strip(),
+            },
+            False,
+        )
+
+    def _add_collaborator(self) -> None:
+        workspace = self._require_workspace()
+        name = self.collab_name.text().strip()
+        if not workspace or not name:
+            QMessageBox.warning(self, "Name required", "Enter a collaborator name.")
+            return
+        self.run_operation(
+            "workspace-collaborator-add",
+            {
+                "workspace": workspace,
+                "name": name,
+                "email": self.collab_email.text().strip(),
+                "role": self.collab_role.currentText(),
+            },
+            False,
+        )
+
+    def _data_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        institutions = Card(
+            "Institution registry",
+            "Import the complete institution list, including closed/renamed/relocated sites. Supported files: CSV, JSONL, GeoJSON, XLSX. Lifecycle status and source URLs remain project data.",
+        )
+        self.institution_file = PathField(mode="file")
+        self.institution_subproject = QLineEdit()
+        self.institution_subproject.setPlaceholderText("Optional subproject ID")
+        grid = QGridLayout()
+        grid.addWidget(LabeledRow("Institution dataset", self.institution_file), 0, 0)
+        grid.addWidget(LabeledRow("Subproject", self.institution_subproject), 0, 1)
+        institutions.layout.addLayout(grid)
+        institutions.layout.addWidget(primary_button("Import Institutions", self._import_institutions))
+        layout.addWidget(institutions)
+
+        layers = Card(
+            "Reference layers",
+            "Add as many coordinate-bearing CSV/JSONL/GeoJSON/XLSX layers as needed. By default SUGAR copies the source into the project so sharing remains portable.",
+        )
+        self.layer_file = PathField(mode="file")
+        self.layer_name = QLineEdit()
+        self.layer_name.setPlaceholderText("e.g., American Spaces, universities, embassies")
+        self.layer_subproject = QLineEdit()
+        self.layer_subproject.setPlaceholderText("Optional subproject ID")
+        layer_grid = QGridLayout()
+        layer_grid.addWidget(LabeledRow("Layer file", self.layer_file), 0, 0, 1, 2)
+        layer_grid.addWidget(LabeledRow("Layer name", self.layer_name), 1, 0)
+        layer_grid.addWidget(LabeledRow("Subproject", self.layer_subproject), 1, 1)
+        layers.layout.addLayout(layer_grid)
+        lrow = QHBoxLayout()
+        lrow.addWidget(QPushButton("Add Layer", clicked=self._add_layer))
+        lrow.addWidget(primary_button("Build Project Map", self._build_map))
+        lrow.addStretch(1)
+        layers.layout.addLayout(lrow)
+        note = QLabel("Closed institutions are retained and rendered with a ☠ marker; active/other institutions remain separate. The map is descriptive and does not equate proximity with influence.")
+        note.setWordWrap(True)
+        note.setObjectName("hint")
+        layers.layout.addWidget(note)
+        layout.addWidget(layers)
+        layout.addStretch(1)
+        return page
+
+    def _import_institutions(self) -> None:
+        workspace = self._require_workspace()
+        source = self.institution_file.text().strip()
+        if not workspace or not source:
+            QMessageBox.warning(self, "Dataset required", "Choose an institution dataset.")
+            return
+        self.run_operation(
+            "workspace-institutions-import",
+            {
+                "workspace": workspace,
+                "input_file": source,
+                "subproject_id": self.institution_subproject.text().strip(),
+            },
+            False,
+        )
+
+    def _add_layer(self) -> None:
+        workspace = self._require_workspace()
+        source = self.layer_file.text().strip()
+        if not workspace or not source:
+            QMessageBox.warning(self, "Layer required", "Choose a reference-layer file.")
+            return
+        self.run_operation(
+            "workspace-layer-add",
+            {
+                "workspace": workspace,
+                "input_file": source,
+                "name": self.layer_name.text().strip(),
+                "subproject_id": self.layer_subproject.text().strip(),
+            },
+            False,
+        )
+
+    def _build_map(self) -> None:
+        workspace = self._require_workspace()
+        if workspace:
+            self.run_operation("workspace-map", {"workspace": workspace}, False)
+
+    def _listening_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        create = Card(
+            "Create listening post",
+            "A listening post is a saved monitor definition. It feeds normal provenance-preserving collection back into the project and records a delta of newly observed record identities.",
+        )
+        self.listen_name = QLineEdit()
+        self.listen_name.setPlaceholderText("e.g., Kyrgyzstan institution watch")
+        self.listen_subproject = QLineEdit()
+        self.listen_subproject.setPlaceholderText("Optional subproject ID")
+        self.listen_terms = QTextEdit()
+        self.listen_terms.setMaximumHeight(90)
+        self.listen_terms.setPlaceholderText("One term per line")
+        self.listen_handles = QLineEdit()
+        self.listen_handles.setPlaceholderText("@handle1, @handle2")
+        self.listen_entities = QLineEdit()
+        self.listen_entities.setPlaceholderText("Optional entity IDs, comma separated")
+        self.listen_sources = SourceSelector(SOURCES)
+        self.listen_sources.boxes["bilibili"].setChecked(True)
+        self.listen_cadence = QComboBox()
+        self.listen_cadence.addItems(["manual", "daily", "weekly", "monthly", "hourly"])
+        form = QGridLayout()
+        form.addWidget(LabeledRow("Name", self.listen_name), 0, 0)
+        form.addWidget(LabeledRow("Subproject", self.listen_subproject), 0, 1)
+        form.addWidget(LabeledRow("Terms", self.listen_terms), 1, 0)
+        form.addWidget(LabeledRow("Handles", self.listen_handles), 1, 1)
+        form.addWidget(LabeledRow("Linked entity IDs", self.listen_entities), 2, 0)
+        form.addWidget(LabeledRow("Cadence metadata", self.listen_cadence), 2, 1)
+        create.layout.addLayout(form)
+        create.layout.addWidget(LabeledRow("Sources", self.listen_sources))
+        create.layout.addWidget(primary_button("Save Listening Post", self._save_listening))
+        layout.addWidget(create)
+
+        run = Card(
+            "Run listening post",
+            "Runs explicitly on demand. Stored cadence records analyst intent; SUGAR does not silently bypass platform controls or manufacture authentication.",
+        )
+        self.listen_id = QLineEdit()
+        self.listen_id.setPlaceholderText("Listening post ID")
+        run.layout.addWidget(LabeledRow("Listening post ID", self.listen_id))
+        run.layout.addWidget(primary_button("Collect New Material", self._run_listening))
+        self.listen_result = QLabel("")
+        self.listen_result.setObjectName("muted")
+        self.listen_result.setWordWrap(True)
+        run.layout.addWidget(self.listen_result)
+        layout.addWidget(run)
+        layout.addStretch(1)
+        return page
+
+    def _split_values(self, value: str) -> list[str]:
+        return [item.strip() for item in re.split(r"[,;\n]+", value) if item.strip()]
+
+    def _save_listening(self) -> None:
+        workspace = self._require_workspace()
+        name = self.listen_name.text().strip()
+        if not workspace or not name:
+            QMessageBox.warning(self, "Name required", "Enter a listening-post name.")
+            return
+        self.run_operation(
+            "workspace-listening-add",
+            {
+                "workspace": workspace,
+                "name": name,
+                "subproject_id": self.listen_subproject.text().strip(),
+                "query_terms": self._split_values(self.listen_terms.toPlainText()),
+                "handles": self._split_values(self.listen_handles.text()),
+                "entity_ids": self._split_values(self.listen_entities.text()),
+                "sources": self.listen_sources.selected(),
+                "cadence": self.listen_cadence.currentText(),
+            },
+            False,
+        )
+
+    def _run_listening(self) -> None:
+        workspace = self._require_workspace()
+        listening_post_id = self.listen_id.text().strip()
+        if not workspace or not listening_post_id:
+            QMessageBox.warning(self, "Listening post required", "Enter or create a listening-post ID.")
+            return
+        self.run_operation(
+            "workspace-listening-run",
+            {"workspace": workspace, "listening_post_id": listening_post_id},
+            False,
+        )
+
+    def _history_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 16, 16, 16)
+        card = Card(
+            "Saved project history",
+            "SUGAR records search terms, sources, date filters, result counts, listening-post linkage, and output paths for searches performed inside a workspace.",
+        )
+        row = QHBoxLayout()
+        self.history_query = QLineEdit()
+        self.history_query.setPlaceholderText("Filter terms, sources, IDs, or dates")
+        row.addWidget(self.history_query, 1)
+        row.addWidget(QPushButton("Search History", clicked=self._search_history))
+        row.addWidget(QPushButton("Refresh Project", clicked=self._refresh))
+        card.layout.addLayout(row)
+        self.history_text = QPlainTextEdit()
+        self.history_text.setReadOnly(True)
+        self.history_text.setPlaceholderText("Search history will appear here.")
+        card.layout.addWidget(self.history_text)
+        layout.addWidget(card, 1)
+        return page
+
+    def _search_history(self) -> None:
+        workspace = self._require_workspace()
+        if workspace:
+            self.run_operation(
+                "workspace-history",
+                {"workspace": workspace, "query": self.history_query.text().strip()},
+                False,
+            )
+
+    def _conversation_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 16, 16, 16)
+        card = Card(
+            "Conversation / dialogue reconstruction",
+            "Keep handles separate instead of flattening a thread into generic text. Parent/reply relationships are shown as indentation when source data provides them.",
+        )
+        self.conversation_records = PathField(mode="file")
+        self.conversation_subproject = QLineEdit()
+        self.conversation_subproject.setPlaceholderText("Optional subproject ID")
+        card.layout.addWidget(LabeledRow("SUGAR records dataset", self.conversation_records))
+        card.layout.addWidget(LabeledRow("Subproject", self.conversation_subproject))
+        card.layout.addWidget(primary_button("Build Conversation View", self._build_conversations))
+        layout.addWidget(card)
+        layout.addStretch(1)
+        return page
+
+    def _build_conversations(self) -> None:
+        workspace = self._require_workspace()
+        records = self.conversation_records.text().strip()
+        if not workspace or not records:
+            QMessageBox.warning(self, "Dataset required", "Choose a SUGAR record dataset.")
+            return
+        self.run_operation(
+            "workspace-conversations",
+            {
+                "workspace": workspace,
+                "records": records,
+                "subproject_id": self.conversation_subproject.text().strip(),
+            },
+            False,
+        )
+
+    def _share_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        export = Card(
+            "Share project",
+            "Exports registered project-local evidence, state, reference layers, and outputs with integrity hashes. Credentials, cache files, the rebuildable local SQLite index, and external artifacts are excluded.",
+        )
+        export.layout.addWidget(primary_button("Export .sugarproject.zip", self._share_project))
+        self.share_result = QLabel("")
+        self.share_result.setWordWrap(True)
+        self.share_result.setObjectName("muted")
+        export.layout.addWidget(self.share_result)
+        layout.addWidget(export)
+
+        imported = Card("Import shared project", "Verifies file hashes before opening the portable workspace.")
+        self.import_bundle = PathField(mode="file")
+        self.import_destination = PathField(mode="directory")
+        imported.layout.addWidget(LabeledRow("Bundle", self.import_bundle))
+        imported.layout.addWidget(LabeledRow("Destination folder", self.import_destination))
+        imported.layout.addWidget(QPushButton("Import Shared Project", clicked=self._import_shared_project))
+        layout.addWidget(imported)
+        layout.addStretch(1)
+        return page
+
+    def _share_project(self) -> None:
+        workspace = self._require_workspace()
+        if workspace:
+            self.run_operation("workspace-share", {"workspace": workspace}, False)
+
+    def _import_shared_project(self) -> None:
+        bundle = self.import_bundle.text().strip()
+        destination = self.import_destination.text().strip()
+        if not bundle or not destination:
+            QMessageBox.warning(self, "Bundle and destination required", "Choose the shared project bundle and an import destination.")
+            return
+        self.run_operation(
+            "workspace-share-import",
+            {"bundle": bundle, "destination": destination},
+            False,
+        )
+
+    def _render_history(self, rows: list[dict[str, Any]]) -> None:
+        lines: list[str] = []
+        for row in rows:
+            terms = ", ".join(str(value) for value in row.get("terms") or [])
+            sources = ", ".join(str(value) for value in row.get("sources") or [])
+            count = row.get("result_count")
+            listening = str(row.get("listening_post_id") or "")
+            suffix = f" · listening {listening}" if listening else ""
+            lines.append(f"{row.get('timestamp', '')} · {sources} · {count} results{suffix}\n  {terms}")
+        self.history_text.setPlainText("\n\n".join(lines) if lines else "No matching search-history entries.")
+
+    def handle_backend_event(self, payload: dict[str, Any]) -> None:
+        event = str(payload.get("event") or "")
+        if event == "workspace_research_status":
+            self.project_status.setText(
+                f"{payload.get('name', 'Project')} · {payload.get('subprojects', 0)} subprojects · "
+                f"{payload.get('entities', 0)} institutions/entities ({payload.get('closed_entities', 0)} closed) · "
+                f"{payload.get('reference_layers', 0)} reference layers · {payload.get('listening_posts', 0)} listening posts · "
+                f"{payload.get('history_events', 0)} history events"
+            )
+            history = [
+                row for row in payload.get("recent_history") or []
+                if isinstance(row, dict) and row.get("event") == "search"
+            ]
+            self._render_history(list(reversed(history)))
+            return
+        if event == "workspace_subproject":
+            item = payload.get("subproject") or {}
+            self.last_subproject.setText(
+                f"Created {item.get('name', '')} · ID {item.get('subproject_id', '')}"
+            )
+            return
+        if event == "workspace_listening_post":
+            item = payload.get("listening_post") or {}
+            self.listen_id.setText(str(item.get("listening_post_id") or ""))
+            self.listen_result.setText(f"Saved listening post: {item.get('name', '')}")
+            return
+        if event == "workspace_listening_result":
+            self.listen_result.setText(
+                f"Listening post completed: {payload.get('result_count', 0)} records; "
+                f"{payload.get('new_record_count', 0)} new since the previous run."
+            )
+            return
+        if event == "workspace_history":
+            self._render_history([row for row in payload.get("history") or [] if isinstance(row, dict)])
+            return
+        if event == "workspace_share":
+            self.share_result.setText(str(payload.get("output") or ""))
+            return
+        if event == "workspace_help":
+            sections = []
+            for key, values in payload.items():
+                if key == "event":
+                    continue
+                if isinstance(values, list):
+                    sections.append(key.replace("_", " ").title() + ":\n" + "\n".join(f"• {value}" for value in values))
+            QMessageBox.information(self, "SUGAR workflow help", "\n\n".join(sections))
+
+
+
 class MainWindow(QMainWindow):
     def __init__(self,*,smoke:bool=False)->None:
         super().__init__(); self.setWindowTitle("SUGAR — State Research Workbench"); self.resize(1380,900); self.setMinimumSize(1080,720); self._close_after_cancel=False; icon=resource_path("sugar-logo.png");
@@ -1647,15 +2183,16 @@ class MainWindow(QMainWindow):
         self.runner=BackendRunner(self); self._diagnostics:dict[str,Any]={}; self.pages:dict[str,int]={}
         self.settings_page=SettingsPage(); self.home=HomePage()
         self.state_page=StatePage(self.run_operation,self.settings_page)
+        self.projects_page=ProjectsPage(self.run_operation,self.settings_page)
         central=QWidget(); outer=QHBoxLayout(central); outer.setContentsMargins(0,0,0,0); outer.setSpacing(0)
         sidebar=QFrame(); sidebar.setObjectName("sidebar"); sidebar.setFixedWidth(210); side=QVBoxLayout(sidebar); side.setContentsMargins(8,16,8,12); brand=QLabel("SUGAR"); brand.setObjectName("brand"); sub=QLabel("State Research Workbench"); sub.setObjectName("brandSub"); side.addWidget(brand); side.addWidget(sub); side.addSpacing(12); self.nav=QListWidget(); self.nav.setObjectName("nav"); side.addWidget(self.nav,1); version=QLabel("Evidence-first OSINT + analysis"); version.setObjectName("brandSub"); version.setWordWrap(True); side.addWidget(version); outer.addWidget(sidebar)
         self.stack=QStackedWidget(); outer.addWidget(self.stack,1); self.setCentralWidget(central)
-        page_defs=[("Home",self.home),("Collect",CollectPage(self.run_operation,self.settings_page)),("Weibo",WeiboPage(self.run_operation,self.settings_page)),("State Workflow",self.state_page),("Intelligence",IntelligencePage(self.run_operation,self.settings_page)),("Maps & Reports",ReportsPage(self.run_operation,self.settings_page)),("Settings",self.settings_page)]
+        page_defs=[("Home",self.home),("Projects",self.projects_page),("Collect",CollectPage(self.run_operation,self.settings_page)),("Weibo",WeiboPage(self.run_operation,self.settings_page)),("State Workflow",self.state_page),("Intelligence",IntelligencePage(self.run_operation,self.settings_page)),("Maps & Reports",ReportsPage(self.run_operation,self.settings_page)),("Settings",self.settings_page)]
         for name,page in page_defs:
             self.pages[name]=self.stack.count(); self.nav.addItem(QListWidgetItem(name)); self.stack.addWidget(scroll_page(page))
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex); self.nav.setCurrentRow(0); self.home.navigate.connect(self.navigate)
         self.activity=ActivityDock(self); self.addDockWidget(Qt.BottomDockWidgetArea,self.activity); self.activity.cancel_requested.connect(self.runner.cancel)
-        self.runner.event.connect(self._event); self.runner.event.connect(self.state_page.handle_backend_event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.runner.running_changed.connect(self._finish_pending_close); self.settings_page.diagnostics_requested.connect(self._diagnostics_run); self.settings_page.arc_test_requested.connect(self._arc_test_run)
+        self.runner.event.connect(self._event); self.runner.event.connect(self.state_page.handle_backend_event); self.runner.event.connect(self.projects_page.handle_backend_event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.runner.running_changed.connect(self._finish_pending_close); self.settings_page.diagnostics_requested.connect(self._diagnostics_run); self.settings_page.arc_test_requested.connect(self._arc_test_run)
         self._build_menu()
         if not smoke:
             QTimer.singleShot(150,self._diagnostics_run)
