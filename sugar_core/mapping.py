@@ -882,6 +882,9 @@ def create_map(
     m = folium.Map(
         location=center,
         zoom_start=2,
+        # MarkerCluster requires a finite map maxZoom even when the active base
+        # layer is the provider-independent canvas rather than a tile layer.
+        max_zoom=19,
         tiles=None,
         control_scale=True,
         prefer_canvas=True,

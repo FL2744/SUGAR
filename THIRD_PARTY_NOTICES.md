@@ -20,21 +20,23 @@ This document is a release-facing summary of SUGAR's direct dependencies. It is 
 | python-docx | MIT | DOCX reporting |
 | ReportLab | BSD-style | PDF reporting |
 | Requests | Apache License 2.0 | HTTP client |
+| MapLibre GL JS | BSD 3-Clause | Shared browser and desktop map renderer |
+| React / React DOM | MIT | Canonical browser frontend, also used by desktop packages |
+| Tauri / Tauri JavaScript API | MIT or Apache License 2.0 | Optional cross-platform desktop shell and IPC |
+| DM Sans / Manrope | SIL Open Font License 1.1 | Bundled interface typefaces |
 
 ## Optional and packaging dependencies
 
 | Component | License family | Notes |
 | --- | --- | --- |
-| PySide6 / Qt for Python | LGPLv3/GPLv3 or commercial Qt license | Used by the Windows desktop application. SUGAR community Windows builds select the LGPLv3 option for LGPL-covered Qt/PySide6 components actually bundled with the application. |
+| PySide6 / Qt for Python | LGPLv3/GPLv3 or commercial Qt license | Historical archived Windows UI only; not included in current application packages. |
 | PyInstaller | GPLv2 with the PyInstaller bootloader exception; some files Apache-2.0 | Used to create packaged applications. PyInstaller's exception permits generated bundles to use the application's license subject to bundled dependency licenses. |
 | arabic-reshaper | MIT | Optional RTL text support |
 | python-bidi | LGPL | Optional bidirectional-text support |
 
 ## Packaged desktop applications
 
-The Windows portable application bundles third-party runtime libraries, including Qt/PySide6. The Windows build is intentionally produced as an `onedir` application for the PySide6 GUI, leaving Qt libraries as separate files in the application directory rather than statically incorporating them into SUGAR source code. Release packages include this file, SUGAR's `LICENSE` and `NOTICE`, a generated `licenses/` directory containing license/notice files discovered from the exact installed dependency set used for that build, and `third_party_licenses/qt/` containing the LGPLv3/GPLv3 texts and SUGAR's Qt source/relinking notice.
-
-The macOS application bundles SUGAR's Python backend. Release packages include SUGAR's `LICENSE`, `NOTICE`, this notice file, and the generated dependency-license directory in the application resources.
+Current Tauri desktop packages bundle the shared frontend, the existing Python bridge, SUGAR's `LICENSE`, `NOTICE`, this notice file, and the license materials collected for the exact resolved frontend dependencies. The browser frontend uses the same React and MapLibre dependency set. The PySide6 and SwiftUI source archived in `archive/legacy-native-ui/` is historical and is not built or released through current workflows.
 
 ## Data, services, and platform content
 

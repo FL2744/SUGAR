@@ -1,0 +1,99 @@
+{
+  "artifacts": [
+    {
+      "bytes": 1376,
+      "path": "context/research-requirement.json",
+      "role": "research_requirement",
+      "sha256": "7727df10951abca142fe6e058caf05c92c11082c87f0cf4f79ce5e64dd1727cd"
+    },
+    {
+      "bytes": 7775,
+      "path": "context/search-plan.json",
+      "role": "search_plan",
+      "sha256": "aadf2ae691940b01828e85eda775eefeb5ab48a19f78d5aac92a52ff1ba6c339"
+    },
+    {
+      "bytes": 12827,
+      "path": "evidence/lineage.json",
+      "role": "evidence_lineage",
+      "sha256": "06a1da8b0c0739a0f7e0f5ed3d400ccfe745fb1b434a18ce89c25f3364920939"
+    },
+    {
+      "bytes": 14686,
+      "path": "evidence/observations.jsonl",
+      "role": "research_observations",
+      "sha256": "b73ac67103b4f143f9051e861d09991610a33219500f4813f57e84dd85b91362"
+    },
+    {
+      "bytes": 8017,
+      "path": "evidence/records.jsonl",
+      "role": "normalized_records",
+      "sha256": "1fb61d54d09b6cdfc7ef3444cf0a7da387bca6286658f71e07be2619ced942b4"
+    },
+    {
+      "bytes": 724,
+      "path": "limitations.json",
+      "role": "coverage_and_limitations",
+      "sha256": "9ccd8f111674570f8f5bbe285332578566a301999ab061de4d942999ed11ffa9"
+    },
+    {
+      "bytes": 38084,
+      "path": "outputs/ghana-education-research.html",
+      "role": "analytic_output",
+      "sha256": "74a390b88dee7e9892d737e47a404c811255732a80afbad72e04c4c12f45a26b"
+    },
+    {
+      "bytes": 2414,
+      "path": "provenance/evidence-gaps.md",
+      "role": "provenance",
+      "sha256": "3b6eb6a9cdef10d94a186358b5aecab8a902e5f9b5735152b7556cd691deb222"
+    },
+    {
+      "bytes": 116283,
+      "path": "provenance/ghana-demo-institution-registry.csv",
+      "role": "provenance",
+      "sha256": "a3ab2c58a17577e51c3f8113dfdbb950bfb9e9e411f916cd8e9c137d7444ffe0"
+    },
+    {
+      "bytes": 4660,
+      "path": "provenance/ghana-demo-source-inventory.csv",
+      "role": "provenance",
+      "sha256": "2bc95d579e961694b006417e8485266ef99b28739ca8e1ed6c4e6b0236243847"
+    },
+    {
+      "bytes": 558,
+      "path": "provenance/ghana-demo-source-records.metadata.json",
+      "role": "provenance",
+      "sha256": "64c9c9bcb8f37ed5ab017479d0d4364ca55e76927a42fa29289e4eaa44f45705"
+    }
+  ],
+  "counts": {
+    "analytic_outputs": 1,
+    "findings": 0,
+    "observations": 6,
+    "provenance_files": 4,
+    "records": 6
+  },
+  "generated_at": "2026-09-28T21:45:49Z",
+  "handoff_schema_version": "1.0",
+  "portability": {
+    "paths_relative_to_bundle_root": true,
+    "requires_virginia_tech_infrastructure": false,
+    "verification": "Verify artifact byte lengths and SHA-256 values against this manifest."
+  },
+  "requirement_id": "rq_38f8f64728f91924",
+  "schemas": {
+    "limitations": "1.0",
+    "lineage": "1.0",
+    "post_record": "1.3",
+    "research_observation": "1.4",
+    "research_requirement": "1.0",
+    "research_strategy": "",
+    "search_plan": "1.0"
+  },
+  "software": {
+    "name": "SUGAR",
+    "version": "1.3.0"
+  },
+  "strategy_id": ""
+}

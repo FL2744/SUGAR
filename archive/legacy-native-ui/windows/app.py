@@ -46,54 +46,86 @@ APP_ORGANIZATION = "Virginia Tech Diplomacy Lab"
 SOURCES = ("bilibili", "weibo", "x", "bluesky", "mastodon")
 
 STYLE = """
-QMainWindow { background: #f5f7fb; color: #172033; }
-QDialog, QMessageBox { background: #ffffff; color: #172033; }
-QMessageBox QLabel, QMessageBox QCheckBox { background: transparent; color: #172033; }
-QToolTip { background: #ffffff; color: #172033; border: 1px solid #cfd8e6; padding: 4px; }
-QAbstractItemView { background: #ffffff; color: #172033; selection-background-color: #e8f0fb; selection-color: #172033; }
-QWidget { color: #172033; font-family: "Segoe UI"; font-size: 10pt; }
-QStackedWidget, QScrollArea { background: #f5f7fb; border: none; }
-QScrollArea > QWidget > QWidget { background: #f5f7fb; }
+QMainWindow { background: #f3f6fa; color: #182437; }
+QDialog, QMessageBox { background: #ffffff; color: #182437; }
+QMessageBox QLabel, QMessageBox QCheckBox { background: transparent; color: #182437; }
+QToolTip { background: #102239; color: #f7fbff; border: 1px solid #29425f; padding: 6px 8px; }
+QAbstractItemView { background: #ffffff; color: #182437; selection-background-color: #e6eefb; selection-color: #182437; }
+QWidget { color: #182437; font-family: "Segoe UI"; font-size: 10pt; }
+QStackedWidget, QScrollArea { background: #f3f6fa; border: none; }
+QScrollArea > QWidget > QWidget { background: #f3f6fa; }
 QLabel, QCheckBox { background: transparent; }
-QMenuBar { background: #ffffff; color: #172033; border-bottom: 1px solid #dfe5ef; }
-QMenuBar::item { background: transparent; padding: 5px 8px; }
-QMenuBar::item:selected { background: #eef3fa; }
-QMenu { background: #ffffff; color: #172033; border: 1px solid #cfd8e6; }
-QMenu::item:selected { background: #e8f0fb; }
-QToolButton { background: #ffffff; color: #172033; border: 1px solid #cbd5e4; border-radius: 6px; padding: 6px 9px; }
-QToolButton:hover { background: #eef3fa; }
-QFrame#sidebar { background: #111b2e; border: none; }
-QLabel#brand { color: white; font-size: 19pt; font-weight: 700; }
-QLabel#brandSub { color: #aab8cf; font-size: 9pt; }
-QListWidget#nav { background: transparent; border: none; color: #cfdaeb; outline: none; }
-QListWidget#nav::item { padding: 11px 12px; margin: 2px 8px; border-radius: 7px; }
-QListWidget#nav::item:selected { background: #275aa8; color: white; }
-QListWidget#nav::item:hover:!selected { background: #1a2a45; }
-QFrame#card { background: white; border: 1px solid #dfe5ef; border-radius: 9px; }
-QLabel#pageTitle { font-size: 21pt; font-weight: 700; color: #172033; }
-QLabel#pageSub { color: #637087; font-size: 10pt; }
-QLabel#cardTitle { font-size: 12pt; font-weight: 650; color: #18243a; }
-QLabel#fieldLabel { font-weight: 600; color: #33415a; }
-QLabel#hint, QLabel#muted { color: #6e7b91; font-size: 9pt; }
+QMenuBar { background: #ffffff; color: #182437; border-bottom: 1px solid #e1e7ef; padding: 2px 6px; }
+QMenuBar::item { background: transparent; padding: 7px 10px; border-radius: 5px; }
+QMenuBar::item:selected { background: #edf2f8; }
+QMenu { background: #ffffff; color: #182437; border: 1px solid #d8e0ea; padding: 4px; }
+QMenu::item { padding: 7px 24px 7px 10px; border-radius: 4px; }
+QMenu::item:selected { background: #eaf0f8; }
+QToolButton { background: #ffffff; color: #182437; border: 1px solid #d1dbe7; border-radius: 7px; padding: 7px 10px; }
+QToolButton:hover { background: #edf3fa; }
+QFrame#sidebar { background: #101c2d; border: none; }
+QFrame#brandMark { background: #2e6cdb; border: 1px solid #5487e2; border-radius: 11px; }
+QLabel#brandMarkText { color: white; font-size: 18pt; font-weight: 750; }
+QLabel#brand { color: #f7faff; font-size: 17pt; font-weight: 750; }
+QLabel#brandSub { color: #9eafc5; font-size: 9pt; }
+QLabel#navCaption { color: #7489a4; font-size: 8pt; font-weight: 700; letter-spacing: 1px; padding: 5px 12px 1px; }
+QListWidget#nav { background: transparent; border: none; color: #c4d0df; outline: none; padding: 3px 0; }
+QListWidget#nav::item { min-height: 22px; padding: 10px 12px; margin: 2px 5px; border-radius: 7px; border-left: 3px solid transparent; }
+QListWidget#nav::item:selected { background: #203654; color: #ffffff; border-left: 3px solid #64d7b6; }
+QListWidget#nav::item:hover:!selected { background: #192b42; color: #f5f8fc; }
+QFrame#sidebarFooter { background: #14243a; border: 1px solid #263a54; border-radius: 9px; }
+QLabel#sidebarFooterTitle { color: #dce7f4; font-weight: 650; }
+QLabel#sidebarFooterSub { color: #91a4bd; font-size: 8pt; }
+QFrame#contextBar { background: #ffffff; border: none; border-bottom: 1px solid #e1e7ef; }
+QLabel#contextCaption { color: #718096; font-size: 8pt; font-weight: 700; letter-spacing: 1px; }
+QLabel#contextProject { color: #1b2b41; font-size: 11pt; font-weight: 650; }
+QLabel#contextArea { color: #607087; font-size: 9pt; font-weight: 600; }
+QFrame#card { background: #ffffff; border: 1px solid #dfe6ee; border-radius: 12px; }
+QLabel#pageTitle { font-size: 21pt; font-weight: 700; color: #182437; }
+QLabel#pageSub { color: #64748b; font-size: 10pt; }
+QLabel#cardTitle { font-size: 11pt; font-weight: 700; color: #1c2b40; }
+QLabel#fieldLabel { font-weight: 650; color: #34445a; }
+QLabel#hint, QLabel#muted { color: #697a90; font-size: 9pt; }
+QFrame#homeHero { background: #12253d; border: 1px solid #203956; border-radius: 16px; }
+QLabel#heroEyebrow { color: #77dec0; font-size: 8pt; font-weight: 750; letter-spacing: 1.2px; }
+QLabel#heroTitle { color: #f7faff; font-size: 22pt; font-weight: 700; }
+QLabel#heroCopy { color: #c9d6e6; font-size: 10pt; }
+QLabel#heroStep { color: #dae5f1; background: #1b3451; border: 1px solid #294562; border-radius: 7px; padding: 7px 10px; font-size: 9pt; font-weight: 600; }
+QFrame#dashboardCard { background: #ffffff; border: 1px solid #dfe6ee; border-radius: 12px; }
+QLabel#dashboardTitle { color: #1c2b40; font-size: 10pt; font-weight: 700; }
+QLabel#dashboardCopy { color: #697a90; font-size: 9pt; }
+QLabel#sectionEyebrow { color: #63758b; font-size: 8pt; font-weight: 750; letter-spacing: 1px; }
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {
-  background: white; border: 1px solid #cfd8e6; border-radius: 6px; padding: 6px; selection-background-color: #2d6cc0;
+  background: #ffffff; border: 1px solid #ccd7e4; border-radius: 7px; padding: 8px; selection-background-color: #2e67c8;
 }
-QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus { border: 1px solid #2d6cc0; }
-QPushButton { background: #ffffff; border: 1px solid #cbd5e4; border-radius: 6px; padding: 7px 12px; }
-QPushButton:hover { background: #eef3fa; }
-QPushButton[primary="true"] { background: #235fa8; border-color: #235fa8; color: white; font-weight: 600; }
-QPushButton[primary="true"]:hover { background: #194f91; }
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus { border: 1px solid #3976d3; }
+QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QComboBox:disabled { background: #f2f5f8; color: #8390a2; }
+QPushButton { background: #ffffff; border: 1px solid #ccd7e4; border-radius: 7px; padding: 8px 13px; min-height: 18px; font-weight: 550; }
+QPushButton:hover { background: #f0f4f9; border-color: #b8c7d8; }
+QPushButton:pressed { background: #e6edf6; }
+QPushButton:disabled { color: #8c98a8; background: #f4f6f8; border-color: #e1e6ec; }
+QPushButton[primary="true"] { background: #2e67c8; border-color: #2e67c8; color: white; font-weight: 650; }
+QPushButton[primary="true"]:hover { background: #2458b1; border-color: #2458b1; }
 QPushButton[danger="true"] { background: #fff6f5; color: #a8322d; border-color: #e5b8b5; }
-QTabWidget::pane { border: 1px solid #dfe5ef; background: white; border-radius: 7px; }
-QTabBar::tab { padding: 8px 14px; background: #edf1f7; margin-right: 2px; }
-QTabBar::tab:selected { background: white; color: #235fa8; font-weight: 600; }
-QProgressBar { border: 1px solid #cad4e2; border-radius: 5px; text-align: center; background: white; }
-QProgressBar::chunk { background: #2d6cc0; border-radius: 4px; }
-QLabel[tone="good"] { background: #e7f6ed; color: #1f6a3b; border-radius: 10px; padding: 4px 10px; font-weight: 600; }
-QLabel[tone="warn"] { background: #fff4da; color: #805b00; border-radius: 10px; padding: 4px 10px; font-weight: 600; }
-QLabel[tone="bad"] { background: #fde9e7; color: #9e302b; border-radius: 10px; padding: 4px 10px; font-weight: 600; }
-QLabel[tone="neutral"] { background: #e9eef6; color: #43536e; border-radius: 10px; padding: 4px 10px; font-weight: 600; }
-QDockWidget { font-weight: 600; }
+QPushButton#heroSecondary { background: #203956; border-color: #49617b; color: #f5f8fc; }
+QPushButton#heroSecondary:hover { background: #2a4767; border-color: #66809e; }
+QTabWidget::pane { border: 1px solid #dfe6ee; background: #ffffff; border-radius: 9px; top: -1px; }
+QTabBar::tab { padding: 10px 15px; background: #edf1f6; color: #596b81; margin-right: 3px; border-top-left-radius: 6px; border-top-right-radius: 6px; }
+QTabBar::tab:selected { background: #ffffff; color: #275db8; font-weight: 700; border-bottom: 2px solid #3976d3; }
+QTableWidget, QTableView { background: #ffffff; alternate-background-color: #f7f9fc; gridline-color: #e7ecf2; border: 1px solid #dfe6ee; border-radius: 8px; selection-background-color: #e6eefb; selection-color: #182437; }
+QHeaderView::section { background: #f1f4f8; color: #4f6075; padding: 8px 9px; border: none; border-bottom: 1px solid #dfe6ee; font-weight: 650; }
+QProgressBar { border: 1px solid #d2dce7; border-radius: 6px; text-align: center; background: #ffffff; color: #34445a; min-height: 14px; }
+QProgressBar::chunk { background: #3976d3; border-radius: 5px; }
+QLabel[tone="good"] { background: #e6f5ee; color: #206640; border-radius: 10px; padding: 5px 10px; font-weight: 650; }
+QLabel[tone="warn"] { background: #fff3d7; color: #795900; border-radius: 10px; padding: 5px 10px; font-weight: 650; }
+QLabel[tone="bad"] { background: #fde9e7; color: #9e302b; border-radius: 10px; padding: 5px 10px; font-weight: 650; }
+QLabel[tone="neutral"] { background: #eaf0f6; color: #4b5c72; border-radius: 10px; padding: 5px 10px; font-weight: 650; }
+QDockWidget { font-weight: 650; color: #304158; }
+QDockWidget::title { background: #f7f9fb; padding: 7px 10px; border-top: 1px solid #dfe6ee; }
+QScrollBar:vertical { background: transparent; width: 11px; margin: 2px; }
+QScrollBar::handle:vertical { background: #c6d1de; min-height: 28px; border-radius: 5px; }
+QScrollBar::handle:vertical:hover { background: #9eafc2; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 """
 
 
@@ -105,33 +137,33 @@ def apply_light_palette(app: QApplication) -> None:
     role = QPalette.ColorRole
 
     colors = {
-        role.Window: "#f5f7fb",
-        role.WindowText: "#172033",
+        role.Window: "#f3f6fa",
+        role.WindowText: "#182437",
         role.Base: "#ffffff",
-        role.AlternateBase: "#f5f7fb",
+        role.AlternateBase: "#f7f9fc",
         role.ToolTipBase: "#ffffff",
-        role.ToolTipText: "#172033",
-        role.Text: "#172033",
+        role.ToolTipText: "#182437",
+        role.Text: "#182437",
         role.Button: "#ffffff",
-        role.ButtonText: "#172033",
+        role.ButtonText: "#182437",
         role.BrightText: "#ffffff",
-        role.Link: "#235fa8",
-        role.Highlight: "#2d6cc0",
+        role.Link: "#2e67c8",
+        role.Highlight: "#2e67c8",
         role.HighlightedText: "#ffffff",
-        role.PlaceholderText: "#6e7b91",
+        role.PlaceholderText: "#697a90",
     }
     for color_role, value in colors.items():
         palette.setColor(normal, color_role, QColor(value))
         palette.setColor(QPalette.ColorGroup.Active, color_role, QColor(value))
         palette.setColor(QPalette.ColorGroup.Inactive, color_role, QColor(value))
 
-    palette.setColor(disabled, role.Window, QColor("#f5f7fb"))
-    palette.setColor(disabled, role.Base, QColor("#f2f4f8"))
-    palette.setColor(disabled, role.Button, QColor("#eef1f5"))
-    palette.setColor(disabled, role.WindowText, QColor("#7a8496"))
-    palette.setColor(disabled, role.Text, QColor("#7a8496"))
-    palette.setColor(disabled, role.ButtonText, QColor("#7a8496"))
-    palette.setColor(disabled, role.PlaceholderText, QColor("#9098a7"))
+    palette.setColor(disabled, role.Window, QColor("#f3f6fa"))
+    palette.setColor(disabled, role.Base, QColor("#f2f5f8"))
+    palette.setColor(disabled, role.Button, QColor("#eef2f6"))
+    palette.setColor(disabled, role.WindowText, QColor("#7c899a"))
+    palette.setColor(disabled, role.Text, QColor("#7c899a"))
+    palette.setColor(disabled, role.ButtonText, QColor("#7c899a"))
+    palette.setColor(disabled, role.PlaceholderText, QColor("#8b97a7"))
     app.setPalette(palette)
 
 
@@ -388,75 +420,117 @@ class HomePage(QWidget):
     def __init__(self) -> None:
         super().__init__()
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 24)
-        root.setSpacing(14)
-        root.addWidget(page_header("SUGAR Research Workbench", "Evidence-first collection, State Department research coding, macro/micro analytic intelligence, and reproducible briefing outputs."))
+        root.setContentsMargins(28, 22, 28, 28)
+        root.setSpacing(16)
+        root.addWidget(page_header("Research command center", "A clear path from a research question to traceable evidence and a verified handoff."))
 
-        start = Card(
-            "Start here — first time?",
-            "Recommended State/research path: create a portable Research Project, define the question, and build an inspectable plan. Core project, import, review, and export workflows do not require an LLM or Virginia Tech credentials.",
+        hero = QFrame()
+        hero.setObjectName("homeHero")
+        hero_layout = QVBoxLayout(hero)
+        hero_layout.setContentsMargins(26, 22, 26, 20)
+        hero_layout.setSpacing(12)
+        eyebrow = QLabel("EVIDENCE FIRST  ·  AUDITABLE BY DESIGN")
+        eyebrow.setObjectName("heroEyebrow")
+        hero_layout.addWidget(eyebrow)
+        title = QLabel("Turn a research question into a reviewable handoff.")
+        title.setObjectName("heroTitle")
+        title.setWordWrap(True)
+        hero_layout.addWidget(title)
+        intro = QLabel(
+            "Create a project, bring in source material, review what the evidence supports, and export a portable record. "
+            "Core project, import, review, and export workflows work without an AI key."
         )
-        steps = QLabel(
-            "1. Open State Workflow → Research Project and create or open a project folder.\n"
-            "2. Enter the research question and constraints, then build and review the search plan. You can import an existing authorized dataset without configuring an LLM.\n"
-            "3. Configure OpenAI, a custom OpenAI-compatible endpoint, or the optional Virginia Tech ARC classroom integration only if you need AI-assisted triage or enrichment."
-        )
-        steps.setWordWrap(True)
-        start.layout.addWidget(steps)
+        intro.setObjectName("heroCopy")
+        intro.setWordWrap(True)
+        hero_layout.addWidget(intro)
+
         start_row = QHBoxLayout()
-        setup_arc = QPushButton("Optional LLM settings")
-        setup_arc.clicked.connect(lambda: self.navigate.emit("Settings"))
-        collect_public = primary_button("1. Start Research Project", lambda: self.navigate.emit("State Workflow"))
-        guide = QPushButton("Open 5-minute guide")
-        guide.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(resource_path("CLASSROOM-QUICK-START.md")))))
-        start_row.addWidget(setup_arc)
-        start_row.addWidget(collect_public)
-        start_row.addWidget(guide)
+        start_row.setSpacing(9)
+        start_row.addWidget(primary_button("Start a research project", lambda: self.navigate.emit("State Workflow")))
+        workspace_button = QPushButton("Open project workspace")
+        workspace_button.setObjectName("heroSecondary")
+        workspace_button.clicked.connect(lambda: self.navigate.emit("Research Workspace"))
+        start_row.addWidget(workspace_button)
+        settings_button = QPushButton("Provider settings")
+        settings_button.setObjectName("heroSecondary")
+        settings_button.clicked.connect(lambda: self.navigate.emit("Settings"))
+        start_row.addWidget(settings_button)
         start_row.addStretch(1)
-        start.layout.addLayout(start_row)
-        root.addWidget(start)
+        hero_layout.addLayout(start_row)
+
+        workflow = QHBoxLayout()
+        workflow.setSpacing(8)
+        for label in ("01   Define the question", "02   Review source evidence", "03   Export a verified handoff"):
+            step = QLabel(label)
+            step.setObjectName("heroStep")
+            workflow.addWidget(step)
+        workflow.addStretch(1)
+        hero_layout.addLayout(workflow)
+        root.addWidget(hero)
 
         summary = QHBoxLayout()
-        self.backend_card = Card("Backend")
+        summary.setSpacing(12)
+        self.backend_card = Card("Backend status")
+        self.backend_card.setMinimumHeight(132)
         self.backend_status = StatusPill("Checking…", "neutral")
         self.backend_detail = QLabel("Starting diagnostics")
         self.backend_detail.setObjectName("muted")
         self.backend_detail.setWordWrap(True)
         self.backend_card.layout.addWidget(self.backend_status)
         self.backend_card.layout.addWidget(self.backend_detail)
-        summary.addWidget(self.backend_card)
+        summary.addWidget(self.backend_card, 1)
 
-        collectors = Card("Collectors")
+        collectors = Card("Source coverage")
+        collectors.setMinimumHeight(132)
         self.collector_status = QLabel("Waiting for backend capabilities")
         self.collector_status.setWordWrap(True)
+        self.collector_status.setObjectName("muted")
         collectors.layout.addWidget(self.collector_status)
-        summary.addWidget(collectors)
+        summary.addWidget(collectors, 1)
 
-        research = Card("Research pipeline")
-        text = QLabel("Collect → Normalize → Triage → Human Verify → State Assessment → Intelligence → Red Team → Brief")
-        text.setWordWrap(True)
-        research.layout.addWidget(text)
-        summary.addWidget(research)
+        project = Card("Current project")
+        project.setMinimumHeight(132)
+        self.project_status = QLabel("No project selected")
+        self.project_status.setObjectName("dashboardTitle")
+        self.project_status.setWordWrap(True)
+        self.project_detail = QLabel("Projects keep research, evidence, maps, and history together.")
+        self.project_detail.setObjectName("dashboardCopy")
+        self.project_detail.setWordWrap(True)
+        project.layout.addWidget(self.project_status)
+        project.layout.addWidget(self.project_detail)
+        self.project_action = QPushButton("Choose project")
+        self.project_action.clicked.connect(lambda: self.navigate.emit("Research Workspace"))
+        project.layout.addWidget(self.project_action)
+        summary.addWidget(project, 1)
         root.addLayout(summary)
 
-        quick = Card("Quick actions", "Use the full pages for advanced controls; these buttons jump directly to the relevant workflow.")
+        section_label = QLabel("CHOOSE A WORKFLOW")
+        section_label.setObjectName("sectionEyebrow")
+        root.addWidget(section_label)
         actions = QHBoxLayout()
-        for label, target in (("Collect data", "Collect"), ("Investigate Weibo", "Weibo"), ("Build State package", "State Workflow"), ("Run intelligence synthesis", "Intelligence")):
-            button = QPushButton(label)
+        actions.setSpacing(12)
+        for heading, detail, button_text, target in (
+            ("Research workspace", "Institutions, project history, saved searches, and layered maps.", "Manage workspace", "Research Workspace"),
+            ("Collect evidence", "Run a bounded search or manage a repeatable collection campaign.", "Open collectors", "Collect"),
+            ("Analyze and brief", "Inspect evidence quality, compare claims, and prepare outputs.", "Open intelligence", "Intelligence"),
+        ):
+            card = QFrame()
+            card.setObjectName("dashboardCard")
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(17, 15, 17, 15)
+            card_layout.setSpacing(8)
+            card_title = QLabel(heading)
+            card_title.setObjectName("dashboardTitle")
+            card_layout.addWidget(card_title)
+            description = QLabel(detail)
+            description.setObjectName("dashboardCopy")
+            description.setWordWrap(True)
+            card_layout.addWidget(description, 1)
+            button = QPushButton(button_text)
             button.clicked.connect(lambda _checked=False, value=target: self.navigate.emit(value))
-            actions.addWidget(button)
-        actions.addStretch(1)
-        quick.layout.addLayout(actions)
-        root.addWidget(quick)
-
-        guard = Card("Analytic guardrails")
-        guard_text = QLabel(
-            "SUGAR keeps presence, activity, reach, engagement, outcomes, and causal influence separate. "
-            "AI can suggest classifications and analytic hypotheses, but it cannot self-verify evidence, invent source identities, or promote an uncited judgment into a confident finding."
-        )
-        guard_text.setWordWrap(True)
-        guard.layout.addWidget(guard_text)
-        root.addWidget(guard)
+            card_layout.addWidget(button, 0, Qt.AlignLeft)
+            actions.addWidget(card, 1)
+        root.addLayout(actions)
         root.addStretch(1)
 
     def update_diagnostics(self, payload: dict[str, Any]) -> None:
@@ -519,6 +593,17 @@ class HomePage(QWidget):
         self.backend_status.setText("Backend problem")
         self.backend_status.set_tone("bad")
         self.backend_detail.setText(message)
+
+    def update_project(self, path: str) -> None:
+        if path:
+            project_name = Path(path).name or path
+            self.project_status.setText(project_name)
+            self.project_detail.setText(path)
+            self.project_action.setText("Open project workspace")
+        else:
+            self.project_status.setText("No project selected")
+            self.project_detail.setText("Projects keep research, evidence, maps, and history together.")
+            self.project_action.setText("Choose project")
 
 
 class CollectPage(QWidget):
@@ -1702,13 +1787,13 @@ class ActivityDock(QDockWidget):
     def __init__(self,parent:QWidget|None=None)->None:
         super().__init__("Activity & Outputs",parent); self.setObjectName("activityDock"); shell=QWidget(); root=QVBoxLayout(shell); root.setContentsMargins(10,8,10,8); root.setSpacing(6)
         top=QHBoxLayout(); self.status=QLabel("Ready"); self.status.setObjectName("muted"); self.progress=QProgressBar(); self.progress.setRange(0,1); self.progress.setValue(0); self.progress.setMaximumWidth(240); self.cancel=QPushButton("Cancel"); self.cancel.setProperty("danger",True); self.cancel.setEnabled(False); self.cancel.clicked.connect(self.cancel_requested); self.copy=QPushButton("Copy log"); self.clear=QPushButton("Clear"); top.addWidget(self.status); top.addStretch(1); top.addWidget(self.progress); top.addWidget(self.cancel); top.addWidget(self.copy); top.addWidget(self.clear); root.addLayout(top)
-        self.log=QPlainTextEdit(); self.log.setReadOnly(True); self.log.setMaximumBlockCount(5000); self.log.setMinimumHeight(105); root.addWidget(self.log,1)
+        self.log=QPlainTextEdit(); self.log.setReadOnly(True); self.log.setMaximumBlockCount(5000); self.log.setMinimumHeight(64); root.addWidget(self.log,1)
         self.output_host=QWidget(); self.output_layout=QHBoxLayout(self.output_host); self.output_layout.setContentsMargins(0,0,0,0)
         self.output_count=QLabel("Outputs: none"); self.output_choice=QComboBox(); self.output_choice.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon); self.output_choice.setMinimumContentsLength(24); self.output_choice.setEnabled(False)
         self.open_output=QPushButton("Open location"); self.open_output.setEnabled(False); self.open_output.clicked.connect(self._open_selected_output)
         self.copy_output=QPushButton("Copy path"); self.copy_output.setEnabled(False); self.copy_output.clicked.connect(lambda: QApplication.clipboard().setText(self.output_choice.currentData() or ""))
         self.output_choice.currentIndexChanged.connect(self._update_output_tooltip)
-        self.output_layout.addWidget(self.output_count); self.output_layout.addWidget(self.output_choice,1); self.output_layout.addWidget(self.open_output); self.output_layout.addWidget(self.copy_output); root.addWidget(self.output_host)
+        self.output_layout.addWidget(self.output_count); self.output_layout.addWidget(self.output_choice,1); self.output_layout.addWidget(self.open_output); self.output_layout.addWidget(self.copy_output); root.addWidget(self.output_host); self.output_host.setVisible(False)
         self.setWidget(shell); self.copy.clicked.connect(self._copy); self.clear.clicked.connect(self.log.clear)
     def _copy(self)->None: QApplication.clipboard().setText(self.log.toPlainText())
     def _open_selected_output(self)->None:
@@ -1741,35 +1826,53 @@ class ActivityDock(QDockWidget):
         self.output_choice.clear()
         for path in paths: self.output_choice.addItem(Path(path).name or path, path)
         self.output_count.setText(f"Outputs: {len(paths)}" if paths else "Outputs: none")
+        self.output_host.setVisible(bool(paths))
         for widget in (self.output_choice,self.open_output,self.copy_output): widget.setEnabled(bool(paths))
 
 
 class MainWindow(QMainWindow):
     def __init__(self,*,smoke:bool=False)->None:
-        super().__init__(); self.setWindowTitle("SUGAR — State Research Workbench"); self.resize(1380,900); self.setMinimumSize(1080,720); self._close_after_cancel=False; icon=resource_path("sugar-logo.png");
+        super().__init__(); self.setWindowTitle("SUGAR — State Research Workbench"); self.resize(1380,900); self.setMinimumSize(1080,680); self._close_after_cancel=False; icon=resource_path("sugar-logo.png");
         if icon.is_file(): self.setWindowIcon(QIcon(str(icon)))
         self.runner=BackendRunner(self); self._diagnostics:dict[str,Any]={}; self.pages:dict[str,int]={}; self._workspace_operation_queue:list[tuple[str,dict[str,Any],bool]]=[]; self._workspace_operation_scheduled=False
         self.settings_page=SettingsPage(); self.home=HomePage()
         self.state_page=StatePage(self.run_operation,self.settings_page)
         self.workspace_hub=WorkspaceHubPage(self.run_workspace_operation,self._activate_workspace,self.state_page.research_workspace.text().strip())
         central=QWidget(); outer=QHBoxLayout(central); outer.setContentsMargins(0,0,0,0); outer.setSpacing(0)
-        sidebar=QFrame(); sidebar.setObjectName("sidebar"); sidebar.setFixedWidth(210); side=QVBoxLayout(sidebar); side.setContentsMargins(8,16,8,12); brand=QLabel("SUGAR"); brand.setObjectName("brand"); sub=QLabel("State Research Workbench"); sub.setObjectName("brandSub"); side.addWidget(brand); side.addWidget(sub); side.addSpacing(12); self.nav=QListWidget(); self.nav.setObjectName("nav"); side.addWidget(self.nav,1); version=QLabel("Evidence-first OSINT + analysis"); version.setObjectName("brandSub"); version.setWordWrap(True); side.addWidget(version); outer.addWidget(sidebar)
-        self.stack=QStackedWidget(); outer.addWidget(self.stack,1); self.setCentralWidget(central)
+        sidebar=QFrame(); sidebar.setObjectName("sidebar"); sidebar.setFixedWidth(238); side=QVBoxLayout(sidebar); side.setContentsMargins(12,18,12,14); side.setSpacing(0)
+        brand_row=QHBoxLayout(); brand_row.setSpacing(10)
+        brand_mark=QFrame(); brand_mark.setObjectName("brandMark"); brand_mark.setFixedSize(42,42); brand_mark_layout=QVBoxLayout(brand_mark); brand_mark_layout.setContentsMargins(0,0,0,0); brand_mark_text=QLabel("S"); brand_mark_text.setObjectName("brandMarkText"); brand_mark_text.setAlignment(Qt.AlignCenter); brand_mark_layout.addWidget(brand_mark_text)
+        brand_copy=QVBoxLayout(); brand_copy.setSpacing(1); brand=QLabel("SUGAR"); brand.setObjectName("brand"); sub=QLabel("Research workbench"); sub.setObjectName("brandSub"); brand_copy.addWidget(brand); brand_copy.addWidget(sub)
+        brand_row.addWidget(brand_mark); brand_row.addLayout(brand_copy); brand_row.addStretch(1); side.addLayout(brand_row); side.addSpacing(26)
+        nav_caption=QLabel("WORKSPACE"); nav_caption.setObjectName("navCaption"); side.addWidget(nav_caption); side.addSpacing(5)
+        self.nav=QListWidget(); self.nav.setObjectName("nav"); self.nav.setSpacing(2); side.addWidget(self.nav,1)
+        footer=QFrame(); footer.setObjectName("sidebarFooter"); footer_layout=QVBoxLayout(footer); footer_layout.setContentsMargins(12,10,12,10); footer_layout.setSpacing(3); footer_title=QLabel("Evidence-first research"); footer_title.setObjectName("sidebarFooterTitle"); footer_sub=QLabel("Portable projects · reviewable outputs"); footer_sub.setObjectName("sidebarFooterSub"); footer_sub.setWordWrap(True); footer_layout.addWidget(footer_title); footer_layout.addWidget(footer_sub); side.addSpacing(10); side.addWidget(footer); outer.addWidget(sidebar)
+
+        content=QWidget(); content_layout=QVBoxLayout(content); content_layout.setContentsMargins(0,0,0,0); content_layout.setSpacing(0)
+        context=QFrame(); context.setObjectName("contextBar"); context.setFixedHeight(76); context_layout=QHBoxLayout(context); context_layout.setContentsMargins(24,10,24,10); context_layout.setSpacing(16)
+        project_context_column=QVBoxLayout(); project_context_column.setSpacing(2); project_caption=QLabel("ACTIVE PROJECT"); project_caption.setObjectName("contextCaption"); self.project_context=QLabel("No project selected"); self.project_context.setObjectName("contextProject"); self.project_context.setToolTip("Open or create a project in Research Workspace"); project_context_column.addWidget(project_caption); project_context_column.addWidget(self.project_context); context_layout.addLayout(project_context_column,1)
+        area_column=QVBoxLayout(); area_column.setSpacing(2); area_caption=QLabel("CURRENT AREA"); area_caption.setObjectName("contextCaption"); self.area_context=QLabel("Home"); self.area_context.setObjectName("contextArea"); area_column.addWidget(area_caption); area_column.addWidget(self.area_context); context_layout.addLayout(area_column)
+        self.backend_indicator=StatusPill("Backend checking", "neutral"); context_layout.addWidget(self.backend_indicator)
+        self.change_project_button=QPushButton("Choose project"); self.change_project_button.clicked.connect(lambda: self.navigate("Research Workspace")); context_layout.addWidget(self.change_project_button)
+        content_layout.addWidget(context)
+        self.stack=QStackedWidget(); content_layout.addWidget(self.stack,1); outer.addWidget(content,1); self.setCentralWidget(central)
         page_defs=[("Home",self.home),("Collect",CollectPage(self.run_operation,self.settings_page)),("Weibo",WeiboPage(self.run_operation,self.settings_page)),("State Workflow",self.state_page),("Research Workspace",self.workspace_hub),("Intelligence",IntelligencePage(self.run_operation,self.settings_page)),("Maps & Reports",ReportsPage(self.run_operation,self.settings_page)),("Settings",self.settings_page)]
         for name,page in page_defs:
             self.pages[name]=self.stack.count(); self.nav.addItem(QListWidgetItem(name)); self.stack.addWidget(scroll_page(page))
-        self.nav.currentRowChanged.connect(self.stack.setCurrentIndex); self.nav.setCurrentRow(0); self.home.navigate.connect(self.navigate)
-        self.activity=ActivityDock(self); self.addDockWidget(Qt.BottomDockWidgetArea,self.activity); self.activity.cancel_requested.connect(self.runner.cancel)
+        self.nav.currentRowChanged.connect(self.stack.setCurrentIndex); self.nav.currentRowChanged.connect(self._update_area_context); self.nav.setCurrentRow(0); self.home.navigate.connect(self.navigate)
+        self.home.update_project(self.workspace_hub.workspace)
+        self._set_project_context(self.workspace_hub.workspace)
+        self.activity=ActivityDock(self); self.addDockWidget(Qt.BottomDockWidgetArea,self.activity); self.activity.setMinimumHeight(142); self.resizeDocks([self.activity],[154],Qt.Vertical); self.activity.cancel_requested.connect(self.runner.cancel)
         self.runner.event.connect(self._event); self.runner.event.connect(self.state_page.handle_backend_event); self.runner.event.connect(self.workspace_hub.handle_backend_event); self.runner.outputs_changed.connect(self.activity.set_outputs); self.runner.error.connect(self._error); self.runner.running_changed.connect(self.activity.set_running); self.runner.running_changed.connect(self._finish_pending_close); self.runner.finished.connect(self._run_queued_workspace_operation); self.settings_page.diagnostics_requested.connect(self._diagnostics_run); self.settings_page.arc_test_requested.connect(self._arc_test_run)
         self._build_menu()
         self._monitor_timer=QTimer(self); self._monitor_timer.setInterval(60000); self._monitor_timer.timeout.connect(self._auto_run_due_monitors); self._monitor_timer.start()
         if not smoke:
             QTimer.singleShot(150,self._diagnostics_run)
-            QTimer.singleShot(450,self._show_getting_started)
 
     def _build_menu(self)->None:
         bar=self.menuBar(); file_menu=bar.addMenu("File"); open_output=QAction("Open default output folder",self); open_output.triggered.connect(lambda:QDesktopServices.openUrl(QUrl.fromLocalFile(self.settings_page.default_output()))); file_menu.addAction(open_output); file_menu.addSeparator(); quit_action=QAction("Exit",self); quit_action.triggered.connect(self.close); file_menu.addAction(quit_action)
         tools=bar.addMenu("Tools"); diag=QAction("Backend diagnostics",self); diag.triggered.connect(self._diagnostics_run); tools.addAction(diag); cancel=QAction("Cancel current operation",self); cancel.triggered.connect(self.runner.cancel); tools.addAction(cancel)
+        view=bar.addMenu("View"); view.addAction(self.activity.toggleViewAction())
         help_menu=bar.addMenu("Help"); getting_started=QAction("Getting Started",self); getting_started.triggered.connect(lambda: self._show_getting_started(True)); help_menu.addAction(getting_started); guide=QAction("Research Workspace guide",self); guide.triggered.connect(self._show_workspace_guide); help_menu.addAction(guide)
 
     def _show_getting_started(self, force: bool = False)->None:
@@ -1798,9 +1901,26 @@ class MainWindow(QMainWindow):
     def navigate(self,name:str)->None:
         if name in self.pages: self.nav.setCurrentRow(self.pages[name])
 
+    def _update_area_context(self, row: int) -> None:
+        item = self.nav.item(row) if row >= 0 else None
+        self.area_context.setText(item.text() if item else "Home")
+
+    def _set_project_context(self, path: str) -> None:
+        if path:
+            project = Path(path)
+            self.project_context.setText(project.name or str(project))
+            self.project_context.setToolTip(str(project))
+            self.change_project_button.setText("Switch project")
+        else:
+            self.project_context.setText("No project selected")
+            self.project_context.setToolTip("Open or create a project in Research Workspace")
+            self.change_project_button.setText("Choose project")
+
     def _activate_workspace(self, path: str) -> None:
         self.state_page.research_workspace.setText(path)
         self.state_page.research_project_name.setText(Path(path).name.replace("-", " "))
+        self.home.update_project(path)
+        self._set_project_context(path)
 
     def _show_workspace_guide(self) -> None:
         self.navigate("Research Workspace")
@@ -1858,8 +1978,10 @@ class MainWindow(QMainWindow):
 
     def _diagnostics_run(self)->None:
         if self.runner.is_running: return
+        self.backend_indicator.setText("Backend checking")
+        self.backend_indicator.set_tone("neutral")
         try: self.runner.diagnostics()
-        except Exception as exc: self.home.diagnostic_failure(str(exc))
+        except Exception as exc: self.home.diagnostic_failure(str(exc)); self.backend_indicator.setText("Backend issue"); self.backend_indicator.set_tone("bad")
 
     def _event(self,payload:dict[str,Any])->None:
         event=payload.get("event");
@@ -1877,6 +1999,8 @@ class MainWindow(QMainWindow):
             })
             diagnostic_payload["optional_credentials"]=backend_credentials
             self._diagnostics=diagnostic_payload; self.home.update_diagnostics(diagnostic_payload)
+            self.backend_indicator.setText("Backend ready")
+            self.backend_indicator.set_tone("good")
         if event=="llm_connection":
             available=bool(payload.get("selected_model_available",True)); model=str(payload.get("model") or "ARC model")
             self.settings_page.arc_status.setText("ARC connected" if available else "ARC connected · model unavailable"); self.settings_page.arc_status.set_tone("good" if available else "warn")
@@ -1885,7 +2009,10 @@ class MainWindow(QMainWindow):
         self.activity.append_event(payload)
 
     def _error(self,message:str)->None:
-        self.home.diagnostic_failure(message) if not self._diagnostics else None
+        if not self._diagnostics:
+            self.home.diagnostic_failure(message)
+            self.backend_indicator.setText("Backend issue")
+            self.backend_indicator.set_tone("bad")
         QMessageBox.critical(self,"SUGAR operation failed",message)
 
     def _finish_pending_close(self,running:bool)->None:

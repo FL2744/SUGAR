@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_7ce40a50c6131f01ff11ab3e2eed0e1f {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.1.0/leaflet.markercluster.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.1.0/MarkerCluster.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.1.0/MarkerCluster.Default.css"/>
+    <script src="https://cdn.jsdelivr.net/gh/python-visualization/folium@main/folium/templates/leaflet_heat.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.fullscreen@3.0.0/Control.FullScreen.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.fullscreen@3.0.0/Control.FullScreen.css"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-minimap/3.6.1/Control.MiniMap.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-minimap/3.6.1/Control.MiniMap.css"/>
+    <script src="https://cdn.jsdelivr.net/gh/ljagis/leaflet-measure@2.1.7/dist/leaflet-measure.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/ljagis/leaflet-measure@2.1.7/dist/leaflet-measure.min.css"/>
+    <script src="https://cdn.jsdelivr.net/gh/ardhi/Leaflet.MousePosition/src/L.Control.MousePosition.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/ardhi/Leaflet.MousePosition/src/L.Control.MousePosition.min.css"/>
+</head>
+<body>
+    
+    
+    <style>
+      .sugar-map-panel, .sugar-legend {
+        position: fixed; z-index: 9999; background: rgba(255,255,255,.95);
+        border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 2px 12px rgba(15,23,42,.16);
+        font: 12px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color: #0f172a;
+      }
+      .sugar-map-panel { top: 12px; left: 58px; width: 300px; padding: 12px 14px; }
+      .sugar-legend { bottom: 28px; left: 12px; padding: 9px 11px; max-height: 280px; overflow-y: auto; }
+      .sugar-panel-title { font-weight: 700; font-size: 16px; margin-bottom: 2px; }
+      .sugar-panel-subtitle { color: #475569; margin-bottom: 7px; }
+      .sugar-panel-type { font-weight: 600; margin-bottom: 5px; }
+      .sugar-panel-note { color: #64748b; border-top: 1px solid #e2e8f0; margin-top: 7px; padding-top: 7px; }
+      .sugar-legend-row { white-space: nowrap; margin-top: 4px; }
+      .sugar-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; border:1px solid rgba(15,23,42,.35); }
+      .sugar-reference-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; border:2px dashed #334155; background:white; box-sizing:border-box; }
+      .sugar-popup { min-width: 275px; max-width: 430px; font: 12px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      .sugar-popup-title { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+      .sugar-popup-meta { color: #475569; margin-bottom: 7px; }
+      .sugar-popup-summary { border-top: 1px solid #e2e8f0; margin-top: 7px; padding-top: 7px; }
+      .sugar-popup-provenance { color: #64748b; margin-top: 7px; font-size: 11px; }
+      .sugar-popup-id { color: #94a3b8; font-size: 10px; margin-top: 5px; word-break: break-all; }
+      .sugar-overlap { color: #9f1239; }
+      .sugar-proximity { color: #0f766e; margin-top: 4px; }
+      @media (max-width: 700px) {
+        .sugar-map-panel { left: 48px; width: 220px; max-height: 190px; overflow-y:auto; }
+        .sugar-legend { display:none; }
+      }
+    </style>
+    
+    
+    <div id="sugar-map-panel" class="sugar-map-panel">
+      <div class="sugar-panel-title">Ghana Education and Cultural Programs</div>
+      <div class="sugar-panel-subtitle">Institutions, programs, and public-diplomacy context</div>
+      <div><b>View date:</b> 2026-09-28</div>
+      <div class='sugar-panel-note'>Historical map views use documented opening/closure dates and dated activity. They do not reconstruct unknown historical locations or infer missing lifecycle dates.</div>
+      <div class="sugar-panel-type">Source records</div>
+      <div><b>8</b> mapped of 8 rows (100.0%)</div><div><b>3</b> mapped source platforms</div><div><b>1</b> countries represented</div>
+      <div class="sugar-panel-note">Heat intensity represents mapped record density, not influence, sentiment, audience size, institutional strength, or causal effect. Computed proximity is distance only and is not a strategic-overlap finding.</div>
+    </div>
+    
+    <div class='sugar-legend'><b>Source platforms</b><div class='sugar-legend-row'><span class='sugar-dot' style='background:hsl(198, 62%, 43%)'></span>American Spaces Ghana</div><div class='sugar-legend-row'><span class='sugar-dot' style='background:hsl(134, 62%, 43%)'></span>Educationusa</div><div class='sugar-legend-row'><span class='sugar-dot' style='background:hsl(138, 62%, 43%)'></span>Reference</div></div>
+    
+            <div class="folium-map" id="map_7ce40a50c6131f01ff11ab3e2eed0e1f" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_7ce40a50c6131f01ff11ab3e2eed0e1f = L.map(
+                "map_7ce40a50c6131f01ff11ab3e2eed0e1f",
+                {
+                    center: [5.5571096, -0.2012376],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 2,
+  "zoomControl": true,
+  "preferCanvas": true,
+  "worldCopyJump": true,
+}
+
+                }
+            );
+            L.control.scale().addTo(map_7ce40a50c6131f01ff11ab3e2eed0e1f);
+
+            
+
+        
+    
+            var feature_group_47ad453dedbb7fc3aa2ec97d7f8e162a = L.featureGroup(
+                {
+}
+            );
+        
+    
+            feature_group_47ad453dedbb7fc3aa2ec97d7f8e162a.addTo(map_7ce40a50c6131f01ff11ab3e2eed0e1f);
+        
+    
+            var tile_layer_9cf49d81cb5eb49820d2bd9cab365cbe = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; OpenStreetMap contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            var marker_cluster_8168584477cbcb2e41371e8d354a5734 = L.markerClusterGroup(
+                {
+  "disableClusteringAtZoom": 11,
+  "spiderfyOnMaxZoom": true,
+}
+            );
+        
+    
+            var marker_ce50d9b8dcca1573ab6a1c71c3f3b2f4 = L.marker(
+                [5.5571096, -0.2012376],
+                {
+}
+            ).addTo(marker_cluster_8168584477cbcb2e41371e8d354a5734);
+        
+    
+            var div_icon_88aad911f970e02bfbc912db1d27a93a = L.divIcon({
+  "html": "\u003cspan role=\u0027img\u0027 aria-label=\u0027American Spaces Ghana site \u2014 American Center Accra \u2014 unknown\u0027 title=\u0027American Spaces Ghana site \u2014 American Center Accra \u2014 unknown\u0027 style=\u0027display:flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:#e2e8f0;border:2px solid #64748b;color:#334155;font:700 20px/20px sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.35)\u0027\u003e?\u003c/span\u003e",
+  "iconSize": [23, 23],
+  "iconAnchor": [11, 11],
+  "className": "empty",
+});
+        
+    
+        var popup_a26d4655230292f2926b865e560aa4cc = L.popup({
+  "maxWidth": 470,
+});
+
+        
+            
+                var html_4c4e109a4c6fe8ff0d95bc3ee218b63e = $(`<div id="html_4c4e109a4c6fe8ff0d95bc3ee218b63e" style="width: 100.0%; height: 100.0%;"><div class='sugar-popup'><div class='sugar-popup-title'>American Spaces Ghana site — American Center Accra</div><div class='sugar-popup-meta'><b>Site</b> · Source Record</div><div><b>Location:</b> Accra, Ghana</div><div><b>Institution / record status:</b> Unknown</div><div><a href='https://americanspaces.state.gov/wp-content/uploads/sites/292/2301-Newsletter.pdf' target='_blank' rel='noopener noreferrer'>Open status evidence ↗</a></div><div><b>Actors:</b> American Center Accra</div><div><b>Related entities:</b> member_of: American Spaces Ghana</div><div><b>Location precision:</b> city</div><div class='sugar-popup-summary'>Official historical American Spaces newsletter refers to an American Center in Accra; present operating status is unknown. Relationships: member_of: American Spaces Ghana Lifecycle history: status_claim: 2026-09-28T21:45:48Z</div><div class='sugar-popup-provenance'>platform american spaces ghana · location: unknown</div><div><a href='https://americanspaces.state.gov/wp-content/uploads/sites/292/2301-Newsletter.pdf' target='_blank' rel='noopener noreferrer'>Open source evidence ↗</a></div><div><b>Registry ID:</b> site_american_center_accra</div><div><a href='https://www.openstreetmap.org/relation/12803764' target='_blank' rel='noopener noreferrer'>Open supporting registry evidence 1 ↗</a></div><div class='sugar-popup-id'>site_american_center_accra</div></div></div>`)[0];
+                popup_a26d4655230292f2926b865e560aa4cc.setContent(html_4c4e109a4c6fe8ff0d95bc3ee218b63e);
+            
+        
+
+        marker_ce50d9b8dcca1573ab6a1c71c3f3b2f4.bindPopup(popup_a26d4655230292f2926b865e560aa4cc)
+        ;
+
+        
+    
+    
+            marker_ce50d9b8dcca1573ab6a1c71c3f3b2f4.bindTooltip(
+                `<div>
+                     American Spaces Ghana site — American Center Accra — Accra, Ghana — Unknown
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_ce50d9b8dcca1573ab6a1c71c3f3b2f4.setIcon(div_icon_88aad911f970e02bfbc912db1d27a93a);
+            
+    
+            var marker_f1b72c361d2093afcae682810b2ba7af = L.marker(
+                [5.5571096, -0.2012376],
+                {
+}
+            ).addTo(marker_cluster_8168584477cbcb2e41371e8d354a5734);
+        
+    
+            var div_icon_80737d0f9328b651d7e18b07cf3891ad = L.divIcon({
+  "html": "\u003cspan role=\u0027img\u0027 aria-label=\u0027American Spaces Ghana site \u2014 American Corner Accra \u2014 unknown\u0027 title=\u0027American Spaces Ghana site \u2014 American Corner Accra \u2014 unknown\u0027 style=\u0027display:flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:#e2e8f0;border:2px solid #64748b;color:#334155;font:700 20px/20px sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.35)\u0027\u003e?\u003c/span\u003e",
+  "iconSize": [23, 23],
+  "iconAnchor": [11, 11],
+  "className": "empty",
+});
+        
+    
+        var popup_b820c8aa59c00ba845aabd9f39c305d6 = L.popup({
+  "maxWidth": 470,
+});
+
+        
+            
+                var html_39a001846296119b9c1889706e9ec451 = $(`<div id="html_39a001846296119b9c1889706e9ec451" style="width: 100.0%; height: 100.0%;"><div class='sugar-popup'><div class='sugar-popup-title'>American Spaces Ghana site — American Corner Accra</div><div class='sugar-popup-meta'><b>Site</b> · Source Record</div><div><b>Location:</b> Accra, Ghana</div><div><b>Institution / record status:</b> Unknown</div><div><a href='https://americanspaces.state.gov/wp-content/uploads/sites/292/2301-Newsletter.pdf' target='_blank' rel='noopener noreferrer'>Open status evidence ↗</a></div><div><b>Actors:</b> American Corner Accra</div><div><b>Related entities:</b> member_of: American Spaces Ghana</div><div><b>Location precision:</b> city</div><div class='sugar-popup-summary'>Official historical American Spaces newsletter refers to an American Corner in Accra; present operating status is unknown. Relationships: member_of: American Spaces Ghana Lifecycle history: status_claim: 2026-09-28T21:45:48Z</div><div class='sugar-popup-provenance'>platform american spaces ghana · location: unknown</div><div><a href='https://americanspaces.state.gov/wp-content/uploads/sites/292/2301-Newsletter.pdf' target='_blank' rel='noopener noreferrer'>Open source evidence ↗</a></div><div><b>Registry ID:</b> site_american_corner_accra</div><div><a href='https://www.openstreetmap.org/relation/12803764' target='_blank' rel='noopener noreferrer'>Open supporting registry evidence 1 ↗</a></div><div class='sugar-popup-id'>site_american_corner_accra</div></div></div>`)[0];
+                popup_b820c8aa59c00ba845aabd9f39c305d6.setContent(html_39a001846296119b9c1889706e9ec451);
+            
+        
+
+        marker_f1b72c361d2093afcae682810b2ba7af.bindPopup(popup_b820c8aa59c00ba845aabd9f39c305d6)
+        ;
+
+        
+    
+    
+            marker_f1b72c361d2093afcae682810b2ba7af.bindTooltip(
+                `<div>
+                     American Spaces Ghana site — American Corner Accra — Accra, Ghana — Unknown
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_f1b72c361d2093afcae682810b2ba7af.setIcon(div_icon_80737d0f9328b651d7e18b07cf3891ad);
+            
+    
+            marker_cluster_8168584477cbcb2e41371e8d354a5734.addTo(map_7ce40a50c6131f01ff11ab3e2eed0e1f);
+        
+    
+            var marker_cluster_a632312571f47eca2de252aad679f50f = L.markerClusterGroup(
+                {
+  "disableClusteringAtZoom": 11,
+  "spiderfyOnMaxZoom": true,
+}
+            );
+        
+    
+            var circle_marker_f8790fa971b410f5a595335476c143e1 = L.circleMarker(
+                [5.5571096, -0.2012376],
+                {"bubblingMouseEvents": true, "color": "hsl(134, 62%, 43%)", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "hsl(134, 62%, 43%)", "fillOpacity": 0.76, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 6, "stroke": true, "weight": 1.5}
+            ).addTo(marker_cluster_a632312571f47eca2de252aad679f50f);
+        
+    
+        var popup_ef7400a5916b4c3f9b2c549e0cb3f159 = L.popup({
+  "maxWidth": 470,
+});
+
+        
+            
+                var html_d442fa9d8257f3684ff19834d5de9163 = $(`<div id="html_d442fa9d8257f3684ff19834d5de9163" style="width: 100.0%; height: 100.0%;"><div class='sugar-popup'><div class='sugar-popup-title'>Educationusa site — EducationUSA Accra (ACE Consult)</div><div class='sugar-popup-meta'><b>Site</b> · Source Record</div><div><b>Location:</b> Accra, Ghana</div><div><b>Institution / record status:</b> Active</div><div><a href='https://educationusa.state.gov/centers/educationusa-accra-ace-consult' target='_blank' rel='noopener noreferrer'>Open status evidence ↗</a></div><div><b>Actors:</b> EducationUSA Accra (ACE Consult)</div><div><b>Programs / services:</b> U.S. higher education advising</div><div><b>Source program descriptions:</b> U.S. higher education advising</div><div><b>Related entities:</b> member_of: EducationUSA</div><div><b>Location precision:</b> city</div><div class='sugar-popup-summary'>Official EducationUSA center page lists this advising location and address. Relationships: member_of: EducationUSA Lifecycle history: active: 2026-09-28T21:45:48Z</div><div class='sugar-popup-provenance'>platform educationusa · location: unknown</div><div><a href='https://educationusa.state.gov/centers/educationusa-accra-ace-consult' target='_blank' rel='noopener noreferrer'>Open source evidence ↗</a></div><div><b>Registry ID:</b> site_educationusa_accra_ace</div><div><a href='https://www.openstreetmap.org/relation/12803764' target='_blank' rel='noopener noreferrer'>Open supporting registry evidence 1 ↗</a></div><div class='sugar-popup-id'>site_educationusa_accra_ace</div></div></div>`)[0];
+                popup_ef7400a5916b4c3f9b2c549e0cb3f159.setContent(html_d442fa9d8257f3684ff19834d5de9163);
+            
+        
+
+        circle_marker_f8790fa971b410f5a595335476c143e1.bindPopup(popup_ef7400a5916b4c3f9b2c549e0cb3f159)
+        ;
+
+        
+    
+    
+            circle_marker_f8790fa971b410f5a595335476c143e1.bindTooltip(
+                `<div>
+                     Educationusa site — EducationUSA Accra (ACE Consult) — Accra, Ghana — Active
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_ddcb13fabc50c3f3937ce9626f4a4b97 = L.circleMarker(
+                [5.5571096, -0.2012376],
+                {"bubblingMouseEvents": true, "color": "hsl(134, 62%, 43%)", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "hsl(134, 62%, 43%)", "fillOpacity": 0.76, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 6, "stroke": true, "weight": 1.5}
+            ).addTo(marker_cluster_a632312571f47eca2de252aad679f50f);
+        
+    
+        var popup_8d4758c8e847e5926ad87f99150065d7 = L.popup({
+  "maxWidth": 470,
+});
+
+        
+            
+                var html_31b15147729a9ac1ee7ac84da2237f9d = $(`<div id="html_31b15147729a9ac1ee7ac84da2237f9d" style="width: 100.0%; height: 100.0%;"><div class='sugar-popup'><div class='sugar-popup-title'>Educationusa site — EducationUSA Accra (U.S. Embassy)</div><div class='sugar-popup-meta'><b>Site</b> · Source Record</div><div><b>Location:</b> Accra, Ghana</div><div><b>Institution / record status:</b> Active</div><div><a href='https://educationusa.state.gov/centers/educationusa-accra' target='_blank' rel='noopener noreferrer'>Open status evidence ↗</a></div><div><b>Actors:</b> EducationUSA Accra (U.S. Embassy)</div><div><b>Aliases:</b> EducationUSA Accra</div><div><b>Programs / services:</b> U.S. higher education advising</div><div><b>Source program descriptions:</b> U.S. higher education advising</div><div><b>Related entities:</b> hosted_by: U.S. Embassy Accra, member_of: EducationUSA</div><div><b>Location precision:</b> city</div><div class='sugar-popup-summary'>Official EducationUSA center page lists this advising location and address. Relationships: hosted_by: U.S. Embassy Accra; member_of: EducationUSA Lifecycle history: active: 2026-09-28T21:45:48Z</div><div class='sugar-popup-provenance'>platform educationusa · location: unknown</div><div><a href='https://educationusa.state.gov/centers/educationusa-accra' target='_blank' rel='noopener noreferrer'>Open source evidence ↗</a></div><div><b>Registry ID:</b> site_educationusa_accra_embassy</div><div><a href='https://www.openstreetmap.org/relation/12803764' target='_blank' rel='noopener noreferrer'>Open supporting registry evidence 1 ↗</a></div><div class='sugar-popup-id'>site_educationusa_accra_embassy</div></div></div>`)[0];
+                popup_8d4758c8e847e5926ad87f99150065d7.setContent(html_31b15147729a9ac1ee7ac84da2237f9d);
+            
+        
+
+        circle_marker_ddcb13fabc50c3f3937ce9626f4a4b97.bindPopup(popup_8d4758c8e847e5926ad87f99150065d7)
+        ;
+
+        
+    
+    
+            circle_marker_ddcb13fabc50c3f3937ce9626f4a4b97.bindTooltip(
+                `<div>
+                     Educationusa site — EducationUSA Accra (U.S. Embassy) — Accra, Ghana — Active
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_30e9d9117d243dc3f827780ba4198ac8 = L.circleMarker(
+                [6.6985605, -1.6233086],
+                {"bubblingMouseEvents": true, "color": "hsl(134, 62%, 43%)", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "hsl(134, 62%, 43%)", "fillOpacity": 0.76, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 6, "stroke": true, "weight": 1.5}
+            ).addTo(marker_cluster_a632312571f47eca2de252aad679f50f);
+        
+    
+        var popup_891b20e78e28c0107fe5b2637ab2de34 = L.popup({
+  "maxWidth": 470,
+});
+
+        
+            
+                var html_75f7a271ef8328f39ece195980a9a838 = $(`<div id="html_75f7a271ef8328f39ece195980a9a838" style="width: 100.0%; height: 100.0%;"><div class='sugar-popup'><div class='sugar-popup-title'>Educationusa site — EducationUSA Kumasi (ACE Consult)</div><div class='sugar-popup-meta'><b>Site</b> · Source Record</div><div><b>Location:</b> Kumasi, Ghana</div><div><b>Institution / record status:</b> Active</div><div><a href='https://educationusa.state.gov/find-advising-center?field_directory_admissions_couns_value=AR&amp;field_program_page_degree_type_target_id=13&amp;page=24' target='_blank' rel='noopener noreferrer'>Open status evidence ↗</a></div><div><b>Actors:</b> EducationUSA Kumasi (ACE Consult)</div><div><b>Programs / services:</b> U.S. higher education advising</div><div><b>Source program descriptions:</b> U.S. higher education advising</div><div><b>Related entities:</b> member_of: EducationUSA</div><div><b>Location precision:</b> city</div><div class='sugar-popup-summary'>Official EducationUSA center directory lists an ACE Consult center in Kumasi. Relationships: member_of: EducationUSA Lifecycle history: active: 2026-09-28T21:45:48Z</div><div class='sugar-popup-provenance'>platform educationusa · location: unknown</div><div><a href='https://educationusa.state.gov/find-advising-center?field_directory_admissions_couns_value=AR&amp;field_program_page_degree_type_target_id=13&amp;page=24' target='_blank' rel='noopener noreferrer'>Open source evidence ↗</a></div><div><b>Registry ID:</b> site_educationusa_kumasi</div><div><a href='https://www.openstreetmap.org/node/261702404' target='_blank' rel='noopener noreferrer'>Open supporting registry evidence 1 ↗</a></div><div class='sugar-popup-id'>site_educationusa_kumasi</div></div></div>`)[0];
+                popup_891b20e78e28c0107fe5b2637ab2de34.setContent(html_75f7a271ef8328f39ece195980a9a838);
+            
+        
+
+        circle_marker_30e9d9117d243dc3f827780ba4198ac8.bindPopup(popup_891b20e78e28c0107fe5b2637ab2de34)
+        ;
+
+        
+    
+    
+            circle_marker_30e9d9117d243dc3f827780ba4198ac8.bindTooltip(
+                `<div>
+                     Educationusa site — EducationUSA Kumasi (ACE Consult) — Kumasi, Ghana — Active
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            marker_cluster_a632312571f47eca2de252aad679f50f.addTo(map_7ce40a50c6131f01ff11ab3e2eed0e1f);
+        
+    
+            var marker_cluster_30be1114d20a060896b1b216ddf74b87 = L.markerClusterGroup(
+                {
+  "disableClusteringAtZoom": 11,
+  "spiderfyOnMaxZoom": true,
+}
+            );
+        
+    
+            var circle_marker_2971f38976648183911c1d3901891354 = L.circleMarker(
+                [5.6465979, -0.188004],
+                {"bubblingMouseEvents": true, "color": "hsl(138, 62%, 43%)", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "hsl(138, 62%, 43%)", "fillOpacity": 0.76, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 6, "stroke": true, "weight": 1.5}
+            ).addTo(marker_cluster_30be1114d20a060896b1b216ddf74b87);
+        
+    
+        var popup_1889d1720915f9ac258a3a04cf718299 = L.popup({
+  "maxWidth": 470,
+});
+
+        
+            
+                var html_e1ad6ff88cd043b0b6bc1c4514db1459 = $(`<div id="html_e1ad6ff88cd043b0b6bc1c4514db1459" style="width: 100.0%; height: 100.0%;"><div class='sugar-popup'><div class='sugar-popup-title'>Reference program — Confucius Institute at the University of Ghana</div><div class='sugar-popup-meta'><b>Program</b> · Source Record</div><div><b>Location:</b> Ghana</div><div><b>Institution / record status:</b> Active</div><div><a href='https://www.ug.edu.gh/news/ciug-board-meeting-charts-new-direction-2026-ug-and-zhejiang-university-technology-strengthen' target='_blank' rel='noopener noreferrer'>Open status evidence ↗</a></div><div><b>Actors:</b> Confucius Institute at the University of Ghana</div><div><b>Programs / services:</b> cultural_programming</div><div><b>Source program descriptions:</b> Chinese language education, cultural programming</div><div><b>Normalized program domains:</b> cultural_programming</div><div><b>Related entities:</b> hosted_by: University of Ghana, partner_of: Zhejiang University of Technology</div><div><b>Location precision:</b> campus</div><div class='sugar-popup-summary'>University of Ghana reports CIUG activity and a partnership with Zhejiang University of Technology. Relationships: hosted_by: University of Ghana; partner_of: Zhejiang University of Technology Lifecycle history: active: 2026-09-28T21:45:48Z</div><div class='sugar-popup-provenance'>platform reference · location: unknown</div><div><a href='https://www.ug.edu.gh/news/ciug-board-meeting-charts-new-direction-2026-ug-and-zhejiang-university-technology-strengthen' target='_blank' rel='noopener noreferrer'>Open source evidence ↗</a></div><div><b>Registry ID:</b> program_ciug</div><div><a href='https://www.openstreetmap.org/way/308668766' target='_blank' rel='noopener noreferrer'>Open supporting registry evidence 1 ↗</a></div><div class='sugar-popup-id'>program_ciug</div></div></div>`)[0];
+                popup_1889d1720915f9ac258a3a04cf718299.setContent(html_e1ad6ff88cd043b0b6bc1c4514db1459);
+            
+        
+
+        circle_marker_2971f38976648183911c1d3901891354.bindPopup(popup_1889d1720915f9ac258a3a04cf718299)
+        ;
+
+        
+    
+    
+            circle_marker_2971f38976648183911c1d3901891354.bindTooltip(
+                `<div>
+                     Reference program — Confucius Institute at the University of Ghana — Ghana — Active
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_50276b2200d6a24631a8760b65a9a531 = L.circleMarker(
+                [5.5571096, -0.2012376],
+                {"bubblingMouseEvents": true, "color": "hsl(138, 62%, 43%)", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "hsl(138, 62%, 43%)", "fillOpacity": 0.76, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 6, "stroke": true, "weight": 1.5}
+            ).addTo(marker_cluster_30be1114d20a060896b1b216ddf74b87);
+        
+    
+        var popup_32fecb75d79086954ddd307b781e4529 = L.popup({
+  "maxWidth": 470,
+});
+
+        
+            
+                var html_7f4981167f9b5108b0a9356fb1c122c1 = $(`<div id="html_7f4981167f9b5108b0a9356fb1c122c1" style="width: 100.0%; height: 100.0%;"><div class='sugar-popup'><div class='sugar-popup-title'>Reference organization — U.S. Embassy Accra</div><div class='sugar-popup-meta'><b>Organization</b> · Source Record</div><div><b>Location:</b> Accra, Ghana</div><div><b>Institution / record status:</b> Active</div><div><a href='https://educationusa.state.gov/centers/educationusa-accra' target='_blank' rel='noopener noreferrer'>Open status evidence ↗</a></div><div><b>Actors:</b> U.S. Embassy Accra</div><div><b>Related entities:</b> hosted_by: EducationUSA Accra (U.S. Embassy)</div><div><b>Location precision:</b> city</div><div class='sugar-popup-summary'>EducationUSA&#x27;s official center listing gives the embassy address; coordinates are only an Accra city reference point. Relationships: hosted_by: EducationUSA Accra (U.S. Embassy) Lifecycle history: active: 2026-09-28T21:45:48Z</div><div class='sugar-popup-provenance'>platform reference · location: unknown</div><div><a href='https://educationusa.state.gov/centers/educationusa-accra' target='_blank' rel='noopener noreferrer'>Open source evidence ↗</a></div><div><b>Registry ID:</b> organization_us_embassy_accra</div><div><a href='https://www.openstreetmap.org/relation/12803764' target='_blank' rel='noopener noreferrer'>Open supporting registry evidence 1 ↗</a></div><div class='sugar-popup-id'>organization_us_embassy_accra</div></div></div>`)[0];
+                popup_32fecb75d79086954ddd307b781e4529.setContent(html_7f4981167f9b5108b0a9356fb1c122c1);
+            
+        
+
+        circle_marker_50276b2200d6a24631a8760b65a9a531.bindPopup(popup_32fecb75d79086954ddd307b781e4529)
+        ;
+
+        
+    
+    
+            circle_marker_50276b2200d6a24631a8760b65a9a531.bindTooltip(
+                `<div>
+                     Reference organization — U.S. Embassy Accra — Accra, Ghana — Active
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_18b0fd6b54f5925ee051d1d71eb48da7 = L.circleMarker(
+                [5.6465979, -0.188004],
+                {"bubblingMouseEvents": true, "color": "hsl(138, 62%, 43%)", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "hsl(138, 62%, 43%)", "fillOpacity": 0.76, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 6, "stroke": true, "weight": 1.5}
+            ).addTo(marker_cluster_30be1114d20a060896b1b216ddf74b87);
+        
+    
+        var popup_241f445d99dfe05b0d82bcf7103efd33 = L.popup({
+  "maxWidth": 470,
+});
+
+        
+            
+                var html_6fa7901759ec1fe71454700db2a6f72f = $(`<div id="html_6fa7901759ec1fe71454700db2a6f72f" style="width: 100.0%; height: 100.0%;"><div class='sugar-popup'><div class='sugar-popup-title'>Reference institution — University of Ghana</div><div class='sugar-popup-meta'><b>Institution</b> · Source Record</div><div><b>Location:</b> Ghana</div><div><b>Institution / record status:</b> Active</div><div><a href='https://www.ug.edu.gh/news/ciug-board-meeting-charts-new-direction-2026-ug-and-zhejiang-university-technology-strengthen' target='_blank' rel='noopener noreferrer'>Open status evidence ↗</a></div><div><b>Actors:</b> University of Ghana</div><div><b>Related entities:</b> hosted_by: Confucius Institute at the University of Ghana</div><div><b>Location precision:</b> campus</div><div class='sugar-popup-summary'>University of Ghana reports current institutional activity; the map uses a separately sourced campus reference point. Relationships: hosted_by: Confucius Institute at the University of Ghana Lifecycle history: active: 2026-09-28T21:45:48Z</div><div class='sugar-popup-provenance'>platform reference · location: unknown</div><div><a href='https://www.ug.edu.gh/news/ciug-board-meeting-charts-new-direction-2026-ug-and-zhejiang-university-technology-strengthen' target='_blank' rel='noopener noreferrer'>Open source evidence ↗</a></div><div><b>Registry ID:</b> institution_university_of_ghana</div><div><a href='https://www.openstreetmap.org/way/308668766' target='_blank' rel='noopener noreferrer'>Open supporting registry evidence 1 ↗</a></div><div class='sugar-popup-id'>institution_university_of_ghana</div></div></div>`)[0];
+                popup_241f445d99dfe05b0d82bcf7103efd33.setContent(html_6fa7901759ec1fe71454700db2a6f72f);
+            
+        
+
+        circle_marker_18b0fd6b54f5925ee051d1d71eb48da7.bindPopup(popup_241f445d99dfe05b0d82bcf7103efd33)
+        ;
+
+        
+    
+    
+            circle_marker_18b0fd6b54f5925ee051d1d71eb48da7.bindTooltip(
+                `<div>
+                     Reference institution — University of Ghana — Ghana — Active
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            marker_cluster_30be1114d20a060896b1b216ddf74b87.addTo(map_7ce40a50c6131f01ff11ab3e2eed0e1f);
+        
+    
+            var feature_group_96a43ebeef119018968bee1abe71d8ca = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var heat_map_16aa7e68ed1acde8ec09df7809334a2c = L.heatLayer(
+                [[5.6465979, -0.188004], [5.5571096, -0.2012376], [5.6465979, -0.188004], [5.5571096, -0.2012376], [5.5571096, -0.2012376], [5.5571096, -0.2012376], [5.5571096, -0.2012376], [6.6985605, -1.6233086]],
+                {
+  "minOpacity": 0.25,
+  "maxZoom": 18,
+  "radius": 24,
+  "blur": 18,
+}
+            );
+        
+    
+            heat_map_16aa7e68ed1acde8ec09df7809334a2c.addTo(feature_group_96a43ebeef119018968bee1abe71d8ca);
+        
+    
+            L.control.fullscreen(
+                {
+  "position": "topleft",
+  "title": "Fullscreen",
+  "titleCancel": "Exit fullscreen",
+  "forceSeparateButton": false,
+}
+            ).addTo(map_7ce40a50c6131f01ff11ab3e2eed0e1f);
+        
+    
+            var tile_layer_d943238cb1fc6c60e1719c4870d99fe4 = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {"attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors", "detect_retina": false, "max_native_zoom": 19, "max_zoom": 19, "min_zoom": 0, "no_wrap": false, "opacity": 1, "subdomains": "abc", "tms": false}
+            );
+            var mini_map_2d3afc5dfb85095e109dadd7bd39c3ee = new L.Control.MiniMap(
+                tile_layer_d943238cb1fc6c60e1719c4870d99fe4,
+                {
+  "position": "bottomright",
+  "width": 150,
+  "height": 150,
+  "collapsedWidth": 25,
+  "collapsedHeight": 25,
+  "zoomLevelOffset": -5,
+  "centerFixed": false,
+  "zoomAnimation": false,
+  "toggleDisplay": true,
+  "autoToggleDisplay": false,
+  "minimized": true,
+}
+            );
+            map_7ce40a50c6131f01ff11ab3e2eed0e1f.addControl(mini_map_2d3afc5dfb85095e109dadd7bd39c3ee);
+        
+    
+            var measure_control_04c1eb73bc99f77c6afdda0794b6355f = new L.Control.Measure(
+                {
+  "position": "topleft",
+  "primaryLengthUnit": "kilometers",
+  "secondaryLengthUnit": "miles",
+  "primaryAreaUnit": "sqmeters",
+  "secondaryAreaUnit": "acres",
+});
+            map_7ce40a50c6131f01ff11ab3e2eed0e1f.addControl(measure_control_04c1eb73bc99f77c6afdda0794b6355f);
+
+            // Workaround for using this plugin with Leaflet>=1.8.0
+            // https://github.com/ljagis/leaflet-measure/issues/171
+            L.Control.Measure.include({
+                _setCaptureMarkerIcon: function () {
+                    // disable autopan
+                    this._captureMarker.options.autoPanOnFocus = false;
+                    // default function
+                    this._captureMarker.setIcon(
+                        L.divIcon({
+                            iconSize: this._map.getSize().multiplyBy(2)
+                        })
+                    );
+                },
+            });
+
+        
+    
+            var mouse_position_040922131643f55c8820bd8e90a7a2c1 = new L.Control.MousePosition(
+                {
+  "position": "bottomright",
+  "separator": " \u00b7 ",
+  "emptyString": "Unavailable",
+  "lngFirst": false,
+  "numDigits": 5,
+  "prefix": "Lat/Lon:",
+}
+            );
+            mouse_position_040922131643f55c8820bd8e90a7a2c1.options["latFormatter"] =
+                undefined;
+            mouse_position_040922131643f55c8820bd8e90a7a2c1.options["lngFormatter"] =
+                undefined;
+            map_7ce40a50c6131f01ff11ab3e2eed0e1f.addControl(mouse_position_040922131643f55c8820bd8e90a7a2c1);
+        
+    
+            map_7ce40a50c6131f01ff11ab3e2eed0e1f.fitBounds(
+                [[5.5571096, -1.6233086], [6.6985605, -0.188004]],
+                {"padding": [28, 28]}
+            );
+        
+    
+            var layer_control_82937024b1edcc873d623701f1f0cc03_layers = {
+                base_layers : {
+                    "Offline analytic canvas" : feature_group_47ad453dedbb7fc3aa2ec97d7f8e162a,
+                    "OpenStreetMap (online)" : tile_layer_9cf49d81cb5eb49820d2bd9cab365cbe,
+                },
+                overlays :  {
+                    "Platform \u2014 American Spaces Ghana (2)" : marker_cluster_8168584477cbcb2e41371e8d354a5734,
+                    "Platform \u2014 Educationusa (3)" : marker_cluster_a632312571f47eca2de252aad679f50f,
+                    "Platform \u2014 Reference (3)" : marker_cluster_30be1114d20a060896b1b216ddf74b87,
+                    "Density \u2014 all analytical records" : feature_group_96a43ebeef119018968bee1abe71d8ca,
+                },
+            };
+            let layer_control_82937024b1edcc873d623701f1f0cc03 = L.control.layers(
+                layer_control_82937024b1edcc873d623701f1f0cc03_layers.base_layers,
+                layer_control_82937024b1edcc873d623701f1f0cc03_layers.overlays,
+                {
+  "position": "topright",
+  "collapsed": false,
+  "autoZIndex": true,
+}
+            ).addTo(map_7ce40a50c6131f01ff11ab3e2eed0e1f);
+
+        
+</script>
+</html>

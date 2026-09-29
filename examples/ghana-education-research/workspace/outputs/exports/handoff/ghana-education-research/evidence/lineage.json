@@ -1,0 +1,323 @@
+{
+  "assessments": [],
+  "counts": {
+    "assessments": 0,
+    "findings": 0,
+    "observations": 6,
+    "records": 6,
+    "source_conflicts": 0
+  },
+  "dataset_provenance": {
+    "capture_method": "curated_manual_import",
+    "csv": "ghana-demo-source-records.csv",
+    "generated_at": "2026-09-28T21:45:48Z",
+    "records": 6,
+    "snapshot_date": "2026-09-28",
+    "source_coverage_note": "Six manually curated official webpages/documents; no platform collection was performed.",
+    "sources": [
+      "americanspaces.state.gov",
+      "educationusa.state.gov",
+      "www.ug.edu.gh"
+    ],
+    "terms": [
+      "Ghana EducationUSA American Spaces Confucius Institute University of Ghana"
+    ],
+    "xlsx": "ghana-demo-source-records.xlsx"
+  },
+  "findings": [],
+  "generated_at": "2026-09-28T21:45:49Z",
+  "guardrail": "Lineage points to stored original evidence. Summaries and analytic findings do not replace canonical source records or evidence references.",
+  "observations": [
+    {
+      "ai_model": "",
+      "ai_provider": "",
+      "ai_workflow": "",
+      "evidence": [
+        {
+          "archived_url": "",
+          "collected_at": "2026-09-28T12:00:00Z",
+          "language": "",
+          "media_artifact_id": "",
+          "media_locator": "",
+          "native_id": "educationusa-accra-embassy",
+          "note": "Paraphrased source record; inspect the linked source for the original wording.",
+          "platform": "web",
+          "published_at": "",
+          "source_type": "official public webpage or document",
+          "title": "EducationUSA Accra",
+          "url": "https://educationusa.state.gov/centers/educationusa-accra"
+        }
+      ],
+      "observation_id": "obs_d7e230485f28e36e6ccb",
+      "reviewed_at": "",
+      "reviewer": "",
+      "source_record_keys": [
+        "web:educationusa-accra-embassy"
+      ],
+      "verification_notes": "Public-source demo claim; analyst review is still required.",
+      "verification_state": "unreviewed"
+    },
+    {
+      "ai_model": "",
+      "ai_provider": "",
+      "ai_workflow": "",
+      "evidence": [
+        {
+          "archived_url": "",
+          "collected_at": "2026-09-28T12:00:00Z",
+          "language": "",
+          "media_artifact_id": "",
+          "media_locator": "",
+          "native_id": "educationusa-accra-ace-consult",
+          "note": "Paraphrased source record; inspect the linked source for the original wording.",
+          "platform": "web",
+          "published_at": "",
+          "source_type": "official public webpage or document",
+          "title": "EducationUSA Accra (ACE Consult)",
+          "url": "https://educationusa.state.gov/centers/educationusa-accra-ace-consult"
+        }
+      ],
+      "observation_id": "obs_71c15b6d8a6fb32a438a",
+      "reviewed_at": "",
+      "reviewer": "",
+      "source_record_keys": [
+        "web:educationusa-accra-ace-consult"
+      ],
+      "verification_notes": "Public-source demo claim; analyst review is still required.",
+      "verification_state": "unreviewed"
+    },
+    {
+      "ai_model": "",
+      "ai_provider": "",
+      "ai_workflow": "",
+      "evidence": [
+        {
+          "archived_url": "",
+          "collected_at": "2026-09-28T12:00:00Z",
+          "language": "",
+          "media_artifact_id": "",
+          "media_locator": "",
+          "native_id": "educationusa-kumasi-ace-consult",
+          "note": "Paraphrased source record; inspect the linked source for the original wording.",
+          "platform": "web",
+          "published_at": "",
+          "source_type": "official public webpage or document",
+          "title": "EducationUSA center directory: Kumasi (ACE Consult)",
+          "url": "https://educationusa.state.gov/find-advising-center?field_directory_admissions_couns_value=AR&field_program_page_degree_type_target_id=13&page=24"
+        }
+      ],
+      "observation_id": "obs_0daf8958749ea22972aa",
+      "reviewed_at": "",
+      "reviewer": "",
+      "source_record_keys": [
+        "web:educationusa-kumasi-ace-consult"
+      ],
+      "verification_notes": "Public-source demo claim; analyst review is still required.",
+      "verification_state": "unreviewed"
+    },
+    {
+      "ai_model": "",
+      "ai_provider": "",
+      "ai_workflow": "",
+      "evidence": [
+        {
+          "archived_url": "",
+          "collected_at": "2026-09-28T12:00:00Z",
+          "language": "",
+          "media_artifact_id": "",
+          "media_locator": "",
+          "native_id": "american-spaces-ghana-newsletter",
+          "note": "Paraphrased source record; inspect the linked source for the original wording.",
+          "platform": "web",
+          "published_at": "",
+          "source_type": "official public webpage or document",
+          "title": "American Spaces Ghana newsletter (historical reference)",
+          "url": "https://americanspaces.state.gov/wp-content/uploads/sites/292/2301-Newsletter.pdf"
+        }
+      ],
+      "observation_id": "obs_b568ab39c5fb173792d6",
+      "reviewed_at": "",
+      "reviewer": "",
+      "source_record_keys": [
+        "web:american-spaces-ghana-newsletter"
+      ],
+      "verification_notes": "Public-source demo claim; analyst review is still required.",
+      "verification_state": "unreviewed"
+    },
+    {
+      "ai_model": "",
+      "ai_provider": "",
+      "ai_workflow": "",
+      "evidence": [
+        {
+          "archived_url": "",
+          "collected_at": "2026-09-28T12:00:00Z",
+          "language": "",
+          "media_artifact_id": "",
+          "media_locator": "",
+          "native_id": "university-of-ghana-homepage",
+          "note": "Paraphrased source record; inspect the linked source for the original wording.",
+          "platform": "web",
+          "published_at": "",
+          "source_type": "official public webpage or document",
+          "title": "University of Ghana",
+          "url": "https://www.ug.edu.gh/"
+        }
+      ],
+      "observation_id": "obs_bc200544c4c891cc2a57",
+      "reviewed_at": "",
+      "reviewer": "",
+      "source_record_keys": [
+        "web:university-of-ghana-homepage"
+      ],
+      "verification_notes": "Public-source demo claim; analyst review is still required.",
+      "verification_state": "unreviewed"
+    },
+    {
+      "ai_model": "",
+      "ai_provider": "",
+      "ai_workflow": "",
+      "evidence": [
+        {
+          "archived_url": "",
+          "collected_at": "2026-09-28T12:00:00Z",
+          "language": "",
+          "media_artifact_id": "",
+          "media_locator": "",
+          "native_id": "ciug-zjut-partnership",
+          "note": "Paraphrased source record; inspect the linked source for the original wording.",
+          "platform": "web",
+          "published_at": "",
+          "source_type": "official public webpage or document",
+          "title": "CIUG and Zhejiang University of Technology partnership",
+          "url": "https://www.ug.edu.gh/news/ciug-board-meeting-charts-new-direction-2026-ug-and-zhejiang-university-technology-strengthen"
+        }
+      ],
+      "observation_id": "obs_aa332ec19c013ff2fd57",
+      "reviewed_at": "",
+      "reviewer": "",
+      "source_record_keys": [
+        "web:ciug-zjut-partnership"
+      ],
+      "verification_notes": "Public-source demo claim; analyst review is still required.",
+      "verification_state": "unreviewed"
+    }
+  ],
+  "provenance_documents": [
+    {
+      "kind": "dataset_metadata",
+      "name": "ghana-demo-source-records.metadata.json",
+      "sha256": "64c9c9bcb8f37ed5ab017479d0d4364ca55e76927a42fa29289e4eaa44f45705"
+    },
+    {
+      "kind": "provenance",
+      "name": "ghana-demo-source-inventory.csv",
+      "sha256": "2bc95d579e961694b006417e8485266ef99b28739ca8e1ed6c4e6b0236243847"
+    },
+    {
+      "kind": "provenance",
+      "name": "ghana-demo-institution-registry.csv",
+      "sha256": "a3ab2c58a17577e51c3f8113dfdbb950bfb9e9e411f916cd8e9c137d7444ffe0"
+    },
+    {
+      "kind": "provenance",
+      "name": "evidence-gaps.md",
+      "sha256": "3b6eb6a9cdef10d94a186358b5aecab8a902e5f9b5735152b7556cd691deb222"
+    }
+  ],
+  "records": [
+    {
+      "canonical_url": "https://educationusa.state.gov/centers/educationusa-accra",
+      "collected_at": "2026-09-28T12:00:00Z",
+      "collector_version": "sugar-core-1.1",
+      "has_original_text": true,
+      "native_id": "educationusa-accra-embassy",
+      "original_text_sha256": "d5df803a73597fa1d815c017cf8b666baf678ccb315f3ae41397c5c410ce7775",
+      "platform": "web",
+      "published_at": "",
+      "record_key": "web:educationusa-accra-embassy",
+      "schema_version": "1.3",
+      "source_host": "educationusa.state.gov",
+      "source_mode": "manual_import",
+      "source_url": "https://educationusa.state.gov/centers/educationusa-accra"
+    },
+    {
+      "canonical_url": "https://educationusa.state.gov/centers/educationusa-accra-ace-consult",
+      "collected_at": "2026-09-28T12:00:00Z",
+      "collector_version": "sugar-core-1.1",
+      "has_original_text": true,
+      "native_id": "educationusa-accra-ace-consult",
+      "original_text_sha256": "1bc5d0174ea1631314957b63f7f945f7731d9679b5f2577cda9f1d1091d7587d",
+      "platform": "web",
+      "published_at": "",
+      "record_key": "web:educationusa-accra-ace-consult",
+      "schema_version": "1.3",
+      "source_host": "educationusa.state.gov",
+      "source_mode": "manual_import",
+      "source_url": "https://educationusa.state.gov/centers/educationusa-accra-ace-consult"
+    },
+    {
+      "canonical_url": "https://educationusa.state.gov/find-advising-center?field_directory_admissions_couns_value=AR&field_program_page_degree_type_target_id=13&page=24",
+      "collected_at": "2026-09-28T12:00:00Z",
+      "collector_version": "sugar-core-1.1",
+      "has_original_text": true,
+      "native_id": "educationusa-kumasi-ace-consult",
+      "original_text_sha256": "6f981b4ee31044f19181801bef0815521e0b1d218e354e49e117f06d0699644e",
+      "platform": "web",
+      "published_at": "",
+      "record_key": "web:educationusa-kumasi-ace-consult",
+      "schema_version": "1.3",
+      "source_host": "educationusa.state.gov",
+      "source_mode": "manual_import",
+      "source_url": "https://educationusa.state.gov/find-advising-center?field_directory_admissions_couns_value=AR&field_program_page_degree_type_target_id=13&page=24"
+    },
+    {
+      "canonical_url": "https://americanspaces.state.gov/wp-content/uploads/sites/292/2301-Newsletter.pdf",
+      "collected_at": "2026-09-28T12:00:00Z",
+      "collector_version": "sugar-core-1.1",
+      "has_original_text": true,
+      "native_id": "american-spaces-ghana-newsletter",
+      "original_text_sha256": "d65ce253998c06790726c8f433395d7c1f935c20e1a7c3898386daf8c8f23d23",
+      "platform": "web",
+      "published_at": "",
+      "record_key": "web:american-spaces-ghana-newsletter",
+      "schema_version": "1.3",
+      "source_host": "americanspaces.state.gov",
+      "source_mode": "manual_import",
+      "source_url": "https://americanspaces.state.gov/wp-content/uploads/sites/292/2301-Newsletter.pdf"
+    },
+    {
+      "canonical_url": "https://www.ug.edu.gh/",
+      "collected_at": "2026-09-28T12:00:00Z",
+      "collector_version": "sugar-core-1.1",
+      "has_original_text": true,
+      "native_id": "university-of-ghana-homepage",
+      "original_text_sha256": "33c38d8bdd91080a2909ac038eeb6e47628963fcfdf2bb8f4cca6f7e89d030fa",
+      "platform": "web",
+      "published_at": "",
+      "record_key": "web:university-of-ghana-homepage",
+      "schema_version": "1.3",
+      "source_host": "www.ug.edu.gh",
+      "source_mode": "manual_import",
+      "source_url": "https://www.ug.edu.gh/"
+    },
+    {
+      "canonical_url": "https://www.ug.edu.gh/news/ciug-board-meeting-charts-new-direction-2026-ug-and-zhejiang-university-technology-strengthen",
+      "collected_at": "2026-09-28T12:00:00Z",
+      "collector_version": "sugar-core-1.1",
+      "has_original_text": true,
+      "native_id": "ciug-zjut-partnership",
+      "original_text_sha256": "01cfb419bfff89db9b9f7b1c3f548f370718ebbf0c8ae64b1711897f0b44d6aa",
+      "platform": "web",
+      "published_at": "",
+      "record_key": "web:ciug-zjut-partnership",
+      "schema_version": "1.3",
+      "source_host": "www.ug.edu.gh",
+      "source_mode": "manual_import",
+      "source_url": "https://www.ug.edu.gh/news/ciug-board-meeting-charts-new-direction-2026-ug-and-zhejiang-university-technology-strengthen"
+    }
+  ],
+  "schema_version": "1.0",
+  "source_claims": {},
+  "source_conflicts": []
+}

@@ -50,7 +50,7 @@ dev = [
 audit = ["pip-audit>=2.10,<3"]
 analytics = ["duckdb>=1.4,<2"]
 macos = ["pyinstaller>=6.15,<7"]
-windows = ["PySide6>=6.8,<7", "pyinstaller>=6.15,<7"]
+windows = ["pyinstaller>=6.15,<7"]
 rtl = ["arabic-reshaper>=3,<4", "python-bidi>=0.6,<1"]
 
 [project.scripts]
@@ -58,6 +58,7 @@ sugar = "sugar_core.cli:main"
 sugar-project = "sugar_core.workspace_cli:main"
 sugar-state = "sugar_core.state_cli:main"
 sugar-intel = "sugar_core.state_intel_cli:main"
+sugar-api = "sugar_api:main"
 
 [project.urls]
 Repository = "https://github.com/FL2744/SUGAR"
@@ -65,6 +66,7 @@ Issues = "https://github.com/FL2744/SUGAR/issues"
 
 [tool.setuptools]
 packages = ["sugar_core"]
+py-modules = ["sugar_api", "sugar_bridge"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

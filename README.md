@@ -12,7 +12,7 @@ License: **Apache License 2.0**. Copyright 2026 Alejandro Grenier and contributo
 
 ## What SUGAR does
 
-SUGAR provides one shared Python research core with native macOS and Windows clients. The supported pipeline is:
+SUGAR keeps one shared Python research core and is moving its Windows and macOS desktop interfaces to one Tauri 2 / React frontend. The shared MapLibre map and React workflows run in the same shell on both operating systems, with the Python engine packaged as a sidecar. The supported pipeline is:
 
 **Collect → Normalize → Enrich/triage → Human review → Evidence dataset → Spatial/analytic products → Refresh**
 
@@ -28,7 +28,7 @@ Use `sugar lineage ...` to build a standalone lineage index and `sugar verify-li
 
 The `sugar-intel` research-quality tools rank bounded next-collection actions from uncovered requirement scope, competing hypotheses, candidate metrics, and comparable completed-branch outcomes. Reports show why each action ranked and label historical medians/rates as planning references rather than predictions. The same tools identify text-similarity lineage candidates and build temporal graphs from observations plus explicit evidence-backed registry relationships and lifecycle dates. Unique names and human-verified aliases join records without turning co-appearance into a relationship; sensitivity output is not a confidence score. See [`docs/research-intelligence-feedback.md`](docs/research-intelligence-feedback.md).
 
-Research projects can also merge separate analyst workspaces with `sugar-project merge`, preserving contributor artifacts and review decisions while deduplicating matching canonical records and surfacing assessment conflicts. `sugar-project pipeline` reports hash-based artifact freshness and rebuild order. The desktop clients also support local lexical search, optional cross-lingual embedding retrieval with a clear remote-content opt-in, sanitized analyst capture from saved HTML, and hash-preserved media with timestamped citations. `sugar-intel calibrate` runs a fixed offline gold-case suite. These workflows and their limits are documented in [`docs/research-intelligence-feedback.md`](docs/research-intelligence-feedback.md).
+Research projects can also merge separate analyst workspaces with `sugar-project merge`, preserving contributor artifacts and review decisions while deduplicating matching canonical records and surfacing assessment conflicts. `sugar-project pipeline` reports hash-based artifact freshness and rebuild order. The Python research core also supports local lexical search, optional cross-lingual embedding retrieval with a clear remote-content opt-in, sanitized analyst capture from saved HTML, and hash-preserved media with timestamped citations. `sugar-intel calibrate` runs a fixed offline gold-case suite. These workflows and their limits are documented in [`docs/research-intelligence-feedback.md`](docs/research-intelligence-feedback.md).
 
 For larger datasets, `python -m pip install 'sugar-osint[analytics]'` enables a DuckDB/Parquet build and bounded SQL-query path that reads CSV/JSONL directly without pandas materialization.
 
@@ -38,29 +38,27 @@ SUGAR deliberately distinguishes **presence, activity, reach, engagement, outcom
 
 | Surface | Purpose |
 | --- | --- |
-| `SUGAR-macOS/` | Native SwiftUI application for macOS 13+ |
-| `SUGAR-Windows/` | Native PySide6 research workbench for Windows |
+| `SUGAR-Desktop/` | Canonical browser app, Python HTTP API, and optional Tauri 2 packages for Windows/macOS |
+| `SUGAR-macOS/` | Small compatibility wrapper for the shared macOS package build |
+| `SUGAR-Windows/` | Small compatibility wrapper for the shared Windows package build |
 | `sugar` | Requirements/planning, external import, collection/harvest, triage, overlap, mapping, and reporting CLI |
 | `sugar-project` | Persistent project-workspace management |
 | `sugar-state` | State/Diplomacy Lab evidence-to-brief workflow |
 | `sugar-intel` | Structured analytic-intelligence workflow |
-| `sugar_bridge.py` | Typed line-delimited JSON process boundary used by desktop clients |
+| `sugar_bridge.py` | Typed line-delimited JSON process boundary used by the desktop shell and API |
+| `sugar_api.py` | Project-scoped HTTP API for the browser frontend |
 
-Both desktop applications call the same `sugar_core` implementation. Collection semantics, evidence rules, assessment logic, maps, and synthesis should not be reimplemented in individual frontends.
+The browser is the canonical UI. The optional Tauri packages run that same frontend and use the same `sugar_core` implementation. Collection semantics, evidence rules, assessment logic, and synthesis stay in Python. MapLibre is the shared interactive renderer; Folium/Leaflet remains available for portable HTML exports. Older PySide6 and SwiftUI clients are archived in `archive/legacy-native-ui/` and are no longer build fallbacks.
 
-## Desktop use
+## Browser and desktop use
 
-### macOS
+Start the Python API from the repository root with `python -m pip install -e .` followed by `python sugar_api.py`. In another terminal, run `cd SUGAR-Desktop`, `npm install`, and `npm run dev`. The browser opens the shared UI and connects to `http://127.0.0.1:8765` by default. Projects created through the API are stored under `~/.sugar/workspaces`; set `SUGAR_API_WORKSPACE_ROOT` to select another location.
 
-The packaged macOS application supports **Apple Silicon Macs running macOS 13 Ventura or newer**. Intel Macs are not a supported desktop target. Development/test builds may not be publicly notarized; only override Gatekeeper warnings for builds obtained from a trusted project source. Credentials entered through the native app are stored using macOS Keychain where supported.
+`sugar_api.py` can serve the same UI against a local or hosted Python backend. A remote deployment requires HTTPS, an API token, an explicit allowed browser origin, and approved identity/access controls. The current API is a single-operator service; it does not provide tenant isolation or institutional identity.
 
-See [`SUGAR-macOS/README.md`](SUGAR-macOS/README.md) for build, packaging, compatibility, signing, and troubleshooting details.
+For optional desktop installs, `SUGAR-Desktop/scripts/build-windows.ps1` builds the Windows MSI, and `SUGAR-Desktop/scripts/build-macos.sh` builds the macOS app/DMG on a Mac with Xcode command line tools and Python 3.12. Compatibility wrapper commands are available at [`SUGAR-Windows/scripts/build.ps1`](SUGAR-Windows/scripts/build.ps1) and [`SUGAR-macOS/scripts/build_app.sh`](SUGAR-macOS/scripts/build_app.sh).
 
-### Windows
-
-The Windows workbench packages `SUGAR.exe` plus a separate `sugar-bridge.exe` child process. That separation keeps the UI responsive, provides real cancellation, and isolates backend failures. Development/CI bundles are unsigned and may trigger SmartScreen; production distribution should use normal Authenticode signing rather than weakening endpoint protections.
-
-See [`SUGAR-Windows/README.md`](SUGAR-Windows/README.md) for development, packaging, credentials, and troubleshooting.
+The web app covers project setup, research requirements, evidence import and inspection, plan review and collection, institution registry import and mapping, evidence source inspection, run history, and verified handoff export. Map tiles require network access; research records remain in project workspaces.
 
 ## Python installation
 
@@ -104,7 +102,7 @@ See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the workspace
 
 ## Persistent research workspace
 
-The **Research Workspace** page in both desktop clients brings multi-project navigation, subprojects, run and plan-change history, evidence-backed institution/service registries, inspectable data tables, reusable map layers, conversation context, and persistent listening posts into one analyst workflow. The shared `sugar-project` CLI supports project dashboards/history, reference-data import/export, monitor scheduling/review, conversation reconstruction, and integrity-checked project bundles. Monitoring can be run manually or by an approved operating-system scheduler; in-app polling is opt-in.
+The project-workspace layer supports multi-project navigation, subprojects, run and plan-change history, evidence-backed institution/service registries, inspectable data tables, reusable map layers, conversation context, and persistent listening posts. The shared `sugar-project` CLI supports project dashboards/history, reference-data import/export, monitor scheduling/review, conversation reconstruction, and integrity-checked project bundles. The unified browser interface currently focuses on research requirements, imports, evidence inspection, institution maps, project history, and handoffs; the remaining workspace operations continue to be available through the Python CLI and core APIs as they are brought into the shared UI. Monitoring can be run manually or by an approved operating-system scheduler; in-app polling is opt-in.
 
 SUGAR includes blank registry schemas for American Spaces, EducationUSA, language education centers, technical training workshops, and custom networks. It does not present those schemas as an authoritative current inventory; analysts supply source-backed datasets and record their scope and coverage limits. The tool keeps American Spaces and EducationUSA distinct, reports comparison dimensions separately, and preserves evidence and uncertainty without scoring popularity, effectiveness, or causal influence.
 

@@ -44,35 +44,33 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev,windows]"
-      - name: Build portable Windows application
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: SUGAR-Desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build shared Windows application
         shell: pwsh
-        run: .\SUGAR-Windows\scripts\build.ps1
-      - name: Validate Windows bundle
+        run: .\SUGAR-Desktop\scripts\build-windows.ps1
+      - name: Validate Windows installer and bridge
         shell: pwsh
-        env:
-          QT_QPA_PLATFORM: offscreen
         run: |
-          $line = & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe diagnostics
+          $bridge = Resolve-Path .\SUGAR-Desktop\src-tauri\binaries\sugar-bridge-x86_64-pc-windows-msvc.exe
+          $line = & $bridge diagnostics
           $payload = $line | ConvertFrom-Json
           if ($payload.event -ne "diagnostics") { throw "Expected diagnostics event" }
           if ($payload.bridge_protocol -ne 3) { throw "Unexpected desktop bridge protocol" }
-          & .\SUGAR-Windows\dist\SUGAR\SUGAR.exe --smoke-test
-          if (-not (Test-Path .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip)) { throw "Portable Windows ZIP missing" }
-          if ((Get-Item .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip).Length -lt 1000000) { throw "Portable Windows ZIP is unexpectedly small" }
+          $installer = Get-ChildItem .\SUGAR-Desktop\src-tauri\target\release\bundle\msi -Filter *.msi | Select-Object -First 1
+          if (-not $installer) { throw "Tauri Windows MSI missing" }
+          if ($installer.Length -lt 1000000) { throw "Windows MSI is unexpectedly small" }
       - name: Validate no-credential State workflow
         shell: pwsh
-        run: .\tools\smoke_packaged_no_credentials.ps1 -Bridge .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe
-      - name: Validate first-run research workflow
-        shell: pwsh
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: |
-          $env:SUGAR_E2E_BRIDGE = (Resolve-Path .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe).Path
-          python -m pytest -q tests/test_first_run_desktop.py --basetemp $env:RUNNER_TEMP\sugar-first-run-tests
+        run: .\tools\smoke_packaged_no_credentials.ps1 -Bridge .\SUGAR-Desktop\src-tauri\binaries\sugar-bridge-x86_64-pc-windows-msvc.exe
       - uses: actions/upload-artifact@v7
         with:
           name: release-windows-x64
-          path: SUGAR-Windows/dist/SUGAR-Windows-x64.zip
+          path: SUGAR-Desktop/src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: error
 
   macos-apple-silicon:
@@ -85,19 +83,25 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: SUGAR-Desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
       - name: Build macOS Apple Silicon application
-        run: ./SUGAR-macOS/scripts/build_app.sh
+        run: ./SUGAR-Desktop/scripts/build-macos.sh
       - name: Validate and archive Apple Silicon app
         run: |
           test "$(uname -m)" = "arm64"
-          test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/MacOS/SUGAR
-          test -x SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
-          SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge diagnostics
-          codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
-          ditto -c -k --sequesterRsrc --keepParent SUGAR-macOS/.build-native/SUGAR.app SUGAR-macOS.zip
+          app="SUGAR-Desktop/src-tauri/target/release/bundle/macos/SUGAR.app"
+          test -d "$app"
+          bridge="$(find "$app" -type f -name 'sugar-bridge*' -perm -111 -print -quit)"
+          test -n "$bridge"
+          "$bridge" diagnostics
+          sh tools/smoke_packaged_no_credentials.sh "$bridge"
+          ditto -c -k --sequesterRsrc --keepParent "$app" SUGAR-macOS.zip
           test -s SUGAR-macOS.zip
-      - name: Validate no-credential State workflow
-        run: sh tools/smoke_packaged_no_credentials.sh SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
       - uses: actions/upload-artifact@v7
         with:
           name: release-macos-apple-silicon
@@ -137,7 +141,7 @@ jobs:
           merge-multiple: true
       - name: Verify release payload and checksums
         run: |
-          test -s release-assets/SUGAR-Windows-x64.zip
+          ls release-assets/*.msi >/dev/null
           test -s release-assets/SUGAR-macOS.zip
           ls release-assets/*.whl >/dev/null
           ls release-assets/*.tar.gz >/dev/null
@@ -146,13 +150,13 @@ jobs:
       - name: Write release notes
         run: |
           cat > RELEASE_NOTES.md <<'EOF'
-          SUGAR cross-platform desktop release.
+          SUGAR browser and optional desktop release.
 
           **Choose the file for your system:**
-          - Windows 10/11 x64: `SUGAR-Windows-x64.zip`
-          - Mac: `SUGAR-macOS.zip`
+          - Windows 10/11 x64: the included SUGAR MSI installer
+          - Mac: `SUGAR-macOS.zip` (Tauri app bundle)
 
-          macOS desktop releases support Apple Silicon and target macOS 13 or newer. They are ad-hoc signed classroom/community builds rather than Apple-notarized distribution builds. Intel Macs are not a supported desktop target. The Python wheel/source archive is included for CLI and development use.
+          macOS desktop releases support Apple Silicon and target macOS 13 or newer. They are local-use builds; configure organization signing and notarization before public distribution. The Python wheel/source archive is included for CLI and development use.
 
           See `CHANGELOG.md` in the repository for release-specific fixes and methodology notes.
           EOF

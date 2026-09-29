@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-09-28T21:44:57Z",
+  "description": "A small, evidence-backed public-source demo of EducationUSA, American Spaces, and a Ghana-based higher-education partnership. Snapshot 2026-09-28.",
+  "layout": {
+    "cache": ".sugar/cache",
+    "exports": "outputs/exports",
+    "intelligence": "outputs/intelligence",
+    "maps": "outputs/maps",
+    "observations": "data/observations",
+    "raw": "data/raw",
+    "references": "references",
+    "reports": "outputs/reports",
+    "state": "state"
+  },
+  "name": "Ghana Education and Cultural Programs",
+  "project_id": "df32c261-308c-5ace-bd33-0d6c5990b477",
+  "schema_version": "1.0",
+  "updated_at": "2026-09-28T21:44:57Z"
+}

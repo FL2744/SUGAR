@@ -48,9 +48,9 @@ def test_runtime_does_not_assume_an_undocumented_statechat_api():
     runtime_files = [
         *sorted((ROOT / "sugar_core").glob("*.py")),
         ROOT / "sugar_bridge.py",
-        ROOT / "SUGAR-Windows" / "app.py",
-        ROOT / "SUGAR-macOS" / "Sources" / "AppModel.swift",
-        ROOT / "SUGAR-macOS" / "Sources" / "ContentView.swift",
+        ROOT / "sugar_api.py",
+        ROOT / "SUGAR-Desktop" / "src" / "shell.tsx",
+        ROOT / "SUGAR-Desktop" / "src" / "bridge.ts",
     ]
     offenders = [
         str(path.relative_to(ROOT))
@@ -58,4 +58,3 @@ def test_runtime_does_not_assume_an_undocumented_statechat_api():
         if "statechat" in path.read_text(encoding="utf-8").casefold()
     ]
     assert offenders == []
-

@@ -53,16 +53,11 @@ def test_license_inventory_name_normalisation_is_stable():
     assert _normalise_name("python_bidi") == "python-bidi"
 
 
-def test_windows_gui_qt_surface_stays_within_reviewed_modules():
-    allowed = {"QtCore", "QtGui", "QtWidgets"}
-    imported: set[str] = set()
-    for source in (ROOT / "SUGAR-Windows").glob("*.py"):
-        for line in source.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if stripped.startswith("from PySide6."):
-                imported.add(stripped.split("from PySide6.", 1)[1].split(" import ", 1)[0])
-            elif stripped.startswith("import PySide6."):
-                imported.add(stripped.split("import PySide6.", 1)[1].split()[0].split(",", 1)[0])
+def test_active_windows_package_does_not_depend_on_qt():
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    windows_dependencies = project["optional-dependencies"]["windows"]
+    assert any(item.startswith("pyinstaller") for item in windows_dependencies)
+    assert not any("pyside" in item.casefold() or "qt" in item.casefold() for item in windows_dependencies)
 
-    assert imported
-    assert imported <= allowed, f"Qt module import requires licensing review: {sorted(imported - allowed)}"
+    rust_shell = (ROOT / "SUGAR-Desktop" / "src-tauri" / "src" / "main.rs").read_text(encoding="utf-8")
+    assert "tauri::Builder" in rust_shell

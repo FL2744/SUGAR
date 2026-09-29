@@ -103,6 +103,24 @@ def _event_result(progress: ProgressCallback | None, action: str, payload: Any) 
     return []
 
 
+def _project_research_state(workspace: SugarWorkspace) -> dict[str, Any]:
+    state: dict[str, Any] = {}
+    for key, filename in (
+        ("research_requirement", "research-requirement.json"),
+        ("search_plan", "search-plan.json"),
+    ):
+        path = workspace.path_for("state") / filename
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict):
+            state[key] = payload
+    return state
+
+
 def _registry_map_frame(workspace: SugarWorkspace) -> pd.DataFrame:
     entities = list_entities(workspace)
     entity_names = {entity["entity_id"]: entity.get("name", "") for entity in entities}
@@ -243,7 +261,9 @@ def run_workspace_hub(
         return _event_result(progress, action, list_projects(root))
 
     if action == "dashboard":
-        return _event_result(progress, action, dashboard(workspace))
+        data = dashboard(workspace)
+        data.update(_project_research_state(workspace))
+        return _event_result(progress, action, data)
 
     if action == "project-create-subproject":
         child = create_subproject(workspace, str(config.get("name") or ""), description=str(config.get("description") or ""))

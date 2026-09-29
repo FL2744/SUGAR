@@ -69,6 +69,22 @@ jobs:
       - name: Exercise a bounded 5,000-record checkpoint workload offline
         run: python tools/stress_test.py --records 5000 --skip-export --skip-map --output-dir "$RUNNER_TEMP/sugar-stress" --max-seconds 90 --max-disk-mb 256 --max-peak-python-mb 512
 
+  shared-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: SUGAR-Desktop/package-lock.json
+      - run: npm ci
+        working-directory: SUGAR-Desktop
+      - run: npm audit --audit-level=high
+        working-directory: SUGAR-Desktop
+      - run: npm run build
+        working-directory: SUGAR-Desktop
+
   macos-app:
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: macos-15
@@ -81,14 +97,23 @@ jobs:
           # Python 3.14 support is exercised by the cross-platform core matrix.
           python-version: "3.12"
           cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: SUGAR-Desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
       - name: Build packaged app
-        run: ./SUGAR-macOS/scripts/build_app.sh
-      - name: Inspect bundled architectures
+        run: ./SUGAR-Desktop/scripts/build-macos.sh
+      - name: Locate app and packaged Python bridge
         run: |
-          lipo -archs SUGAR-macOS/.build-native/SUGAR.app/Contents/MacOS/SUGAR
-          lipo -archs SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
+          app="SUGAR-Desktop/src-tauri/target/release/bundle/macos/SUGAR.app"
+          test -d "$app"
+          bridge="$(find "$app" -type f -name 'sugar-bridge*' -perm -111 -print -quit)"
+          test -n "$bridge"
+          echo "SUGAR_BRIDGE_PATH=$bridge" >> "$GITHUB_ENV"
       - name: Backend diagnostics smoke test
-        run: SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge diagnostics
+        run: "$SUGAR_BRIDGE_PATH" diagnostics
       - name: Packaged analysis smoke test
         run: |
           cat > /tmp/sugar-smoke.csv <<'CSV'
@@ -98,21 +123,20 @@ jobs:
           cat > /tmp/sugar-analysis.json <<'JSON'
           {"source_file":"/tmp/sugar-smoke.csv","output_stem":"/tmp/sugar-smoke-report","output_format":"pdf"}
           JSON
-          SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge analysis --config /tmp/sugar-analysis.json
+          "$SUGAR_BRIDGE_PATH" analysis --config /tmp/sugar-analysis.json
           test -s /tmp/sugar-smoke-report.pdf
       - name: Packaged no-credential research-project smoke test
-        run: sh tools/smoke_packaged_no_credentials.sh SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/sugar-bridge
-      - name: Verify bundle signature
+        run: sh tools/smoke_packaged_no_credentials.sh "$SUGAR_BRIDGE_PATH"
+      - name: Verify bundled notices
         run: |
-          test -s SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/LICENSE
-          test -s SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/NOTICE
-          test -s SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/THIRD_PARTY_NOTICES.md
-          test -s SUGAR-macOS/.build-native/SUGAR.app/Contents/Resources/licenses/manifest.json
-          codesign --verify --deep --strict --verbose=2 SUGAR-macOS/.build-native/SUGAR.app
+          app="SUGAR-Desktop/src-tauri/target/release/bundle/macos/SUGAR.app"
+          test -s "$app/Contents/Resources/licenses/LICENSE"
+          test -s "$app/Contents/Resources/licenses/NOTICE"
+          test -s "$app/Contents/Resources/licenses/THIRD_PARTY_NOTICES.md"
+          test -s "$app/Contents/Resources/licenses/npm/manifest.json"
       - name: Archive validated macOS bundle
         run: |
-          test "$(uname -m)" = "arm64"
-          ditto -c -k --sequesterRsrc --keepParent SUGAR-macOS/.build-native/SUGAR.app SUGAR-macOS.zip
+          ditto -c -k --sequesterRsrc --keepParent SUGAR-Desktop/src-tauri/target/release/bundle/macos/SUGAR.app SUGAR-macOS.zip
           test -s SUGAR-macOS.zip
       - name: Publish validated macOS bundle
         uses: actions/upload-artifact@v7
@@ -132,14 +156,21 @@ jobs:
         with:
           python-version: "3.14"
           cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: SUGAR-Desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
       - run: python -m pip install -e ".[dev,windows]"
-      - name: Build portable Windows application
+      - name: Build shared Windows application
         shell: pwsh
-        run: .\SUGAR-Windows\scripts\build.ps1
+        run: .\SUGAR-Desktop\scripts\build-windows.ps1
       - name: Packaged backend diagnostics
         shell: pwsh
         run: |
-          $line = & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe diagnostics
+          $bridge = Resolve-Path .\SUGAR-Desktop\src-tauri\binaries\sugar-bridge-x86_64-pc-windows-msvc.exe
+          $line = & $bridge diagnostics
           Write-Host $line
           $payload = $line | ConvertFrom-Json
           if ($payload.event -ne "diagnostics") { throw "Expected diagnostics event" }
@@ -147,55 +178,44 @@ jobs:
           if ($payload.operations -notcontains "state-package") { throw "State desktop operations missing" }
           if ($payload.operations -notcontains "intel-synthesize") { throw "Intelligence desktop operations missing" }
           if ($payload.operations -notcontains "workspace-init") { throw "Workspace desktop operations missing" }
-      - name: Packaged GUI offscreen smoke test
-        shell: pwsh
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: .\SUGAR-Windows\dist\SUGAR\SUGAR.exe --smoke-test
-      - name: Packaged first-run research workflow
-        shell: pwsh
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: |
-          $env:SUGAR_E2E_BRIDGE = (Resolve-Path .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe).Path
-          python -m pytest -q tests/test_first_run_desktop.py --basetemp $env:RUNNER_TEMP\sugar-first-run-tests
       - name: Packaged analysis smoke test
         shell: pwsh
         run: |
+          $bridge = Resolve-Path .\SUGAR-Desktop\src-tauri\binaries\sugar-bridge-x86_64-pc-windows-msvc.exe
           @'
           platform,native_id,published_at,author_handle,original_text,latitude,longitude,engagement
           bluesky,smoke-1,2026-09-10T12:00:00Z,tester,Smoke test,37.2296,-80.4139,"{""likes"": 1}"
           '@ | Set-Content -Encoding UTF8 $env:RUNNER_TEMP\sugar-smoke.csv
           @{ source_file = "$env:RUNNER_TEMP\sugar-smoke.csv"; output_stem = "$env:RUNNER_TEMP\sugar-smoke-report"; output_format = "pdf" } | ConvertTo-Json | Set-Content -Encoding UTF8 $env:RUNNER_TEMP\sugar-analysis.json
-          & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe analysis --config $env:RUNNER_TEMP\sugar-analysis.json
+          & $bridge analysis --config $env:RUNNER_TEMP\sugar-analysis.json
           if (-not (Test-Path $env:RUNNER_TEMP\sugar-smoke-report.pdf)) { throw "Packaged analysis did not create a PDF" }
       - name: Typed State operation smoke test
         shell: pwsh
         run: |
+          $bridge = Resolve-Path .\SUGAR-Desktop\src-tauri\binaries\sugar-bridge-x86_64-pc-windows-msvc.exe
           @{ output_file = "$env:RUNNER_TEMP\us-presence.csv" } | ConvertTo-Json | Set-Content -Encoding UTF8 $env:RUNNER_TEMP\state-template.json
-          & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe state-template-us-sites --config $env:RUNNER_TEMP\state-template.json
+          & $bridge state-template-us-sites --config $env:RUNNER_TEMP\state-template.json
           if (-not (Test-Path $env:RUNNER_TEMP\us-presence.csv)) { throw "Packaged State operation did not create output" }
       - name: Typed workspace operation smoke test
         shell: pwsh
         run: |
+          $bridge = Resolve-Path .\SUGAR-Desktop\src-tauri\binaries\sugar-bridge-x86_64-pc-windows-msvc.exe
           @{ workspace = "$env:RUNNER_TEMP\sugar-project"; name = "CI Workspace" } | ConvertTo-Json | Set-Content -Encoding UTF8 $env:RUNNER_TEMP\workspace-init.json
-          & .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe workspace-init --config $env:RUNNER_TEMP\workspace-init.json
+          & $bridge workspace-init --config $env:RUNNER_TEMP\workspace-init.json
           if (-not (Test-Path $env:RUNNER_TEMP\sugar-project\sugar-project.json)) { throw "Packaged workspace operation did not create manifest" }
       - name: Packaged no-credential research-project smoke test
         shell: pwsh
-        run: .\tools\smoke_packaged_no_credentials.ps1 -Bridge .\SUGAR-Windows\dist\SUGAR\sugar-bridge.exe
-      - name: Verify portable artifact
+        run: .\tools\smoke_packaged_no_credentials.ps1 -Bridge .\SUGAR-Desktop\src-tauri\binaries\sugar-bridge-x86_64-pc-windows-msvc.exe
+      - name: Verify Windows installer
         shell: pwsh
         run: |
-          if (-not (Test-Path .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip)) { throw "Portable Windows ZIP missing" }
-          if ((Get-Item .\SUGAR-Windows\dist\SUGAR-Windows-x64.zip).Length -lt 1000000) { throw "Portable Windows ZIP is unexpectedly small" }
-          foreach ($legal in @("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "licenses\manifest.json", "third_party_licenses\qt\README.md", "third_party_licenses\qt\LGPL-3.0.txt", "third_party_licenses\qt\GPL-3.0.txt")) {
-            if (-not (Test-Path (Join-Path ".\SUGAR-Windows\dist\SUGAR" $legal))) { throw "Missing legal artifact: $legal" }
-          }
-      - name: Publish validated portable Windows bundle
+          $installer = Get-ChildItem .\SUGAR-Desktop\src-tauri\target\release\bundle\msi -Filter *.msi | Select-Object -First 1
+          if (-not $installer) { throw "Tauri Windows MSI missing" }
+          if ($installer.Length -lt 1000000) { throw "Windows MSI is unexpectedly small" }
+      - name: Publish validated Windows installer
         uses: actions/upload-artifact@v7
         with:
           name: SUGAR-Windows-x64
-          path: SUGAR-Windows/dist/SUGAR-Windows-x64.zip
+          path: SUGAR-Desktop/src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: error
           retention-days: 14

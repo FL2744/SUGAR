@@ -1,0 +1,13 @@
+{
+  "known_gaps": [
+    "Current American Spaces site status is unknown.",
+    "EducationUSA Accra street addresses are not geocoded at street-level precision.",
+    "Kumasi is mapped at city precision; University of Ghana and CIUG are mapped at campus precision.",
+    "Zhejiang University of Technology is a named partner in the University of Ghana source but is not geolocated in this sample.",
+    "No complete lifecycle dates, outcome data, or evidence of influence were collected.",
+    "All imported claims and relationships remain unreviewed."
+  ],
+  "schema_version": "1.0",
+  "scope": "Small public-source demonstration sample, not a comprehensive Ghana inventory.",
+  "snapshot_date": "2026-09-28"
+}

@@ -41,11 +41,31 @@ geocode_cache.json
 # Native application build products
 SUGAR-macOS/.build/
 SUGAR-macOS/.build-native/
+SUGAR-Desktop/.build-macos/
 SUGAR-Windows/build/
 SUGAR-Windows/dist/
+SUGAR-Desktop/node_modules/
+SUGAR-Desktop/*.tsbuildinfo
+SUGAR-Desktop/src-tauri/target/
+SUGAR-Desktop/src-tauri/binaries/sugar-bridge-*
+SUGAR-Desktop/src-tauri/icons/android/
+SUGAR-Desktop/src-tauri/icons/ios/
+SUGAR-Desktop/resources/npm-licenses/**
+!SUGAR-Desktop/resources/npm-licenses/.gitkeep
 
 # Local history, private notes, and generated working files
-archive/
+archive/*
+!archive/legacy-native-ui/
+archive/legacy-native-ui/*
+!archive/legacy-native-ui/windows/
+!archive/legacy-native-ui/macos/
+!archive/legacy-native-ui/tests/
+archive/legacy-native-ui/windows/*
+archive/legacy-native-ui/macos/*
+archive/legacy-native-ui/tests/*
+!archive/legacy-native-ui/windows/**
+!archive/legacy-native-ui/macos/**
+!archive/legacy-native-ui/tests/**
 private-notes/
 outputs/
 scratch/
@@ -53,3 +73,12 @@ work/
 stress-output-*/
 soak-output-*/
 .tmp-*.html
+
+# Curated sponsor demo workspace (intentional, source-backed example outputs)
+examples/ghana-education-research/workspace-initial/
+!examples/ghana-education-research/workspace/.sugar/
+examples/ghana-education-research/workspace/.sugar/*
+!examples/ghana-education-research/workspace/.sugar/project-history.jsonl
+!examples/ghana-education-research/workspace/.sugar/project-relations.json
+!examples/ghana-education-research/workspace/outputs/
+!examples/ghana-education-research/workspace/outputs/**

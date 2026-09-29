@@ -5,10 +5,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_windows_classroom_first_run_copy_and_defaults():
     app = (ROOT / "SUGAR-Windows" / "app.py").read_text(encoding="utf-8")
-    assert "Start here — first time?" in app
+    assert 'page_header("Research command center"' in app
     assert 'self.store.value("llm/provider", "openai")' in app
-    assert "Core project, import, review, and export workflows do not require an LLM or Virginia Tech credentials." in app
-    assert "Start Research Project" in app
+    assert "Core project, import, review, and export workflows work without an AI key." in app
+    assert "Start a research project" in app
+    assert 'QTimer.singleShot(450,self._show_getting_started)' not in app
     assert 'self.search_sources.boxes["bilibili"].setChecked(True)' in app
     assert 'self.search_sources.boxes["weibo"].setChecked(True)' not in app
     assert "Audit & Changes" in app
@@ -35,9 +36,9 @@ def test_windows_ui_uses_deterministic_light_palette() -> None:
     source = Path("SUGAR-Windows/app.py").read_text(encoding="utf-8")
     assert "def apply_light_palette(" in source
     assert "QPalette.ColorRole.WindowText" not in source  # roles are intentionally aliased locally
-    assert 'role.WindowText: "#172033"' in source
-    assert 'role.Window: "#f5f7fb"' in source
-    assert "QDialog, QMessageBox { background: #ffffff; color: #172033; }" in source
+    assert 'role.WindowText: "#182437"' in source
+    assert 'role.Window: "#f3f6fa"' in source
+    assert "QDialog, QMessageBox { background: #ffffff; color: #182437; }" in source
     assert "apply_light_palette(app)" in source
 
 def test_classroom_quick_search_is_bounded_and_credential_honest() -> None:

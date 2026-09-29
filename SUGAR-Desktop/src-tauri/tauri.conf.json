@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SUGAR",
+  "version": "1.4.0",
+  "identifier": "edu.vt.diplomacy-lab.sugar",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run prepare:licenses && npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "SUGAR · Research workspace",
+        "width": 1420,
+        "height": 920,
+        "minWidth": 1040,
+        "minHeight": 700,
+        "center": true,
+        "resizable": true,
+        "backgroundColor": "#f3f5f8"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://tiles.openfreemap.org https://*.openfreemap.org; script-src 'self'; worker-src 'self' blob:; connect-src ipc: http://ipc.localhost https://tiles.openfreemap.org https://*.openfreemap.org"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../../LICENSE": "licenses/LICENSE",
+      "../../NOTICE": "licenses/NOTICE",
+      "../../THIRD_PARTY_NOTICES.md": "licenses/THIRD_PARTY_NOTICES.md",
+      "../THIRD_PARTY_NOTICES.md": "licenses/THIRD_PARTY_NOTICES-DESKTOP.md",
+      "../resources/npm-licenses": "licenses/npm",
+      "Cargo.lock": "licenses/Cargo.lock",
+      "../package-lock.json": "licenses/package-lock.json"
+    },
+    "category": "Education",
+    "shortDescription": "Research workspace",
+    "longDescription": "SUGAR is a structured research workspace for evidence-backed institutional analysis.",
+    "externalBin": ["binaries/sugar-bridge"]
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}

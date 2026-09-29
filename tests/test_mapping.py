@@ -190,6 +190,7 @@ def test_create_map_smoke_contains_plain_analytical_panel_content(tmp_path: Path
     assert "Offline analytic canvas" in text
     assert "OpenStreetMap (online)" in text
     assert "tile.openstreetmap.org" in text
+    assert '"maxZoom": 19' in text
     assert "tile.openstreetmap.fr" not in text
 
 

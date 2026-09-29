@@ -1,0 +1,9 @@
+{
+  "generated_at": "2026-09-28T21:45:48Z",
+  "records": 6,
+  "dataset_type": "research_observations",
+  "observation_schema_version": "1.4",
+  "csv": "ghana-demo-observations.csv",
+  "xlsx": "ghana-demo-observations.xlsx",
+  "snapshot_date": "2026-09-28"
+}
