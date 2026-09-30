@@ -2,6 +2,26 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
+## Unreleased
+
+### Added
+
+- **Research workbench.** Plain-language requests are interpreted into a persistent, typed `ResearchPlanSpec` (topic, geography, actors, timeframe, languages, platforms, queries, exclusions, depth, limits, translation, de-duplication, provider, refresh, concurrency, retry, extension fields) that is shown for review (run / edit / advanced) before anything executes.
+- LLM interpretation harness with JSON-schema output, safe repair, bounded retry with feedback, and fallback to a deterministic interpreter and then manual structured entry; clarification is requested only when the topic cannot be inferred.
+- Provider-aware LLM configuration (OpenAI, OpenAI-compatible, Anthropic, Virginia Tech ARC, local) with typed credentials, per-stage *Test connection* (reachable / credential / model / inference), and provider-specific errors.
+- Secure local credential storage (OS vault or owner-only file, environment and `.env.local` overrides) and shared secret redaction for logs, events, run records, exports, and diagnostic reports.
+- Structured activity events, a concurrent pipeline (Plan → Search → Collect → Translate → Process → Results), live translation view, pause/resume/cancel, query edits and item exclusion during a run, retry of failed sources, failure classes (fatal / source-specific / retryable / skipped / warning), and explicit reporting of incomplete collection.
+- Run objects, project data model, project timeline, provenance and evidence-chain lineage, timing instrumentation, Debug Mode, verifiable export bundles (JSON/JSONL/CSV/GeoJSON/Markdown + manifest with SHA-256).
+- New UI: Research, Activity, Results, Projects, Settings with explicit Save, Basic/Advanced modes, text-size and density settings, rem-based typography for high-DPI displays, prominent *New project*, compact project list, About page with attribution.
+- Desktop app starts a loopback research API sidecar for live runs; `sugar-bridge serve`.
+- `tools/demo_workbench_server.py` offline demo with simulated platforms and model.
+
+### Changed
+
+- "Refresh plan" is replaced by five distinct operations (Reinterpret request, Rebuild plan, Refresh sources, Reprocess results, Rerun).
+- Credentials are no longer entered as session-only fields; bridge operations resolve them from the environment and then from saved Settings.
+- Project authors now include William Taggart.
+
 ## 1.3.0 — 2026-09-24
 
 ### Added

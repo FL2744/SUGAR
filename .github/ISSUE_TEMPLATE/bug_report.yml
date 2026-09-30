@@ -7,6 +7,8 @@ body:
     attributes:
       value: |
         Do not include API keys, passwords, session cookies, bearer tokens, or private research material. For security-sensitive issues, follow SECURITY.md instead.
+
+        To attach diagnostics safely, use Settings → Privacy & diagnostics → “Build diagnostic report”. It lists versions, provider and platform status, and recent run errors with every credential redacted.
   - type: input
     id: version
     attributes:

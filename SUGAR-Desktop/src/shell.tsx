@@ -1,11 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { configureApi, createWorkspace, defaultApiUrl, downloadWorkspaceFile, hubData, latestEvent, listWorkspaces, runBackend, uploadWorkspaceFile, type ApiWorkspace, type Credentials } from "./bridge";
+import { api, configureApi, createWorkspace, defaultApiUrl, downloadWorkspaceFile, ensureLocalApi, hubData, latestEvent, listWorkspaces, openLocalFolder, runBackend, uploadWorkspaceFile, type ApiWorkspace, type Credentials } from "./bridge";
 import { InstitutionMap, institutionCoordinates } from "./map-view";
-import type { BackendEvent, Institution, SecretKey } from "./types";
+import type { BackendEvent, Institution } from "./types";
+import { AboutPage } from "./about-page";
+import { ActivityView } from "./activity-view";
+import { usePrefs } from "./prefs";
+import { ProjectsPage } from "./projects-page";
+import { research } from "./research-api";
+import { ResearchPage } from "./research-page";
+import type { ProjectOverview, RunSummary } from "./research-types";
+import { ResultsView } from "./results-view";
+import { SettingsPage } from "./settings-page";
+import { TimelinePage } from "./timeline-page";
+import { StatusPill } from "./ui";
 
-type Page = "home" | "project" | "institutions" | "activity" | "settings";
+type Page = "research" | "activity" | "results" | "projects" | "home" | "project" | "institutions" | "timeline" | "settings" | "about";
 type ActivityItem = { id: number; time: string; title: string; detail: string; kind: "ok" | "error" | "info" };
 type Dashboard = {
   name?: string;
@@ -22,20 +33,23 @@ type RegistryData = { entities?: Institution[]; count?: number; relationships?: 
 type RegistryPreview = { columns?: string[]; suggested_mapping?: Record<string, string>; sample_rows?: Record<string, unknown>[]; row_count?: number; [key: string]: unknown };
 type EvidencePreview = { columns?: string[]; rows?: Record<string, unknown>[]; row_count?: number; matching_rows?: number };
 
-const NAV: Array<{ id: Page; label: string; icon: string }> = [
+const NAV_BASIC: Array<{ id: Page; label: string; icon: string }> = [
+  { id: "research", label: "Research", icon: "⌕" },
+  { id: "activity", label: "Activity", icon: "↗" },
+  { id: "results", label: "Results", icon: "▤" },
+  { id: "projects", label: "Projects", icon: "⌂" },
+];
+// Advanced mode adds the evidence, map, and audit surfaces.
+const NAV_ADVANCED: Array<{ id: Page; label: string; icon: string }> = [
   { id: "home", label: "Overview", icon: "◫" },
-  { id: "project", label: "Research project", icon: "⌕" },
+  { id: "project", label: "Evidence & handoff", icon: "☷" },
   { id: "institutions", label: "Institutions & map", icon: "⌖" },
-  { id: "activity", label: "Run history", icon: "↗" },
+  { id: "timeline", label: "Project timeline", icon: "◷" },
 ];
-const SECRET_FIELDS: Array<{ key: SecretKey; label: string; placeholder: string }> = [
-  { key: "llm_api_key", label: "LLM provider key", placeholder: "Optional · for assisted workflows" },
-  { key: "x_bearer_token", label: "X bearer token", placeholder: "Optional" },
-  { key: "bluesky_identifier", label: "Bluesky identifier", placeholder: "Optional" },
-  { key: "bluesky_app_password", label: "Bluesky app password", placeholder: "Optional" },
-  { key: "mastodon_token", label: "Mastodon access token", placeholder: "Optional" },
-  { key: "weibo_cookie", label: "Weibo cookie", placeholder: "Optional" },
-];
+const PAGE_TITLES: Record<Page, string> = {
+  research: "Research", activity: "Activity", results: "Results", projects: "Projects", home: "Overview", project: "Evidence & handoff",
+  institutions: "Institutions & map", timeline: "Project timeline", settings: "Settings", about: "About",
+};
 
 function titleCase(value: string) {
   return value.replaceAll("_", " ").replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -79,8 +93,16 @@ function extractEvidence(row: Institution): Array<{ label: string; url: string }
 }
 
 export function App() {
-  const [page, setPage] = useState<Page>("home");
+  const [page, setPage] = useState<Page>("research");
+  const [prefs, savePrefs] = usePrefs();
   const [workspace, setWorkspace] = useState(() => localStorage.getItem("sugar.workspace") || "");
+  const [projectId, setProjectId] = useState(() => localStorage.getItem("sugar.projectId") || (localStorage.getItem("sugar.workspace") || "").replace("sugar-workspace://", "").replace(/^[^0-9a-f].*$/i, ""));
+  const [projects, setProjects] = useState<ApiWorkspace[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [overview, setOverview] = useState<ProjectOverview | null>(null);
+  const [runId, setRunId] = useState("");
+  const [timelineKey, setTimelineKey] = useState(0);
+  const settingsDirty = useRef(false);
   const [projectName, setProjectName] = useState("State Research Project");
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [registry, setRegistry] = useState<Institution[]>([]);
@@ -92,11 +114,9 @@ export function App() {
   const [engineVersion, setEngineVersion] = useState("");
   const [apiUrl, setApiUrl] = useState(() => defaultApiUrl());
   const [apiToken, setApiToken] = useState("");
-  const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
-  const [remoteWorkspaces, setRemoteWorkspaces] = useState<ApiWorkspace[]>([]);
-  const [remoteProjectName, setRemoteProjectName] = useState("State Research Project");
   const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [credentials, setCredentials] = useState<Credentials>({});
+  // Credentials are managed in Settings and stored securely by the engine; legacy operations resolve them there.
+  const credentials = useMemo<Credentials>(() => ({}), []);
   const [question, setQuestion] = useState("");
   const [geography, setGeography] = useState("");
   const [knownEntities, setKnownEntities] = useState("");
@@ -190,15 +210,19 @@ export function App() {
     }
   }, [workspace, execute]);
 
+  // The legacy evidence/registry dashboard spawns several engine operations; load it only when one of its pages is opened.
+  const legacyLoaded = useRef("");
   useEffect(() => {
-    if (!workspace) return;
+    if (!workspace || !["home", "project", "institutions"].includes(page) || legacyLoaded.current === workspace) return;
+    legacyLoaded.current = workspace;
     void refreshDashboard(workspace);
-  }, [workspace]);
+  }, [workspace, page]);
 
   useEffect(() => {
     let active = true;
     setEngineState("checking");
-    void runBackend("diagnostics", undefined, credentials).then((result) => {
+    // Desktop: start the loopback research API first; live runs and the research workbench use it.
+    void ensureLocalApi().then(() => runBackend("diagnostics", undefined, credentials)).then((result) => {
       if (!active) return;
       const diagnostics = latestEvent<Record<string, unknown>>(result.events, "diagnostics");
       setEngineVersion(String(diagnostics?.version || ""));
@@ -220,70 +244,94 @@ export function App() {
   const networks = useMemo(() => ["All networks", ...new Set(registry.map((row) => row.network).filter((item): item is string => Boolean(item)))], [registry]);
   const locatedCount = useMemo(() => registry.filter((row) => institutionCoordinates(row) !== null).length, [registry]);
 
-  const chooseWorkspace = async () => {
-    if (!isTauri()) {
-      setBusy("loading-projects");
-      setError("");
-      try {
-        setRemoteWorkspaces(await listWorkspaces());
-        setRemoteProjectName(projectName || "Research project");
-        setWorkspacePickerOpen(true);
-      } catch (issue) {
-        setError(issue instanceof Error ? issue.message : String(issue));
-      } finally { setBusy(""); }
-      return;
+  // ---- projects (research workbench) ------------------------------------------------------------------
+  const loadProjects = useCallback(async () => {
+    setProjectsLoading(true);
+    try { setProjects(await listWorkspaces()); } catch (issue) { setError(issue instanceof Error ? issue.message : String(issue)); } finally { setProjectsLoading(false); }
+  }, []);
+
+  const refreshOverview = useCallback(async (id = projectId) => {
+    if (!id) { setOverview(null); return; }
+    try {
+      const data = await research.overview(id);
+      setOverview(data);
+      setProjectName(data.summary.name);
+      setRunId((current) => (current && data.runs.some((r) => r.run_id === current) ? current : data.runs[0]?.run_id || ""));
+      setTimelineKey((n) => n + 1);
+    } catch (issue) {
+      const message = issue instanceof Error ? issue.message : String(issue);
+      if (/not found/i.test(message)) { setProjectId(""); setOverview(null); } else setError(message);
     }
+  }, [projectId]);
+
+  const activateProject = useCallback((project: ApiWorkspace) => {
+    setProjectId(project.id);
+    setProjectName(project.name);
+    // Browser projects are addressed by reference; the desktop app also knows the folder for its file dialogs.
+    const reference = isTauri() ? (project.path || "") : project.workspace;
+    setWorkspace(reference);
+    try { localStorage.setItem("sugar.projectId", project.id); localStorage.setItem("sugar.workspace", reference); } catch { /* storage may be unavailable */ }
+    setRunId("");
+    setOverview(null);
+  }, []);
+
+  const changePage = useCallback((next: Page) => {
+    if (page === "settings" && next !== "settings" && settingsDirty.current && !window.confirm("You have unsaved settings. Leave without saving them?")) return;
+    setError("");
+    setPage(next);
+    if (next === "projects") void loadProjects();
+    if (next === "institutions" && registry.length === 0 && workspace) void refreshRegistry();
+  }, [page, loadProjects, registry.length, workspace]);
+
+  const openProject = (project: ApiWorkspace) => {
+    activateProject(project);
+    addActivity("Project opened", project.name, "ok");
+    setPage("research");
+  };
+
+  const createProject = async (name: string, question = ""): Promise<string> => {
+    setBusy("creating-project");
+    setError("");
+    try {
+      const created = await createWorkspace(name, question);
+      setProjects((items) => [created, ...items]);
+      activateProject(created);
+      if (isTauri()) { const listed = (await listWorkspaces()).find((item) => item.id === created.id); if (listed?.path) { setWorkspace(listed.path); localStorage.setItem("sugar.workspace", listed.path); } }
+      if (question) await api(`/api/workspaces/${created.id}/research/requirement`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: question }) }).catch(() => undefined);
+      addActivity("Project created", name, "ok");
+      setPage("research");
+      return created.id;
+    } catch (issue) {
+      setError(issue instanceof Error ? issue.message : String(issue));
+      throw issue;
+    } finally { setBusy(""); }
+  };
+
+  const openFolder = async () => {
     const selectedPath = await open({ directory: true, multiple: false, title: "Select a SUGAR project folder" });
     if (typeof selectedPath !== "string") return;
     setBusy("workspace-status");
     try {
-      let result = await runBackend("workspace-status", { workspace: selectedPath }, credentials);
-      let status = latestEvent<Record<string, unknown>>(result.events, "workspace_status");
-      if (!status) {
-        result = await runBackend("workspace-init", { workspace: selectedPath, name: projectName.trim() || "Research project", exist_ok: true }, credentials);
-        status = latestEvent<Record<string, unknown>>(result.events, "workspace_status");
-      }
-      setWorkspace(selectedPath);
-      localStorage.setItem("sugar.workspace", selectedPath);
-      if (status?.name) setProjectName(String(status.name));
-      addActivity("Project opened", String(status?.name || selectedPath), "ok");
-      setPage("home");
-    } catch (issue) {
-      const message = issue instanceof Error ? issue.message : String(issue);
-      if (message.includes("No such file") || message.includes("does not exist") || message.includes("FileNotFoundError")) {
-        const created = await runBackend("workspace-init", { workspace: selectedPath, name: projectName.trim() || "Research project", exist_ok: true }, credentials).catch(() => null);
-        if (created) {
-          setWorkspace(selectedPath);
-          localStorage.setItem("sugar.workspace", selectedPath);
-          addActivity("Project created", projectName, "ok");
-          setPage("home");
-        } else setError(message);
-      } else setError(message);
-    } finally { setBusy(""); }
+      const linked = await openLocalFolder(selectedPath, true, projectName.trim() || "Research project");
+      activateProject({ ...linked, path: selectedPath });
+      addActivity("Project opened", linked.name, "ok");
+      setPage("research");
+    } catch (issue) { setError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
   };
 
-  const openRemoteWorkspace = (item: ApiWorkspace) => {
-    setWorkspace(item.workspace);
-    setProjectName(item.name);
-    localStorage.setItem("sugar.workspace", item.workspace);
-    setWorkspacePickerOpen(false);
-    addActivity("Project opened", item.name, "ok");
-    setPage("home");
+  const ensureProject = async (suggested: string): Promise<string> => {
+    if (projectId) return projectId;
+    const name = suggested.trim() ? suggested.trim().replace(/^./, (c) => c.toUpperCase()) : "New research project";
+    return createProject(name.slice(0, 120));
   };
 
-  const createRemoteWorkspace = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!remoteProjectName.trim()) return;
-    setBusy("creating-project");
-    setError("");
-    try {
-      const created = await createWorkspace(remoteProjectName.trim());
-      setRemoteWorkspaces((items) => [created, ...items]);
-      openRemoteWorkspace(created);
-    } catch (issue) {
-      setError(issue instanceof Error ? issue.message : String(issue));
-    } finally { setBusy(""); }
-  };
+  const handleRunStarted = useCallback((id: string, run: RunSummary) => {
+    setRunId(run.run_id);
+    setPage("activity");
+    void refreshOverview(id);
+  }, [refreshOverview]);
+
+  const chooseWorkspace = () => changePage("projects");
 
   const connectResearchEngine = async () => {
     configureApi(apiUrl, apiToken);
@@ -498,13 +546,20 @@ export function App() {
     }
   };
 
-  const changePage = (next: Page) => {
-    setError("");
-    setPage(next);
-    if (next === "institutions" && registry.length === 0 && workspace) void refreshRegistry();
-  };
+  const title = PAGE_TITLES[page];
+  const navItems = prefs.mode === "advanced" ? [...NAV_BASIC, ...NAV_ADVANCED] : NAV_BASIC;
+  const activeRunSummary = overview?.runs.find((r) => ["running", "paused", "queued", "cancelling"].includes(r.status));
+  const author = "analyst";
 
-  const title = NAV.find((item) => item.id === page)?.label || "Settings";
+  // load the project list once (needed for the project chip and the Projects page) and the overview of the open project
+  useEffect(() => { void ensureLocalApi().catch(() => undefined).then(() => loadProjects()); }, [loadProjects, apiUrl]);
+  useEffect(() => { void refreshOverview(projectId); }, [projectId, refreshOverview]);
+  useEffect(() => {
+    // a hidden run should not be forgotten: return to it when the project has one in flight
+    if (activeRunSummary && !runId) setRunId(activeRunSummary.run_id);
+  }, [activeRunSummary, runId]);
+  const [createSignal, setCreateSignal] = useState(0);
+  const openNewProject = () => { changePage("projects"); setCreateSignal((n) => n + 1); };
 
   return (
     <div className="app-shell">
@@ -512,27 +567,28 @@ export function App() {
       <input ref={datasetInputRef} className="sr-only" type="file" accept=".csv,.tsv,.xlsx,.xls,.json,.jsonl" onChange={(event) => { const file = event.currentTarget.files?.[0]; void uploadRegistryFile(file); event.currentTarget.value = ""; }} />
       <aside className="sidebar">
         <div className="brand-row"><div className="brand-mark">S</div><div><div className="brand-name">SUGAR</div><div className="brand-subtitle">Research workspace</div></div></div>
-        <div className="side-caption">WORKSPACE</div>
+        <div className="side-caption">RESEARCH</div>
         <nav className="nav-list" aria-label="Main navigation">
-          {NAV.map((item) => <button key={item.id} className={`nav-item ${page === item.id ? "active" : ""}`} onClick={() => changePage(item.id)}><span className="nav-icon">{item.icon}</span>{item.label}{item.id === "activity" && activity.length > 0 && <span className="nav-count">{Math.min(activity.length, 99)}</span>}</button>)}
+          {navItems.map((item) => <button key={item.id} className={`nav-item ${page === item.id ? "active" : ""}`} aria-current={page === item.id ? "page" : undefined} onClick={() => changePage(item.id)}><span className="nav-icon" aria-hidden="true">{item.icon}</span>{item.label}{item.id === "activity" && activeRunSummary && <span className="nav-live" title="A run is in progress" />}</button>)}
         </nav>
         <div className="side-caption secondary-caption">PROJECT</div>
-        <button className="project-chip" onClick={() => changePage("project")}><span className={`project-indicator ${workspace ? "connected" : ""}`} /><span className="project-chip-copy"><strong>{projectName || "No project open"}</strong><small>{workspace ? workspace.split(/[\\/]/).at(-1) : "Choose a project folder"}</small></span><span className="chevron">›</span></button>
+        <button className="side-new-project" onClick={openNewProject}><span aria-hidden="true">＋</span> New project</button>
+        <button className="project-chip" onClick={() => changePage("projects")} title="Switch project"><span className={`project-indicator ${projectId ? "connected" : ""}`} /><span className="project-chip-copy"><strong>{projectId ? projectName : "No project open"}</strong><small>{projectId ? (overview?.summary.status ? titleCase(overview.summary.status) : "Open") : "Create or choose one"}</small></span><span className="chevron" aria-hidden="true">›</span></button>
         <div className="sidebar-spacer" />
         <div className="engine-card"><div className={`engine-light ${engineState}`} /><div><strong>{engineState === "checking" ? "Connecting to engine" : engineState === "unavailable" ? "Engine unavailable" : engineState === "preview" ? "Browser preview" : isTauri() ? "Local research engine" : "SUGAR API connected"}</strong><small>{engineState === "ready" ? `Python core · ${engineVersion || "connected"}` : engineState === "unavailable" ? "Check the API address and credentials" : engineState === "preview" ? "Connect a research API to work" : "Checking Python core"}</small></div></div>
-        <button className={`nav-item settings-link ${page === "settings" ? "active" : ""}`} onClick={() => changePage("settings")}><span className="nav-icon">⚙</span>Settings</button>
-        <div className="sidebar-version">SUGAR Desktop <span>1.4</span></div>
+        <button className={`nav-item settings-link ${page === "settings" ? "active" : ""}`} onClick={() => changePage("settings")} title="Settings"><span className="nav-icon" aria-hidden="true">⚙</span><span className="nav-label">Settings</span></button>
+        <button className={`nav-item about-link ${page === "about" ? "active" : ""}`} onClick={() => changePage("about")} title="About SUGAR"><span className="nav-icon" aria-hidden="true">ⓘ</span><span className="nav-label">About</span></button>
+        <div className="sidebar-version">SUGAR <span>{engineVersion || "1.4"}</span> · Diplomacy Lab</div>
       </aside>
 
       <main className="main-area">
         <header className="topbar">
           <div className="breadcrumbs"><span>SUGAR</span><b>/</b><strong>{title}</strong></div>
-          <div className="topbar-actions"><div className={`connection-badge ${busy ? "working" : workspace ? "connected" : ""}`}><i />{busy ? `${titleCase(busy)} running` : workspace ? "Project connected" : "No project open"}</div><button className="button button-primary button-small" onClick={() => void chooseWorkspace()} disabled={Boolean(busy)}><span>＋</span> Open project</button></div>
+          <div className="topbar-actions"><div className={`connection-badge ${busy || activeRunSummary ? "working" : projectId ? "connected" : ""}`}><i />{busy ? "Working…" : activeRunSummary ? "Research running" : projectId ? "Project open" : "No project open"}</div>{overview && <StatusPill status={overview.summary.status} />}<button className="button button-primary button-small" onClick={openNewProject} disabled={Boolean(busy)}><span aria-hidden="true">＋</span> New project</button></div>
         </header>
 
         {error && <div className="error-banner" role="alert"><span className="error-symbol">!</span><div><strong>Action needs attention</strong><p>{error}</p></div><button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
         {busy && <div className="progress-line"><i /></div>}
-        {workspacePickerOpen && <div className="workspace-picker-backdrop" onClick={() => setWorkspacePickerOpen(false)}><section className="workspace-picker" role="dialog" aria-modal="true" aria-labelledby="workspace-picker-title" onClick={(event) => event.stopPropagation()}><div className="workspace-picker-heading"><div><span className="eyebrow">SUGAR API</span><h2 id="workspace-picker-title">Choose a research project</h2><p>Projects are stored by the connected Python service.</p></div><button className="inspector-close" onClick={() => setWorkspacePickerOpen(false)} aria-label="Close project picker">×</button></div><div className="workspace-picker-list">{remoteWorkspaces.map((item) => <button className="workspace-option" key={item.id} onClick={() => openRemoteWorkspace(item)}><span className="project-current-mark">⌂</span><span><strong>{item.name}</strong><small>{item.description || "SUGAR project workspace"}</small></span><b>Open →</b></button>)}{!remoteWorkspaces.length && <div className="workspace-picker-empty"><span>⌂</span><strong>No projects on this API yet</strong><p>Create a project below to start a research workspace.</p></div>}</div><form className="workspace-create-form" onSubmit={(event) => void createRemoteWorkspace(event)}><label className="field-block"><span>New project name</span><input value={remoteProjectName} onChange={(event) => setRemoteProjectName(event.target.value)} maxLength={120} placeholder="e.g. Public diplomacy in Ghana" /></label><button className="button button-primary" type="submit" disabled={!remoteProjectName.trim() || Boolean(busy)}>Create project <span>→</span></button></form></section></div>}
 
         {page === "home" && <section className="page-content overview-page">
           <div className="page-heading"><div><div className="eyebrow">RESEARCH DESK <span className="eyebrow-line" /></div><h1>Good work starts with a clear question.</h1><p>A focused workspace for planning, collecting, and inspecting evidence.</p></div><div className="date-stamp">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}</div></div>
@@ -565,10 +621,14 @@ export function App() {
           {selected && <div className="inspector-backdrop" onClick={() => setSelected(null)}><aside className="evidence-inspector" onClick={(event) => event.stopPropagation()}><div className="inspector-top"><div><span className="eyebrow">INSTITUTION RECORD</span><button className="inspector-close" onClick={() => setSelected(null)} aria-label="Close inspector">×</button></div><div className="inspector-identity"><div className="inspector-avatar">{(selected.name || "?").slice(0, 1).toUpperCase()}</div><div><h2>{selected.name || "Unnamed institution"}</h2><span>{[selected.city, selected.country].filter(Boolean).join(", ") || "Location not recorded"}</span></div></div><div className="inspector-badges"><span className={`status-pill status-pill-${String(selected.status || "unknown").toLowerCase()}`}>{titleCase(selected.status || "unknown")}</span><span className="network-pill">{selected.network || titleCase(selected.entity_type || "Institution")}</span></div></div><div className="inspector-content"><div className="inspector-section"><span className="eyebrow">PROFILE</span><p>{selected.description || "No descriptive profile has been recorded for this institution."}</p><div className="profile-facts"><div><span>Entity type</span><strong>{titleCase(selected.entity_type || "institution")}</strong></div><div><span>Coordinates</span><strong>{coordinatesText(selected)}</strong></div><div><span>Registry ID</span><strong>{selected.entity_id}</strong></div></div></div><div className="inspector-section"><div className="evidence-heading"><span className="eyebrow">EVIDENCE & SOURCES</span><span className="source-count">{extractEvidence(selected).length}</span></div>{extractEvidence(selected).length ? <div className="source-list">{extractEvidence(selected).map((source) => <a className="source-link" key={source.url} href={source.url} target="_blank" rel="noreferrer"><span className="source-icon">↗</span><span><strong>{source.label}</strong><small>{new URL(source.url).hostname}</small></span></a>)}</div> : <div className="evidence-gap"><span>◷</span><div><strong>Evidence gap</strong><p>No source URL has been attached yet. Verify this record before relying on its status or location.</p></div></div>}</div></div><div className="inspector-footer"><span>Claim-level source provenance is retained in the project registry.</span></div></aside></div>}
         </section>}
 
-        {page === "activity" && <section className="page-content"><div className="page-heading compact-heading"><div><div className="eyebrow">AUDIT TRAIL <span className="eyebrow-line" /></div><h1>Project run history.</h1><p>Review the recent operations recorded for this workspace.</p></div><button className="button button-secondary" onClick={() => void refreshDashboard()} disabled={!workspace || Boolean(busy)}>↻ Refresh history</button></div><div className="panel history-panel"><div className="history-head"><div><strong>Recent project activity</strong><span>{activity.length} recorded events</span></div><div className="history-cols"><span>DETAIL</span><span>TIME</span></div></div>{activity.length ? activity.map((item) => <ActivityRow key={item.id} item={item} expanded />) : <div className="empty-state"><div className="empty-state-icon">↗</div><h3>No project history yet</h3><p>Research operations, imports, and exports will be recorded here.</p></div>}</div></section>}
+        {page === "research" && <ResearchPage projectId={projectId} projectName={projectName} prefs={prefs} overview={overview} onOverview={() => refreshOverview(projectId)} ensureProject={ensureProject} onRunStarted={handleRunStarted} onOpenSettings={() => changePage("settings")} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onError={setError} />}
+        {page === "activity" && <ActivityView projectId={projectId} runId={runId} prefs={prefs} author={author} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onNewRun={() => changePage("research")} onOpenSettings={() => changePage("settings")} onRunStarted={handleRunStarted} onError={setError} />}
+        {page === "results" && <ResultsView projectId={projectId} runId={runId || overview?.runs[0]?.run_id || ""} runs={overview?.runs || []} prefs={prefs} author={author} projectPath={workspace.startsWith("sugar-workspace://") ? "" : workspace} onSelectRun={setRunId} onOpenActivity={(id) => { setRunId(id); changePage("activity"); }} onOpenResearch={() => changePage("research")} onRunStarted={handleRunStarted} onError={setError} />}
+        {page === "projects" && <ProjectsPage projects={projects} currentId={projectId} loading={projectsLoading} advanced={prefs.mode === "advanced"} createSignal={createSignal} onOpen={openProject} onCreate={async (name, question) => { await createProject(name, question); }} onOpenFolder={() => void openFolder()} onRefresh={() => void loadProjects()} />}
+        {page === "timeline" && <TimelinePage projectId={projectId} refreshKey={timelineKey} />}
+        {page === "about" && <AboutPage version="1.4" engineVersion={engineVersion} />}
+        {page === "settings" && <SettingsPage prefs={prefs} onSavePrefs={savePrefs} onDirtyChange={(dirty) => { settingsDirty.current = dirty; }} engineState={engineState} apiUrl={apiUrl} apiToken={apiToken} onApiUrl={setApiUrl} onApiToken={setApiToken} onConnect={() => void connectResearchEngine()} busy={Boolean(busy)} onError={setError} />}
 
-        {page === "settings" && <section className="page-content"><div className="page-heading compact-heading"><div><div className="eyebrow">PREFERENCES <span className="eyebrow-line" /></div><h1>Connection settings.</h1><p>Connect the browser to a SUGAR Python service and manage optional provider credentials.</p></div><span className={`workflow-state ${engineState === "ready" ? "ready" : "pending"}`}><i />{engineState === "ready" ? "Engine connected" : "Connection needed"}</span></div><div className="settings-layout"><div className="panel settings-panel">{!isTauri() && <><div className="section-title"><div className="section-icon blue">↗</div><div><h3>Research API</h3><p>The same browser interface works with a local service or an approved hosted endpoint.</p></div></div><div className="api-connection-fields"><label className="field-block"><span>API address</span><input type="url" value={apiUrl} onChange={(event) => setApiUrl(event.target.value)} placeholder="http://127.0.0.1:8765" /></label><label className="field-block"><span>API token <small>Only needed when the service requires one</small></span><input type="password" autoComplete="off" value={apiToken} onChange={(event) => setApiToken(event.target.value)} placeholder="Session only" /></label><div className="api-connect-footer"><span>Use HTTPS for a remotely hosted API. The token stays in this browser session.</span><button className="button button-primary" onClick={() => void connectResearchEngine()} disabled={Boolean(busy)}>Test connection</button></div></div><div className="settings-divider" /></>}
-          <div className="section-title"><div className="section-icon amber">⌘</div><div><h3>Provider credentials</h3><p>Credentials are sent only with the research operation that needs them.</p></div><span className="secure-badge"><span>◉</span> Session only</span></div><div className="credential-list">{SECRET_FIELDS.map(({ key, label, placeholder }) => <label className="field-block" key={key}><span>{label}</span><input type="password" autoComplete="off" value={credentials[key] || ""} onChange={(event) => setCredentials((current) => ({ ...current, [key]: event.target.value }))} placeholder={placeholder} /></label>)}</div><div className="settings-footnote"><span>i</span><p>Provider credentials stay in memory and are not written to a project or browser storage. Closing this app clears them. Remote API connections should use HTTPS.</p></div></div><aside className="connection-summary"><div className="summary-head"><span className="summary-icon">◉</span><div><strong>Research engine</strong><small>{isTauri() ? "Packaged Python sidecar" : "Python HTTP API"}</small></div></div><div className="summary-divider" /><div className="summary-row"><span>Interface</span><strong>Browser UI</strong></div><div className="summary-row"><span>Desktop wrapper</span><strong>Optional Tauri app</strong></div><div className="summary-row"><span>Project storage</span><strong>{isTauri() ? "Selected local folder" : "API workspace root"}</strong></div><div className="summary-map-note"><span>⌖</span><p>MapLibre uses OpenFreeMap vector tiles for the background map. Institution records remain in the project workspace.</p></div></aside></div></section>}
 
         <footer className="statusbar"><div><span className={`status-dot ${workspace ? "active" : "unknown"}`} /><span>{workspace ? `Workspace · ${workspace.split(/[\\/]/).at(-1)}` : "Local workspace not selected"}</span></div><span className="statusbar-right">SUGAR research engine <b>·</b> Python core</span></footer>
       </main>

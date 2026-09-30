@@ -130,19 +130,38 @@ def load_config(path: str) -> dict[str, Any]:
     return payload
 
 
+def _stored_secret(ref: str) -> str:
+    """Credential saved through SUGAR Settings (OS vault or owner-only file); '' if none or unreadable."""
+    try:
+        from sugar_core.credential_store import default_store
+        return default_store().get(ref)
+    except Exception:
+        return ""
+
+
+def _default_llm_secret() -> str:
+    try:
+        from sugar_core.llm_providers import ProviderRegistry
+        registry = ProviderRegistry()
+        profile = registry.get(registry.default_id())
+        return registry.secret_for(profile) if profile else ""
+    except Exception:
+        return ""
+
+
 def secrets_from_environment() -> dict[str, str]:
-    secrets = {
-        "x_bearer_token": os.environ.get("SUGAR_X_BEARER_TOKEN", ""),
-        "llm_api_key": os.environ.get("SUGAR_LLM_API_KEY", ""),
-        "bluesky_identifier": os.environ.get("SUGAR_BLUESKY_IDENTIFIER", ""),
-        "bluesky_app_password": os.environ.get("SUGAR_BLUESKY_APP_PASSWORD", ""),
-        "mastodon_token": os.environ.get("SUGAR_MASTODON_TOKEN", ""),
-        "weibo_cookie": os.environ.get("SUGAR_WEIBO_COOKIE", ""),
+    """Collector/LLM credentials: explicit environment values win, then credentials saved in Settings."""
+    names = {
+        "x_bearer_token": "SUGAR_X_BEARER_TOKEN",
+        "bluesky_identifier": "SUGAR_BLUESKY_IDENTIFIER",
+        "bluesky_app_password": "SUGAR_BLUESKY_APP_PASSWORD",
+        "mastodon_token": "SUGAR_MASTODON_TOKEN",
+        "weibo_cookie": "SUGAR_WEIBO_COOKIE",
     }
+    secrets = {key: os.environ.get(variable, "").strip() or _stored_secret(f"platform:{key}") for key, variable in names.items()}
+    secrets["llm_api_key"] = os.environ.get("SUGAR_LLM_API_KEY", "").strip() or _default_llm_secret()
     _ACTIVE_SECRET_VALUES.clear()
-    _ACTIVE_SECRET_VALUES.update(
-        str(value) for value in secrets.values() if str(value)
-    )
+    _ACTIVE_SECRET_VALUES.update(str(value) for value in secrets.values() if str(value))
     return secrets
 
 
@@ -287,6 +306,10 @@ def _run_workspace_operation(command: str, config: dict[str, Any]) -> list[str]:
 
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "serve":
+        # Long-lived local HTTP API used by the desktop shell for live research runs (activity streaming).
+        from sugar_api import main as api_main
+        return int(api_main(argv[1:]) or 0)
     if argv and argv[0] in {"cli", "project", "state", "intel"}:
         mode = argv.pop(0)
         if mode == "cli":

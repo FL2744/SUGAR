@@ -11,6 +11,7 @@ import "@fontsource/manrope/700.css";
 import "@fontsource/manrope/800.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
+import "./workbench.css";
 import { App } from "./shell";
 
 createRoot(document.getElementById("root")!).render(

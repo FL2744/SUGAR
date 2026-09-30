@@ -11,7 +11,7 @@ def test_apache_license_contract_is_declared_consistently():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     assert project["license"] == "Apache-2.0"
     assert set(project["license-files"]) == {"LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"}
-    assert {author["name"] for author in project["authors"]} == {"Alejandro Grenier"}
+    assert {author["name"] for author in project["authors"]} == {"Alejandro Grenier", "William Taggart"}
 
     license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
     assert "Apache License" in license_text

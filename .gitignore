@@ -5,6 +5,7 @@ SUGAR KEYS.*
 .env
 .env.*
 !.env.example
+!.env.local.example
 .x_bearer_token
 *x_bearer_token*
 *.secret

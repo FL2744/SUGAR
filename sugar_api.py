@@ -22,9 +22,13 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 import sugar_bridge
+from sugar_core.credential_store import load_env_file
+from sugar_core.research_api import ApiError, Stream, dispatch as research_dispatch
+from sugar_core.research_runs import ResearchProject
+from sugar_core.workbench import ResearchWorkbench
 from sugar_core.workspace import SugarWorkspace
 
 
@@ -49,10 +53,72 @@ SECRET_ENV = {
 }
 
 
-class ApiError(Exception):
-    def __init__(self, status: int, message: str) -> None:
-        super().__init__(message)
-        self.status = status
+_workbench: ResearchWorkbench | None = None
+
+
+def get_workbench() -> ResearchWorkbench:
+    """The process-wide research workbench (providers, credentials, live runs)."""
+    global _workbench
+    if _workbench is None:
+        _workbench = ResearchWorkbench()
+    return _workbench
+
+
+def _linked_path() -> Path:
+    return get_workspace_root() / "linked-projects.json"
+
+
+def _linked_index() -> dict[str, str]:
+    """Folders a local desktop user opened from elsewhere on disk: stable id -> absolute folder."""
+    try:
+        payload = json.loads(_linked_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {str(k): str(v) for k, v in payload.items()} if isinstance(payload, dict) else {}
+
+
+def link_local_project(folder: str, *, name: str = "", create: bool = False) -> dict[str, Any]:
+    """Register an existing (or new) SUGAR project folder so the workbench can use it. Desktop/loopback only."""
+    target = Path(folder).expanduser().resolve()
+    if not (target / "sugar-project.json").is_file():
+        if not create:
+            raise ApiError(404, "That folder is not a SUGAR project. Create a new project or choose a folder that contains sugar-project.json.")
+        workspace = SugarWorkspace.create(target, name=name or target.name)
+    else:
+        workspace = SugarWorkspace.open(target)
+    identifier = str(uuid.uuid5(uuid.NAMESPACE_URL, target.as_uri()))
+    index = _linked_index()
+    index[identifier] = str(target)
+    _linked_path().write_text(json.dumps(index, indent=2, sort_keys=True), encoding="utf-8")
+    return {"id": identifier, "workspace": f"sugar-workspace://{identifier}", "name": workspace.manifest.name, "path": str(target)}
+
+
+def resolve_project(raw_identifier: str) -> ResearchProject:
+    identifier = _workspace_id(raw_identifier)
+    linked = _linked_index().get(identifier)
+    if linked and (Path(linked) / "sugar-project.json").is_file():
+        return ResearchProject(SugarWorkspace.open(linked))
+    root = (get_workspace_root() / identifier).resolve()
+    if not _within(get_workspace_root(), root) or not (root / "sugar-project.json").is_file():
+        raise ApiError(404, "Project was not found on this SUGAR server.")
+    return ResearchProject(SugarWorkspace.open(root))
+
+
+def list_research_projects() -> list[ResearchProject]:
+    projects = []
+    for candidate in sorted(get_workspace_root().iterdir()):
+        if candidate.is_dir() and re.fullmatch(r"[0-9a-fA-F-]{36}", candidate.name) and (candidate / "sugar-project.json").is_file():
+            try:
+                projects.append(ResearchProject(SugarWorkspace.open(candidate)))
+            except (OSError, ValueError):
+                continue
+    for identifier, folder in _linked_index().items():
+        if (Path(folder) / "sugar-project.json").is_file():
+            try:
+                projects.append(ResearchProject(SugarWorkspace.open(folder)))
+            except (OSError, ValueError):
+                continue
+    return projects
 
 
 def _workspace_id(value: str) -> str:
@@ -175,13 +241,19 @@ def _read_manifest(path: Path) -> dict[str, Any] | None:
 
 
 class SugarApiHandler(BaseHTTPRequestHandler):
-    server_version = "SUGAR-API/1.0"
+    server_version = "SUGAR-API/2.0"
     api_token = ""
     allowed_origins: set[str] = set()
+    expose_paths = False    # desktop sidecar only: lets the local app reach a project's folder for file dialogs
 
     def log_message(self, fmt: str, *args: Any) -> None:
-        # Avoid logging request bodies, query strings, or authorization headers.
-        super().log_message("%s", fmt.split(" ", 1)[0])
+        # Log only "METHOD /path -> status": never request bodies, query strings, or authorization headers.
+        try:
+            request, code = str(args[0]), str(args[1])
+            method, _, rest = request.partition(" ")
+            super().log_message("%s %s -> %s", method, rest.split(" ")[0].split("?")[0], code)
+        except (IndexError, ValueError):
+            super().log_message("%s", "request")
 
     def _send(self, status: int, payload: Any, content_type: str = "application/json; charset=utf-8", headers: dict[str, str] | None = None) -> None:
         body = payload if isinstance(payload, bytes) else json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -194,7 +266,7 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         if headers:
             for key, value in headers.items():
                 self.send_header(key, value)
@@ -221,6 +293,8 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             raise ApiError(400, "Invalid Content-Length header.") from exc
         if length < 0 or length > maximum:
             raise ApiError(413, "Request body is too large.")
+        if length == 0:
+            return {}
         try:
             payload = json.loads(self.rfile.read(length))
         except (ValueError, UnicodeDecodeError) as exc:
@@ -240,33 +314,84 @@ class SugarApiHandler(BaseHTTPRequestHandler):
         if not self._authorized():
             return
         route = urlsplit(self.path)
+        try:
+            self._get(route)
+        except ApiError as exc:
+            self._send(exc.status, {"error": str(exc)})
+        except Exception as exc:  # Keep internal paths and tracebacks out of browser responses.
+            self._send(500, {"error": f"SUGAR API operation failed ({type(exc).__name__})."})
+
+    def _get(self, route) -> None:
         if route.path == "/api/health":
-            self._send(200, {"status": "ready", "api_version": 1, "bridge_protocol": sugar_bridge.BRIDGE_PROTOCOL_VERSION})
+            self._send(200, {"status": "ready", "api_version": 2, "bridge_protocol": sugar_bridge.BRIDGE_PROTOCOL_VERSION,
+                             "features": ["research_workbench", "activity_stream", "providers", "debug_report"]})
             return
         if route.path == "/api/workspaces":
             rows = []
-            for candidate in sorted(get_workspace_root().iterdir()):
-                if not candidate.is_dir() or not re.fullmatch(r"[0-9a-fA-F-]{36}", candidate.name):
+            linked_ids = {str(Path(v).resolve()): k for k, v in _linked_index().items()}
+            for project in list_research_projects():
+                manifest = _read_manifest(project.workspace.root)
+                if not manifest:
                     continue
-                manifest = _read_manifest(candidate)
-                if manifest:
-                    identifier = _workspace_id(candidate.name)
-                    rows.append({"id": identifier, "workspace": f"sugar-workspace://{identifier}", "name": manifest.get("name") or candidate.name, "description": manifest.get("description", "")})
+                identifier = linked_ids.get(str(project.workspace.root)) or _workspace_id(project.workspace.root.name)
+                summary = project.summary()
+                rows.append({"id": identifier, "workspace": f"sugar-workspace://{identifier}", "name": manifest.get("name") or project.workspace.root.name,
+                             "description": manifest.get("description", ""), "research_question": summary["research_question"],
+                             "status": summary["status"], "last_activity": summary["last_activity"], "updated_at": summary["updated_at"],
+                             "run_count": summary["run_count"],
+                             **({"path": str(project.workspace.root)} if self.expose_paths else {})})
+            rows.sort(key=lambda row: str(row["last_activity"]), reverse=True)
             self._send(200, {"workspaces": rows})
             return
         match = re.fullmatch(r"/api/workspaces/([0-9a-fA-F-]+)/files/(.+)", route.path)
         if match:
             identifier = _workspace_id(match.group(1))
             reference = f"sugar-file://{identifier}/{match.group(2)}"
-            try:
-                path = _virtual_path(reference, workspace_id=identifier)
-            except ApiError as exc:
-                self._send(exc.status, {"error": str(exc)})
-                return
+            path = _virtual_path(reference, workspace_id=identifier)
             filename = path.name.replace('"', "")
             self._send(200, path.read_bytes(), mimetypes.guess_type(filename)[0] or "application/octet-stream", {"Content-Disposition": f'attachment; filename="{filename}"'})
             return
-        self._send(404, {"error": "API route not found."})
+        self._research("GET", route, None)
+
+    def _research(self, method: str, route, body: dict[str, Any] | None) -> None:
+        query = {key: values[-1] for key, values in parse_qs(route.query).items()}
+        result = research_dispatch(method, route.path, query, body, wb=get_workbench(), resolve_project=resolve_project,
+                                   list_projects=list_research_projects)
+        if result is None:
+            self._send(404, {"error": "API route not found."})
+        elif isinstance(result, Stream):
+            self._stream(result)
+        else:
+            self._send(result[0], result[1])
+
+    def _stream(self, stream: Stream) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        origin = self.headers.get("Origin", "")
+        if origin and origin in self.allowed_origins:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+        self.end_headers()
+        try:
+            for frame in stream.frames():
+                self.wfile.write(frame)
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+
+    def do_DELETE(self) -> None:
+        if not self._authorized():
+            return
+        route = urlsplit(self.path)
+        try:
+            self._research("DELETE", route, None)
+        except ApiError as exc:
+            self._send(exc.status, {"error": str(exc)})
+        except Exception as exc:
+            self._send(500, {"error": f"SUGAR API operation failed ({type(exc).__name__})."})
 
     def do_POST(self) -> None:
         if not self._authorized():
@@ -276,6 +401,12 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             if route.path == "/api/workspaces":
                 self._create_workspace()
                 return
+            if route.path == "/api/workspaces/open":
+                if not self.expose_paths:
+                    raise ApiError(403, "Opening folders is only available in the local desktop app.")
+                payload = self._json_body()
+                self._send(200, link_local_project(str(payload.get("path") or ""), name=str(payload.get("name") or ""), create=bool(payload.get("create"))))
+                return
             upload_match = re.fullmatch(r"/api/workspaces/([0-9a-fA-F-]+)/uploads/(.+)", route.path)
             if upload_match:
                 self._upload(upload_match.group(1), upload_match.group(2))
@@ -283,7 +414,7 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             if route.path == "/api/run":
                 self._run_operation()
                 return
-            self._send(404, {"error": "API route not found."})
+            self._research("POST", route, self._json_body())
         except ApiError as exc:
             self._send(exc.status, {"error": str(exc)})
         except Exception as exc:  # Keep internal paths and tracebacks out of browser responses.
@@ -350,7 +481,9 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             config_path = Path(stream.name)
         environment = os.environ.copy()
         for name, variable in SECRET_ENV.items():
-            environment[variable] = str(credentials.get(name) or "")
+            supplied = str(credentials.get(name) or "")
+            if supplied:                      # otherwise the bridge falls back to the environment, then to saved Settings
+                environment[variable] = supplied
         command = [sys.executable, str(Path(sugar_bridge.__file__).resolve()), operation]
         if operation != "diagnostics":
             command.extend(["--config", str(config_path)])
@@ -384,30 +517,53 @@ class SugarApiHandler(BaseHTTPRequestHandler):
         self._send(200, {"code": result.returncode, "events": events, "stdout": stdout, "stderr": stderr})
 
 
+TAURI_ORIGINS = {"tauri://localhost", "http://tauri.localhost", "https://tauri.localhost"}
+DEFAULT_DEV_ORIGINS = {"http://localhost:1420", "http://127.0.0.1:1420", "http://localhost:4173", "http://127.0.0.1:4173",
+                       "http://localhost:5173", "http://127.0.0.1:5173"}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the SUGAR HTTP API for its browser interface.")
     parser.add_argument("--host", default=os.environ.get("SUGAR_API_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("SUGAR_API_PORT", "8765")))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("SUGAR_API_PORT", "8765")), help="0 selects a free port.")
     parser.add_argument("--workspace-root", default=os.environ.get("SUGAR_API_WORKSPACE_ROOT", str(Path.home() / ".sugar" / "workspaces")))
     parser.add_argument("--allow-origin", action="append", default=[])
+    parser.add_argument("--env-file", default="", help="Git-ignored file of SUGAR_* variables (default: ./.env.local or ~/.sugar/.env).")
+    parser.add_argument("--generate-token", action="store_true", help="Create a random API token for this process (desktop sidecar).")
+    parser.add_argument("--ready-json", action="store_true", help="Print one machine-readable JSON line when ready (desktop sidecar).")
+    parser.add_argument("--expose-paths", action="store_true", help="Include project folder paths in listings (loopback desktop use only).")
     args = parser.parse_args(argv)
+    loaded = load_env_file(args.env_file or None)
+    if loaded and not args.ready_json:
+        print(f"Loaded {len(loaded)} SUGAR_* variable(s) from the environment file (values are never printed).")
     global _workspace_root
     _workspace_root = Path(args.workspace_root).expanduser().resolve()
     _workspace_root.mkdir(parents=True, exist_ok=True)
     token = os.environ.get("SUGAR_API_TOKEN", "").strip()
+    if args.generate_token and not token:
+        token = secrets.token_urlsafe(32)
     local_hosts = {"localhost", "127.0.0.1", "::1"}
     if args.host not in local_hosts and not token:
         parser.error("SUGAR_API_TOKEN is required when binding beyond loopback.")
+    if args.expose_paths and args.host not in local_hosts:
+        parser.error("--expose-paths is only allowed when binding to loopback.")
     allowed_origins = set(args.allow_origin)
     allowed_origins.update(origin.strip() for origin in os.environ.get("SUGAR_API_ALLOWED_ORIGINS", "").split(",") if origin.strip())
     if not allowed_origins:
-        allowed_origins = {"http://localhost:1420", "http://127.0.0.1:1420", "http://localhost:4173", "http://127.0.0.1:4173", "http://localhost:5173", "http://127.0.0.1:5173"}
+        allowed_origins = set(DEFAULT_DEV_ORIGINS)
+    if args.ready_json:
+        allowed_origins |= TAURI_ORIGINS
     SugarApiHandler.api_token = token
     SugarApiHandler.allowed_origins = allowed_origins
+    SugarApiHandler.expose_paths = bool(args.expose_paths)
     server = ThreadingHTTPServer((args.host, args.port), SugarApiHandler)
     server.daemon_threads = True
-    print(f"SUGAR API ready at http://{args.host}:{args.port}/api/health")
-    print(f"Project root: {_workspace_root}")
+    url = f"http://{args.host}:{server.server_address[1]}"
+    if args.ready_json:
+        print(json.dumps({"event": "api_ready", "url": url, "token": token, "workspace_root": str(_workspace_root)}), flush=True)
+    else:
+        print(f"SUGAR API ready at {url}/api/health", flush=True)
+        print(f"Project root: {_workspace_root}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
