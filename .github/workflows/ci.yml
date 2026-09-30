@@ -117,7 +117,8 @@ jobs:
           test -n "$bridge"
           echo "SUGAR_BRIDGE_PATH=$bridge" >> "$GITHUB_ENV"
       - name: Backend diagnostics smoke test
-        run: "$SUGAR_BRIDGE_PATH" diagnostics
+        run: |
+          "$SUGAR_BRIDGE_PATH" diagnostics
       - name: Packaged analysis smoke test
         run: |
           cat > /tmp/sugar-smoke.csv <<'CSV'
