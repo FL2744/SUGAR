@@ -1,6 +1,6 @@
 {
   "collection_mode": "quick",
-  "created_at": "2026-09-28T21:45:48Z",
+  "created_at": "2026-09-30T17:08:04Z",
   "excluded_topics": [
     "Influence claims",
     "Program outcome claims",
@@ -12,9 +12,7 @@
   "known_entities": [
     "American Spaces Ghana",
     "EducationUSA",
-    "University of Ghana",
-    "Confucius Institute at the University of Ghana",
-    "Zhejiang University of Technology"
+    "University of Ghana"
   ],
   "languages": [
     "auto"
@@ -24,8 +22,8 @@
     "Official U.S. Department of State pages",
     "Official University of Ghana pages"
   ],
-  "question": "Which public-facing education advising and American Spaces activity is documented in Ghana, where can sources locate those services, and which status, partner, and geographic-precision fields remain unresolved against a small external higher-education institution set?",
-  "requirement_id": "rq_38f8f64728f91924",
+  "question": "Which public-facing education advising and American Spaces activity is documented in Ghana, where can sources locate those services, and which status and geographic-precision fields remain unresolved in this small public-source sample?",
+  "requirement_id": "rq_a6bad792b3461c97",
   "schema_version": "1.0",
   "target_audiences": [
     "Research analyst"

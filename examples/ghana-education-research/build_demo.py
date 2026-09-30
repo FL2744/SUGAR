@@ -136,19 +136,6 @@ SOURCES = [
         "location": "University of Ghana campus reference point",
         "geo": "university_of_ghana",
     },
-    {
-        "id": "ciug-zjut-partnership",
-        "title": "CIUG and Zhejiang University of Technology partnership",
-        "url": "https://www.ug.edu.gh/news/ciug-board-meeting-charts-new-direction-2026-ug-and-zhejiang-university-technology-strengthen",
-        "summary": "University of Ghana reports current CIUG board activity and work to strengthen its partnership with Zhejiang University of Technology.",
-        "kind": "partnership",
-        "status": "active",
-        "institution": "Confucius Institute at the University of Ghana",
-        "program": "Chinese language education and cultural programming",
-        "city": "",
-        "location": "Confucius Institute at the University of Ghana, campus reference point",
-        "geo": "university_of_ghana",
-    },
 ]
 
 
@@ -162,7 +149,7 @@ def _record(source: dict[str, str]) -> PostRecord:
         platform="web",
         native_id=source["id"],
         canonical_url=source["url"],
-        query="Ghana education advising American Spaces university partnerships",
+        query="Ghana education advising American Spaces",
         content_type="webpage",
         source_mode="manual_import",
         source_host=urlparse(source["url"]).netloc,
@@ -231,7 +218,7 @@ def build_workspace(target: Path) -> dict[str, object]:
             raise FileExistsError(f"The demo project is already complete: {target}")
         resuming = True
         existing_entity_count = len(list_entities(workspace))
-        if existing_entity_count not in {0, 11}:
+        if existing_entity_count not in {0, 9}:
             raise ValueError(f"Existing demo workspace has an unexpected registry size ({existing_entity_count}): {target}")
     else:
         if target.exists() and any(target.iterdir()):
@@ -241,7 +228,7 @@ def build_workspace(target: Path) -> dict[str, object]:
             name="Ghana Education and Cultural Programs",
             description=(
                 "A small, evidence-backed public-source demo of EducationUSA, American Spaces, "
-                "and a Ghana-based higher-education partnership. Snapshot 2026-09-28."
+                "and a public university in Ghana. Snapshot 2026-09-28."
             ),
             project_id=project_id,
         )
@@ -250,7 +237,7 @@ def build_workspace(target: Path) -> dict[str, object]:
     inventory_copy = workspace.path_for("references") / "ghana-demo-source-inventory.csv"
     shutil.copy2(INVENTORY, inventory_copy)
     preview = preview_reference_import(inventory_copy)
-    if preview["error_count"] or preview["row_count"] != 11:
+    if preview["error_count"] or preview["row_count"] != 9:
         raise ValueError(f"Inventory preview did not pass: {preview['errors']}")
     mapping = preview["suggested_mapping"]
     if not resuming or existing_entity_count == 0:
@@ -260,13 +247,13 @@ def build_workspace(target: Path) -> dict[str, object]:
             mapping=mapping,
             dataset_name="Ghana sponsor-demo seed inventory",
             network="",
-        geographic_scope="Selected sites in Accra and Kumasi, the University of Ghana campus, and one named external partner institution.",
+            geographic_scope="Selected sites in Accra and Kumasi and a University of Ghana campus reference point.",
             known_coverage_limits="Non-exhaustive public-source sample; see evidence-gaps.md.",
             license_notes="Facts paraphrased from linked public official sources; source URLs are retained. Map location claims separately cite OpenStreetMap under ODbL.",
             actor="demo builder",
             review_state="unreviewed",
         )
-        if imported["entity_count"] != 11 or imported["excluded_rows"]:
+        if imported["entity_count"] != 9 or imported["excluded_rows"]:
             raise ValueError(f"Inventory import did not complete cleanly: {imported}")
         record_project_run(
             workspace,
@@ -283,7 +270,6 @@ def build_workspace(target: Path) -> dict[str, object]:
         ("site_american_center_accra", "accra"),
         ("site_american_corner_accra", "accra"),
         ("institution_university_of_ghana", "university_of_ghana"),
-        ("program_ciug", "university_of_ghana"),
     ):
         point = OPENSTREETMAP[geo_key]
         entity = next(row for row in list_entities(workspace) if row["entity_id"] == entity_id)
@@ -312,8 +298,8 @@ def build_workspace(target: Path) -> dict[str, object]:
     requirement = ResearchRequirement(
         question=(
             "Which public-facing education advising and American Spaces activity is documented in Ghana, "
-            "where can sources locate those services, and which status, partner, and geographic-precision "
-            "fields remain unresolved against a small external higher-education institution set?"
+            "where can sources locate those services, and which status and geographic-precision "
+            "fields remain unresolved in this small public-source sample?"
         ),
         geographies=["Ghana"],
         timeframe=ResearchTimeframe(start="2023-01-01", end=SNAPSHOT_DATE),
@@ -322,8 +308,6 @@ def build_workspace(target: Path) -> dict[str, object]:
             "American Spaces Ghana",
             "EducationUSA",
             "University of Ghana",
-            "Confucius Institute at the University of Ghana",
-            "Zhejiang University of Technology",
         ],
         excluded_topics=["Influence claims", "Program outcome claims", "Comprehensive national coverage claims"],
         preferred_sources=["Official U.S. Department of State pages", "Official University of Ghana pages"],
@@ -350,8 +334,8 @@ def build_workspace(target: Path) -> dict[str, object]:
         "capture_method": "curated_manual_import",
         "snapshot_date": SNAPSHOT_DATE,
         "sources": sorted({urlparse(item["url"]).netloc for item in SOURCES}),
-        "terms": ["Ghana EducationUSA American Spaces Confucius Institute University of Ghana"],
-        "source_coverage_note": "Six manually curated official webpages/documents; no platform collection was performed.",
+        "terms": ["Ghana EducationUSA American Spaces University of Ghana"],
+        "source_coverage_note": "Five manually curated official webpages/documents; no platform collection was performed.",
     })
     observations_path = workspace.path_for("observations") / "ghana-demo-observations.csv"
     save_observations([_observation(source) for source in SOURCES], observations_path, metadata={"snapshot_date": SNAPSHOT_DATE})
@@ -375,7 +359,7 @@ def build_workspace(target: Path) -> dict[str, object]:
         "title": "Ghana Education and Cultural Programs",
         "as_of_date": SNAPSHOT_DATE,
     })
-    record_project_run(workspace, command="registry-map", config={"as_of_date": SNAPSHOT_DATE, "mapped_entities": 8, "location_precision": "city/campus reference points"}, outputs=[map_path])
+    record_project_run(workspace, command="registry-map", config={"as_of_date": SNAPSHOT_DATE, "mapped_entities": 7, "location_precision": "city/campus reference points"}, outputs=[map_path])
 
     limitations_file = workspace.path_for("exports") / "limitations.json"
     _write_json(limitations_file, {
@@ -385,8 +369,7 @@ def build_workspace(target: Path) -> dict[str, object]:
         "known_gaps": [
             "Current American Spaces site status is unknown.",
             "EducationUSA Accra street addresses are not geocoded at street-level precision.",
-            "Kumasi is mapped at city precision; University of Ghana and CIUG are mapped at campus precision.",
-            "Zhejiang University of Technology is a named partner in the University of Ghana source but is not geolocated in this sample.",
+            "Kumasi is mapped at city precision; the University of Ghana point is campus-level.",
             "No complete lifecycle dates, outcome data, or evidence of influence were collected.",
             "All imported claims and relationships remain unreviewed.",
         ],
@@ -413,7 +396,7 @@ def build_workspace(target: Path) -> dict[str, object]:
         "workspace": str(workspace.root),
         "entities": len(list_entities(workspace)),
         "relationships": len(list_relationships(workspace)),
-        "mapped_entities": 8,
+        "mapped_entities": 7,
         "plan_branches": len(plan.branches),
         "records": len(records),
         "observations": len(SOURCES),

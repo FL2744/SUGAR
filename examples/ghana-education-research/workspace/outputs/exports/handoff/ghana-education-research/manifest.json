@@ -1,46 +1,46 @@
 {
   "artifacts": [
     {
-      "bytes": 1376,
+      "bytes": 1246,
       "path": "context/research-requirement.json",
       "role": "research_requirement",
-      "sha256": "7727df10951abca142fe6e058caf05c92c11082c87f0cf4f79ce5e64dd1727cd"
+      "sha256": "c2efab9ad6c234998293374755aee38f69d6f1c9a3ccb7135d30966a1337e4f6"
     },
     {
-      "bytes": 7775,
+      "bytes": 4695,
       "path": "context/search-plan.json",
       "role": "search_plan",
-      "sha256": "aadf2ae691940b01828e85eda775eefeb5ab48a19f78d5aac92a52ff1ba6c339"
+      "sha256": "0012ba554ba07e4aec12d315fc36fd3655a266d57564baa7f25ea8335ba41c5b"
     },
     {
-      "bytes": 12827,
+      "bytes": 10888,
       "path": "evidence/lineage.json",
       "role": "evidence_lineage",
-      "sha256": "06a1da8b0c0739a0f7e0f5ed3d400ccfe745fb1b434a18ce89c25f3364920939"
+      "sha256": "c9ecb6a51148139fd8de3edb1be437db08adf5fd9af3ba2a3e23e7cd4df1cdb5"
     },
     {
-      "bytes": 14686,
+      "bytes": 12055,
       "path": "evidence/observations.jsonl",
       "role": "research_observations",
-      "sha256": "b73ac67103b4f143f9051e861d09991610a33219500f4813f57e84dd85b91362"
+      "sha256": "b947a80943195588aab8823120ccc23c54fe6bfc899b07d6fe3bead989e1ac30"
     },
     {
-      "bytes": 8017,
+      "bytes": 6366,
       "path": "evidence/records.jsonl",
       "role": "normalized_records",
-      "sha256": "1fb61d54d09b6cdfc7ef3444cf0a7da387bca6286658f71e07be2619ced942b4"
+      "sha256": "af2e4ae6dd40f329931347c615728ddef73347e921693c43f46f384374e48726"
     },
     {
-      "bytes": 724,
+      "bytes": 577,
       "path": "limitations.json",
       "role": "coverage_and_limitations",
-      "sha256": "9ccd8f111674570f8f5bbe285332578566a301999ab061de4d942999ed11ffa9"
+      "sha256": "8310c404f0647e098c03566d41e67628778b23bb73dbdd240b975b0618a0be2c"
     },
     {
-      "bytes": 38084,
+      "bytes": 34579,
       "path": "outputs/ghana-education-research.html",
       "role": "analytic_output",
-      "sha256": "74a390b88dee7e9892d737e47a404c811255732a80afbad72e04c4c12f45a26b"
+      "sha256": "0f20853d162ed139915ea9f67e9fd3f6757ae1f607d4bfc56e8c8beee9eebb7c"
     },
     {
       "bytes": 2414,
@@ -49,39 +49,39 @@
       "sha256": "3b6eb6a9cdef10d94a186358b5aecab8a902e5f9b5735152b7556cd691deb222"
     },
     {
-      "bytes": 116283,
+      "bytes": 95341,
       "path": "provenance/ghana-demo-institution-registry.csv",
       "role": "provenance",
-      "sha256": "a3ab2c58a17577e51c3f8113dfdbb950bfb9e9e411f916cd8e9c137d7444ffe0"
+      "sha256": "96acf11d368b554551bceaef6892eb93d98e47e7dc5dcc137acb2182dc56db00"
     },
     {
-      "bytes": 4660,
+      "bytes": 3439,
       "path": "provenance/ghana-demo-source-inventory.csv",
       "role": "provenance",
-      "sha256": "2bc95d579e961694b006417e8485266ef99b28739ca8e1ed6c4e6b0236243847"
+      "sha256": "f8e79fa562601419a03593fe934dcadecba67fdc0052053974e37dcd717f5caf"
     },
     {
-      "bytes": 558,
+      "bytes": 539,
       "path": "provenance/ghana-demo-source-records.metadata.json",
       "role": "provenance",
-      "sha256": "64c9c9bcb8f37ed5ab017479d0d4364ca55e76927a42fa29289e4eaa44f45705"
+      "sha256": "a136b04e6b305f671f920c9c4bd94036b36c404ca583939e267d5984f07cd0fd"
     }
   ],
   "counts": {
     "analytic_outputs": 1,
     "findings": 0,
-    "observations": 6,
+    "observations": 5,
     "provenance_files": 4,
-    "records": 6
+    "records": 5
   },
-  "generated_at": "2026-09-28T21:45:49Z",
+  "generated_at": "2026-09-30T17:08:05Z",
   "handoff_schema_version": "1.0",
   "portability": {
     "paths_relative_to_bundle_root": true,
     "requires_virginia_tech_infrastructure": false,
     "verification": "Verify artifact byte lengths and SHA-256 values against this manifest."
   },
-  "requirement_id": "rq_38f8f64728f91924",
+  "requirement_id": "rq_a6bad792b3461c97",
   "schemas": {
     "limitations": "1.0",
     "lineage": "1.0",

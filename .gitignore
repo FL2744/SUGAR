@@ -45,6 +45,8 @@ SUGAR-Desktop/.build-macos/
 SUGAR-Windows/build/
 SUGAR-Windows/dist/
 SUGAR-Desktop/node_modules/
+SUGAR-Desktop/test-results/
+SUGAR-Desktop/playwright-report/
 SUGAR-Desktop/*.tsbuildinfo
 SUGAR-Desktop/src-tauri/target/
 SUGAR-Desktop/src-tauri/binaries/sugar-bridge-*

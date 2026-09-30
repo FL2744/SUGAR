@@ -84,6 +84,10 @@ jobs:
         working-directory: SUGAR-Desktop
       - run: npm run build
         working-directory: SUGAR-Desktop
+      - run: npx playwright install --with-deps chromium
+        working-directory: SUGAR-Desktop
+      - run: npm run test:e2e
+        working-directory: SUGAR-Desktop
 
   macos-app:
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'

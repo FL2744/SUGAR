@@ -119,6 +119,28 @@ def test_cached_chat_retries_then_caches_success(monkeypatch, tmp_path):
     assert "ok" in cache.data.values()
 
 
+def test_cached_chat_sends_strict_json_schema_and_separates_cache_key():
+    client, completions = _client('{"ok":true}')
+    schema = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "test_result",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {"ok": {"type": "boolean"}},
+                "required": ["ok"],
+                "additionalProperties": False,
+            },
+        },
+    }
+
+    assert cached_chat(
+        client, LLMConfig(), None, "strict-task", "sys", "user", response_format=schema,
+    ) == '{"ok":true}'
+    assert completions.calls[0]["response_format"] == schema
+
+
 def test_cached_chat_fails_closed_after_retry_budget(monkeypatch):
     client, _ = _client(RuntimeError("one"), RuntimeError("two"), RuntimeError("three"))
     monkeypatch.setattr("sugar_core.llm.time.sleep", lambda _: None)

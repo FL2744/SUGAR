@@ -52,6 +52,49 @@ _STRICTLY_GROUNDED_LABELS = {
     "us_overlap_explicit",
 }
 
+_TRIAGE_JSON_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "sugar_research_triage",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "relevance": {"type": "string", "enum": ["relevant", "uncertain", "not_relevant"]},
+                "relevance_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                "labels": {"type": "array", "items": {"type": "string", "enum": sorted(TRIAGE_LABELS)}},
+                "summary": {"type": "string"},
+                "institution_name": {"type": "string"},
+                "program_name": {"type": "string"},
+                "actors": {"type": "array", "items": {"type": "string"}},
+                "audiences": {"type": "array", "items": {"type": "string"}},
+                "themes": {"type": "array", "items": {"type": "string"}},
+                "us_overlap": {"type": "array", "items": {"type": "string"}},
+                "location_label": {"type": "string"},
+                "reason": {"type": "string"},
+                "evidence": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "label": {"type": "string", "enum": sorted(_EVIDENCE_LABELS)},
+                            "span": {"type": "string"},
+                        },
+                        "required": ["label", "span"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": [
+                "relevance", "relevance_confidence", "labels", "summary", "institution_name",
+                "program_name", "actors", "audiences", "themes", "us_overlap", "location_label",
+                "reason", "evidence",
+            ],
+            "additionalProperties": False,
+        },
+    },
+}
+
 
 @dataclass(frozen=True)
 class GroundedEvidence:
@@ -236,6 +279,7 @@ def triage_post(
         system,
         user,
         max_tokens=1800,
+        response_format=_TRIAGE_JSON_SCHEMA if llm.provider == "openai" else None,
     )
     return parse_triage_result(parse_json_object(response), record)
 

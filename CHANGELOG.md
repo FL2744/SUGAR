@@ -2,6 +2,24 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
+## 1.4.0 — 2026-09-30
+
+### Added
+
+- added research requirement controls for date range, language codes, excluded topics, and collection sources; plan collection now carries the configured date, source, and language filters;
+- OpenAI triage now requests strict JSON Schema output, with the parsed evidence spans still checked against source text;
+
+### Fixed
+
+- removed target-specific institute and partner references from the Ghana education research demo so it passes the public repository OPSEC check; regenerated the example workspace and its portable handoff from the corrected source inventory;
+- increased muted-text contrast across the shared desktop workspace, labeled hidden file inputs, and added light/dark appearance selection with a remembered theme;
+- aligned the Python package and core version with the existing 1.4.0 desktop application.
+
+### Quality
+
+- added Chromium Playwright coverage for browser project creation, research-requirement submission, session-only credentials, and WCAG 2.2 A/AA checks across the primary workspace views;
+- added the browser suite to CI and verified the Windows MSI and bundled sidecar with the packaged no-credential workflow.
+
 ## 1.3.0 — 2026-09-24
 
 ### Added

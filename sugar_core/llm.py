@@ -32,7 +32,7 @@ def create_client(config: LLMConfig):
 
 
 def _chat(client, model: str, system: str, user: str, max_tokens: int = 4000,
-          provider: str = "openai") -> str:
+          provider: str = "openai", response_format: dict[str, Any] | None = None) -> str:
     # Keep ARC/OpenAI-compatible servers on their legacy parameter by default.
     token_parameter = "max_completion_tokens" if provider == "openai" else "max_tokens"
     options = dict(
@@ -44,6 +44,8 @@ def _chat(client, model: str, system: str, user: str, max_tokens: int = 4000,
         **{token_parameter: max_tokens},
         temperature=0,
     )
+    if response_format is not None:
+        options["response_format"] = response_format
     adapted = set()
     while True:
         try:
@@ -81,8 +83,9 @@ def cached_chat(
     user: str,
     max_tokens: int = 4000,
     retries: int = 3,
+    response_format: dict[str, Any] | None = None,
 ) -> str:
-    key = stable_hash("llm", task, config.provider, config.model, system, user)
+    key = stable_hash("llm", task, config.provider, config.model, system, user, response_format)
     if cache:
         cached = cache.get(key)
         if isinstance(cached, str):
@@ -90,7 +93,11 @@ def cached_chat(
     last_error: Exception | None = None
     for attempt in range(retries):
         try:
-            text = _chat(client, config.model, system, user, max_tokens=max_tokens, provider=config.provider)
+            chat_options = {"response_format": response_format} if response_format is not None else {}
+            text = _chat(
+                client, config.model, system, user, max_tokens=max_tokens,
+                provider=config.provider, **chat_options,
+            )
             if cache:
                 cache.set(key, text)
             return text
