@@ -2,6 +2,29 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
+## 1.5.0 — 2026-09-30
+
+### Added
+
+- added live collection controls for queries, sources, exclusions, languages, date windows, source retries, and cooperative stop requests;
+- added cross-provider request pacing, parallel source collection, bounded collection requests, an estimated memory budget, and parallel order-preserving observation extraction;
+- added OpenAI strict structured output for multilingual requirement interpretation, with analyst approval before a compiled strategy drives search;
+- added optional translation of collected posts, project-level notes and a member roster, analyst-reviewed coded findings, export format selection, and geographic grouping summaries;
+- added Windows Credential Manager, macOS Keychain, and supported Linux vault integration with no plaintext credential fallback;
+- increased the desktop text-size floor to 16px and expanded responsive, dark-mode, and accessibility coverage;
+
+### Fixed
+
+- project file references are constrained to their owning workspace, GeoJSON exports retain valid coordinate ordering, and JSON exports are emitted as JSON arrays;
+- Windows and macOS sidecar build scripts now include the credential-vault runtime;
+- frozen desktop workspaces now report the packaged SUGAR version when Python distribution metadata is absent.
+
+### Quality
+
+- added API and browser tests for live collection controls, project profiles, dataset formats, geography summaries, memory limits, and strict structured output;
+- verified the Windows Credential Manager integration, OpenAI model access, structured interpretation, Spanish translation, X search, and anonymous Bilibili pipeline against live services;
+- added the expanded Playwright suite to the existing CI UI job and retained the repository OPSEC check.
+
 ## 1.4.0 — 2026-09-30
 
 ### Added

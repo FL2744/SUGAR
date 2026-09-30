@@ -23,13 +23,27 @@ type Dashboard = {
     languages?: string[];
     excluded_topics?: string[];
     preferred_sources?: string[];
+    notes?: string;
     timeframe?: { start?: string; end?: string };
   };
   search_plan?: Record<string, unknown>;
+  research_strategy?: Record<string, unknown>;
+  project_profile?: { notes?: string; members?: ProjectMember[]; access_control?: boolean };
 };
+type ProjectMember = { name: string; email: string; role: string };
 type RegistryData = { entities?: Institution[]; count?: number; relationships?: number };
 type RegistryPreview = { columns?: string[]; suggested_mapping?: Record<string, string>; sample_rows?: Record<string, unknown>[]; row_count?: number; [key: string]: unknown };
 type EvidencePreview = { columns?: string[]; rows?: Record<string, unknown>[]; row_count?: number; matching_rows?: number };
+type GeographySummary = { group_by?: string; total_rows?: number; located_rows?: number; unlocated_rows?: number; groups?: Array<{ label?: string; records?: number; share?: number }>; guardrail?: string };
+type CollectionScope = {
+  terms: string;
+  sources: string;
+  since: string;
+  until: string;
+  post_languages: string;
+  excluded_topics: string;
+};
+const COLLECTION_SOURCES = ["x", "bluesky", "mastodon", "weibo", "bilibili"];
 
 function commaList(value: string): string[] {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
@@ -116,6 +130,9 @@ export function App() {
   const [question, setQuestion] = useState("");
   const [geography, setGeography] = useState("");
   const [knownEntities, setKnownEntities] = useState("");
+  const [projectNotes, setProjectNotes] = useState("");
+  const [projectContextNotes, setProjectContextNotes] = useState("");
+  const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
   const [audience, setAudience] = useState("Policy researchers");
   const [languages, setLanguages] = useState("auto");
   const [excludedTopics, setExcludedTopics] = useState("");
@@ -124,9 +141,26 @@ export function App() {
   const [timeframeEnd, setTimeframeEnd] = useState("");
   const [requirementSaved, setRequirementSaved] = useState(false);
   const [plan, setPlan] = useState<Record<string, unknown> | null>(null);
+  const [strategy, setStrategy] = useState<Record<string, unknown> | null>(null);
+  const [translatePosts, setTranslatePosts] = useState(false);
+  const [activeCollectionRunId, setActiveCollectionRunId] = useState("");
+  const [collectionScope, setCollectionScope] = useState<CollectionScope>({
+    terms: "", sources: "", since: "", until: "", post_languages: "", excluded_topics: "",
+  });
+  const [collectionRetrySource, setCollectionRetrySource] = useState("x");
+  const [collectionControlBusy, setCollectionControlBusy] = useState(false);
+  const [collectionControlMessage, setCollectionControlMessage] = useState("");
+  const [vaultMessage, setVaultMessage] = useState("");
+  const [vaultAvailability, setVaultAvailability] = useState<boolean | null>(null);
+  const [savedCredentialNames, setSavedCredentialNames] = useState<string[]>([]);
   const [evidenceFile, setEvidenceFile] = useState("");
   const [evidenceRecordsPath, setEvidenceRecordsPath] = useState("");
   const [evidencePreview, setEvidencePreview] = useState<EvidencePreview | null>(null);
+  const [codedFindingsPath, setCodedFindingsPath] = useState("");
+  const [codedFindingsPreview, setCodedFindingsPreview] = useState<EvidencePreview | null>(null);
+  const [evidenceExportFormat, setEvidenceExportFormat] = useState("csv");
+  const [geographyGroupBy, setGeographyGroupBy] = useState("auto");
+  const [geographySummary, setGeographySummary] = useState<GeographySummary | null>(null);
   const [reviewPrepared, setReviewPrepared] = useState(false);
   const [query, setQuery] = useState("");
   const [network, setNetwork] = useState("All networks");
@@ -189,6 +223,7 @@ export function App() {
       const requirement = data.research_requirement;
       if (requirement) {
         setQuestion(String(requirement.question || ""));
+        setProjectNotes(String(requirement.notes || ""));
         setGeography(Array.isArray(requirement.geographies) ? requirement.geographies.join(", ") : "");
         setKnownEntities(Array.isArray(requirement.known_entities) ? requirement.known_entities.join(", ") : "");
         setAudience(Array.isArray(requirement.target_audiences) ? requirement.target_audiences.join(", ") : "");
@@ -200,6 +235,9 @@ export function App() {
       }
       setRequirementSaved(Boolean(requirement || data.artifacts?.some((item) => item.kind === "research_requirement")));
       setPlan(data.search_plan && typeof data.search_plan === "object" ? data.search_plan : null);
+      setStrategy(data.research_strategy && typeof data.research_strategy === "object" ? data.research_strategy : null);
+      setProjectContextNotes(String(data.project_profile?.notes || ""));
+      setProjectMembers(Array.isArray(data.project_profile?.members) ? data.project_profile.members : []);
     }
     const history = await execute("workspace-hub", { action: "project-history", workspace: path, limit: 100 });
     if (history) {
@@ -332,6 +370,56 @@ export function App() {
     } finally { setBusy(""); }
   };
 
+  const readVaultStatus = async () => {
+    const result = await runBackend("credential-vault-status", {}, {});
+    const completed = latestEvent<Record<string, unknown>>(result.events, "complete");
+    const outputs = Array.isArray(completed?.outputs) ? completed.outputs : [];
+    const status = outputs.length && typeof outputs[0] === "string" ? JSON.parse(outputs[0] as string) as Record<string, unknown> : {};
+    setVaultAvailability(Boolean(status.available));
+    const stored = status.stored && typeof status.stored === "object" ? status.stored as Record<string, unknown> : {};
+    setSavedCredentialNames(Object.entries(stored).filter(([, value]) => Boolean(value)).map(([name]) => name));
+    return status;
+  };
+
+  const saveVaultCredentials = async () => {
+    setVaultMessage("Saving credentials to the operating-system vault…");
+    try {
+      await runBackend("credential-vault-save", {}, credentials);
+      const status = await readVaultStatus();
+      if (!status.available) throw new Error(String(status.message || "No supported operating-system vault is available."));
+      setVaultMessage("Credentials saved in the operating-system vault.");
+    } catch (issue) {
+      setVaultMessage(issue instanceof Error ? issue.message : String(issue));
+    }
+  };
+
+  const loadVaultCredentials = async () => {
+    setVaultMessage("Loading credentials from the operating-system vault…");
+    try {
+      const result = await runBackend("credential-vault-load", {}, {});
+      const completed = latestEvent<Record<string, unknown>>(result.events, "complete");
+      const outputs = Array.isArray(completed?.outputs) ? completed.outputs : [];
+      const loaded = outputs.length && typeof outputs[0] === "string" ? JSON.parse(outputs[0] as string) as Record<string, unknown> : {};
+      const values = loaded.credentials && typeof loaded.credentials === "object" ? loaded.credentials as Credentials : {};
+      setCredentials((current) => ({ ...current, ...values }));
+      const status = await readVaultStatus();
+      setVaultMessage(status.available ? "Saved credentials loaded into this session." : String(status.message || "Credential vault unavailable."));
+    } catch (issue) {
+      setVaultMessage(issue instanceof Error ? issue.message : String(issue));
+    }
+  };
+
+  const deleteVaultCredentials = async () => {
+    setVaultMessage("Removing saved credentials from the operating-system vault…");
+    try {
+      await runBackend("credential-vault-delete", {}, {});
+      setSavedCredentialNames([]);
+      setVaultMessage("Saved credentials removed from the operating-system vault. Current session values remain until cleared.");
+    } catch (issue) {
+      setVaultMessage(issue instanceof Error ? issue.message : String(issue));
+    }
+  };
+
   const refreshRegistry = async () => {
     if (!workspace) { setError("Open or create a project before loading its institution registry."); return; }
     const result = await execute("workspace-hub", { action: "registry-list", workspace });
@@ -349,6 +437,7 @@ export function App() {
     const result = await execute("research-requirement", {
       workspace,
       question: question.trim(),
+      notes: projectNotes.trim(),
       geographies: geography,
       known_entities: knownEntities,
       target_audiences: audience,
@@ -365,6 +454,50 @@ export function App() {
     }
   };
 
+  const saveProjectProfile = async () => {
+    if (!workspace) return;
+    const result = await execute("workspace-hub", {
+      action: "project-profile-update", workspace,
+      notes: projectContextNotes,
+      members: projectMembers,
+    });
+    const profile = result && hubData<{ notes?: string; members?: ProjectMember[] }>(result.events, "project-profile-update");
+    if (profile) {
+      setProjectContextNotes(String(profile.notes || ""));
+      setProjectMembers(profile.members || []);
+      addActivity("Project profile saved", `${profile.members?.length || 0} roster entries recorded.`, "ok");
+    }
+  };
+
+  const addProjectMember = () => setProjectMembers((members) => [...members, { name: "", email: "", role: "Analyst" }]);
+
+  const updateProjectMember = (index: number, field: keyof ProjectMember, value: string) => {
+    setProjectMembers((members) => members.map((member, current) => current === index ? { ...member, [field]: value } : member));
+  };
+
+  const interpretRequirement = async () => {
+    if (!workspace || !credentials.llm_api_key?.trim()) {
+      setError("Add an OpenAI-compatible provider key in Settings before interpreting the requirement.");
+      return;
+    }
+    const result = await execute("research-compile", { workspace, ai_expand: true });
+    const reviewed = result && latestEvent<Record<string, unknown>>(result.events, "strategy-review");
+    if (reviewed) {
+      setStrategy(reviewed);
+      addActivity("AI interpretation ready", "Review the explicit concepts, interpretation, and hypotheses before approval.", "info");
+    }
+  };
+
+  const approveInterpretation = async () => {
+    if (!workspace) return;
+    const result = await execute("research-strategy-update", {
+      workspace, decision: "approved", reviewer: "Project analyst",
+      review_note: "Reviewed the explicit source spans, interpretations, and hypotheses.",
+    });
+    const reviewed = result && latestEvent<Record<string, unknown>>(result.events, "strategy-review");
+    if (reviewed) setStrategy(reviewed);
+  };
+
   const buildPlan = async () => {
     if (!workspace) return;
     const result = await execute("research-plan", { workspace, ai_expand: false });
@@ -373,18 +506,107 @@ export function App() {
     else if (result) setPlan({ message: "Plan generated and saved. Open Run history to review the complete backend output." });
   };
 
-  const collectPlan = async () => {
-    if (!workspace) return;
-    const result = await execute("research-collect", {
-      workspace,
-      sources: commaList(preferredSources),
+  const collectionControlPayload = (): Omit<CollectionScope, "terms" | "sources" | "post_languages" | "excluded_topics"> & {
+    terms: string[]; sources: string[]; post_languages: string[]; excluded_topics: string[];
+  } => ({
+    ...collectionScope,
+    terms: collectionScope.terms.split(/\r?\n/).map((term) => term.trim()).filter(Boolean),
+    sources: commaList(collectionScope.sources),
+    post_languages: commaList(collectionScope.post_languages).filter((language) => language.toLowerCase() !== "auto"),
+    excluded_topics: commaList(collectionScope.excluded_topics),
+  });
+
+  const sendCollectionControl = async (extra: Record<string, unknown> = {}) => {
+    if (!workspace || !activeCollectionRunId) return false;
+    setCollectionControlBusy(true);
+    setCollectionControlMessage("Sending the update to the active run…");
+    try {
+      const config = extra.cancel
+        ? { workspace, collection_run_id: activeCollectionRunId, cancel: true }
+        : { workspace, collection_run_id: activeCollectionRunId, ...collectionControlPayload(), ...extra };
+      const result = await runBackend("research-collect-control", config, {});
+      const updated = latestEvent<Record<string, unknown>>(result.events, "collection-control-updated");
+      if (extra.cancel) {
+        setCollectionControlMessage("Stop requested. The current network request will finish first.");
+      } else if (updated) {
+        setCollectionControlMessage(`Update ${String(updated.revision || "")} queued for the next request boundary.`);
+      } else {
+        setCollectionControlMessage("Update sent. It will apply at the next request boundary.");
+      }
+      return true;
+    } catch (issue) {
+      const message = issue instanceof Error ? issue.message : String(issue);
+      setCollectionControlMessage(message);
+      setError(message);
+      return false;
+    } finally {
+      setCollectionControlBusy(false);
+    }
+  };
+
+  const startLiveCollection = async () => {
+    if (!workspace || busy) return;
+    const branches = Array.isArray(plan?.branches) ? plan.branches as Array<Record<string, unknown>> : [];
+    const terms = branches
+      .filter((branch) => !["completed", "paused", "skipped"].includes(String(branch.status || "").toLowerCase()))
+      .map((branch) => String(branch.query || "").trim())
+      .filter(Boolean);
+    const initialScope: CollectionScope = {
+      terms: terms.join("\n"),
+      sources: preferredSources,
       since: timeframeStart,
       until: timeframeEnd,
-      post_languages: commaList(languages).filter((language) => language.toLowerCase() !== "auto"),
-    });
-    if (result) {
-      addActivity("Research collection finished", "New source material is recorded in the project.", "ok");
+      post_languages: commaList(languages).filter((language) => language.toLowerCase() !== "auto").join(", "),
+      excluded_topics: excludedTopics,
+    };
+    const runId = crypto.randomUUID().replaceAll("-", "");
+    const controlPayload = {
+      workspace,
+      collection_run_id: runId,
+      start: true,
+      terms,
+      sources: commaList(initialScope.sources),
+      since: initialScope.since,
+      until: initialScope.until,
+      post_languages: commaList(initialScope.post_languages),
+      excluded_topics: commaList(initialScope.excluded_topics),
+      translate_posts: translatePosts,
+    };
+
+    setBusy("research-collect");
+    setError("");
+    setCollectionScope(initialScope);
+    setCollectionRetrySource(commaList(initialScope.sources)[0] || "x");
+    setCollectionControlMessage("Preparing run controls…");
+    try {
+      await runBackend("research-collect-control", controlPayload, {});
+      setActiveCollectionRunId(runId);
+      setCollectionControlMessage("Live updates apply between source requests; an in-flight request is allowed to finish.");
+      const collectionConfig = Object.fromEntries(Object.entries(controlPayload).filter(([key]) => key !== "start"));
+      const result = await runBackend("research-collect", collectionConfig, credentials);
+      for (const event of result.events) {
+        const item = summarizeEvent(event);
+        if (item.title !== "Research engine ready" && item.title !== "Operation complete") {
+          addActivity(item.title, item.detail, event.event === "error" ? "error" : "info");
+        }
+      }
+      const stopped = result.events.some((event) => event.event === "collection_stopped");
+      addActivity(
+        stopped ? "Research collection stopped" : "Research collection finished",
+        stopped ? "Partial results were saved after the current request completed." : "New source material is recorded in the project.",
+        "ok",
+      );
+      setCollectionControlMessage(stopped ? "Run stopped. Partial results were saved." : "Run complete.");
+      setBusy("");
+      setActiveCollectionRunId("");
       await refreshDashboard(workspace);
+    } catch (issue) {
+      const message = issue instanceof Error ? issue.message : String(issue);
+      setError(message);
+      setCollectionControlMessage(message);
+      addActivity("Research collection", message, "error");
+      setBusy("");
+      setActiveCollectionRunId("");
     }
   };
 
@@ -441,6 +663,63 @@ export function App() {
       addActivity("Human review drafts prepared", `${prepared.records || 0} records are marked unreviewed.`, "ok");
       await refreshDashboard(workspace);
     }
+  };
+
+  const codeEvidence = async () => {
+    if (!workspace || !evidenceRecordsPath) return;
+    if (!credentials.llm_api_key?.trim()) {
+      setError("Add an LLM provider key in Settings to generate AI-coded findings.");
+      return;
+    }
+    const result = await execute("research-triage", { workspace, records_file: evidenceRecordsPath });
+    const completed = result && latestEvent<{ outputs?: string[] }>(result.events, "triage-complete");
+    const output = completed?.outputs?.find((item) => item.toLowerCase().endsWith(".csv"));
+    if (!output) return;
+    setCodedFindingsPath(output);
+    const browse = await execute("workspace-hub", {
+      action: "dataset-browse", workspace, source_file: output, max_rows: 100,
+    });
+    const data = browse && hubData<EvidencePreview>(browse.events, "dataset-browse");
+    if (data) {
+      setCodedFindingsPreview(data);
+      addActivity("Coded findings generated", `${data.row_count || 0} AI-triaged records are ready for human review.`, "info");
+    }
+  };
+
+  const exportEvidence = async () => {
+    if (!workspace || !evidenceRecordsPath) return;
+    const fileName = `${projectName.trim().replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "sugar-project"}-evidence.${evidenceExportFormat}`;
+    let outputFile: string | undefined;
+    if (isTauri()) {
+      outputFile = await save({
+        title: "Export research records",
+        defaultPath: fileName,
+        filters: [{ name: `${evidenceExportFormat.toUpperCase()} dataset`, extensions: [evidenceExportFormat] }],
+      }) || undefined;
+      if (!outputFile) return;
+    }
+    const result = await execute("workspace-hub", {
+      action: "dataset-export", workspace, source_file: evidenceRecordsPath,
+      format: evidenceExportFormat, file_name: fileName, ...(outputFile ? { output_file: outputFile } : {}),
+    });
+    const completed = result && latestEvent<{ outputs?: string[] }>(result.events, "complete");
+    const exported = completed?.outputs?.find((item) => item.toLowerCase().endsWith(`.${evidenceExportFormat}`));
+    if (!exported) return;
+    if (!isTauri()) {
+      try { await downloadWorkspaceFile(exported, fileName); }
+      catch (issue) { setError(issue instanceof Error ? issue.message : String(issue)); return; }
+    }
+    addActivity("Research records exported", fileName, "ok");
+  };
+
+  const summarizeEvidenceGeography = async () => {
+    if (!workspace || !evidenceRecordsPath) return;
+    const result = await execute("workspace-hub", {
+      action: "dataset-geography-summary", workspace,
+      source_file: evidenceRecordsPath, group_by: geographyGroupBy,
+    });
+    const summary = result && hubData<GeographySummary>(result.events, "dataset-geography-summary");
+    if (summary) setGeographySummary(summary);
   };
 
   const importFile = async () => {
@@ -592,9 +871,12 @@ export function App() {
           <div className="page-heading compact-heading"><div><div className="eyebrow">RESEARCH PROJECT <span className="eyebrow-line" /></div><h1>Define the work before collecting.</h1><p>Set the project home and create a research requirement that guides the evidence plan.</p></div><span className={`workflow-state ${workspace ? "ready" : "pending"}`}><i />{workspace ? "Project ready" : "Project required"}</span></div>
           <div className="project-layout"><div className="column-main">
             <div className="panel project-panel"><div className="section-title"><div className="section-icon blue">⌂</div><div><h3>Project workspace</h3><p>Your research stays organized in a portable folder or hosted project.</p></div></div><div className="project-current"><div className="project-current-mark">{workspace ? "✓" : "⌂"}</div><div className="project-current-main"><strong>{workspace ? projectName : "No active project"}</strong><span>{workspace ? workspace.startsWith("sugar-workspace://") ? `Hosted project · ${projectName}` : workspace : "Choose an existing project or create a new one."}</span></div><button className="button button-secondary" onClick={() => void chooseWorkspace()} disabled={Boolean(busy)}>{workspace ? "Change project" : "Choose project"}</button></div></div>
-            <div className="panel requirement-panel"><div className="section-title"><div className="section-icon violet">⌕</div><div><h3>Research requirement</h3><p>A precise question gives the search plan a useful starting point.</p></div><span className="step-badge">STEP 1</span></div><form className="research-form" onSubmit={(event) => void createRequirement(event)}><label className="field-block"><span>Research question <em>Required</em></span><textarea value={question} onChange={(event) => setQuestion(event.target.value)} required rows={3} placeholder="What would you like to understand?" /></label><div className="field-grid"><label className="field-block"><span>Geographies</span><input value={geography} onChange={(event) => setGeography(event.target.value)} placeholder="Countries, regions, or cities" /><small>Separate multiple places with commas.</small></label><label className="field-block"><span>Known institutions or entities</span><input value={knownEntities} onChange={(event) => setKnownEntities(event.target.value)} placeholder="Names already in scope" /><small>Optional starting points for the plan.</small></label></div><label className="field-block"><span>Intended audience</span><input value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Who will use the results?" /></label><div className="field-grid"><label className="field-block"><span>Start date</span><input aria-label="Start date" type="date" value={timeframeStart} onChange={(event) => setTimeframeStart(event.target.value)} /></label><label className="field-block"><span>End date</span><input aria-label="End date" type="date" value={timeframeEnd} onChange={(event) => setTimeframeEnd(event.target.value)} /></label></div><div className="field-grid"><label className="field-block"><span>Languages</span><input aria-label="Languages" value={languages} onChange={(event) => setLanguages(event.target.value)} placeholder="auto or language codes, e.g. es, zh" /><small>Use language codes separated by commas; auto leaves filtering open.</small></label><label className="field-block"><span>Collection sources</span><input aria-label="Collection sources" value={preferredSources} onChange={(event) => setPreferredSources(event.target.value)} placeholder="x, bluesky, mastodon, weibo, bilibili" /><small>Choose supported keyword-search sources, separated by commas.</small></label></div><label className="field-block"><span>Excluded topics</span><input aria-label="Excluded topics" value={excludedTopics} onChange={(event) => setExcludedTopics(event.target.value)} placeholder="Topics to leave out of the search plan" /><small>Separate exclusions with commas.</small></label><div className="form-footer"><span className="privacy-note"><span>◉</span> The requirement is saved in this project folder.</span><button className="button button-primary" type="submit" disabled={!workspace || !question.trim() || Boolean(busy)}>Save research requirement <span>→</span></button></div></form></div>
-            <div className="panel evidence-panel"><div className="section-title"><div className="section-icon blue">▤</div><div><h3>Import and inspect research records</h3><p>Bring in an authorized CSV or JSONL dataset and inspect its source fields.</p></div><span className="step-badge">STEP 2</span></div><div className="evidence-import-row"><div className="evidence-file"><span className="file-mark">▧</span><div><strong>{evidenceFile ? evidenceFile.split(/[\\/]/).at(-1) : evidenceRecordsPath ? "Research records are in this project" : "No evidence dataset selected"}</strong><small>{evidenceRecordsPath || "Choose a CSV or JSONL file to begin an auditable import."}</small></div></div><div className="evidence-actions"><button className="button button-secondary" onClick={() => void chooseEvidenceFile()} disabled={!workspace || Boolean(busy)}>Choose data</button>{evidenceFile && <button className="button button-primary" onClick={() => void importEvidence()} disabled={Boolean(busy)}>Import records <span>→</span></button>}</div></div>{evidenceRecordsPath && <div className="evidence-review-row"><span className={`review-state ${reviewPrepared ? "ready" : "pending"}`}><i />{reviewPrepared ? "Human-review draft prepared" : "Imported · awaiting review draft"}</span><div className="evidence-actions"><button className="button button-quiet" onClick={() => void inspectEvidence()} disabled={Boolean(busy)}>Inspect records</button><button className="button button-secondary" onClick={() => void prepareEvidenceReview()} disabled={reviewPrepared || Boolean(busy)}>{reviewPrepared ? "Review draft ready" : "Prepare human review"}</button></div></div>}{evidencePreview && <div className="evidence-preview"><div className="preview-summary"><strong>{evidencePreview.row_count ?? 0} source records</strong><span>Showing {evidencePreview.rows?.length || 0} · source text and URL retained</span></div><div className="evidence-table-scroll"><table className="evidence-table"><thead><tr>{(evidencePreview.columns || []).filter((column) => ["platform", "author_name", "content_type", "original_text", "canonical_url", "source_url", "published_at", "query"].includes(column)).slice(0, 6).map((column) => <th key={column}>{titleCase(column)}</th>)}</tr></thead><tbody>{(evidencePreview.rows || []).map((row, index) => <tr key={String(row.record_key || row.native_id || index)}>{(evidencePreview.columns || []).filter((column) => ["platform", "author_name", "content_type", "original_text", "canonical_url", "source_url", "published_at", "query"].includes(column)).slice(0, 6).map((column) => <td key={column} title={String(row[column] ?? "")}>{String(row[column] ?? "—")}</td>)}</tr>)}</tbody></table></div></div>}</div>
-            <div className="panel plan-panel"><div className="section-title"><div className="section-icon green">☷</div><div><h3>Search plan</h3><p>Generate a deterministic first plan for review before any collection.</p></div><span className="step-badge">STEP 3</span></div><div className="plan-callout"><div className="plan-callout-copy"><strong>{plan ? "Plan ready to inspect" : "Plan only runs after the requirement is saved"}</strong><span>{plan ? `${Array.isArray(plan.branches) ? plan.branches.length : 0} search branches · no provider key required` : "You stay in control of what gets collected."}</span></div><button className="button button-secondary" onClick={() => void buildPlan()} disabled={!workspace || !requirementSaved || Boolean(busy)}>{plan ? "Refresh plan" : "Build research plan"} <span>→</span></button></div>{plan && <><div className="plan-preview">{Array.isArray(plan.branches) && plan.branches.length ? plan.branches.slice(0, 6).map((branch, index) => { const row = branch as Record<string, unknown>; return <div className="plan-branch" key={String(row.branch_id || index)}><span className="branch-number">{String(index + 1).padStart(2, "0")}</span><div><strong>{String(row.query || "Search branch")}</strong><p>{String(row.rationale || row.origin || "Review this line of inquiry before collection.")}</p></div><span className="branch-status">{titleCase(String(row.status || "proposed"))}</span></div>; }) : <p className="muted-copy">{String(plan.message || "Research plan generated.")}</p>}</div><div className="collection-footer"><span>Review the plan above, then start collection when ready.</span><button className="button button-primary" onClick={() => void collectPlan()} disabled={!commaList(preferredSources).length || Boolean(busy)}>Run plan collection <span>→</span></button></div></>}</div>
+            <div className="panel project-profile-panel"><div className="section-title"><div className="section-icon amber">✎</div><div><h3>Project notes and members</h3><p>Keep shared context and a local member roster with this project.</p></div></div><label className="field-block"><span>Project notes</span><textarea aria-label="Project context notes" value={projectContextNotes} onChange={(event) => setProjectContextNotes(event.target.value)} rows={3} placeholder="Purpose, constraints, source policy, or handoff context" /></label><div className="project-member-list" role="group" aria-label="Project member roster">{projectMembers.map((member, index) => <div className="project-member-row" key={index}><label className="field-block"><span>Name</span><input aria-label={`Member ${index + 1} name`} value={member.name} onChange={(event) => updateProjectMember(index, "name", event.target.value)} /></label><label className="field-block"><span>Email</span><input aria-label={`Member ${index + 1} email`} type="email" value={member.email} onChange={(event) => updateProjectMember(index, "email", event.target.value)} /></label><label className="field-block"><span>Role label</span><input aria-label={`Member ${index + 1} role`} value={member.role} onChange={(event) => updateProjectMember(index, "role", event.target.value)} /></label><button className="button button-quiet" type="button" aria-label={`Remove member ${index + 1}`} onClick={() => setProjectMembers((members) => members.filter((_, current) => current !== index))}>Remove</button></div>)}</div><div className="project-profile-actions"><button className="button button-quiet" type="button" onClick={addProjectMember} disabled={Boolean(busy)}>＋ Add member</button><button className="button button-primary" type="button" onClick={() => void saveProjectProfile()} disabled={!workspace || Boolean(busy)}>Save project profile</button></div><p className="muted-copy">The roster is stored with this project for coordination; it does not grant access or enforce permissions.</p></div>
+            <div className="panel requirement-panel"><div className="section-title"><div className="section-icon violet">⌕</div><div><h3>Research requirement</h3><p>A precise question gives the search plan a useful starting point.</p></div><span className="step-badge">STEP 1</span></div><form className="research-form" onSubmit={(event) => void createRequirement(event)}><label className="field-block"><span>Research question <em>Required</em></span><textarea value={question} onChange={(event) => setQuestion(event.target.value)} required rows={3} placeholder="What would you like to understand?" /></label><label className="field-block"><span>Project notes</span><textarea aria-label="Project notes" value={projectNotes} onChange={(event) => setProjectNotes(event.target.value)} rows={2} placeholder="Context, constraints, or analyst notes to keep with this requirement" /></label><div className="field-grid"><label className="field-block"><span>Geographies</span><input value={geography} onChange={(event) => setGeography(event.target.value)} placeholder="Countries, regions, or cities" /><small>Separate multiple places with commas.</small></label><label className="field-block"><span>Known institutions or entities</span><input value={knownEntities} onChange={(event) => setKnownEntities(event.target.value)} placeholder="Names already in scope" /><small>Optional starting points for the plan.</small></label></div><label className="field-block"><span>Intended audience</span><input value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Who will use the results?" /></label><div className="field-grid"><label className="field-block"><span>Start date</span><input aria-label="Start date" type="date" value={timeframeStart} onChange={(event) => setTimeframeStart(event.target.value)} /></label><label className="field-block"><span>End date</span><input aria-label="End date" type="date" value={timeframeEnd} onChange={(event) => setTimeframeEnd(event.target.value)} /></label></div><div className="field-grid"><label className="field-block"><span>Languages</span><input aria-label="Languages" value={languages} onChange={(event) => setLanguages(event.target.value)} placeholder="auto or language codes, e.g. es, zh" /><small>Use language codes separated by commas; auto leaves filtering open.</small></label><label className="field-block"><span>Collection sources</span><input aria-label="Collection sources" value={preferredSources} onChange={(event) => setPreferredSources(event.target.value)} placeholder="x, bluesky, mastodon, weibo, bilibili" /><small>Choose supported keyword-search sources, separated by commas.</small></label></div><label className="field-block"><span>Excluded topics</span><input aria-label="Excluded topics" value={excludedTopics} onChange={(event) => setExcludedTopics(event.target.value)} placeholder="Topics to leave out of the search plan" /><small>Separate exclusions with commas.</small></label><label className="check-field"><input aria-label="Translate collected posts" type="checkbox" checked={translatePosts} onChange={(event) => setTranslatePosts(event.target.checked)} /><span>Translate collected posts to English during collection<small>Uses the provider key in Settings; originals remain available.</small></span></label><div className="form-footer"><span className="privacy-note"><span>◉</span> The requirement is saved in this project folder.</span><button className="button button-primary" type="submit" disabled={!workspace || !question.trim() || Boolean(busy)}>Save research requirement <span>→</span></button></div></form></div>
+            <div className="panel evidence-panel"><div className="section-title"><div className="section-icon blue">▤</div><div><h3>Import and inspect research records</h3><p>Bring in an authorized CSV or JSONL dataset and inspect its source fields.</p></div><span className="step-badge">STEP 2</span></div><div className="evidence-import-row"><div className="evidence-file"><span className="file-mark">▧</span><div><strong>{evidenceFile ? evidenceFile.split(/[\\/]/).at(-1) : evidenceRecordsPath ? "Research records are in this project" : "No evidence dataset selected"}</strong><small>{evidenceRecordsPath || "Choose a CSV or JSONL file to begin an auditable import."}</small></div></div><div className="evidence-actions"><button className="button button-secondary" onClick={() => void chooseEvidenceFile()} disabled={!workspace || Boolean(busy)}>Choose data</button>{evidenceFile && <button className="button button-primary" onClick={() => void importEvidence()} disabled={Boolean(busy)}>Import records <span>→</span></button>}</div></div>{evidenceRecordsPath && <div className="evidence-review-row"><span className={`review-state ${reviewPrepared ? "ready" : "pending"}`}><i />{reviewPrepared ? "Human-review draft prepared" : "Imported · awaiting review draft"}</span><div className="evidence-actions"><button className="button button-quiet" onClick={() => void inspectEvidence()} disabled={Boolean(busy)}>Inspect records</button><button className="button button-secondary" onClick={() => void prepareEvidenceReview()} disabled={reviewPrepared || Boolean(busy)}>{reviewPrepared ? "Review draft ready" : "Prepare human review"}</button><button className="button button-secondary" onClick={() => void codeEvidence()} disabled={!credentials.llm_api_key?.trim() || Boolean(busy)} title={!credentials.llm_api_key?.trim() ? "Add an LLM provider key in Settings first" : "Generate AI-coded findings for review"}>Generate coded findings</button><label className="field-block export-format-select"><span>Export as</span><select aria-label="Evidence export format" value={evidenceExportFormat} onChange={(event) => setEvidenceExportFormat(event.target.value)}><option value="csv">CSV</option><option value="xlsx">Excel</option><option value="jsonl">JSON Lines</option><option value="json">JSON</option><option value="geojson">GeoJSON</option></select></label><label className="field-block geography-group-select"><span>Geographic grouping</span><select aria-label="Geographic grouping" value={geographyGroupBy} onChange={(event) => setGeographyGroupBy(event.target.value)}><option value="auto">Automatic hierarchy</option><option value="country">Country</option><option value="region">Region</option><option value="city">City</option><option value="coordinate_grid">Coordinate cells</option></select></label><button className="button button-secondary" onClick={() => void summarizeEvidenceGeography()} disabled={Boolean(busy)}>Summarize geography</button><button className="button button-quiet" onClick={() => void exportEvidence()} disabled={Boolean(busy)}>Export data</button></div></div>}{evidencePreview && <div className="evidence-preview"><div className="preview-summary"><strong>{evidencePreview.row_count ?? 0} source records</strong><span>Showing {evidencePreview.rows?.length || 0} · source text and URL retained</span></div><div className="evidence-table-scroll"><table className="evidence-table"><thead><tr>{(evidencePreview.columns || []).filter((column) => ["platform", "author_name", "content_type", "original_text", "canonical_url", "source_url", "published_at", "query"].includes(column)).slice(0, 6).map((column) => <th key={column}>{titleCase(column)}</th>)}</tr></thead><tbody>{(evidencePreview.rows || []).map((row, index) => <tr key={String(row.record_key || row.native_id || index)}>{(evidencePreview.columns || []).filter((column) => ["platform", "author_name", "content_type", "original_text", "canonical_url", "source_url", "published_at", "query"].includes(column)).slice(0, 6).map((column) => <td key={column} title={String(row[column] ?? "")}>{String(row[column] ?? "—")}</td>)}</tr>)}</tbody></table></div></div>}{geographySummary && <section className="geography-summary" aria-label="Geographic summary"><div className="preview-summary"><strong>Geographic groups · {geographySummary.total_rows || 0} records</strong><span>{geographySummary.located_rows || 0} located · {geographySummary.unlocated_rows || 0} unlocated · {titleCase(geographySummary.group_by || "auto")}</span></div><div className="geography-summary-list">{(geographySummary.groups || []).slice(0, 12).map((group) => <div key={String(group.label)}><span>{String(group.label || "Unspecified")}</span><strong>{group.records || 0}</strong></div>)}</div><p className="muted-copy">{geographySummary.guardrail}</p></section>}</div>
+            {codedFindingsPreview && <div className="panel coded-findings-panel"><div className="section-title"><div className="section-icon violet">✦</div><div><h3>AI-coded findings</h3><p>{codedFindingsPreview.row_count ?? 0} proposed codes · {codedFindingsPath.split(/[\\/]/).at(-1) || "triage output"}</p></div><span className="review-state pending"><i />Human review required</span></div><p className="coded-findings-note">These are model-assisted classifications for analyst review. They are not verified findings or evidence of intent.</p><div className="evidence-table-scroll"><table className="evidence-table"><thead><tr>{(codedFindingsPreview.columns || []).filter((column) => ["observation_type", "summary", "country", "city", "triage_labels", "ai_confidence", "verification_state"].includes(column)).slice(0, 7).map((column) => <th key={column}>{titleCase(column)}</th>)}</tr></thead><tbody>{(codedFindingsPreview.rows || []).map((row, index) => <tr key={String(row.observation_id || index)}>{(codedFindingsPreview.columns || []).filter((column) => ["observation_type", "summary", "country", "city", "triage_labels", "ai_confidence", "verification_state"].includes(column)).slice(0, 7).map((column) => <td key={column} title={String(row[column] ?? "")}>{Array.isArray(row[column]) ? row[column].join(", ") : String(row[column] ?? "—")}</td>)}</tr>)}</tbody></table></div></div>}
+            <div className="panel plan-panel"><div className="section-title"><div className="section-icon green">☷</div><div><h3>Search plan</h3><p>Generate a deterministic first plan for review before any collection.</p></div><span className="step-badge">STEP 3</span></div>{strategy && <div className="strategy-review-card"><div><strong>AI interpretation · {String(strategy.review_state || "draft")}</strong><p>Explicit phrases, semantic interpretation, and hypotheses stay separate. Review before this strategy shapes a plan.</p></div><ul>{(Array.isArray(strategy.concepts) ? strategy.concepts as Array<Record<string, unknown>> : []).slice(0, 8).map((concept, index) => <li key={String(concept.concept_id || index)}><span>{titleCase(String(concept.origin || "interpreted"))} · {titleCase(String(concept.kind || "concept"))}</span><strong>{String(concept.value || "")}</strong></li>)}</ul>{String(strategy.review_state || "draft") === "draft" && <button className="button button-secondary" onClick={() => void approveInterpretation()} disabled={Boolean(busy)}>Approve interpretation</button>}</div>}<div className="plan-callout"><div className="plan-callout-copy"><strong>{plan ? "Plan ready to inspect" : "Plan only runs after the requirement is saved"}</strong><span>{plan ? `${Array.isArray(plan.branches) ? plan.branches.length : 0} search branches · no provider key required` : "You stay in control of what gets collected."}</span></div><button className="button button-secondary" onClick={() => void interpretRequirement()} disabled={!workspace || !requirementSaved || !credentials.llm_api_key?.trim() || Boolean(busy)} title={!credentials.llm_api_key?.trim() ? "Add a provider key in Settings first" : "Interpret this requirement with strict structured output"}>{strategy ? "Reinterpret with AI" : "Interpret with AI"}</button><button className="button button-secondary" onClick={() => void buildPlan()} disabled={!workspace || !requirementSaved || Boolean(busy) || Boolean(strategy && String(strategy.review_state || "draft") !== "approved")}>{plan ? "Refresh plan" : "Build research plan"} <span>→</span></button></div>{plan && <><div className="plan-preview">{Array.isArray(plan.branches) && plan.branches.length ? plan.branches.slice(0, 6).map((branch, index) => { const row = branch as Record<string, unknown>; return <div className="plan-branch" key={String(row.branch_id || index)}><span className="branch-number">{String(index + 1).padStart(2, "0")}</span><div><strong>{String(row.query || "Search branch")}</strong><p>{String(row.rationale || row.origin || "Review this line of inquiry before collection.")}</p></div><span className="branch-status">{titleCase(String(row.status || "proposed"))}</span></div>; }) : <p className="muted-copy">{String(plan.message || "Research plan generated.")}</p>}</div><div className="collection-footer"><span>Review the plan above, then start collection when ready.</span><button className="button button-primary" onClick={() => void startLiveCollection()} disabled={!commaList(preferredSources).length || Boolean(busy)}>Run plan collection <span>→</span></button></div>
+            {activeCollectionRunId && <section className="collection-live-controls" aria-labelledby="collection-controls-title"><div className="collection-live-heading"><div><h4 id="collection-controls-title">Live collection controls</h4><p>Updates take effect between source requests. A request already in progress will finish first.</p></div><span className="run-live-badge">Run active</span></div><div className="collection-live-grid"><label className="field-block"><span>Search queries <small>One query per line</small></span><textarea aria-label="Live search queries" rows={4} value={collectionScope.terms} onChange={(event) => setCollectionScope((current) => ({ ...current, terms: event.target.value }))} /></label><div className="collection-live-fields"><label className="field-block"><span>Active sources <small>Comma-separated; remove a source to disable it</small></span><input aria-label="Live collection sources" value={collectionScope.sources} onChange={(event) => setCollectionScope((current) => ({ ...current, sources: event.target.value }))} /></label><label className="field-block"><span>Excluded topics</span><input aria-label="Live excluded topics" value={collectionScope.excluded_topics} onChange={(event) => setCollectionScope((current) => ({ ...current, excluded_topics: event.target.value }))} /></label><label className="field-block"><span>Post languages</span><input aria-label="Live post languages" value={collectionScope.post_languages} onChange={(event) => setCollectionScope((current) => ({ ...current, post_languages: event.target.value }))} placeholder="Blank means any language" /></label><div className="field-grid"><label className="field-block"><span>From date</span><input aria-label="Live start date" type="date" value={collectionScope.since} onChange={(event) => setCollectionScope((current) => ({ ...current, since: event.target.value }))} /></label><label className="field-block"><span>Through date</span><input aria-label="Live end date" type="date" value={collectionScope.until} onChange={(event) => setCollectionScope((current) => ({ ...current, until: event.target.value }))} /></label></div></div></div><div className="collection-live-actions"><label className="field-block"><span>Retry source</span><select aria-label="Source to retry" value={collectionRetrySource} onChange={(event) => setCollectionRetrySource(event.target.value)}>{COLLECTION_SOURCES.map((source) => <option key={source} value={source}>{titleCase(source)}</option>)}</select></label><button type="button" className="button button-secondary" onClick={() => void sendCollectionControl()} disabled={collectionControlBusy}>Apply changes</button><button type="button" className="button button-secondary" onClick={() => void sendCollectionControl({ retry_source: collectionRetrySource })} disabled={collectionControlBusy}>Retry source</button><button type="button" className="button button-quiet" onClick={() => void sendCollectionControl({ cancel: true })} disabled={collectionControlBusy}>Stop after current request</button></div><p className="collection-live-status" role="status" aria-live="polite">{collectionControlMessage}</p></section>}</>}</div>
           </div><aside className="column-side"><div className="side-note"><div className="note-mark">✧</div><span className="eyebrow">RESEARCH PRACTICE</span><h3>Keep the question visible.</h3><p>Every dataset, search, and analysis should trace back to a documented requirement. You can update it as the work evolves.</p><div className="note-separator" /><div className="note-stat"><strong>{requirementSaved ? "Saved" : "Not started"}</strong><span>Requirement status</span></div><div className="note-stat"><strong>{plan ? "Ready" : "Waiting"}</strong><span>Search plan status</span></div></div><div className="help-card"><span className="help-icon">i</span><div><strong>Review before collection</strong><p>The plan is a working proposal. Inspect its search branches before starting a collector run.</p></div></div></aside></div>
         </section>}
 
@@ -610,7 +892,7 @@ export function App() {
         {page === "activity" && <section className="page-content"><div className="page-heading compact-heading"><div><div className="eyebrow">AUDIT TRAIL <span className="eyebrow-line" /></div><h1>Project run history.</h1><p>Review the recent operations recorded for this workspace.</p></div><button className="button button-secondary" onClick={() => void refreshDashboard()} disabled={!workspace || Boolean(busy)}>↻ Refresh history</button></div><div className="panel history-panel"><div className="history-head"><div><strong>Recent project activity</strong><span>{activity.length} recorded events</span></div><div className="history-cols"><span>DETAIL</span><span>TIME</span></div></div>{activity.length ? activity.map((item) => <ActivityRow key={item.id} item={item} expanded />) : <div className="empty-state"><div className="empty-state-icon">↗</div><h3>No project history yet</h3><p>Research operations, imports, and exports will be recorded here.</p></div>}</div></section>}
 
         {page === "settings" && <section className="page-content"><div className="page-heading compact-heading"><div><div className="eyebrow">PREFERENCES <span className="eyebrow-line" /></div><h1>Connection settings.</h1><p>Connect the browser to a SUGAR Python service and manage optional provider credentials.</p></div><span className={`workflow-state ${engineState === "ready" ? "ready" : "pending"}`}><i />{engineState === "ready" ? "Engine connected" : "Connection needed"}</span></div><div className="settings-layout"><div className="panel settings-panel"><div className="section-title"><div className="section-icon blue">◐</div><div><h3>Appearance</h3><p>Choose a light or dark workspace theme.</p></div></div><label className="field-block appearance-field"><span>Color theme</span><select aria-label="Color theme" value={theme} onChange={(event) => setTheme(event.target.value === "dark" ? "dark" : "light")}><option value="light">Light</option><option value="dark">Dark</option></select></label><div className="settings-divider" />{!isTauri() && <><div className="section-title"><div className="section-icon blue">↗</div><div><h3>Research API</h3><p>The same browser interface works with a local service or an approved hosted endpoint.</p></div></div><div className="api-connection-fields"><label className="field-block"><span>API address</span><input type="url" value={apiUrl} onChange={(event) => setApiUrl(event.target.value)} placeholder="http://127.0.0.1:8765" /></label><label className="field-block"><span>API token <small>Only needed when the service requires one</small></span><input type="password" autoComplete="off" value={apiToken} onChange={(event) => setApiToken(event.target.value)} placeholder="Session only" /></label><div className="api-connect-footer"><span>Use HTTPS for a remotely hosted API. The token stays in this browser session.</span><button className="button button-primary" onClick={() => void connectResearchEngine()} disabled={Boolean(busy)}>Test connection</button></div></div><div className="settings-divider" /></>}
-          <div className="section-title"><div className="section-icon amber">⌘</div><div><h3>Provider credentials</h3><p>Credentials are sent only with the research operation that needs them.</p></div><span className="secure-badge"><span>◉</span> Session only</span></div><div className="credential-list">{SECRET_FIELDS.map(({ key, label, placeholder }) => <label className="field-block" key={key}><span>{label}</span><input type="password" autoComplete="off" value={credentials[key] || ""} onChange={(event) => setCredentials((current) => ({ ...current, [key]: event.target.value }))} placeholder={placeholder} /></label>)}</div><div className="settings-footnote"><span>i</span><p>Provider credentials stay in memory and are not written to a project or browser storage. Closing this app clears them. Remote API connections should use HTTPS.</p></div></div><aside className="connection-summary"><div className="summary-head"><span className="summary-icon">◉</span><div><strong>Research engine</strong><small>{isTauri() ? "Packaged Python sidecar" : "Python HTTP API"}</small></div></div><div className="summary-divider" /><div className="summary-row"><span>Interface</span><strong>Browser UI</strong></div><div className="summary-row"><span>Desktop wrapper</span><strong>Optional Tauri app</strong></div><div className="summary-row"><span>Project storage</span><strong>{isTauri() ? "Selected local folder" : "API workspace root"}</strong></div><div className="summary-map-note"><span>⌖</span><p>MapLibre uses OpenFreeMap vector tiles for the background map. Institution records remain in the project workspace.</p></div></aside></div></section>}
+          <div className="section-title"><div className="section-icon amber">⌘</div><div><h3>Provider credentials</h3><p>Credentials are sent only with the research operation that needs them.</p></div><span className="secure-badge"><span>◉</span> {savedCredentialNames.length ? "OS vault" : "Session only"}</span></div><div className="credential-list">{SECRET_FIELDS.map(({ key, label, placeholder }) => <label className="field-block" key={key}><span>{label}</span><input type="password" autoComplete="off" value={credentials[key] || ""} onChange={(event) => setCredentials((current) => ({ ...current, [key]: event.target.value }))} placeholder={placeholder} /></label>)}</div>{isTauri() && <div className="vault-actions"><span>{vaultAvailability === false ? "OS credential vault not available on this device." : savedCredentialNames.length ? `${savedCredentialNames.length} credential type(s) saved securely.` : "Optionally remember credentials in the operating-system vault."}</span><button className="button button-secondary" onClick={() => void loadVaultCredentials()}>Load saved</button><button className="button button-primary" onClick={() => void saveVaultCredentials()} disabled={!Object.values(credentials).some(Boolean)}>Save securely</button><button className="button button-quiet" onClick={() => void deleteVaultCredentials()} disabled={!savedCredentialNames.length}>Forget saved</button></div>}<div className="settings-footnote"><span>i</span><p>Credentials remain in memory unless you explicitly save them. SUGAR uses the Windows Credential Manager, macOS Keychain, or a supported Linux system vault. It never falls back to a plaintext credential file. {isTauri() ? "Remote API connections should use HTTPS." : "This browser-only mode does not access the desktop operating-system vault."}</p></div>{vaultMessage && <p className="collection-live-status" role="status" aria-live="polite">{vaultMessage}</p>}</div><aside className="connection-summary"><div className="summary-head"><span className="summary-icon">◉</span><div><strong>Research engine</strong><small>{isTauri() ? "Packaged Python sidecar" : "Python HTTP API"}</small></div></div><div className="summary-divider" /><div className="summary-row"><span>Interface</span><strong>Browser UI</strong></div><div className="summary-row"><span>Desktop wrapper</span><strong>Optional Tauri app</strong></div><div className="summary-row"><span>Project storage</span><strong>{isTauri() ? "Selected local folder" : "API workspace root"}</strong></div><div className="summary-map-note"><span>⌖</span><p>MapLibre uses OpenFreeMap vector tiles for the background map. Institution records remain in the project workspace.</p></div></aside></div></section>}
 
         <footer className="statusbar"><div><span className={`status-dot ${workspace ? "active" : "unknown"}`} /><span>{workspace ? `Workspace · ${workspace.split(/[\\/]/).at(-1)}` : "Local workspace not selected"}</span></div><span className="statusbar-right">SUGAR research engine <b>·</b> Python core</span></footer>
       </main>

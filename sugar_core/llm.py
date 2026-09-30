@@ -9,14 +9,25 @@ from typing import Any
 from .utils import JsonCache, stable_hash
 
 ARC_BASE_URL = "https://llm-api.arc.vt.edu/api/v1"
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+DEFAULT_ARC_MODEL = "gpt-5.6-luna"
+
+
+def default_model(provider: str) -> str:
+    """Return the usable default for a provider when the user leaves it blank."""
+    return DEFAULT_ARC_MODEL if provider.strip().casefold() == "arc" else DEFAULT_OPENAI_MODEL
 
 
 @dataclass(frozen=True)
 class LLMConfig:
     provider: str = "openai"
-    model: str = "gpt-5.6-luna"
+    model: str | None = None
     api_key: str = ""
     base_url: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.model or not self.model.strip():
+            object.__setattr__(self, "model", default_model(self.provider))
 
 
 def create_client(config: LLMConfig):

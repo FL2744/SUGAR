@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from sugar_bridge import backend_info
+from sugar_bridge import backend_info, load_config
 from sugar_core.models import PostRecord
 from sugar_core import service
 
@@ -12,6 +12,12 @@ def test_backend_diagnostics_has_support_fields():
     assert info["architecture"]
     assert info["python"]
     assert info["runtime"] in {"python", "bundled"}
+
+
+def test_bridge_config_accepts_older_powershell_utf8_bom(tmp_path: Path):
+    config = tmp_path / "config.json"
+    config.write_text('{"operation":"test"}', encoding="utf-8-sig")
+    assert load_config(str(config)) == {"operation": "test"}
 
 
 def test_search_progress_reports_major_stages(monkeypatch, tmp_path: Path):

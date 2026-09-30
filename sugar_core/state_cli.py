@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from . import __version__
-from .llm import ARC_BASE_URL, LLMConfig
+from .llm import ARC_BASE_URL, LLMConfig, default_model
 from .observation_storage import load_observations
 from .state_aggregate import save_state_rollups
 from .state_conflict_package import package_from_files_with_conflicts
@@ -79,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     triage.add_argument("observations")
     triage.add_argument("--output")
     triage.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
-    triage.add_argument("--model", default="gpt-5.6-luna")
+    triage.add_argument("--model")
     triage.add_argument("--base-url", default="")
     triage.add_argument("--cache-dir")
     triage.add_argument("--limit", type=int)
@@ -196,7 +196,7 @@ def _llm_config(args) -> LLMConfig:
         base_url = ARC_BASE_URL
     if args.provider == "custom" and not base_url:
         raise ValueError("--base-url is required for provider=custom")
-    return LLMConfig(provider=args.provider, model=args.model, api_key=api_key, base_url=base_url)
+    return LLMConfig(provider=args.provider, model=args.model or default_model(args.provider), api_key=api_key, base_url=base_url)
 
 
 def _write_or_print(payload: dict, output: str | Path | None) -> str | None:

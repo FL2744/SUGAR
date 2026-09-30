@@ -19,6 +19,7 @@ const OPERATIONS: &[&str] = &[
     "intel-tradecraft", "intel-synthesize", "intel-hypotheses", "intel-compare",
     "intel-next-evidence", "intel-content-lineage", "intel-evidence-graph", "intel-robustness",
     "intel-media-ingest", "intel-media-attach", "intel-capture-page", "intel-semantic-search",
+    "credential-vault-status", "credential-vault-load", "credential-vault-save", "credential-vault-delete",
 ];
 const SECRET_ENV: &[(&str, &str)] = &[
     ("llm_api_key", "SUGAR_LLM_API_KEY"),
@@ -82,7 +83,9 @@ fn finish_result(
     let mut events = Vec::new();
     for line in stdout.lines() {
         if let Ok(event) = serde_json::from_str::<Value>(line) {
-            let _ = app.emit("backend-event", &event);
+            if !operation.starts_with("credential-vault-") {
+                let _ = app.emit("backend-event", &event);
+            }
             events.push(event);
         }
     }

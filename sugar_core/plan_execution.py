@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .research_requirements import ResearchRequirement, SearchPlan
 from .service import ProgressCallback, run_search
@@ -18,6 +18,7 @@ class PlanExecutionResult:
     executed_branch_ids: list[str]
     records: int
     coverage_status: str = "unrecorded"
+    cancelled: bool = False
 
 
 def execute_search_plan(
@@ -27,6 +28,7 @@ def execute_search_plan(
     config: dict[str, Any],
     secrets: dict[str, str] | None = None,
     progress: ProgressCallback | None = None,
+    control_reader: Callable[[], dict[str, Any] | None] | None = None,
 ) -> PlanExecutionResult:
     """Run current plan branches through the ordinary collector service.
 
@@ -59,11 +61,26 @@ def execute_search_plan(
         "translate_posts": bool(config.get("translate_posts", False)),
         "infer_locations": bool(config.get("infer_locations", False)),
     })
-    outputs = run_search(effective, secrets or {}, progress=progress)
+    run_options: dict[str, Any] = {"progress": progress}
+    if control_reader is not None:
+        run_options["control_reader"] = control_reader
+    outputs = run_search(effective, secrets or {}, **run_options)
     csv_path = next((Path(path) for path in outputs if Path(path).suffix.casefold() == ".csv"), None)
     if csv_path is None:
         raise RuntimeError("Plan collection completed without a canonical CSV output.")
     records = load_post_records(csv_path)
+    metadata_path = csv_path.with_suffix(".metadata.json")
+    collection_cancelled = False
+    collection_request_count: int | None = None
+    if metadata_path.is_file():
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if isinstance(metadata, dict):
+            collection_cancelled = bool(metadata.get("collection_cancelled", False))
+            if "collection_requests" in metadata:
+                collection_request_count = int(metadata.get("collection_requests") or 0)
+            effective_sources = metadata.get("sources")
+            if isinstance(effective_sources, list):
+                sources = [str(value).strip().casefold() for value in effective_sources if str(value).strip()]
     coverage_path = next((Path(path) for path in outputs if path.endswith(".coverage.json")), None)
     coverage_status = "legacy_unrecorded"
     source_coverage: dict[str, Any] = {}
@@ -74,9 +91,12 @@ def execute_search_plan(
             raw_sources = raw_coverage.get("sources") or {}
             if isinstance(raw_sources, dict):
                 source_coverage = raw_sources
-    usable_source = not source_coverage or any(
+    usable_source = (collection_request_count is None and not source_coverage) or (
+        collection_request_count is not None and collection_request_count > 0 and
+        any(
         isinstance(value, dict) and str(value.get("status") or "") in {"success", "zero_result", "partial"}
         for value in source_coverage.values()
+        )
     )
 
     for branch in branches:
@@ -88,7 +108,14 @@ def execute_search_plan(
         branch.metrics.retrieved = len(matching)
         branch.metrics.unique = len({record.record_key for record in matching})
         branch.metrics.distinct_sources = len({record.platform for record in matching if record.platform})
-        if usable_source:
+        if collection_cancelled:
+            plan.set_status(
+                branch.branch_id,
+                "paused",
+                actor="controller",
+                reason="The analyst stopped collection between requests; resume after reviewing the partial records.",
+            )
+        elif usable_source:
             plan.set_status(
                 branch.branch_id,
                 "completed",
@@ -112,10 +139,12 @@ def execute_search_plan(
         coverage_status=coverage_status,
         source_coverage=source_coverage,
         relevance_assessed=False,
+        cancelled=collection_cancelled,
     )
     return PlanExecutionResult(
         outputs=outputs,
         executed_branch_ids=[branch.branch_id for branch in branches],
         records=len(records),
         coverage_status=coverage_status,
+        cancelled=collection_cancelled,
     )

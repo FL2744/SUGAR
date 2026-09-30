@@ -6,7 +6,7 @@
 
 SUGAR is a cross-platform public-source research system for collecting social-media material, preserving provenance, organizing evidence, conducting spatial and structured analysis, and producing reviewable research products. The public engine is target-neutral; project-specific targets, query plans, and case data belong in non-public project configuration.
 
-Current package version: **1.3.0**.
+Current package version: **1.5.0**.
 
 License: **Apache License 2.0**. Copyright 2026 Alejandro Grenier and contributors.
 
@@ -102,7 +102,7 @@ See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the workspace
 
 ## Persistent research workspace
 
-The project-workspace layer supports multi-project navigation, subprojects, run and plan-change history, evidence-backed institution/service registries, inspectable data tables, reusable map layers, conversation context, and persistent listening posts. The shared `sugar-project` CLI supports project dashboards/history, reference-data import/export, monitor scheduling/review, conversation reconstruction, and integrity-checked project bundles. The unified browser interface currently focuses on research requirements, imports, evidence inspection, institution maps, project history, and handoffs; the remaining workspace operations continue to be available through the Python CLI and core APIs as they are brought into the shared UI. Monitoring can be run manually or by an approved operating-system scheduler; in-app polling is opt-in.
+The project-workspace layer supports multi-project navigation, subprojects, run and plan-change history, evidence-backed institution/service registries, inspectable data tables, reusable map layers, conversation context, and persistent listening posts. The shared `sugar-project` CLI supports project dashboards/history, reference-data import/export, monitor scheduling/review, conversation reconstruction, and integrity-checked project bundles. The unified browser interface provides project profiles, notes and member rosters, research requirements, dataset inspection and export, institution maps, geographic summaries, coded findings, translation controls, project history, handoffs, and live collection controls. Monitoring can be run manually or by an approved operating-system scheduler; in-app polling is opt-in.
 
 SUGAR includes blank registry schemas for American Spaces, EducationUSA, language education centers, technical training workshops, and custom networks. It does not present those schemas as an authoritative current inventory; analysts supply source-backed datasets and record their scope and coverage limits. The tool keeps American Spaces and EducationUSA distinct, reports comparison dimensions separately, and preserves evidence and uncertainty without scoring popularity, effectiveness, or causal influence.
 

@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import unquote, urlsplit
 
 import pandas as pd
 
@@ -72,6 +73,24 @@ def _write_json(path: Path, payload: Any) -> str:
     return str(path)
 
 
+def _project_file_path(workspace: SugarWorkspace | None, value: Any) -> Path:
+    raw = str(value or "").strip()
+    parsed = urlsplit(raw)
+    if parsed.scheme.casefold() in {"sugar-workspace", "sugar-file"}:
+        if workspace is None or parsed.hostname != workspace.manifest.project_id:
+            raise ValueError("The selected file does not belong to this project.")
+        relative = unquote(parsed.path).lstrip("/")
+        target = (workspace.root / relative).resolve()
+        try:
+            target.relative_to(workspace.root)
+        except ValueError as exc:
+            raise ValueError("Project file references cannot leave the selected workspace.") from exc
+        return target
+    if not raw:
+        raise ValueError("Choose a project data file first.")
+    return Path(raw).expanduser().resolve()
+
+
 def _load_dataset_rows(source_file: str) -> tuple[list[dict[str, Any]], list[str]]:
     source = Path(source_file).expanduser().resolve()
     if not source.is_file():
@@ -98,6 +117,67 @@ def _filter_dataset_rows(rows: list[dict[str, Any]], column: str = "", value: st
     return [row for row in rows if query in str(row.get(column, "")).casefold()]
 
 
+def _geography_value(row: dict[str, Any], level: str) -> str:
+    row = {str(key).casefold(): value for key, value in row.items()}
+    aliases = {
+        "country": ("country", "country_name", "country_code"),
+        "region": ("region", "admin1", "admin_region", "state", "province"),
+        "city": ("city", "town", "locality"),
+    }
+    if level == "coordinate_grid":
+        try:
+            latitude = float(str(row.get("latitude") or row.get("lat") or "").strip())
+            longitude = float(str(row.get("longitude") or row.get("lon") or row.get("lng") or "").strip())
+        except (TypeError, ValueError):
+            return "Unlocated"
+        if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+            return "Unlocated"
+        return f"{latitude:.2f}, {longitude:.2f}"
+    if level == "hierarchy":
+        parts = []
+        for key in ("country", "country_name", "region", "admin1", "admin_region", "state", "province", "city", "town", "locality"):
+            value = str(row.get(key) or "").strip()
+            if value and value.casefold() not in {part.casefold() for part in parts}:
+                parts.append(value)
+        if parts:
+            return " / ".join(parts)
+        return _geography_value(row, "coordinate_grid")
+    for key in aliases.get(level, ()):
+        value = str(row.get(key) or "").strip()
+        if value:
+            return value
+    return "Unspecified"
+
+
+def _geography_summary(rows: list[dict[str, Any]], level: str) -> dict[str, Any]:
+    supported = {"country", "region", "city", "coordinate_grid"}
+    selected = level.strip().casefold() or "auto"
+    if selected == "auto":
+        selected = "hierarchy"
+    if selected not in supported | {"hierarchy"}:
+        raise ValueError("Geographic grouping supports auto, country, region, city, or coordinate_grid.")
+    counts: dict[str, int] = {}
+    located = 0
+    for row in rows:
+        value = _geography_value(row, selected)
+        if value != "Unlocated" and value != "Unspecified":
+            located += 1
+        counts[value] = counts.get(value, 0) + 1
+    total = len(rows)
+    groups = [
+        {"label": label, "records": count, "share": round(count / total, 4) if total else 0.0}
+        for label, count in sorted(counts.items(), key=lambda item: (-item[1], item[0].casefold()))
+    ]
+    return {
+        "group_by": selected,
+        "total_rows": total,
+        "located_rows": located,
+        "unlocated_rows": total - located,
+        "groups": groups,
+        "guardrail": "Geographic groups summarize supplied location fields or coordinate grid cells; they do not establish influence, coordination, or causation.",
+    }
+
+
 def _event_result(progress: ProgressCallback | None, action: str, payload: Any) -> list[str]:
     _emit(progress, "workspace_hub_data", action=action, data=payload)
     return []
@@ -108,6 +188,7 @@ def _project_research_state(workspace: SugarWorkspace) -> dict[str, Any]:
     for key, filename in (
         ("research_requirement", "research-requirement.json"),
         ("search_plan", "search-plan.json"),
+        ("research_strategy", "research-strategy.json"),
     ):
         path = workspace.path_for("state") / filename
         if not path.is_file():
@@ -119,6 +200,57 @@ def _project_research_state(workspace: SugarWorkspace) -> dict[str, Any]:
         if isinstance(payload, dict):
             state[key] = payload
     return state
+
+
+def _project_profile_path(workspace: SugarWorkspace) -> Path:
+    return workspace.internal_path / "project-profile.json"
+
+
+def _load_project_profile(workspace: SugarWorkspace) -> dict[str, Any]:
+    path = _project_profile_path(workspace)
+    if not path.is_file():
+        return {"notes": "", "members": [], "access_control": False}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("Project profile is unreadable; restore or remove .sugar/project-profile.json.") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Project profile must contain a JSON object.")
+    notes = str(payload.get("notes") or "")
+    members = payload.get("members") or []
+    if not isinstance(members, list):
+        raise ValueError("Project members must be a list.")
+    return {"notes": notes, "members": members, "access_control": False}
+
+
+def _validate_project_profile(config: dict[str, Any]) -> dict[str, Any]:
+    notes = str(config.get("notes") or "").strip()
+    if len(notes) > 100_000:
+        raise ValueError("Project notes must be 100,000 characters or fewer.")
+    members_raw = config.get("members") or []
+    if not isinstance(members_raw, list) or len(members_raw) > 100:
+        raise ValueError("Project members must be a list of at most 100 people.")
+    members: list[dict[str, str]] = []
+    seen_emails: set[str] = set()
+    for index, raw in enumerate(members_raw, start=1):
+        if not isinstance(raw, dict):
+            raise ValueError(f"Project member {index} must be an object.")
+        name = str(raw.get("name") or "").strip()
+        email = str(raw.get("email") or "").strip()
+        role = str(raw.get("role") or "analyst").strip()
+        if not name or len(name) > 120:
+            raise ValueError(f"Project member {index} requires a name of 1 to 120 characters.")
+        if len(email) > 254 or (email and ("@" not in email or any(ch.isspace() for ch in email))):
+            raise ValueError(f"Project member {index} has an invalid email address.")
+        if not role or len(role) > 60:
+            raise ValueError(f"Project member {index} requires a role label of 1 to 60 characters.")
+        email_key = email.casefold()
+        if email_key and email_key in seen_emails:
+            raise ValueError(f"Project member email addresses must be unique: {email}")
+        if email_key:
+            seen_emails.add(email_key)
+        members.append({"name": name, "email": email, "role": role})
+    return {"notes": notes, "members": members, "access_control": False}
 
 
 def _registry_map_frame(workspace: SugarWorkspace) -> pd.DataFrame:
@@ -263,7 +395,27 @@ def run_workspace_hub(
     if action == "dashboard":
         data = dashboard(workspace)
         data.update(_project_research_state(workspace))
+        data["project_profile"] = _load_project_profile(workspace)
         return _event_result(progress, action, data)
+
+    if action == "project-profile":
+        return _event_result(progress, action, _load_project_profile(workspace))
+
+    if action == "project-profile-update":
+        profile = _validate_project_profile(config)
+        _write_json(_project_profile_path(workspace), profile)
+        workspace.register_artifact(
+            "project_profile",
+            _project_profile_path(workspace),
+            label="Project notes and member roster",
+            metadata={"member_count": len(profile["members"]), "access_control": False},
+        )
+        log_project_event(
+            workspace,
+            "project_profile_updated",
+            {"member_count": len(profile["members"]), "notes_characters": len(profile["notes"])},
+        )
+        return _event_result(progress, action, profile)
 
     if action == "project-create-subproject":
         child = create_subproject(workspace, str(config.get("name") or ""), description=str(config.get("description") or ""))
@@ -322,7 +474,7 @@ def run_workspace_hub(
         return _event_result(progress, action, preview)
 
     if action == "dataset-browse":
-        source_file = str(config.get("source_file") or "")
+        source_file = str(_project_file_path(workspace, config.get("source_file")))
         rows, columns = _load_dataset_rows(source_file)
         filtered = _filter_dataset_rows(rows, str(config.get("filter_column") or ""), str(config.get("filter_value") or ""))
         maximum = max(1, min(5000, int(config.get("max_rows", 500))))
@@ -331,22 +483,40 @@ def run_workspace_hub(
             "rows_shown": min(maximum, len(filtered)), "filter_column": str(config.get("filter_column") or ""),
             "filter_value": str(config.get("filter_value") or ""), "rows": filtered[:maximum]})
 
-    if action == "dataset-export":
-        source_file = str(config.get("source_file") or "")
+    if action == "dataset-geography-summary":
+        source_file = str(_project_file_path(workspace, config.get("source_file")))
         rows, _columns = _load_dataset_rows(source_file)
         filtered = _filter_dataset_rows(rows, str(config.get("filter_column") or ""), str(config.get("filter_value") or ""))
-        target = Path(str(config.get("output_file") or "")).expanduser().resolve()
-        if not str(config.get("output_file") or "").strip():
-            raise ValueError("Choose an output path for the filtered dataset export.")
+        return _event_result(progress, action, _geography_summary(filtered, str(config.get("group_by") or "auto")))
+
+    if action == "dataset-export":
+        source_file = str(_project_file_path(workspace, config.get("source_file")))
+        rows, _columns = _load_dataset_rows(source_file)
+        filtered = _filter_dataset_rows(rows, str(config.get("filter_column") or ""), str(config.get("filter_value") or ""))
+        export_format = str(config.get("format") or "").strip().casefold().lstrip(".")
+        extension_for_format = {"csv": ".csv", "jsonl": ".jsonl", "ndjson": ".jsonl", "xlsx": ".xlsx", "json": ".json", "geojson": ".geojson"}
+        if not export_format:
+            export_format = Path(str(config.get("output_file") or "")).suffix.casefold().lstrip(".") or "csv"
+        suffix = extension_for_format.get(export_format)
+        if suffix is None:
+            raise ValueError("Dataset export supports CSV, XLSX, JSONL, JSON, and GeoJSON.")
+        if str(config.get("output_file") or "").strip():
+            target = _project_file_path(workspace, config["output_file"])
+        else:
+            file_name = Path(str(config.get("file_name") or f"research-records{suffix}")).name
+            target = workspace.path_for("exports") / file_name
+        if target.suffix.casefold() != suffix:
+            target = target.with_suffix(suffix)
         target.parent.mkdir(parents=True, exist_ok=True)
-        suffix = target.suffix.casefold()
         if suffix == ".csv":
             pd.DataFrame(filtered).to_csv(target, index=False, encoding="utf-8-sig")
         elif suffix in {".jsonl", ".ndjson"}:
             target.write_text("".join(json.dumps(row, ensure_ascii=False, default=str) + "\n" for row in filtered), encoding="utf-8")
         elif suffix == ".xlsx":
             pd.DataFrame(filtered).to_excel(target, index=False)
-        elif suffix in {".json", ".geojson"}:
+        elif suffix == ".json":
+            target.write_text(json.dumps(filtered, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
+        elif suffix == ".geojson":
             features = []
             for row in filtered:
                 props = dict(row)

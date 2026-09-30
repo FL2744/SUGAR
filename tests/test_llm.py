@@ -8,11 +8,19 @@ from sugar_core.llm import (
     _chat,
     cached_chat,
     create_client,
+    default_model,
     parse_json_object,
     translate_search_term,
     translate_text,
 )
 from sugar_core.utils import JsonCache
+
+
+def test_default_model_matches_the_selected_provider():
+    assert default_model("openai") == "gpt-4o-mini"
+    assert default_model("arc") == "gpt-5.6-luna"
+    assert LLMConfig().model == "gpt-4o-mini"
+    assert LLMConfig(provider="arc").model == "gpt-5.6-luna"
 
 
 class _FakeCompletions:

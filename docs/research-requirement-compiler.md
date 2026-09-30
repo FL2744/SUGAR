@@ -60,7 +60,7 @@ Handoff verification checks semantic linkage in addition to hashes: the strategy
 
 Compile deterministically: sugar strategy compile research-requirement.json --output research-strategy.json
 
-Compile with AI: sugar strategy compile research-requirement.json --ai-expand --provider openai --model gpt-5.6-luna
+Compile with AI: sugar strategy compile research-requirement.json --ai-expand --provider openai --model gpt-4o-mini
 
 Inspect: sugar strategy show research-strategy.json
 

@@ -39,7 +39,12 @@ def _software_version() -> str:
     try:
         return package_version("sugar-osint")
     except PackageNotFoundError:
-        return "unknown"
+        try:
+            from . import __version__
+
+            return __version__
+        except (ImportError, AttributeError):
+            return "unknown"
 
 
 @dataclass(frozen=True)

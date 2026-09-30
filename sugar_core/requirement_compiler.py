@@ -20,7 +20,7 @@ from .research_requirements import (
 from .utils import JsonCache
 
 RESEARCH_STRATEGY_SCHEMA_VERSION = "1.0"
-RESEARCH_STRATEGY_WORKFLOW = "research-requirement-compiler-v1"
+RESEARCH_STRATEGY_WORKFLOW = "research-requirement-compiler-v2"
 
 CONCEPT_ORIGINS = {"explicit", "interpreted", "hypothesis"}
 CONCEPT_KINDS = {
@@ -37,6 +37,73 @@ CONCEPT_KINDS = {
     "indicator",
 }
 STRATEGY_REVIEW_STATES = {"draft", "approved", "rejected"}
+
+
+def _strategy_response_format(provider: str) -> dict[str, Any] | None:
+    if provider.casefold() != "openai":
+        return None
+    kinds = sorted(CONCEPT_KINDS)
+    explicit = {
+        "type": "object",
+        "properties": {
+            "kind": {"type": "string", "enum": kinds},
+            "value": {"type": "string"},
+            "source_text": {"type": "string"},
+            "start": {"type": "integer"},
+            "end": {"type": "integer"},
+            "confidence": {"type": "number"},
+            "rationale": {"type": "string"},
+        },
+        "required": ["kind", "value", "source_text", "start", "end", "confidence", "rationale"],
+        "additionalProperties": False,
+    }
+    interpreted = {
+        "type": "object",
+        "properties": {
+            "kind": {"type": "string", "enum": kinds},
+            "value": {"type": "string"},
+            "confidence": {"type": "number"},
+            "rationale": {"type": "string"},
+        },
+        "required": ["kind", "value", "confidence", "rationale"],
+        "additionalProperties": False,
+    }
+    dimension = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "question": {"type": "string"},
+            "indicators": {"type": "array", "items": {"type": "string"}},
+            "source_families": {"type": "array", "items": {"type": "string"}},
+            "rationale": {"type": "string"},
+        },
+        "required": ["name", "question", "indicators", "source_families", "rationale"],
+        "additionalProperties": False,
+    }
+    schema = {
+        "type": "object",
+        "properties": {
+            "analytic_task": {"type": "string"},
+            "explicit_concepts": {"type": "array", "items": explicit},
+            "interpreted_concepts": {"type": "array", "items": interpreted},
+            "search_hypotheses": {"type": "array", "items": interpreted},
+            "research_dimensions": {"type": "array", "items": dimension},
+        },
+        "required": [
+            "analytic_task", "explicit_concepts", "interpreted_concepts",
+            "search_hypotheses", "research_dimensions",
+        ],
+        "additionalProperties": False,
+    }
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sugar_research_strategy",
+            "description": "Structured research interpretation. Explicit text spans must be verbatim and exact.",
+            "strict": True,
+            "schema": schema,
+        },
+    }
 
 
 def _utc_now() -> str:
@@ -467,12 +534,25 @@ class CompiledResearchStrategy:
 _ACTIVITY_PATTERNS: list[tuple[str, str]] = [
     (r"\breach(?:ing|es|ed)?\b", "audience_outreach"),
     (r"\bengag(?:e|es|ed|ing)\b", "audience_engagement"),
+    (r"\bparticip(?:ate|ates|ated|ating|ation|ations)\b", "participation"),
     (r"\binfluenc(?:e|es|ed|ing)\b", "influence"),
     (r"\bexpand(?:s|ed|ing)?\b", "expansion"),
     (r"\boperate(?:s|d|ing)?\b", "operations"),
     (r"\bpartner(?:s|ed|ing)?\b", "partnership"),
     (r"\btarget(?:s|ed|ing)?\b", "targeting"),
+    (r"\b(?:alcanz(?:a|an|amos|ar|aron|ando)|lleg(?:a|an|amos|ar|aron|ando))\b", "audience_outreach"),
+    (r"\b(?:particip(?:a|an|amos|ar|aron|ando)|involucr(?:a|an|amos|ar|aron|ando))\b", "audience_engagement"),
+    (r"\b(?:influy(?:e|en|eron|endo)|influenci(?:a|an|amos|ar|aron|ando))\b", "influence"),
+    (r"\b(?:ampli(?:a|an|amos|ar|aron|ando)|expand(?:e|en|imos|ir|ieron|iendo))\b", "expansion"),
+    (r"\b(?:oper(?:a|an|amos|ar|aron|ando)|colabor(?:a|an|amos|ar|aron|ando))\b", "operations"),
+    (r"\b(?:particip(?:e|ent|ons|er|é|ée|és|ées)|atteign(?:e|ent|ons|dre|aient))\b", "participation"),
 ]
+
+_COMPARISON_TERMS = re.compile(
+    r"\b(?:compare|comparing|comparison|comparar|compara|comparan|comparación|comparacion|"
+    r"comparer|comparaison|vergleichen|vergleich|confrontar|comparare|confrontare|versus|vs)\b",
+    flags=re.IGNORECASE,
+)
 
 
 def _span(question: str, start: int, end: int) -> SourceSpan:
@@ -570,7 +650,12 @@ def _deterministic_sentence_concepts(requirement: ResearchRequirement) -> tuple[
 
         suffix_start = activity.source_span.end
         suffix = question[suffix_start:]
-        audience_match = re.match(r"\s+(.+?)(?=\s+(?:in|across|within|throughout|among)\s+|[?.!]?$)", suffix, flags=re.I)
+        audience_match = re.match(
+            r"\s+(.+?)(?=\s+(?:in|across|within|throughout|among|en|entre|para|dans|"
+            r"parmi|auprès\s+de|em|no|na|nos|nas)\s+|[?.!]?$)",
+            suffix,
+            flags=re.I,
+        )
         if audience_match:
             raw = _clean(audience_match.group(1))
             if raw:
@@ -589,7 +674,10 @@ def _deterministic_sentence_concepts(requirement: ResearchRequirement) -> tuple[
                 )
 
     geography_match = re.search(
-        r"(?i)\b(?:in|across|within|throughout)\s+([A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*){0,4})(?=[?.!,]|$)",
+        r"(?i:\b(?:in|across|within|throughout|among|en|entre|para|por|dentro\s+de|"
+        r"dans|parmi|à|au|aux|chez|em|no|na|nos|nas)\b)\s+"
+        r"([A-ZÀ-ÖØ-Þ][\w'’.-]*(?:\s+(?:(?:de|del|du|des|d'|la|le|les|los|las|da|do|dos|das)|"
+        r"[A-ZÀ-ÖØ-Þ][\w'’.-]*)){0,5})(?=[?.!,]|$)",
         question,
     )
     if geography_match:
@@ -605,16 +693,16 @@ def _deterministic_sentence_concepts(requirement: ResearchRequirement) -> tuple[
             ),
         )
 
-    folded = question.casefold()
-    if folded.startswith("how ") or folded.startswith("how are ") or folded.startswith("how is "):
+    folded = question.strip("¿¡ \t\r\n").casefold()
+    if re.match(r"^(?:how|cómo|como|comment|wie|come|как|как именно)\b", folded):
         analytic_task = "mechanism_assessment"
-    elif folded.startswith("where "):
+    elif re.match(r"^(?:where|dónde|donde|où|wo|dove|где)\b", folded):
         analytic_task = "geographic_mapping"
-    elif folded.startswith("who "):
+    elif re.match(r"^(?:who|quién|quien|qui|wer|chi|кто)\b", folded):
         analytic_task = "actor_identification"
-    elif folded.startswith(("what ", "which ")):
+    elif re.match(r"^(?:what|which|qué|que|cuál|cual|cuáles|cuales|quel|quelle|quels|quelles|was|welche|welcher|chi|che|что|какие|какой)\b", folded):
         analytic_task = "inventory_assessment"
-    elif "compare" in folded or " versus " in folded or " vs " in folded:
+    elif _COMPARISON_TERMS.search(folded):
         analytic_task = "comparative_assessment"
     else:
         analytic_task = "descriptive_assessment"
@@ -975,6 +1063,7 @@ def enrich_strategy_with_llm(
         system,
         user,
         max_tokens=6000,
+        response_format=_strategy_response_format(llm.provider),
     )
     payload = parse_json_object(response)
     analytic_task = _clean(payload.get("analytic_task")).casefold()

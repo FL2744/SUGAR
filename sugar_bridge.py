@@ -17,8 +17,9 @@ for stream in (sys.stdout, sys.stderr):
 
 import sugar_core
 from sugar_core.collector_registry import collector_capabilities
+from sugar_core.credential_vault import delete_credentials, load_credentials, save_credentials, vault_status
 from sugar_core.desktop_ops import DESKTOP_ANALYTIC_OPERATIONS, run_desktop_analytic_operation
-from sugar_core.llm import ARC_BASE_URL, LLMConfig, create_client
+from sugar_core.llm import ARC_BASE_URL, LLMConfig, create_client, default_model
 from sugar_core.service import run_analysis, run_harvest, run_ingest, run_map, run_overlap, run_search
 from sugar_core.research_service import (
     apply_research_feedback,
@@ -32,6 +33,7 @@ from sugar_core.research_service import (
     review_research_plan,
     review_research_strategy,
     triage_research_records,
+    update_research_collection_control,
     update_research_plan_branch,
     update_research_strategy,
     verify_research_handoff,
@@ -62,6 +64,7 @@ BASE_OPERATIONS = {
     "research-import",
     "research-prepare-review",
     "research-collect",
+    "research-collect-control",
     "research-triage",
     "research-feedback",
     "research-handoff",
@@ -75,6 +78,10 @@ BASE_OPERATIONS = {
     "analysis",
     "diagnostics",
     "llm-check",
+    "credential-vault-status",
+    "credential-vault-load",
+    "credential-vault-save",
+    "credential-vault-delete",
 } | WORKSPACE_OPERATIONS
 ALL_OPERATIONS = BASE_OPERATIONS | DESKTOP_ANALYTIC_OPERATIONS
 
@@ -123,7 +130,7 @@ def emit(event: str, **values: Any) -> None:
 
 
 def load_config(path: str) -> dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as stream:
+    with open(path, "r", encoding="utf-8-sig") as stream:
         payload = json.load(stream)
     if not isinstance(payload, dict):
         raise ValueError("Desktop bridge configuration must be a JSON object.")
@@ -215,7 +222,7 @@ def _run_llm_check(config: dict[str, Any], secrets: dict[str, str]) -> list[str]
     if not isinstance(raw, dict):
         raise ValueError("llm configuration must be an object.")
     provider = str(raw.get("provider") or "openai").strip()
-    model = str(raw.get("model") or "gpt-5.6-luna").strip()
+    model = str(raw.get("model") or default_model(provider)).strip()
     base_url = str(raw.get("base_url") or "").strip()
     llm_config = LLMConfig(
         provider=provider,
@@ -319,7 +326,15 @@ def main(argv=None) -> int:
         secrets = secrets_from_environment()
         from sugar_core.workspace_memory import log_project_event, record_project_run, utc_now
         run_started_at = utc_now()
-        if args.command == "llm-check":
+        if args.command == "credential-vault-status":
+            outputs = [json.dumps(vault_status(), ensure_ascii=False)]
+        elif args.command == "credential-vault-load":
+            outputs = [json.dumps({"credentials": load_credentials()}, ensure_ascii=False)]
+        elif args.command == "credential-vault-save":
+            outputs = [json.dumps(save_credentials(secrets), ensure_ascii=False)]
+        elif args.command == "credential-vault-delete":
+            outputs = [json.dumps(delete_credentials(config.get("names")), ensure_ascii=False)]
+        elif args.command == "llm-check":
             outputs = _run_llm_check(config, secrets)
         elif args.command in WORKSPACE_OPERATIONS:
             outputs = _run_workspace_operation(args.command, config)
@@ -347,6 +362,8 @@ def main(argv=None) -> int:
             outputs = prepare_manual_review(config, progress=progress_event)
         elif args.command == "research-collect":
             outputs = collect_research_plan(config, secrets, progress=progress_event)
+        elif args.command == "research-collect-control":
+            outputs = update_research_collection_control(config, progress=progress_event)
         elif args.command == "research-triage":
             outputs = triage_research_records(config, secrets, progress=progress_event)
         elif args.command == "research-feedback":
@@ -431,7 +448,7 @@ def main(argv=None) -> int:
                 actor=str(config.get("actor") or "analyst"),
                 reason=str(config.get("reason") or ""),
             )
-        if args.command not in WORKSPACE_OPERATIONS and args.command not in {"workspace-hub", "llm-check"}:
+        if args.command not in WORKSPACE_OPERATIONS and args.command not in {"workspace-hub", "llm-check", "research-collect-control"}:
             active_workspace = workspace_from_config(config)
             if active_workspace is not None:
                 record_project_run(active_workspace, command=args.command, config=config, outputs=outputs,

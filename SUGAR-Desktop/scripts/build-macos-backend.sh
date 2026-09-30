@@ -19,7 +19,7 @@ trap 'rm -rf "$WHEELS"' EXIT
 "$BUILD/backend-venv/bin/python" -m pip install "${ROOT}[macos]" -c "$ROOT/SUGAR-Desktop/constraints-macos.txt"
 "$BUILD/backend-venv/bin/pyinstaller" --noconfirm --clean --onefile \
   --name sugar-bridge --distpath "$BUILD/backend" --workpath "$BUILD/pyinstaller" \
-  --specpath "$BUILD" --collect-all matplotlib --collect-all folium --collect-all docx \
+  --specpath "$BUILD" --collect-all matplotlib --collect-all folium --collect-all docx --collect-all keyring \
   --hidden-import openpyxl --hidden-import reportlab --hidden-import docx \
   "$ROOT/sugar_bridge.py"
 "$BUILD/backend-venv/bin/python" "$ROOT/SUGAR-Desktop/scripts/check_compatibility.py" \

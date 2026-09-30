@@ -49,6 +49,33 @@ def test_deterministic_compiler_extracts_question_structure_without_ai():
     assert "languages" in missing
 
 
+@pytest.mark.parametrize(
+    "question,analytic_task,activity,geography",
+    [
+        (
+            "¿Cómo participan los estudiantes en programas públicos de idiomas en Ciudad de México?",
+            "mechanism_assessment",
+            "participan",
+            "Ciudad de México",
+        ),
+        (
+            "Où les étudiants participent-ils à des programmes à Paris?",
+            "geographic_mapping",
+            "participent",
+            "Paris",
+        ),
+    ],
+)
+def test_deterministic_compiler_extracts_common_non_english_questions(
+    question: str, analytic_task: str, activity: str, geography: str,
+):
+    strategy = compile_requirement_deterministically(ResearchRequirement(question=question))
+    assert strategy.analytic_task == analytic_task
+    concepts = {(item.kind, item.value) for item in strategy.concepts if item.origin == "explicit"}
+    assert ("activity", activity) in concepts
+    assert ("geography", geography) in concepts
+
+
 def test_explicit_concept_rejects_fake_source_span():
     with pytest.raises(ValueError, match="does not exactly match"):
         CompiledResearchStrategy(
@@ -171,6 +198,40 @@ def test_ai_compile_accepts_only_exact_explicit_spans_and_separates_hypotheses(t
         item.origin == "explicit" and item.value == "foreign educational institutions"
         for item in enriched.concepts
     )
+
+
+def test_openai_interpreter_requests_strict_structured_output(monkeypatch, tmp_path: Path):
+    req = requirement()
+    strategy = compile_requirement_deterministically(req)
+    seen: dict[str, object] = {}
+
+    def fake_cached_chat(client, llm, cache, task, system, user, max_tokens, response_format=None):
+        seen["response_format"] = response_format
+        return json.dumps({
+            "analytic_task": "mechanism_assessment",
+            "explicit_concepts": [],
+            "interpreted_concepts": [],
+            "search_hypotheses": [],
+            "research_dimensions": [],
+        })
+
+    monkeypatch.setattr("sugar_core.requirement_compiler.cached_chat", fake_cached_chat)
+    enriched = enrich_strategy_with_llm(
+        req,
+        strategy,
+        llm=LLMConfig(provider="openai", model="gpt-4o-mini", api_key="test-key"),
+        cache_dir=tmp_path,
+        client=object(),
+    )
+
+    response_format = seen["response_format"]
+    assert isinstance(response_format, dict)
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["strict"] is True
+    schema = response_format["json_schema"]["schema"]
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == set(schema["properties"])
+    assert enriched.review_state == "draft"
 
 
 def test_analyst_can_edit_interpretation_but_not_explicit_source_text():
