@@ -430,6 +430,10 @@ def test_collect_plan_reuses_existing_collection_engine(tmp_path: Path, monkeypa
             "question": "What activity is documented?",
             "known_entities": ["Example Center"],
             "preferred_sources": ["bilibili"],
+            "since": "2026-01-01",
+            "until": "2026-03-01",
+            "languages": ["en"],
+            "excluded_topics": ["private data"],
         }
     )[0]
     plan_path = research_service.create_research_plan({"workspace": str(workspace.root)})[0]
@@ -453,9 +457,17 @@ def test_collect_plan_reuses_existing_collection_engine(tmp_path: Path, monkeypa
             "requirement_file": requirement_path,
             "plan_file": plan_path,
             "sources": ["bilibili"],
+            "since": "2026-02-01",
+            "until": "2026-02-10",
+            "post_languages": ["zh", "en"],
+            "excluded_topics": ["political activity"],
         }
     )
     assert seen["config"]["sources"] == ["bilibili"]
+    assert seen["config"]["since"] == "2026-02-01"
+    assert seen["config"]["until"] == "2026-02-10"
+    assert seen["config"]["post_languages"] == ["zh", "en"]
+    assert seen["config"]["excluded_topics"] == ["political activity"]
     assert outputs[-1].endswith("search-plan.json")
 
 
