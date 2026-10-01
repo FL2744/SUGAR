@@ -1,7 +1,7 @@
 import { api, apiPost, openEventStream } from "./bridge";
 import type {
   ActivityEvent, ConnectionReport, Interpretation, PlanSpec, PlatformRow, ProjectOverview, ProviderProfileRow, ProviderType,
-  CodeRow, CodingSummary, Digest, Monitor, InstitutionCandidate, InstitutionDetail, InstitutionList, NetworkPreview, NetworkRow, OverlapResult, SeedRow, ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
+  BriefResult, CodeRow, CodingSummary, ThemeRow, Digest, Monitor, InstitutionCandidate, InstitutionDetail, InstitutionList, NetworkPreview, NetworkRow, OverlapResult, SeedRow, ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
 } from "./research-types";
 
 const ws = (id: string) => `/api/workspaces/${encodeURIComponent(id)}`;
@@ -78,6 +78,12 @@ export const research = {
   tickMonitors: (id: string) => apiPost<{ started: string[]; digests: string[] }>(`${ws(id)}/research/monitors/tick`, {}),
   digests: (id: string) => api<{ digests: Digest[] }>(`${ws(id)}/research/digests`).then((r) => r.digests),
   checkpointDigest: (id: string) => apiPost<{ digest: Digest }>(`${ws(id)}/research/digests/checkpoint`, {}).then((r) => r.digest),
+  scoreRelevance: (id: string, runId: string, mode: "auto" | "deterministic") => apiPost<{ scored: number; bands: Record<string, number>; model_used: boolean; model_refined: number; warnings: string[] }>(`${ws(id)}/research/analysis/relevance`, { run_id: runId, mode }),
+  applyUnlikely: (id: string, runId: string, author = "") => apiPost<{ marked: number; skipped_already_reviewed: number }>(`${ws(id)}/research/analysis/apply-unlikely`, { run_id: runId, author }),
+  themes: (id: string, runId: string) => api<{ themes: ThemeRow[]; items: number; note: string }>(`${ws(id)}/research/analysis/themes${query({ run_id: runId })}`),
+  brief: (id: string, runId: string, mode: "deterministic" | "auto") => apiPost<BriefResult>(`${ws(id)}/research/brief`, { run_id: runId, mode }),
+  exportProfile: (id: string, withInstitutions: boolean) => api<{ profile: Record<string, unknown> }>(`${ws(id)}/research/profile${query({ institutions: withInstitutions })}`).then((r) => r.profile),
+  applyProfile: (id: string, profile: Record<string, unknown>, includeInstitutions: boolean) => apiPost<{ name: string; applied: string[] }>(`${ws(id)}/research/profile`, { profile, include_institutions: includeInstitutions }),
   geocodeInstitutions: (id: string) => apiPost<{ placed: string[]; failed: Array<{ entity_id: string; reason: string }> }>(`${ws(id)}/research/institutions/geocode`, {}),
   results: (id: string, runId: string, params: Record<string, string | number | boolean | undefined> = {}) => api<ResultsPayload>(`${ws(id)}/runs/${runId}/results${query(params)}`),
   item: (id: string, runId: string, itemId: string) => api<{ item: ResultItem }>(`${ws(id)}/runs/${runId}/items/${itemId}`).then((r) => r.item),

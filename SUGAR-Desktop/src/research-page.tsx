@@ -60,6 +60,40 @@ function FeedsCard({ projectId, saved, savedSites, onSaved, onError }: { project
   );
 }
 
+/** Export this project's method as a file, or apply one from another project (another region, another network). */
+function ProfileCard({ projectId, onApplied, onError }: { projectId: string; onApplied: () => void; onError: (m: string) => void }) {
+  const [withInstitutions, setWithInstitutions] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const exportIt = async () => {
+    setBusy(true); setMsg("");
+    try {
+      const profile = await research.exportProfile(projectId, withInstitutions);
+      const blob = new Blob([JSON.stringify(profile, null, 2)], { type: "application/json" });
+      const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `${String(profile.name || "method").replace(/[^A-Za-z0-9._-]+/g, "-")}.sugar-profile.json`; link.click(); URL.revokeObjectURL(link.href);
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
+  const importIt = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true); setMsg("");
+    try {
+      const done = await research.applyProfile(projectId, JSON.parse(await file.text()), true);
+      setMsg(`Applied “${done.name}”: ${done.applied.join(", ")}. Review the plan before running.`); onApplied();
+    } catch (e) { onError(e instanceof SyntaxError ? "That file is not valid JSON." : e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Collapsible title="Reuse a method (optional)" hint="Export this project's networks, plan, sources and vocabulary, or apply another project's">
+      <p className="footnote">A method profile holds how a study is done, never credentials or collected items. Applying one replaces this project's plan, sources and monitors with the profile's, then you adjust what differs, such as the region.</p>
+      <div className="preview-actions">
+        <button type="button" className="button button-secondary" onClick={() => void exportIt()} disabled={busy}>Export method</button>
+        <label className="check-row"><input type="checkbox" checked={withInstitutions} onChange={(e) => setWithInstitutions(e.target.checked)} /><span>Include institution records</span></label>
+        <label className="button button-secondary file-button">Apply a method file…<input type="file" accept=".json,application/json" className="sr-only" onChange={(e) => { void importIt(e.currentTarget.files?.[0]); e.currentTarget.value = ""; }} aria-label="Method profile file" /></label>
+      </div>
+      {msg && <div className="notice notice-ok" role="status">{msg}</div>}
+    </Collapsible>
+  );
+}
+
 function providerState(p: ProviderProfileRow): { mark: string; text: string } {
   if (!p.has_credential && p.type !== "local") return { mark: "⚠", text: "key missing" };
   if (p.status.state === "ok") return { mark: "✓", text: "connected" };
@@ -326,6 +360,7 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
           <ManualEntry initial={interpretation.request} platforms={platforms} onSubmit={(fields) => void submitManual(fields)} busy={busy === "manual"} />
         </>)}
 
+      {projectId && <ProfileCard projectId={projectId} onApplied={() => void onOverview()} onError={onError} />}
       {projectId && <FeedsCard projectId={projectId} saved={overview?.settings?.rss_feeds || []} savedSites={overview?.settings?.web_seeds || []} onSaved={() => void onOverview()} onError={onError} />}
 
       {plan && <PlanPreview summary={summary} interpretation={interpretation} plan={plan} advanced={advanced} running={busy === "run"} canRun onRun={() => void runNow()}

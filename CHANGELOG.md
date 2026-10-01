@@ -2,7 +2,24 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
-## Unreleased
+## 1.7.0 - 2026-10-01
+
+### Added (institution workflow)
+
+- **Institutions:** collected items become source-backed institution records in the evidence registry. A quote must appear in the item it cites; an analyst can cite an official page directly. Candidates are found in a run by patterns and, optionally, a model (ungrounded suggestions are dropped). Claims are verified, rejected or flagged by a person with a date; duplicates are merged without deleting history; confidence is explainable and says nothing about importance.
+- **Networks and overlap:** import a published directory with a confirmed column mapping; give each network a role (subject or reference); compute nearest-reference distance and shared recorded audiences and programs, stated as computed facts, not findings of influence. Seed lists from Wikidata and OpenStreetMap.
+- **Map:** a main-flow map of networks with status, confidence, program, audience and recency filters, an activity heat style, nearest-reference links, and drill-down to sources.
+- **Activity coding:** audiences, program domains, activity type and reported attendance proposed from each item's own words (multilingual patterns, optionally a model), each with its quote; a person confirms or rejects, and confirmed labels can be added to an institution's record.
+- **Websites and page history:** a polite page reader (robots.txt, one request per second, public addresses only, redirects re-checked) and Internet Archive history that flags pages that stopped responding.
+- **Monitoring:** schedules, a background scheduler that never overlaps runs, and digests of new and changed items and institution-level changes (new, closed, renamed, moved, new activity).
+- **Method profiles:** export and apply a study's method as data (networks, request, plan, vocabulary, sources, relevance terms, starting institutions with sources, monitors); no credentials; study-specific detail stays out of the program.
+- Relevance scoring and themes (library, tested; not yet in the interface).
+
+### Fixed
+
+- Plan Run/Edit bar, phone layout, stale "running" status, per-source incomplete notices, WCAG contrast; macOS/Windows test portability.
+
+## Earlier in this release line
 
 ### Added
 

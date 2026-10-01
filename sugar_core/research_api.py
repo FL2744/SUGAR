@@ -359,7 +359,52 @@ def _profile_routes(method, rest, query, body, wb, project):
     return None
 
 
+def _analysis_routes(method, rest, query, body, wb, project):
+    from . import analysis, brief
+    actor = str(body.get("_author") or "Researcher")
+    try:
+        if rest == "analysis/relevance" and method == "POST":
+            run_id = str(body.get("run_id") or "")
+            items = wb.items(project, run_id)
+            plan = project.load_plan()
+            if plan is None:
+                raise WorkbenchError("This project has no research plan to judge relevance against.", 404)
+            provider = budget = None
+            if str(body.get("mode") or "auto") != "deterministic":
+                provider = wb.resolve_provider(plan, project, profile_id=str(body.get("provider_id") or ""))
+                budget = analysis.LLMBudget(int(body.get("max_calls") or 30))
+            return 200, analysis.score_run(project, items, plan, provider=provider, budget=budget)
+        if rest == "analysis/apply-unlikely" and method == "POST":
+            run_id = str(body.get("run_id") or "")
+            ids = {i.item_id for i in wb.items(project, run_id)}
+            scores = analysis.RelevanceStore(project).latest()
+            reviewed = project.review.state()
+            todo = [iid for iid in ids if scores.get(iid, {}).get("band") == "unlikely" and not reviewed.get(iid, {}).get("verdict")]
+            for iid in todo:
+                project.review.apply(iid, {"kind": "verdict", "verdict": "not_relevant"}, author=actor)
+                project.review.apply(iid, {"kind": "comment", "text": "Marked not relevant in bulk: " + "; ".join(scores[iid].get("reasons", [])[:2])}, author=actor)
+            return 200, {"marked": len(todo), "skipped_already_reviewed": sum(1 for iid in ids if scores.get(iid, {}).get("band") == "unlikely" and reviewed.get(iid, {}).get("verdict"))}
+        if rest == "analysis/themes" and method == "GET":
+            return 200, analysis.themes(wb.items(project, query.get("run_id", "")))
+        if rest == "brief" and method == "POST":
+            run_id = str(body.get("run_id") or "")
+            provider = None
+            if str(body.get("mode") or "deterministic") == "auto":
+                provider = wb.resolve_provider(project=project, profile_id=str(body.get("provider_id") or ""))
+            built = brief.build_brief(wb, project, run_id, provider=provider, title=str(body.get("title") or ""))
+            files = brief.write_brief(project, built["markdown"])
+            project.log("brief_created", {"run_id": run_id, "files": files}, actor=actor)
+            return 200, {**built, "files": files}
+    except KeyError as exc:
+        raise WorkbenchError(str(exc.args[0]) if exc.args else "Not found.", 404) from exc
+    except ValueError as exc:
+        raise WorkbenchError(str(exc)) from exc
+    return None
+
+
 def _research_routes(method, rest, query, body, wb, project):
+    if rest.startswith("analysis/") or rest == "brief":
+        return _analysis_routes(method, rest, query, body, wb, project)
     if rest == "profile":
         return _profile_routes(method, rest, query, body, wb, project)
     if rest.startswith("monitors") or rest.startswith("digests"):
@@ -425,7 +470,7 @@ def _run_routes(method, rest, query, body, wb, project):
     if sub == "results" and method == "GET":
         return 200, wb.results(project, run_id, group_by=query.get("group_by", "none"), text=query.get("q", ""), platform=query.get("platform", ""),
                                language=query.get("language", ""), status=query.get("status", "accepted"), geography=query.get("geography", ""),
-                               translated=query.get("translated", ""), verdict=query.get("verdict", ""), tag=query.get("tag", ""), new_only=_bool(query.get("new_only")), limit=_int(query.get("limit"), 200, 1, 1000),
+                               translated=query.get("translated", ""), verdict=query.get("verdict", ""), tag=query.get("tag", ""), relevance=query.get("relevance", ""), new_only=_bool(query.get("new_only")), limit=_int(query.get("limit"), 200, 1, 1000),
                                offset=_int(query.get("offset"), 0))
     match = re.fullmatch(r"items/(it_[A-Za-z0-9]+)", sub)
     if match and method == "GET":

@@ -84,6 +84,7 @@ export type ResultItem = {
   translation_at: string; geography: string[]; coordinates: Record<string, number>; is_new: boolean; known_from_run: string; run_id: string;
   derived_from: Record<string, string>; engagement: Record<string, unknown>; content_type: string;
   review?: { verdict: string; tags: string[]; comments: number };
+  relevance?: { score: number; band: "likely" | "uncertain" | "unlikely"; reasons: string[]; method: string } | null;
   // detail only
   project_id?: string; native_id?: string; query_dispatched?: string; transformations?: Array<Record<string, any>>;
   evidence_chain?: Array<{ id: string; type: string; parent: string; created_at: string; data: Record<string, any> }>;
@@ -98,6 +99,7 @@ export type ResultsPayload = {
   total: number; all_items: number; group_by: string; groups: Array<{ key: string; count: number; items: ResultItem[] }>; items: ResultItem[];
   facets: Record<string, Array<{ key: string; count: number }>>; duplicates: number; rejected: number; excluded: number;
   review?: ReviewSummary;
+  relevance_bands?: { likely: number; uncertain: number; unlikely: number; unscored: number };
 };
 
 export type TimelineEvent = { event_id: string; event_type: string; occurred_at: string; actor: string; details: Record<string, any> };
@@ -151,3 +153,6 @@ export type Digest = {
   new_items: Array<{ item_id: string; platform: string; url: string; text: string }>; changed_items: Array<{ item_id: string; platform: string; url: string; text: string }>;
   institution_changes: DigestChange[]; incomplete_sources: string[];
 };
+
+export type ThemeRow = { label: string; key: string; count: number; share: number; also: string[]; platforms: Record<string, number>; languages: Record<string, number>; examples: Array<{ item_id: string; url: string; text: string }> };
+export type BriefResult = { markdown: string; title: string; references: string[]; model_summary: boolean; warnings: string[]; files: { markdown: string; docx: string } };

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { downloadWorkspaceFile } from "./bridge";
 import { research } from "./research-api";
-import type { ResultItem, ResultsPayload, RunSummary, Verdict } from "./research-types";
+import type { BriefResult, ResultItem, ResultsPayload, RunSummary, ThemeRow, Verdict } from "./research-types";
 import type { Prefs } from "./prefs";
 import { ItemInspector } from "./item-inspector";
 import { CopyButton, EmptyState, IncompleteNotice, Pill, Segmented, Spinner, StatusPill, VERDICTS, VerdictPill, languageName, platformLabel, relativeTime, titleCase } from "./ui";
@@ -25,6 +25,7 @@ function ItemRow({ item, mode, onInspect, onReview }: { item: ResultItem; mode: 
         {item.status === "rejected" && <Pill tone="warn" title={item.rejection_reason}>Rejected</Pill>}
         {item.is_new && item.known_from_run === "" && <span className="new-dot" title="Not seen in an earlier run" />}
         {item.geography.slice(0, 2).map((g) => <Pill key={g} tone="neutral">{g}</Pill>)}
+        {item.relevance && item.relevance.band !== "likely" && <Pill tone={item.relevance.band === "unlikely" ? "warn" : "neutral"} title={item.relevance.reasons.join("; ")}>{item.relevance.band === "unlikely" ? "Likely off topic" : "Relevance unsure"}</Pill>}
         <VerdictPill verdict={item.review?.verdict || ""} />
         {(item.review?.tags || []).slice(0, 3).map((t) => <span key={t} className="tag-chip">#{t}</span>)}
         {(item.review?.comments || 0) > 0 && <span className="muted" title="Comments on this item">💬 {item.review?.comments}</span>}
@@ -65,6 +66,7 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
   const [translated, setTranslated] = useState("");
   const [verdictFilter, setVerdictFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
+  const [relFilter, setRelFilter] = useState("");
   const [newOnly, setNewOnly] = useState(false);
   const [mode, setMode] = useState<TextMode>("original");
   const [inspect, setInspect] = useState("");
@@ -78,12 +80,12 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
     setLoading(true);
     try {
       const [payload, summary] = await Promise.all([
-        research.results(projectId, runId, { group_by: group, q, platform, language, geography, status, translated, verdict: verdictFilter, tag: tagFilter, new_only: newOnly, limit: 300 }),
+        research.results(projectId, runId, { group_by: group, q, platform, language, geography, status, translated, verdict: verdictFilter, tag: tagFilter, relevance: relFilter, new_only: newOnly, limit: 300 }),
         research.run(projectId, runId),
       ]);
       setData(payload); setRun(summary);
     } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setLoading(false); }
-  }, [projectId, runId, group, q, platform, language, geography, status, translated, verdictFilter, tagFilter, newOnly, onError]);
+  }, [projectId, runId, group, q, platform, language, geography, status, translated, verdictFilter, tagFilter, relFilter, newOnly, onError]);
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), q ? 250 : 0); return () => window.clearTimeout(timer); }, [load, q]);
   useEffect(() => { setExportInfo(null); }, [runId]);
@@ -110,6 +112,28 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
       const r = await research.runCoding(projectId, runId, mode);
       setCodingNote(`Proposed ${r.proposed} labels across ${r.with_codes} of ${r.items} items${r.model_used ? " (patterns and your AI model)" : " (patterns)"}. Open an item's Provenance to confirm or reject them.${r.warnings.length ? " " + r.warnings[0] : ""}`);
     } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
+  };
+
+  const [themes, setThemes] = useState<{ themes: ThemeRow[]; note: string } | null>(null);
+  const [brief, setBrief] = useState<BriefResult | null>(null);
+  const scoreRun = async () => {
+    setBusy("relevance"); setCodingNote("");
+    try {
+      const r = await research.scoreRelevance(projectId, runId, "auto");
+      setCodingNote(`Scored ${r.scored} items: ${r.bands.likely} likely relevant, ${r.bands.uncertain} unsure, ${r.bands.unlikely} likely off topic${r.model_used ? ` (your AI model re-checked ${r.model_refined})` : ""}. Nothing was removed.${r.warnings.length ? " " + r.warnings[0] : ""}`);
+      await load();
+    } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
+  };
+  const markUnlikely = async () => {
+    if (!window.confirm(`Mark the ${data?.relevance_bands?.unlikely ?? 0} items that look off topic as “not relevant”? You can change any of them afterward.`)) return;
+    setBusy("unlikely");
+    try { const r = await research.applyUnlikely(projectId, runId, author); setCodingNote(`Marked ${r.marked} items not relevant${r.skipped_already_reviewed ? `; ${r.skipped_already_reviewed} already had a verdict and were left alone` : ""}.`); await load(); }
+    catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
+  };
+  const showThemes = async () => { setBusy("themes"); try { setThemes(await research.themes(projectId, runId)); } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); } };
+  const makeBrief = async (mode: "deterministic" | "auto") => {
+    setBusy("brief"); setBrief(null);
+    try { setBrief(await research.brief(projectId, runId, mode)); } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
   };
 
   const exportRun = async () => {
@@ -173,6 +197,7 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
         {advanced && <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Status"><option value="accepted">Kept</option><option value="duplicate">Duplicates ({data?.duplicates ?? 0})</option><option value="rejected">Rejected ({data?.rejected ?? 0})</option><option value="excluded">Excluded ({data?.excluded ?? 0})</option><option value="all">Everything</option></select>}
         <select value={verdictFilter} onChange={(event) => setVerdictFilter(event.target.value)} aria-label="Review status"><option value="">Any review status</option><option value="unreviewed">Not yet reviewed</option>{VERDICTS.map((v) => <option key={v.id} value={v.id}>{v.label} ({data?.review?.verdicts[v.id] ?? 0})</option>)}</select>
         {Object.keys(data?.review?.tags || {}).length > 0 && <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} aria-label="Tag"><option value="">Any tag</option>{Object.entries(data?.review?.tags || {}).map(([t, n]) => <option key={t} value={t}>#{t} ({n})</option>)}</select>}
+        {(data?.relevance_bands?.unscored ?? 1) < (data?.all_items ?? 0) && <select value={relFilter} onChange={(event) => setRelFilter(event.target.value)} aria-label="Relevance"><option value="">Any relevance</option><option value="likely">Likely relevant ({data?.relevance_bands?.likely ?? 0})</option><option value="uncertain">Unsure ({data?.relevance_bands?.uncertain ?? 0})</option><option value="unlikely">Likely off topic ({data?.relevance_bands?.unlikely ?? 0})</option></select>}
         {run?.kind === "refresh_sources" && <label className="check-row"><input type="checkbox" checked={newOnly} onChange={(event) => setNewOnly(event.target.checked)} /><span>New since last run</span></label>}
         {(hasTranslations || mode !== "original") && <Segmented label="Text shown" value={mode} onChange={setMode} options={[{ value: "original", label: "Original" }, { value: "translation", label: "Translated" }, { value: "both", label: "Side by side" }]} />}
       </div>
@@ -201,9 +226,18 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
           <button className="button button-secondary" disabled={Boolean(busy)} onClick={() => void operate("refresh_sources")} title="Search again; flag new and changed items">Refresh sources</button>
           <button className="button button-secondary" disabled={Boolean(busy)} onClick={() => void operate("reprocess")} title="Repeat translation and extraction without collecting again">Reprocess results</button>
           <button className="button button-secondary" disabled={Boolean(busy)} onClick={() => void codeRun("auto")} title="Propose audiences, programs and reported attendance from each item, with quotes. You confirm them.">Code activity and audiences</button>
+          <button className="button button-secondary" disabled={Boolean(busy)} onClick={() => void scoreRun()} title="Give each item a relevance score with its reasons. Nothing is removed.">Check relevance</button>
+          {(data?.relevance_bands?.unlikely ?? 0) > 0 && <button className="button button-quiet" disabled={Boolean(busy)} onClick={() => void markUnlikely()}>Mark {data?.relevance_bands?.unlikely} likely off-topic items…</button>}
+          <button className="button button-secondary" disabled={Boolean(busy)} onClick={() => void showThemes()}>Show themes</button>
+          <button className="button button-primary" disabled={Boolean(busy)} onClick={() => void makeBrief("deterministic")} title="A written brief with numbered sources, coverage limits and method">{busy === "brief" ? <Spinner /> : "Create brief"}</button>
           <button className="button button-quiet" onClick={onOpenResearch}>Rebuild plan or reinterpret request…</button>
         </div>
         {codingNote && <div className="notice notice-info" role="status">{codingNote}</div>}
+        {themes && <div className="theme-box"><h4>What the items are about</h4>{themes.themes.length === 0 ? <p className="muted">{themes.note}</p> : <ul className="theme-list">{themes.themes.map((t) => <li key={t.key}><strong>{t.label}</strong> <small className="muted">{t.count} items · {Math.round(t.share * 100)}%</small>{t.examples[0] && <q dir="auto">{t.examples[0].text}</q>}</li>)}</ul>}<small className="muted">{themes.note}</small></div>}
+        {brief && <div className="notice notice-ok export-box" role="status"><strong>Brief ready.</strong> {brief.references.length} numbered sources{brief.model_summary ? ", with a model-assisted summary" : ""}.{brief.warnings.map((w) => <span key={w}> {w}</span>)}
+          <div className="export-files"><button className="button button-secondary button-small" onClick={() => void download(brief.files.docx, "research-brief.docx")}>Word (.docx)</button><button className="button button-secondary button-small" onClick={() => void download(brief.files.markdown, "research-brief.md")}>Markdown</button>
+            <button className="button button-quiet button-small" onClick={() => void makeBrief("auto")} title="Adds a short summary written by your AI model; every sentence must cite a source">Add model-assisted summary</button></div>
+          <details><summary>Preview</summary><pre className="brief-preview">{brief.markdown}</pre></details></div>}
         <p className="muted">Each of these does exactly one thing. See the Research page for details.</p>
       </section>
       {inspect && <ItemInspector projectId={projectId} runId={runId} itemId={inspect} author={author} onClose={() => setInspect("")} />}

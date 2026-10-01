@@ -490,3 +490,8 @@ kbd { padding: 0 .4rem; border: 1px solid var(--wb-line2); border-radius: .3rem;
 .digest-changes { gap: .3rem; } .digest-items { gap: .25rem; padding-left: .5rem; overflow-wrap: anywhere; }
 .section-heading { margin: 1.2rem 0 .3rem; font-size: 1.15rem; color: var(--wb-ink); }
 .monitor-form { margin: .8rem 0; }
+
+.theme-box { padding: .7rem .9rem; border: 1px solid var(--wb-line); border-radius: .6rem; background: var(--wb-card); margin: .6rem 0; }
+.theme-list { list-style: none; margin: .3rem 0; padding: 0; display: grid; gap: .5rem; } .theme-list q { display: block; color: var(--wb-ink2); font-style: italic; overflow-wrap: anywhere; }
+.brief-preview { max-height: 22rem; overflow: auto; white-space: pre-wrap; padding: .7rem; background: var(--wb-soft); border-radius: .4rem; font-size: 1rem; }
+.file-button { cursor: pointer; display: inline-flex; align-items: center; }
