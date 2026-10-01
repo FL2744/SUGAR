@@ -61,6 +61,13 @@ def adapt_for_platform(query: QuerySpec, platform: str, secrets: dict[str, str])
     return query.text, ""
 
 
+def _glossary(plan: ResearchPlanSpec, term: str) -> dict[str, Any] | None:
+    """A glossary entry from the plan's own vocabulary (a method profile can add terms) before the built-in one."""
+    own = (plan.extra or {}).get("glossary") or {}
+    key = " ".join(str(term or "").casefold().split())
+    return own.get(key) or gz.glossary_entry(term)
+
+
 def generate_queries(plan: ResearchPlanSpec, *, available_platforms: list[str] | None = None) -> list[QuerySpec]:
     topic = plan.topic
     seeds = [topic] + [t for t in plan.search_terms if t.casefold() != topic.casefold()]
@@ -92,7 +99,7 @@ def generate_queries(plan: ResearchPlanSpec, *, available_platforms: list[str] |
     limit = {"quick": 0, "standard": 2, "deep": 4}[plan.depth] if not requested else 6
     for code in wanted[:limit]:
         for seed in seeds[:2]:
-            entry = gz.glossary_entry(seed)
+            entry = _glossary(plan, seed)
             if entry and entry.get(code):
                 name = gz.LANGUAGE_NAMES.get(code, code)
                 add(str(entry[code]), origin="generated", language=code,
@@ -104,14 +111,14 @@ def generate_queries(plan: ResearchPlanSpec, *, available_platforms: list[str] |
         if plan.source_scope == "selected" and platform not in plan.platforms:
             continue
         for code in langs:
-            entry = gz.glossary_entry(topic)
+            entry = _glossary(plan, topic)
             if entry and entry.get(code):
                 add(str(entry[code]), origin="generated", language=code, platform=platform,
                     rationale=f"{platform.capitalize()} content is mostly in {gz.LANGUAGE_NAMES.get(code, code)}.")
 
     # 5. synonyms
     for seed in seeds[:2]:
-        entry = gz.glossary_entry(seed)
+        entry = _glossary(plan, seed)
         for synonym in (entry or {}).get("synonyms", []) or []:
             add(f"{synonym} {_quote(geos[0])}" if geos else str(synonym), origin="generated",
                 rationale=f"Synonym of “{seed}”.", geography=geos[0] if geos else "")

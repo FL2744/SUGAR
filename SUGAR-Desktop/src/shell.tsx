@@ -8,6 +8,9 @@ import { AboutPage } from "./about-page";
 import { ActivityView } from "./activity-view";
 import { usePrefs } from "./prefs";
 import { Onboarding } from "./onboarding";
+import { InstitutionsPage } from "./institutions-page";
+import { MapPage } from "./map-page";
+import { MonitoringPage } from "./monitoring-page";
 import { CommandPalette, ShortcutHelp, type Command } from "./command-palette";
 import { ToastHost, type Toast } from "./ui";
 import { ProjectsPage } from "./projects-page";
@@ -19,7 +22,7 @@ import { SettingsPage } from "./settings-page";
 import { TimelinePage } from "./timeline-page";
 import { StatusPill } from "./ui";
 
-type Page = "research" | "activity" | "results" | "projects" | "home" | "project" | "institutions" | "timeline" | "settings" | "about";
+type Page = "research" | "activity" | "results" | "projects" | "network" | "map" | "monitoring" | "home" | "project" | "institutions" | "timeline" | "settings" | "about";
 type ActivityItem = { id: number; time: string; title: string; detail: string; kind: "ok" | "error" | "info" };
 type Dashboard = {
   name?: string;
@@ -71,18 +74,21 @@ const NAV_BASIC: Array<{ id: Page; label: string; icon: string }> = [
   { id: "research", label: "Research", icon: "⌕" },
   { id: "activity", label: "Activity", icon: "↗" },
   { id: "results", label: "Results", icon: "▤" },
+  { id: "network", label: "Institutions", icon: "◈" },
+  { id: "map", label: "Map", icon: "⌖" },
+  { id: "monitoring", label: "Monitoring", icon: "◔" },
   { id: "projects", label: "Projects", icon: "⌂" },
 ];
 // Advanced mode adds the evidence, map, and audit surfaces.
 const NAV_ADVANCED: Array<{ id: Page; label: string; icon: string }> = [
   { id: "home", label: "Overview", icon: "◫" },
   { id: "project", label: "Evidence & handoff", icon: "☷" },
-  { id: "institutions", label: "Institutions & map", icon: "⌖" },
+  { id: "institutions", label: "Reference registry", icon: "☰" },
   { id: "timeline", label: "Project timeline", icon: "◷" },
 ];
 const PAGE_TITLES: Record<Page, string> = {
-  research: "Research", activity: "Activity", results: "Results", projects: "Projects", home: "Overview", project: "Evidence & handoff",
-  institutions: "Institutions & map", timeline: "Project timeline", settings: "Settings", about: "About",
+  research: "Research", activity: "Activity", results: "Results", network: "Institutions", map: "Map", monitoring: "Monitoring", projects: "Projects", home: "Overview", project: "Evidence & handoff",
+  institutions: "Reference registry", timeline: "Project timeline", settings: "Settings", about: "About",
 };
 
 function titleCase(value: string) {
@@ -132,6 +138,7 @@ export function App() {
   const [prefill, setPrefill] = useState<{ text: string; n: number }>({ text: "", n: 0 });
   const [showSetup, setShowSetup] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [openInstitution, setOpenInstitution] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastId = useRef(0);
@@ -474,6 +481,16 @@ export function App() {
       setSelected(null);
       addActivity("Institution registry refreshed", `${data.count ?? data.entities?.length ?? 0} records · ${data.relationships ?? 0} relationships`, "ok");
     }
+  };
+
+  const syncOfficialBaselines = async () => {
+    if (!workspace) { setError("Open or create a project before syncing official institution baselines."); return; }
+    const result = await execute("workspace-hub", { action: "registry-sync-baselines", workspace });
+    const data = result && hubData<Record<string, unknown>>(result.events, "registry-sync-baselines");
+    if (!data) return;
+    const sources = data.sources && typeof data.sources === "object" ? Object.values(data.sources as Record<string, Record<string, unknown>>) : [];
+    await refreshRegistry();
+    addActivity("Official institution baselines synced", sources.map((row) => `${Number(row.normalized_rows || 0)} ${String(row.network || "records")}`).join(" · ") || "No sources", "ok");
   };
 
   const moveInstitution = async (id: string, latitude: number, longitude: number) => {
@@ -1134,6 +1151,9 @@ export function App() {
     { id: "go-research", label: "Go to Research", keywords: "new request interpret", run: () => changePage("research") },
     { id: "go-activity", label: "Go to Activity", keywords: "live run progress", run: () => changePage("activity") },
     { id: "go-results", label: "Go to Results", keywords: "items review", run: () => changePage("results") },
+    { id: "go-network", label: "Go to Institutions", keywords: "registry sources verify", run: () => changePage("network") },
+    { id: "go-map", label: "Go to Map", keywords: "heatmap geography overlap", run: () => changePage("map") },
+    { id: "go-monitoring", label: "Go to Monitoring", keywords: "schedule digest changes watch", run: () => changePage("monitoring") },
     { id: "go-projects", label: "Go to Projects", keywords: "switch open", run: () => changePage("projects") },
     { id: "go-settings", label: "Open Settings", keywords: "providers keys credentials preferences", run: () => changePage("settings") },
     { id: "go-about", label: "About SUGAR", keywords: "credits version", run: () => changePage("about") },
@@ -1208,7 +1228,7 @@ export function App() {
         </section>}
 
         {page === "institutions" && <section className="page-content institutions-page">
-          <div className="page-heading compact-heading"><div><div className="eyebrow">REFERENCE REGISTRY <span className="eyebrow-line" /></div><h1>Institutions, on the map.</h1><p>Inspect locations, status, and sources from this project’s registry.</p></div><div className="heading-actions"><button className="button button-secondary" onClick={() => void importFile()} disabled={!workspace || Boolean(busy)}><span>＋</span> Import dataset</button><button className="button button-primary" onClick={() => void refreshRegistry()} disabled={!workspace || Boolean(busy)}><span>↻</span> Refresh registry</button></div></div>
+          <div className="page-heading compact-heading"><div><div className="eyebrow">REFERENCE REGISTRY <span className="eyebrow-line" /></div><h1>Institutions, on the map.</h1><p>Inspect locations, status, and sources from this project’s registry.</p></div><div className="heading-actions"><button className="button button-secondary" onClick={() => void syncOfficialBaselines()} disabled={!workspace || Boolean(busy)}><span>↧</span> Sync official baselines</button><button className="button button-secondary" onClick={() => void importFile()} disabled={!workspace || Boolean(busy)}><span>＋</span> Import dataset</button><button className="button button-primary" onClick={() => void refreshRegistry()} disabled={!workspace || Boolean(busy)}><span>↻</span> Refresh registry</button></div></div>
           {preview && <div className="import-banner"><div className="import-intro"><div className="section-icon violet">⇧</div><div><strong>Review field mapping before import</strong><p>{datasetFileLabel || datasetFile.split(/[\\/]/).at(-1)} · {preview.row_count ?? "?"} source rows</p></div></div><div className="import-fields"><label className="field-block"><span>Dataset name</span><input value={datasetName} onChange={(event) => setDatasetName(event.target.value)} /></label><label className="field-block"><span>Institution network</span><input value={datasetNetwork} onChange={(event) => setDatasetNetwork(event.target.value)} placeholder="e.g. American Spaces" /></label></div><label className="field-block mapping-field"><span>Canonical field → source column <small>Adjust the suggested mapping where needed.</small></span><textarea className="mapping-text" value={mappingText} onChange={(event) => setMappingText(event.target.value)} rows={5} spellCheck={false} /></label><div className="import-footer"><span>Source: {preview.columns?.join(" · ") || "Detected columns"}</span><div><button className="button button-quiet" onClick={() => setPreview(null)}>Cancel</button><button className="button button-primary" onClick={() => void commitImport()} disabled={Boolean(busy)}>Import mapped records <span>→</span></button></div></div></div>}
           {datasetFile && !preview && <div className="pending-import"><span><strong>Dataset selected</strong> · {datasetFileLabel || datasetFile.split(/[\\/]/).at(-1)}</span><div><button className="button button-quiet" onClick={() => { setDatasetFile(""); setDatasetFileLabel(""); }}>Cancel</button><button className="button button-primary" onClick={() => void previewImport()} disabled={Boolean(busy)}>Preview field mapping <span>→</span></button></div></div>}
           <div className="registry-toolbar"><div className="search-field"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search institution, place, or network" /></div><label className="select-wrap"><span className="sr-only">Filter by network</span><select value={network} onChange={(event) => setNetwork(event.target.value)}>{networks.map((item) => <option key={item}>{item}</option>)}</select><b>⌄</b></label><label className="select-wrap"><span className="sr-only">Filter by status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{["All statuses", "active", "closed", "proposed", "unknown"].map((item) => <option key={item}>{item}</option>)}</select><b>⌄</b></label><span className="registry-total"><strong>{filteredRows.length}</strong> of {registry.length}</span></div>
@@ -1219,6 +1239,9 @@ export function App() {
         {page === "research" && <ResearchPage prefill={prefill} projectId={projectId} projectName={projectName} prefs={prefs} overview={overview} onOverview={() => refreshOverview(projectId)} ensureProject={ensureProject} onRunStarted={handleRunStarted} onOpenSettings={() => changePage("settings")} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onError={setError} />}
         {page === "activity" && <ActivityView onRunSettled={(finished) => { void refreshOverview(projectId); const kept = finished.counts?.processed ?? finished.counts?.collected ?? 0; if (finished.status === "failed") notify("The run could not finish. Open Activity for details.", "warn"); else if (finished.status === "cancelled") notify(`Run cancelled — ${kept} items kept.`, "info"); else notify(`Run finished — ${kept} item${kept === 1 ? "" : "s"} kept${finished.status === "completed_with_warnings" ? ", with some sources incomplete" : ""}.`, finished.status === "completed" ? "ok" : "warn", { label: "View results", run: () => changePage("results") }); }} projectId={projectId} runId={runId} prefs={prefs} author={author} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onNewRun={() => changePage("research")} onOpenSettings={() => changePage("settings")} onRunStarted={handleRunStarted} onError={setError} />}
         {page === "results" && <ResultsView projectId={projectId} runId={runId || overview?.runs[0]?.run_id || ""} runs={overview?.runs || []} prefs={prefs} author={author} projectPath={workspace.startsWith("sugar-workspace://") ? "" : workspace} onSelectRun={setRunId} onOpenActivity={(id) => { setRunId(id); changePage("activity"); }} onOpenResearch={() => changePage("research")} onRunStarted={handleRunStarted} onError={setError} />}
+        {page === "network" && <InstitutionsPage projectId={projectId} runs={overview?.runs || []} author={author} onError={setError} onOpenMap={() => changePage("map")} openId={openInstitution} onOpened={() => setOpenInstitution("")} />}
+        {page === "map" && <MapPage projectId={projectId} dark={prefs.theme === "dark"} onOpenInstitutions={() => changePage("network")} onOpenRecord={(id) => { setOpenInstitution(id); changePage("network"); }} />}
+        {page === "monitoring" && <MonitoringPage projectId={projectId} onError={setError} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onOpenRecord={(id) => { setOpenInstitution(id); changePage("network"); }} />}
         {page === "projects" && <ProjectsPage projects={projects} currentId={projectId} loading={projectsLoading} advanced={prefs.mode === "advanced"} createSignal={createSignal} onOpen={openProject} onCreate={async (name, question) => { await createProject(name, question); }} onOpenFolder={() => void openFolder()} onRefresh={() => void loadProjects()} />}
         {page === "timeline" && <TimelinePage projectId={projectId} refreshKey={timelineKey} />}
         {page === "about" && <AboutPage version="1.4" engineVersion={engineVersion} />}

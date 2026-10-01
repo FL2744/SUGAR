@@ -2,7 +2,24 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
-## Unreleased
+## 1.7.0 - 2026-10-01
+
+### Added (institution workflow)
+
+- **Institutions:** collected items become source-backed institution records in the evidence registry. A quote must appear in the item it cites; an analyst can cite an official page directly. Candidates are found in a run by patterns and, optionally, a model (ungrounded suggestions are dropped). Claims are verified, rejected or flagged by a person with a date; duplicates are merged without deleting history; confidence is explainable and says nothing about importance.
+- **Networks and overlap:** import a published directory with a confirmed column mapping; give each network a role (subject or reference); compute nearest-reference distance and shared recorded audiences and programs, stated as computed facts, not findings of influence. Seed lists from Wikidata and OpenStreetMap.
+- **Map:** a main-flow map of networks with status, confidence, program, audience and recency filters, an activity heat style, nearest-reference links, and drill-down to sources.
+- **Activity coding:** audiences, program domains, activity type and reported attendance proposed from each item's own words (multilingual patterns, optionally a model), each with its quote; a person confirms or rejects, and confirmed labels can be added to an institution's record.
+- **Websites and page history:** a polite page reader (robots.txt, one request per second, public addresses only, redirects re-checked) and Internet Archive history that flags pages that stopped responding.
+- **Monitoring:** schedules, a background scheduler that never overlaps runs, and digests of new and changed items and institution-level changes (new, closed, renamed, moved, new activity).
+- **Method profiles:** export and apply a study's method as data (networks, request, plan, vocabulary, sources, relevance terms, starting institutions with sources, monitors); no credentials; study-specific detail stays out of the program.
+- Relevance scoring and themes (library, tested; not yet in the interface).
+
+### Fixed
+
+- Plan Run/Edit bar, phone layout, stale "running" status, per-source incomplete notices, WCAG contrast; macOS/Windows test portability.
+
+## Earlier in this release line
 
 ### Added
 
@@ -22,6 +39,13 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - **Explicit AI model choice** on the Research page (OpenAI, Virginia Tech ARC, or no AI) carried into the plan and run; an unusable choice warns and never falls back to another provider.
 - **Soft per-run model-call budget** (default 500, 0 = unlimited): when spent, optional translation pauses with one notice; collection and the run are never failed or blocked.
 - Command palette (Ctrl/⌘+K), keyboard-shortcut help (?), and completion toasts.
+- **Institution workflow:** institutions as source-backed records (claims with evidence, human verification with reviewer and date, merge, explainable confidence); candidates found in a run with quoted sentences; geocoding; Internet Archive page history for closure and rename leads.
+- **Websites as a source:** a polite, SSRF-safe page reader that follows news and event pages (robots.txt honoured).
+- **Networks and overlap:** roles (subject/reference), directory import with confirmed column mapping, Wikidata and OpenStreetMap seeds, nearest-reference distances and shared recorded audiences, with the standing caution that these are computed facts.
+- **Map page** with network layers, status, confidence and recency filters, activity heat, nearest-reference links and drill-down to sources; list view for the same data.
+- **Activity coding:** audiences, programs, activity types and reported attendance proposed with quotes (multilingual patterns, optional model), confirmed by a person, applied to institutions with citations.
+- **Monitoring:** schedules, a background scheduler, institution-level change detection and digests.
+- **Analysis:** relevance scoring with reasons and a reviewed bulk action, themes, and a grounded brief (Markdown and Word) with numbered sources, coverage limits and method; method profiles to reuse a study's method; an accuracy check against a human-labeled sample.
 
 ### Changed
 
@@ -34,6 +58,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Collection and workflow
 
+- add baseline sync: published institution directories described by run-time baseline packs are fetched, snapshotted (raw + normalized), and bulk-imported with stable IDs and provenance; study-specific names live in packs, not code;
 - retry anonymous Bluesky searches against Bluesky's public AppView when its cached public hostname returns 403; preserve collected first-page records when a later page fails;
 - support explicit public Mastodon `#hashtag` timelines without a search token, with separate provenance from authorized keyword search;
 - restore live collection outputs in the desktop evidence panel, and allow known public Bilibili videos, Weibo posts, and WeChat articles to enter the evidence workflow by URL;
@@ -42,6 +67,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Live verification
 
+- fetched and imported live official directories into a clean workspace through baseline packs, retaining provider coordinates where published;
 - collected and saved real Bluesky and Mastodon posts, completed a research plan using both, and triaged live posts into insight artifacts;
 - ingested and triaged real Bilibili video and Weibo post URLs; generated analysis and maps from live, location-enriched X and Mastodon records;
 - Weibo and Bilibili keyword search still face provider login/access challenges in this environment. WeChat article retrieval encountered a TLS hostname mismatch and remains unavailable here; SUGAR does not disable certificate verification.

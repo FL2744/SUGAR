@@ -29,7 +29,7 @@ COLLECTION_MODES = ("discovery", "targeted", "monitoring")
 SOURCE_SCOPES = ("all_enabled", "selected")
 TRANSLATION_POLICIES = ("auto", "always", "never")
 REFRESH_MODES = ("manual", "scheduled", "watch")
-SOURCE_CATEGORIES = ("social_media", "microblog", "video", "forum", "news", "reference", "scholarly")
+SOURCE_CATEGORIES = ("social_media", "microblog", "video", "forum", "news", "reference", "scholarly", "web")
 
 # Documented defaults (section 8: optional unspecified fields receive documented defaults).
 DEPTH_PRESETS: dict[str, dict[str, int]] = {
@@ -62,6 +62,7 @@ _PLATFORM_ALIASES = {
     "gdelt": "gdelt", "news": "gdelt", "news coverage": "gdelt", "gdelt news": "gdelt",
     "openalex": "openalex", "scholarly": "openalex", "academic": "openalex", "scholarship": "openalex", "papers": "openalex",
     "rss": "rss", "feeds": "rss", "rss feeds": "rss", "atom": "rss",
+    "web": "web", "websites": "web", "website": "web", "web pages": "web", "webpages": "web", "sites": "web",
 }
 # Platforms people commonly name that SUGAR has no collector for; reported, never silently dropped.
 KNOWN_UNSUPPORTED_PLATFORMS = {
@@ -72,7 +73,7 @@ KNOWN_UNSUPPORTED_PLATFORMS = {
 PLATFORM_CATEGORIES = {
     "x": "microblog", "bluesky": "microblog", "mastodon": "microblog",
     "weibo": "microblog", "bilibili": "video", "wechat": "social_media",
-    "wikipedia": "reference", "gdelt": "news", "rss": "news", "openalex": "scholarly",
+    "wikipedia": "reference", "gdelt": "news", "rss": "news", "openalex": "scholarly", "web": "web",
 }
 
 

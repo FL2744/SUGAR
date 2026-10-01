@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { research } from "./research-api";
-import type { ResultItem, ReviewState, Verdict } from "./research-types";
+import type { CodeRow, Institution, ResultItem, ReviewState, Verdict } from "./research-types";
 import { Pill, Spinner, VERDICTS, formatTime, languageName, platformLabel, titleCase } from "./ui";
 
 const CHAIN_LABELS: Record<string, string> = {
@@ -16,6 +16,14 @@ export function ItemInspector({ projectId, runId, itemId, author, onClose }: { p
   const [comment, setComment] = useState("");
   const [tag, setTag] = useState("");
   const [reviewError, setReviewError] = useState("");
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
+  const [linkTo, setLinkTo] = useState("");
+  const [newName, setNewName] = useState("");
+  const [quote, setQuote] = useState("");
+  const [linkMsg, setLinkMsg] = useState("");
+  const [codes, setCodes] = useState<CodeRow[]>([]);
+  const [applyTo, setApplyTo] = useState("");
+  const [codeMsg, setCodeMsg] = useState("");
   useEffect(() => {
     let active = true;
     setItem(null); setError(""); setReview(null); setReviewError("");
@@ -23,6 +31,27 @@ export function ItemInspector({ projectId, runId, itemId, author, onClose }: { p
     return () => { active = false; };
   }, [projectId, runId, itemId]);
 
+  useEffect(() => { void research.institutions(projectId).then((r) => setInstitutions(r.institutions)).catch(() => undefined); }, [projectId]);
+  useEffect(() => { void research.coding(projectId, itemId).then(setCodes).catch(() => undefined); }, [projectId, itemId]);
+  const decideCode = async (code: CodeRow, decision: "confirm" | "reject") => {
+    setCodeMsg("");
+    try { setCodes(await research.decideCode(projectId, itemId, runId, code.field, code.label, decision, "", author)); }
+    catch (issue) { setCodeMsg(issue instanceof Error ? issue.message : String(issue)); }
+  };
+  const applyCodes = async () => {
+    try { const r = await research.applyCodes(projectId, runId, itemId, applyTo, author); setCodeMsg(`Added ${r.applied.length} confirmed label${r.applied.length === 1 ? "" : "s"} to the institution, each citing this item.`); }
+    catch (issue) { setCodeMsg(issue instanceof Error ? issue.message : String(issue)); }
+  };
+  const link = async () => {
+    setLinkMsg("");
+    try {
+      const existing = institutions.find((i) => i.entity_id === linkTo);
+      const saved = await research.recordInstitution(projectId, { values: { name: existing ? existing.name : newName.trim() }, entity_id: existing?.entity_id,
+        evidence: [{ run_id: runId, item_id: itemId, quote: quote.trim() }], author });
+      setLinkMsg(`Linked to ${saved.name}.`); setQuote(""); setNewName("");
+      setInstitutions((await research.institutions(projectId)).institutions);
+    } catch (issue) { setLinkMsg(issue instanceof Error ? issue.message : String(issue)); }
+  };
   const act = async (action: Record<string, unknown>) => {
     setReviewError("");
     try { setReview((await research.postReview(projectId, itemId, action, author)).review); }
@@ -71,6 +100,28 @@ export function ItemInspector({ projectId, runId, itemId, author, onClose }: { p
                 <button className="button button-secondary button-small" disabled={!comment.trim()} onClick={() => { void act({ kind: "comment", text: comment }); setComment(""); }}>Comment</button></div>
               {reviewError && <div className="inline-error" role="alert">{reviewError}</div>}
             </div>
+            <div className="inspector-section"><span className="eyebrow">USE AS EVIDENCE FOR AN INSTITUTION</span>
+              <div className="note-add">
+                <select value={linkTo} onChange={(e) => setLinkTo(e.target.value)} aria-label="Institution">
+                  <option value="">New institution…</option>{institutions.map((i) => <option key={i.entity_id} value={i.entity_id}>{i.name}{i.city ? ` · ${i.city}` : ""}</option>)}</select>
+                {!linkTo && <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Institution name" aria-label="New institution name" />}
+                <input value={quote} onChange={(e) => setQuote(e.target.value)} placeholder="Exact words from this item (optional)" aria-label="Quote from the item" />
+                <button className="button button-secondary button-small" disabled={!linkTo && !newName.trim()} onClick={() => void link()}>Link</button></div>
+              {linkMsg && <small className="muted" role="status">{linkMsg}</small>}
+              <small className="muted">The quote must appear in this item. Verify the claims on the Institutions page.</small></div>
+            {codes.length > 0 && <div className="inspector-section"><span className="eyebrow">WHAT THIS ITEM SUGGESTS (PROPOSED — CONFIRM OR REJECT)</span>
+              <ul className="code-list">{codes.filter((c) => c.status !== "rejected").map((c) => (
+                <li key={`${c.field}:${c.label}`} className={c.status}>
+                  <div><strong>{c.field === "attendance" ? `Reported attendance: ${Number(c.label).toLocaleString()}` : `${titleCase(c.field.replace("_", " "))}: ${titleCase(c.label)}`}</strong>
+                    {c.status === "confirmed" ? <Pill tone="ok">Confirmed{c.decided_by ? ` by ${c.decided_by}` : ""}</Pill> : <Pill>Proposed · {c.methods.join(" + ") || "pattern"}</Pill>}
+                    {c.quote && <q dir="auto">{c.quote}</q>}</div>
+                  {c.status !== "confirmed" && <div className="claim-actions"><button className="button button-secondary button-small" onClick={() => void decideCode(c, "confirm")}>✓ Confirm</button><button className="button button-quiet button-small" onClick={() => void decideCode(c, "reject")}>✕ Reject</button></div>}
+                </li>))}</ul>
+              {codes.some((c) => c.status === "confirmed" && (c.field === "audience" || c.field === "program")) && <div className="note-add">
+                <select value={applyTo} onChange={(e) => setApplyTo(e.target.value)} aria-label="Institution to add the confirmed labels to"><option value="">Add confirmed labels to an institution…</option>{institutions.map((i) => <option key={i.entity_id} value={i.entity_id}>{i.name}</option>)}</select>
+                <button className="button button-secondary button-small" disabled={!applyTo} onClick={() => void applyCodes()}>Add</button></div>}
+              {codeMsg && <small className="muted" role="status">{codeMsg}</small>}
+              <small className="muted">Proposals come from the item's own words. Attendance is as reported by the source, not verified.</small></div>}
             <div className="inspector-section"><span className="eyebrow">ORIGINAL</span><p className="item-text" dir="auto">{item.original_text}</p>
               {item.url && <a className="source-link" href={item.url} target="_blank" rel="noreferrer"><span className="source-icon">↗</span><span><strong>Open the original</strong><small>{item.url}</small></span></a>}</div>
             {item.translated_text && <div className="inspector-section"><span className="eyebrow">TRANSLATION</span><p className="item-text" dir="auto">{item.translated_text}</p>

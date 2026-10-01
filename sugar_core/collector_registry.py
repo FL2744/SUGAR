@@ -19,6 +19,7 @@ from .collectors import (
 )
 from .models import PostRecord
 from .open_sources import collect_gdelt, collect_openalex, collect_rss, collect_wikipedia
+from .web_sources import collect_web
 from .paged_collectors import collect_bilibili_page_range, collect_weibo_page_range
 from .weibo import collect_weibo_comments, collect_weibo_public, fetch_weibo_status
 from .wechat import fetch_wechat_article
@@ -146,6 +147,10 @@ def _collect_openalex(request: CollectorRequest) -> list[PostRecord]:
 
 def _collect_rss(request: CollectorRequest) -> list[PostRecord]:
     return collect_rss(feeds=request.config.get("rss_feeds") or [], **_common(request))
+
+
+def _collect_web_pages(request: CollectorRequest) -> list[PostRecord]:
+    return collect_web(seeds=request.config.get("web_seeds") or [], **_common(request))
 
 
 def _set_thread_root(record: PostRecord, conversation_id: str | None = None) -> PostRecord:
@@ -287,6 +292,11 @@ def _fetch_wechat(identifier: str, request: CollectorRequest) -> PostRecord:
 
 
 COLLECTORS: dict[str, CollectorSpec] = {
+    "web": CollectorSpec(
+        name="web", search=_collect_web_pages, enabled_by="web_seeds",
+        capabilities=CollectorCapabilities(keyword_search=True, anonymous_search=True),
+        description="Public web pages on sites you name, plus their news and event pages. Respects robots.txt; public addresses only.",
+    ),
     "wikipedia": CollectorSpec(
         name="wikipedia", search=_collect_wikipedia,
         capabilities=CollectorCapabilities(keyword_search=True, anonymous_search=True),

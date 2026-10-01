@@ -1,7 +1,7 @@
 import { api, apiPost, openEventStream } from "./bridge";
 import type {
   ActivityEvent, ConnectionReport, Interpretation, PlanSpec, PlatformRow, ProjectOverview, ProviderProfileRow, ProviderType,
-  ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
+  AccuracyReport, BriefResult, CodeRow, CodingSummary, ThemeRow, Digest, Monitor, InstitutionCandidate, InstitutionDetail, InstitutionList, NetworkPreview, NetworkRow, OverlapResult, SeedRow, ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
 } from "./research-types";
 
 const ws = (id: string) => `/api/workspaces/${encodeURIComponent(id)}`;
@@ -47,6 +47,46 @@ export const research = {
   review: (id: string, itemId: string) => api<{ item_id: string; review: ReviewState }>(`${ws(id)}/research/review${query({ item_id: itemId })}`),
   postReview: (id: string, itemId: string, action: Record<string, unknown>, author = "") =>
     apiPost<{ item_id: string; review: ReviewState; summary: ReviewSummary }>(`${ws(id)}/research/review`, { item_id: itemId, author, ...action }),
+  institutions: (id: string, params: Record<string, string | number | boolean | undefined> = {}) => api<InstitutionList>(`${ws(id)}/research/institutions${query(params)}`),
+  institution: (id: string, entityId: string) => api<{ institution: InstitutionDetail }>(`${ws(id)}/research/institutions/${encodeURIComponent(entityId)}`).then((r) => r.institution),
+  recordInstitution: (id: string, body: { values: Record<string, unknown>; evidence: Array<Record<string, unknown>>; entity_id?: string; author?: string }) =>
+    apiPost<{ institution: InstitutionDetail }>(`${ws(id)}/research/institutions`, body).then((r) => r.institution),
+  reviewClaim: (id: string, entityId: string, claimId: string, state: string, note = "", author = "") =>
+    apiPost<{ institution: InstitutionDetail }>(`${ws(id)}/research/institutions/${encodeURIComponent(entityId)}/review`, { claim_id: claimId, state, note, author }).then((r) => r.institution),
+  mergeInstitutions: (id: string, keepId: string, dropId: string, reason = "", author = "") =>
+    apiPost<{ institution: InstitutionDetail }>(`${ws(id)}/research/institutions/${encodeURIComponent(keepId)}/merge`, { drop_id: dropId, reason, author }).then((r) => r.institution),
+  institutionCandidates: (id: string, runId: string, mode: "auto" | "deterministic") =>
+    apiPost<{ candidates: InstitutionCandidate[]; warnings: string[]; scanned: number; model_used: boolean }>(`${ws(id)}/research/institutions/candidates`, { run_id: runId, mode }),
+  institutionHistory: (id: string, entityId: string) => apiPost<{ pages: Array<{ url: string; signals: string[]; total: number; first_seen: string; last_ok: string; snapshots: Array<{ captured_at: string; status: string; archive_url: string }> }>; errors: Array<{ url: string; reason: string }>; note: string }>(`${ws(id)}/research/institutions/${encodeURIComponent(entityId)}/history`, {}),
+  networks: (id: string) => api<{ networks: NetworkRow[] }>(`${ws(id)}/research/networks`).then((r) => r.networks),
+  setNetwork: (id: string, name: string, role: "subject" | "reference", label = "") => apiPost<{ networks: NetworkRow[] }>(`${ws(id)}/research/networks`, { name, role, label }).then((r) => r.networks),
+  previewNetworkFile: (id: string, filename: string, contentBase64: string) => apiPost<NetworkPreview>(`${ws(id)}/research/networks/preview`, { filename, content_base64: contentBase64 }),
+  importNetworkFile: (id: string, body: Record<string, unknown>) => apiPost<Record<string, unknown>>(`${ws(id)}/research/networks/import`, body),
+  seedSearch: (id: string, source: "wikidata" | "osm", queryText: string, countryCode = "") => apiPost<{ rows: SeedRow[] }>(`${ws(id)}/research/networks/seed`, { source, query: queryText, country_code: countryCode }).then((r) => r.rows),
+  seedImport: (id: string, rows: SeedRow[], network: string, role: "subject" | "reference") => apiPost<{ imported: string[]; skipped: number }>(`${ws(id)}/research/networks/seed/import`, { rows, network, role }),
+  overlap: (id: string, params: Record<string, string | number | boolean | undefined>) => api<OverlapResult>(`${ws(id)}/research/overlap${query(params)}`),
+  coding: (id: string, itemId: string) => api<{ codes: CodeRow[] }>(`${ws(id)}/research/coding${query({ item_id: itemId })}`).then((r) => r.codes),
+  codingSummary: (id: string, runId: string) => api<CodingSummary>(`${ws(id)}/research/coding${query({ run_id: runId })}`),
+  runCoding: (id: string, runId: string, mode: "auto" | "deterministic") => apiPost<{ items: number; proposed: number; with_codes: number; model_used: boolean; warnings: string[] }>(`${ws(id)}/research/coding/run`, { run_id: runId, mode }),
+  decideCode: (id: string, itemId: string, runId: string, field: string, label: string, decision: "confirm" | "reject", quote = "", author = "") =>
+    apiPost<{ codes: CodeRow[] }>(`${ws(id)}/research/coding/decide`, { item_id: itemId, run_id: runId, field, label, decision, quote, author }).then((r) => r.codes),
+  applyCodes: (id: string, runId: string, itemId: string, entityId: string, author = "") => apiPost<{ applied: string[] }>(`${ws(id)}/research/coding/apply`, { run_id: runId, item_id: itemId, entity_id: entityId, author }),
+  monitors: (id: string) => api<{ monitors: Monitor[]; cadences_hours: number[] }>(`${ws(id)}/research/monitors`),
+  saveMonitor: (id: string, body: Record<string, unknown>) => apiPost<{ monitor: Monitor; monitors: Monitor[] }>(`${ws(id)}/research/monitors`, body),
+  deleteMonitor: (id: string, monitorId: string) => apiPost<{ monitors: Monitor[] }>(`${ws(id)}/research/monitors`, { id: monitorId, delete: true }),
+  runMonitor: (id: string, monitorId: string) => apiPost<{ run_id: string; kind: string }>(`${ws(id)}/research/monitors/run`, { id: monitorId }),
+  tickMonitors: (id: string) => apiPost<{ started: string[]; digests: string[] }>(`${ws(id)}/research/monitors/tick`, {}),
+  digests: (id: string) => api<{ digests: Digest[] }>(`${ws(id)}/research/digests`).then((r) => r.digests),
+  checkpointDigest: (id: string) => apiPost<{ digest: Digest }>(`${ws(id)}/research/digests/checkpoint`, {}).then((r) => r.digest),
+  scoreRelevance: (id: string, runId: string, mode: "auto" | "deterministic") => apiPost<{ scored: number; bands: Record<string, number>; model_used: boolean; model_refined: number; warnings: string[] }>(`${ws(id)}/research/analysis/relevance`, { run_id: runId, mode }),
+  applyUnlikely: (id: string, runId: string, author = "") => apiPost<{ marked: number; skipped_already_reviewed: number }>(`${ws(id)}/research/analysis/apply-unlikely`, { run_id: runId, author }),
+  themes: (id: string, runId: string) => api<{ themes: ThemeRow[]; items: number; note: string }>(`${ws(id)}/research/analysis/themes${query({ run_id: runId })}`),
+  brief: (id: string, runId: string, mode: "deterministic" | "auto") => apiPost<BriefResult>(`${ws(id)}/research/brief`, { run_id: runId, mode }),
+  exportProfile: (id: string, withInstitutions: boolean) => api<{ profile: Record<string, unknown> }>(`${ws(id)}/research/profile${query({ institutions: withInstitutions })}`).then((r) => r.profile),
+  applyProfile: (id: string, profile: Record<string, unknown>, includeInstitutions: boolean) => apiPost<{ name: string; applied: string[] }>(`${ws(id)}/research/profile`, { profile, include_institutions: includeInstitutions }),
+  accuracySample: (id: string, runId: string, n = 60) => api<{ csv: string }>(`${ws(id)}/research/analysis/sample${query({ run_id: runId, n })}`).then((r) => r.csv),
+  accuracyScore: (id: string, runId: string, labelsCsv: string) => apiPost<AccuracyReport>(`${ws(id)}/research/analysis/evaluate`, { run_id: runId, labels_csv: labelsCsv }),
+  geocodeInstitutions: (id: string) => apiPost<{ placed: string[]; failed: Array<{ entity_id: string; reason: string }> }>(`${ws(id)}/research/institutions/geocode`, {}),
   results: (id: string, runId: string, params: Record<string, string | number | boolean | undefined> = {}) => api<ResultsPayload>(`${ws(id)}/runs/${runId}/results${query(params)}`),
   item: (id: string, runId: string, itemId: string) => api<{ item: ResultItem }>(`${ws(id)}/runs/${runId}/items/${itemId}`).then((r) => r.item),
   exportRun: (id: string, runId: string) => apiPost<{ archive: string; directory: string; files: string[] }>(`${ws(id)}/runs/${runId}/export`),

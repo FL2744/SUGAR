@@ -22,6 +22,7 @@ from .listening_posts import (
     set_monitor_status,
 )
 from .mapping import MapOptions, ReferenceLayer, create_map, load_map_frame
+from .baseline_sources import load_specs, sync_baselines
 from .project_bundle import export_project_bundle, import_project_bundle
 from .reference_registry import (
     add_relationship,
@@ -747,6 +748,14 @@ def run_workspace_hub(
             review_state=str(config.get("review_state") or "unreviewed"),
             accept_partial=bool(config.get("accept_partial", False)),
         )
+        return _event_result(progress, action, result)
+
+    if action == "registry-sync-baselines":
+        requested = config.get("sources") or None
+        if isinstance(requested, str):
+            requested = [item.strip() for item in requested.split(",") if item.strip()]
+        result = sync_baselines(workspace, load_specs(workspace), requested, timeout=float(config.get("timeout") or 30.0),
+                                actor=str(config.get("actor") or "baseline-sync"))
         return _event_result(progress, action, result)
 
     if action == "registry-upsert":

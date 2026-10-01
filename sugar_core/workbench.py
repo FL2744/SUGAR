@@ -15,6 +15,7 @@ Rerun                execute the previous plan again, exactly as recorded
 from __future__ import annotations
 
 import copy
+from collections import Counter
 import threading
 import time
 from datetime import date
@@ -35,7 +36,7 @@ from .research_runs import TERMINAL_STATUSES, ResearchProject
 from .workspace import SugarWorkspace
 
 PLATFORM_LABELS = {"x": "X (Twitter)", "bluesky": "Bluesky", "mastodon": "Mastodon", "bilibili": "Bilibili", "weibo": "Weibo", "wechat": "WeChat",
-                   "wikipedia": "Wikipedia", "gdelt": "News (GDELT)", "openalex": "Scholarly (OpenAlex)", "rss": "News & institution feeds"}
+                   "wikipedia": "Wikipedia", "gdelt": "News (GDELT)", "openalex": "Scholarly (OpenAlex)", "rss": "News & institution feeds", "web": "Websites"}
 PLATFORM_SECRET_HELP = {
     "x": [("x_bearer_token", "X bearer token", True)],
     "bluesky": [("bluesky_identifier", "Bluesky identifier (optional)", False), ("bluesky_app_password", "Bluesky app password (optional)", False)],
@@ -263,7 +264,8 @@ class ResearchWorkbench:
         settings = project.meta().get("settings") or {}
         pipeline = ResearchPipeline(project, run, plan, secrets=self.platform_secrets(secret_overrides), provider=provider, registry=self.registry,
                                     enabled_sources=settings.get("enabled_sources") or None, known_items=known, source_items=source_items,
-                                    extra_config={"rss_feeds": [f for f in (settings.get("rss_feeds") or []) if isinstance(f, str)]},
+                                    extra_config={"rss_feeds": [f for f in (settings.get("rss_feeds") or []) if isinstance(f, str)],
+                                                  "web_seeds": [f for f in (settings.get("web_seeds") or []) if isinstance(f, str)]},
                                     **({"sleeper": self.sleeper} if self.sleeper else {}))
         with self._lock:
             self._live[(project.project_id, run.run_id)] = pipeline
@@ -374,13 +376,17 @@ class ResearchWorkbench:
             raise WorkbenchError("Run not found.", 404)
         return project.load_items(run_id)
 
-    def results(self, project: ResearchProject, run_id: str, *, verdict: str = "", tag: str = "", **filters: Any) -> dict[str, Any]:
+    def results(self, project: ResearchProject, run_id: str, *, verdict: str = "", tag: str = "", relevance: str = "", **filters: Any) -> dict[str, Any]:
         items = all_items = self.items(project, run_id)
         review = project.review.state()
         if verdict:
             items = [i for i in items if (review.get(i.item_id, {}).get("verdict", "") or "unreviewed") == verdict]
         if tag:
             items = [i for i in items if tag.casefold() in review.get(i.item_id, {}).get("tags", [])]
+        from .analysis import RelevanceStore
+        scores = RelevanceStore(project).latest()
+        if relevance:
+            items = [i for i in items if scores.get(i.item_id, {}).get("band", "unscored") == relevance]
         try:
             result = query_items(items, **filters)
         except ValueError as exc:
@@ -389,7 +395,11 @@ class ResearchWorkbench:
         for row in rows:
             state = review.get(row["item_id"])
             row["review"] = {"verdict": state["verdict"], "tags": state["tags"], "comments": len(state["comments"])} if state else {"verdict": "", "tags": [], "comments": 0}
+            score = scores.get(row["item_id"])
+            row["relevance"] = {"score": score["score"], "band": score["band"], "reasons": score.get("reasons", []), "method": score.get("method", "")} if score else None
         result["review"] = project.review.summary({i.item_id for i in all_items})
+        bands = Counter(scores[i.item_id]["band"] for i in all_items if i.item_id in scores)
+        result["relevance_bands"] = {"likely": bands.get("likely", 0), "uncertain": bands.get("uncertain", 0), "unlikely": bands.get("unlikely", 0), "unscored": len(all_items) - sum(bands.values())}
         return result
 
     def item_detail(self, project: ResearchProject, run_id: str, item_id: str) -> dict[str, Any]:

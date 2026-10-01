@@ -483,10 +483,10 @@ class SugarApiHandler(BaseHTTPRequestHandler):
         """Minimum project role for a workbench route (reads: viewer; changing plans/runs: analyst; settings: owner)."""
         if method == "GET":
             return "viewer"
-        if area == "research" and rest == "settings":
+        if area == "research" and rest in {"settings", "profile"}:
             return "owner"
-        if area == "research" and rest == "review":
-            return "reviewer"          # reviewers may judge, tag and comment; viewers can only read
+        if area == "research" and (rest in {"review", "coding/decide", "analysis/apply-unlikely"} or (rest.startswith("institutions/") and rest.endswith("/review"))):
+            return "reviewer"          # reviewers may judge, tag, comment and verify claims; viewers can only read
         return "analyst"
 
     def _authorize_research(self, method: str, path: str, body: dict[str, Any] | None) -> bool:
@@ -774,11 +774,18 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(f"SUGAR API ready at {url}/api/health", flush=True)
         print(f"Project root: {_workspace_root}", flush=True)
+    scheduler = None
+    if os.environ.get("SUGAR_DISABLE_SCHEDULER", "").strip() not in {"1", "true", "yes"}:
+        from sugar_core.monitoring import MonitorScheduler
+        scheduler = MonitorScheduler(list_research_projects, get_workbench, on_error=lambda message: print(message, file=sys.stderr, flush=True))
+        scheduler.start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        if scheduler is not None:
+            scheduler.stop()
         server.server_close()
     return 0
 

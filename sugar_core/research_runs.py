@@ -267,13 +267,26 @@ class ResearchProject:
 
     # -- settings, members, notes ----------------------------------------------------------
     def update_settings(self, changes: dict[str, Any], *, actor: str = "analyst") -> dict[str, Any]:
-        allowed = {"enabled_sources", "provider_profile_id", "debug", "notes_visible", "rss_feeds"}
+        allowed = {"enabled_sources", "provider_profile_id", "debug", "notes_visible", "rss_feeds", "web_seeds", "networks", "monitors", "coding_terms", "relevance"}
         meta = self.meta()
         settings = dict(meta.get("settings") or {})
         applied = {k: v for k, v in changes.items() if k in allowed}
-        if "rss_feeds" in applied:      # feed addresses: http(s) only, de-duplicated, bounded
-            raw = applied["rss_feeds"] if isinstance(applied["rss_feeds"], list) else str(applied["rss_feeds"] or "").split()
-            applied["rss_feeds"] = list(dict.fromkeys(f.strip() for f in raw if isinstance(f, str) and f.strip().lower().startswith(("http://", "https://"))))[:50]
+        if "monitors" in applied:
+            applied["monitors"] = [m for m in (applied["monitors"] if isinstance(applied["monitors"], list) else []) if isinstance(m, dict) and m.get("id")][:20]
+        if "coding_terms" in applied:
+            ct = applied["coding_terms"] if isinstance(applied["coding_terms"], dict) else {}
+            applied["coding_terms"] = {kind: {str(l)[:60]: [str(t)[:80] for t in terms][:40] for l, terms in dict(ct.get(kind) or {}).items() if isinstance(terms, list)} for kind in ("audience", "program")}
+        if "relevance" in applied:
+            rv = applied["relevance"] if isinstance(applied["relevance"], dict) else {}
+            applied["relevance"] = {k: [str(t)[:80] for t in (rv.get(k) or [])][:60] for k in ("include", "exclude")}
+        if "networks" in applied:
+            nets = applied["networks"] if isinstance(applied["networks"], dict) else {}
+            applied["networks"] = {str(k)[:80]: {"role": v.get("role") if v.get("role") in {"subject", "reference"} else "subject", "label": str(v.get("label") or k)[:80],
+                                                 "color": str(v.get("color") or "")[:20]} for k, v in list(nets.items())[:50] if isinstance(v, dict)}
+        for key in ("rss_feeds", "web_seeds"):      # addresses: http(s) only, de-duplicated, bounded
+            if key in applied:
+                raw = applied[key] if isinstance(applied[key], list) else str(applied[key] or "").split()
+                applied[key] = list(dict.fromkeys(f.strip() for f in raw if isinstance(f, str) and f.strip().lower().startswith(("http://", "https://"))))[:50]
         settings.update(applied)
         meta["settings"] = settings
         self._save_meta(meta)

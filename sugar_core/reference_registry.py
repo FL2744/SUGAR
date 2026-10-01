@@ -401,6 +401,8 @@ def _refresh_entity(entity: dict[str, Any]) -> dict[str, Any]:
 def list_entities(workspace: SugarWorkspace, *, filters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     filters = filters or {}
     entities = [_refresh_entity(dict(row)) for row in _jsonl(registry_paths(workspace)["entities"])]
+    if not filters.get("include_merged"):
+        entities = [row for row in entities if not row.get("merged_into")]
     query = _clean(filters.get("query")).casefold()
     for field in ("network", "entity_type", "status", "country", "city"):
         expected = _clean(filters.get(field)).casefold()
@@ -428,6 +430,11 @@ def _record_entity(
     reason: str = "",
     review_state: str = "unreviewed",
     observed_at: str | None = None,
+    _entities: list[dict[str, Any]] | None = None,
+    _persist: bool = True,
+    _history_events: list[dict[str, Any]] | None = None,
+    _lifecycle_events: list[dict[str, Any]] | None = None,
+    _register_artifacts: bool = True,
 ) -> dict[str, Any]:
     if not _clean(values.get("name")):
         raise ValueError("An institution or entity name is required.")
@@ -457,7 +464,7 @@ def _record_entity(
         values["normalized_delivery_modes"] = normalize_labels(delivery_labels, category="delivery")
     entity_id = _clean(values.get("entity_id")) or str(uuid.uuid4())
     paths = registry_paths(workspace)
-    entities = _jsonl(paths["entities"])
+    entities = _entities if _entities is not None else _jsonl(paths["entities"])
     index = next((i for i, item in enumerate(entities) if item.get("entity_id") == entity_id), None)
     if index is None:
         entity = {
@@ -519,27 +526,37 @@ def _record_entity(
     entity = _refresh_entity(entity)
     new_status = _clean(entity.get("status") or "unknown")
     if claimed_status in ENTITY_STATUSES and (new_status != old_status or "status" in changed_fields or "status_date" in changed_fields):
-        _append_jsonl(paths["lifecycle"], {
+        lifecycle_event = {
             "event_id": str(uuid.uuid4()), "entity_id": entity_id,
             "event_type": new_status if new_status != "unknown" else "status_claim",
             "previous_status": old_status, "status": new_status if new_status != "unknown" else claimed_status,
             "effective_date": _clean(values.get("status_date") or values.get("closed_date") or values.get("opened_date")),
             "observed_at": observed_at or _now(), "evidence_refs": refs,
             "review_state": review_state, "reviewer": _clean(actor) if review_state == "human_verified" else "",
-        })
+        }
+        if _lifecycle_events is not None:
+            _lifecycle_events.append(lifecycle_event)
+        else:
+            _append_jsonl(paths["lifecycle"], lifecycle_event)
     if index is None:
         entities[-1] = entity
     else:
         entities[index] = entity
-    _write_jsonl(paths["entities"], entities)
-    _append_jsonl(paths["history"], {
+    if _persist:
+        _write_jsonl(paths["entities"], entities)
+    history_event = {
         "event_id": str(uuid.uuid4()), "event_type": "entity_updated" if changed_fields else "evidence_refreshed",
         "entity_id": entity_id, "fields": changed_fields, "actor": _clean(actor),
         "reason": _clean(reason), "observed_at": observed_at or _now(), "evidence_refs": refs,
-    })
-    workspace.register_artifact("reference_registry", paths["entities"], label="Evidence-backed entity registry")
-    if paths["lifecycle"].is_file():
-        workspace.register_artifact("reference_lifecycle", paths["lifecycle"], label="Evidence-backed entity lifecycle events")
+    }
+    if _history_events is not None:
+        _history_events.append(history_event)
+    else:
+        _append_jsonl(paths["history"], history_event)
+    if _register_artifacts:
+        workspace.register_artifact("reference_registry", paths["entities"], label="Evidence-backed entity registry")
+        if paths["lifecycle"].is_file():
+            workspace.register_artifact("reference_lifecycle", paths["lifecycle"], label="Evidence-backed entity lifecycle events")
     return entity
 
 
@@ -557,6 +574,133 @@ def upsert_entity(
         workspace, values, evidence_refs=evidence_refs, actor=actor, reason=reason,
         review_state=review_state, observed_at=observed_at,
     )
+
+
+def review_claim(workspace: SugarWorkspace, entity_id: str, claim_id: str, review_state: str, *, actor: str = "analyst", note: str = "") -> dict[str, Any]:
+    """Record a human decision on one claim (verify it, reject it, or flag it for follow-up). Never edits the value."""
+    if review_state not in {"unreviewed", "human_verified", "needs_followup", "rejected"}:
+        raise ValueError("Unsupported registry review state.")
+    paths = registry_paths(workspace)
+    entities = _jsonl(paths["entities"])
+    index = next((i for i, row in enumerate(entities) if row.get("entity_id") == entity_id), None)
+    if index is None:
+        raise KeyError(f"No registry entity with ID {entity_id!r}.")
+    claim = next((c for c in entities[index].get("claims", []) if c.get("claim_id") == claim_id), None)
+    if claim is None:
+        raise KeyError(f"No claim {claim_id!r} on that entity.")
+    claim.update({"review_state": review_state, "reviewer": _clean(actor), "review_note": _clean(note), "verified_at": _now() if review_state == "human_verified" else ""})
+    entities[index]["updated_at"] = _now()
+    entities[index] = _refresh_entity(entities[index])
+    _write_jsonl(paths["entities"], entities)
+    _append_jsonl(paths["history"], {
+        "event_id": str(uuid.uuid4()), "event_type": "claim_reviewed", "entity_id": entity_id, "claim_id": claim_id,
+        "field": claim.get("field"), "review_state": review_state, "actor": _clean(actor), "reason": _clean(note), "observed_at": _now(),
+    })
+    return entities[index]
+
+
+def merge_entities(workspace: SugarWorkspace, keep_id: str, drop_id: str, *, actor: str = "analyst", reason: str = "") -> dict[str, Any]:
+    """Fold a duplicate into the record to keep: its claims and evidence move over, its name becomes an alias,
+    and the duplicate stays in the file as a tombstone pointing at the survivor (nothing is deleted)."""
+    if keep_id == drop_id:
+        raise ValueError("Choose two different institutions to merge.")
+    paths = registry_paths(workspace)
+    entities = _jsonl(paths["entities"])
+    keep = next((row for row in entities if row.get("entity_id") == keep_id), None)
+    drop = next((row for row in entities if row.get("entity_id") == drop_id), None)
+    if keep is None or drop is None:
+        raise KeyError("Both institutions must exist to merge them.")
+    if drop.get("merged_into") or keep.get("merged_into"):
+        raise ValueError("One of these records was already merged.")
+    drop_name = _clean(_refresh_entity(dict(drop)).get("name"))
+    moved = 0
+    for claim in drop.get("claims", []):
+        twin = next((c for c in keep["claims"] if c.get("field") == claim.get("field") and c.get("value") == claim.get("value")), None)
+        if twin is not None:
+            for ref in claim.get("evidence_refs", []):
+                if ref not in twin.setdefault("evidence_refs", []):
+                    twin["evidence_refs"].append(ref)
+        else:
+            keep["claims"].append({**claim, "claim_id": str(uuid.uuid4()), "merged_from": drop_id})
+            moved += 1
+    refs = [ref for claim in drop.get("claims", []) for ref in claim.get("evidence_refs", [])][:1]
+    if refs and drop_name and drop_name.casefold() != _clean(_refresh_entity(dict(keep)).get("name")).casefold():
+        keep["claims"].append({"claim_id": str(uuid.uuid4()), "field": "aliases", "value": [drop_name], "evidence_refs": refs, "observed_at": _now(),
+                               "valid_from": "", "valid_to": "", "review_state": "unreviewed", "reviewer": "", "review_note": f"Merged from {drop_id}", "created_at": _now()})
+    keep["updated_at"] = _now()
+    drop["merged_into"], drop["merged_at"], drop["updated_at"] = keep_id, _now(), _now()
+    for i, row in enumerate(entities):
+        if row.get("entity_id") == keep_id:
+            entities[i] = _refresh_entity(keep)
+    _write_jsonl(paths["entities"], entities)
+    _append_jsonl(paths["history"], {"event_id": str(uuid.uuid4()), "event_type": "entities_merged", "entity_id": keep_id, "merged_entity_id": drop_id,
+                                     "claims_moved": moved, "actor": _clean(actor), "reason": _clean(reason), "observed_at": _now()})
+    return _refresh_entity(keep)
+
+
+def bulk_upsert_entities(
+    workspace: SugarWorkspace,
+    records: Iterable[dict[str, Any]],
+    *,
+    actor: str = "analyst",
+    reason: str = "",
+    review_state: str = "unreviewed",
+    observed_at: str | None = None,
+) -> dict[str, Any]:
+    """Upsert many registry entities with a single durable write.
+
+    Each record must contain a ``values`` object and ``evidence_refs``. The result is
+    equivalent to repeated ``upsert_entity`` calls, but avoids rewriting a large JSONL
+    registry after every source row.
+    """
+    paths = registry_paths(workspace)
+    entities = _jsonl(paths["entities"])
+    known_ids = {str(row.get("entity_id") or "") for row in entities if row.get("entity_id")}
+    history_events: list[dict[str, Any]] = []
+    lifecycle_events: list[dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
+    added = 0
+    updated = 0
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError("Bulk registry records must be objects containing values and evidence_refs.")
+        values = record.get("values")
+        if not isinstance(values, dict):
+            raise ValueError("Bulk registry records require a values object.")
+        requested_id = _clean(values.get("entity_id"))
+        existed = bool(requested_id and requested_id in known_ids)
+        entity = _record_entity(
+            workspace,
+            values,
+            evidence_refs=record.get("evidence_refs"),
+            actor=str(record.get("actor") or actor),
+            reason=str(record.get("reason") or reason),
+            review_state=str(record.get("review_state") or review_state),
+            observed_at=str(record.get("observed_at") or observed_at or "") or None,
+            _entities=entities,
+            _persist=False,
+            _history_events=history_events,
+            _lifecycle_events=lifecycle_events,
+            _register_artifacts=False,
+        )
+        results.append(entity)
+        entity_id = _clean(entity.get("entity_id"))
+        if existed:
+            updated += 1
+        else:
+            added += 1
+            if entity_id:
+                known_ids.add(entity_id)
+
+    _write_jsonl(paths["entities"], entities)
+    if lifecycle_events:
+        _write_jsonl(paths["lifecycle"], [*_jsonl(paths["lifecycle"]), *lifecycle_events])
+    if history_events:
+        _write_jsonl(paths["history"], [*_jsonl(paths["history"]), *history_events])
+    workspace.register_artifact("reference_registry", paths["entities"], label="Evidence-backed entity registry")
+    if paths["lifecycle"].is_file():
+        workspace.register_artifact("reference_lifecycle", paths["lifecycle"], label="Evidence-backed entity lifecycle events")
+    return {"entities": results, "added": added, "updated": updated}
 
 
 def add_relationship(
@@ -706,6 +850,8 @@ def import_reference_dataset(
     added = 0
     updated = 0
     relationship_candidates: list[dict[str, Any]] = []
+    bulk_records: list[dict[str, Any]] = []
+    existing_ids = set(before_by_id)
     list_fields = {"aliases", "public_links", "accounts", "host_entities", "partner_entities", "audiences", "program_domains", "delivery_modes", "coverage_scope"}
     for row_number, row in enumerate(rows, start=2):
         if row_number in bad_rows:
@@ -735,9 +881,14 @@ def import_reference_dataset(
             if value not in (None, ""):
                 values[field] = _list(value) if field in list_fields else value
         values["status_date"] = _clean(_mapped_value(row, mapping, "status_date") or _mapped_value(row, mapping, "closed_date") or _mapped_value(row, mapping, "opened_date"))
-        was_existing = any(item.get("entity_id") == entity_id for item in _jsonl(paths["entities"]))
-        _record_entity(workspace, values, evidence_refs=[evidence], actor=actor,
-                       reason=f"Imported from {base['name']}", review_state=review_state)
+        was_existing = entity_id in existing_ids
+        bulk_records.append({
+            "values": values,
+            "evidence_refs": [evidence],
+            "actor": actor,
+            "reason": f"Imported from {base['name']}",
+            "review_state": review_state,
+        })
         relationship_candidates.append({"entity_id": entity_id, "network": item_network,
                                          "host_entities": values.get("host_entities", []),
                                          "partner_entities": values.get("partner_entities", []),
@@ -746,6 +897,15 @@ def import_reference_dataset(
             updated += 1
         else:
             added += 1
+            existing_ids.add(entity_id)
+    if bulk_records:
+        bulk_upsert_entities(
+            workspace,
+            bulk_records,
+            actor=actor,
+            reason=f"Imported from {base['name']}",
+            review_state=review_state,
+        )
     datasets = _jsonl(paths["datasets"])
     datasets = [item for item in datasets if item.get("dataset_id") != base["dataset_id"]]
     datasets.append(base)

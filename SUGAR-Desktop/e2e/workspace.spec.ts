@@ -443,8 +443,8 @@ test("main browser screens have no automated WCAG 2.2 A/AA violations", async ({
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await navigation.getByRole("button", { name: "Evidence & handoff" }).click();
   await expectAccessible(page, "research project");
-  await navigation.getByRole("button", { name: "Institutions & map" }).click();
-  await expectAccessible(page, "institutions and map");
+  await navigation.getByRole("button", { name: "Reference registry" }).click();
+  await expectAccessible(page, "reference registry");
   await navigation.getByRole("button", { name: "Project timeline" }).click();
   await expectAccessible(page, "project timeline");
   await page.getByRole("button", { name: "Settings" }).click();
@@ -485,4 +485,17 @@ test("command palette jumps between pages from the keyboard", async ({ page }) =
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
   await expect(palette).toHaveCount(0);
+});
+
+test("institutions, map and monitoring pages open cleanly and are accessible", async ({ page }) => {
+  await mockApi(page, []);
+  await useAdvancedMode(page);
+  await page.goto("/");
+  await createProject(page, "Institutions Project");
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  for (const [label, heading] of [["Institutions", /Institutions and what supports them/], ["Map", /Where institutions are/], ["Monitoring", /What changed since last time/]] as const) {
+    await navigation.getByRole("button", { name: label, exact: true }).click();
+    await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
+    await expectAccessible(page, label);
+  }
 });

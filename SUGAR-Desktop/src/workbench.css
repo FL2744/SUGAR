@@ -439,3 +439,62 @@ kbd { padding: 0 .4rem; border: 1px solid var(--wb-line2); border-radius: .3rem;
 :root[data-theme="dark"] .field-block small, :root[data-theme="dark"] .footnote { color: var(--wb-muted); }
 :root[data-theme="dark"] .inspector-identity h2, :root[data-theme="dark"] .item-inspector h2 { color: var(--wb-ink); }
 .verdict-row .on, .triage-btn.on, .stepper li.now { background: #2f6bcb; border-color: #2f6bcb; color: #fff; }
+
+/* Institutions */
+.claim-list, .claim-evidence, .reason-list, .candidate-list { list-style: none; margin: .3rem 0; padding: 0; display: grid; gap: .5rem; }
+.claim-row { padding: .6rem .7rem; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); }
+.claim-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.claim-evidence li { display: grid; gap: .15rem; padding-left: .6rem; border-left: 3px solid var(--wb-line2); }
+.claim-evidence q, .candidate-list q { display: block; color: var(--wb-ink2); font-style: italic; overflow-wrap: anywhere; }
+.claim-actions { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
+.reason-list { list-style: disc; padding-left: 1.2rem; }
+.candidate-list li { display: flex; justify-content: space-between; gap: 1rem; padding: .6rem .7rem; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); }
+.candidate-list li > div { display: grid; gap: .2rem; min-width: 0; }
+.candidates-panel { width: min(46rem, calc(100vw - 2rem)); max-height: 90dvh; display: flex; flex-direction: column; }
+.candidates-panel .modal-body { overflow: auto; }
+.institution-drawer .note-add { flex-wrap: wrap; }
+.institution-drawer .note-add input, .institution-drawer .note-add select { flex: 1 1 12rem; }
+.institutions-page-new .project-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1.6fr) minmax(0, 1fr); }
+@container page (max-width: 52rem) { .institutions-page-new .project-row { grid-template-columns: 1fr; } .institutions-page-new .project-head { display: none; } }
+.history-card { display: grid; gap: .2rem; padding: .6rem .7rem; margin: .4rem 0; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); overflow-wrap: anywhere; }
+.history-card ul { margin: .2rem 0; padding-left: 1.1rem; }
+.short-input { width: 8rem; min-height: 2.35rem; padding: .3rem .6rem; border: 1px solid var(--wb-line2); border-radius: .4rem; font-size: 1rem; background: var(--wb-card); color: var(--wb-ink); }
+
+/* Map page */
+.map-layout { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 1rem; align-items: start; }
+.map-layout:has(.map-detail) { grid-template-columns: 15rem minmax(0, 1fr) 17rem; }
+.map-filters { display: grid; gap: .8rem; padding: .8rem; border: 1px solid var(--wb-line); border-radius: .6rem; background: var(--wb-card); }
+.map-main { display: grid; gap: .6rem; min-width: 0; }
+.map-main .map-frame { position: relative; height: min(62dvh, 40rem); min-height: 22rem; border: 1px solid var(--wb-line); border-radius: .6rem; overflow: hidden; }
+.map-main .map-canvas { position: absolute; inset: 0; }
+.map-stats { color: var(--wb-ink2); }
+.map-detail { position: relative; display: grid; gap: .5rem; padding: .9rem; border: 1px solid var(--wb-line); border-radius: .6rem; background: var(--wb-card); }
+.map-detail h3 { margin: 0; padding-right: 1.5rem; }
+.map-detail p { margin: 0; }
+.map-detail .inspector-close { position: absolute; top: .4rem; right: .5rem; }
+.swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; vertical-align: -.1rem; background: #d2691e; } .swatch.reference { background: #1f8f6a; }
+.overlap-table summary { cursor: pointer; font-weight: 600; } .overlap-table table { width: 100%; border-collapse: collapse; margin-top: .4rem; } .overlap-table th, .overlap-table td { padding: .3rem .5rem; border-bottom: 1px solid var(--wb-line); text-align: left; }
+@container page (max-width: 60rem) { .map-layout, .map-layout:has(.map-detail) { grid-template-columns: 1fr; } }
+.map-filters select { width: 100%; min-width: 0; }
+.map-filters { max-height: 78dvh; overflow: auto; }
+.code-list { list-style: none; margin: .3rem 0; padding: 0; display: grid; gap: .5rem; }
+.code-list li { display: grid; gap: .3rem; padding: .55rem .7rem; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); }
+.code-list li.confirmed { border-color: var(--wb-green); }
+.code-list q { display: block; color: var(--wb-ink2); font-style: italic; overflow-wrap: anywhere; }
+
+/* Monitoring */
+.monitor-list, .digest-list, .digest-changes, .digest-items { list-style: none; margin: .5rem 0; padding: 0; display: grid; gap: .6rem; }
+.monitor-list li { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.digest-card { display: grid; gap: .5rem; padding: .8rem .9rem; border: 1px solid var(--wb-line); border-radius: .6rem; background: var(--wb-card); }
+.digest-head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.digest-changes { gap: .3rem; } .digest-items { gap: .25rem; padding-left: .5rem; overflow-wrap: anywhere; }
+.section-heading { margin: 1.2rem 0 .3rem; font-size: 1.15rem; color: var(--wb-ink); }
+.monitor-form { margin: .8rem 0; }
+
+.theme-box { padding: .7rem .9rem; border: 1px solid var(--wb-line); border-radius: .6rem; background: var(--wb-card); margin: .6rem 0; }
+.theme-list { list-style: none; margin: .3rem 0; padding: 0; display: grid; gap: .5rem; } .theme-list q { display: block; color: var(--wb-ink2); font-style: italic; overflow-wrap: anywhere; }
+.brief-preview { max-height: 22rem; overflow: auto; white-space: pre-wrap; padding: .7rem; background: var(--wb-soft); border-radius: .4rem; font-size: 1rem; }
+.file-button { cursor: pointer; display: inline-flex; align-items: center; }
+.inspector-identity > div > span { color: var(--wb-muted); }
+.accuracy-table { width: 100%; border-collapse: collapse; margin: .5rem 0; } .accuracy-table th, .accuracy-table td { padding: .3rem .5rem; border-bottom: 1px solid var(--wb-line); text-align: left; }
+.steps { padding-left: 1.2rem; display: grid; gap: .4rem; }

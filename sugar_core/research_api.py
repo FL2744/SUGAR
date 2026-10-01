@@ -176,7 +176,254 @@ def _route(method, path, query, body, wb, resolve_project, list_projects):  # no
     return _run_routes(method, rest, query, body, wb, project)
 
 
+def _institution_routes(method, rest, query, body, wb, project):
+    from . import institutions as inst
+    actor = str(body.get("_author") or "Researcher")
+    try:
+        if rest == "institutions" and method == "GET":
+            return 200, inst.list_institutions(project, network=query.get("network", ""), status=query.get("status", ""), country=query.get("country", ""),
+                                               query=query.get("q", ""), since=query.get("since", ""), confidence_level=query.get("confidence", ""),
+                                               placed=query.get("placed", ""), program=query.get("program", ""), audience=query.get("audience", ""))
+        if rest == "institutions" and method == "POST":
+            evidence, urls = [], []
+            cache: dict[str, dict[str, object]] = {}
+            for row in body.get("evidence") or []:
+                if row.get("url") and not row.get("item_id"):
+                    urls.append({"url": row.get("url"), "note": row.get("note") or ""})
+                    continue
+                run_id, item_id = str(row.get("run_id") or ""), str(row.get("item_id") or "")
+                if run_id not in cache:
+                    cache[run_id] = {i.item_id: i for i in wb.items(project, run_id)}
+                item = cache[run_id].get(item_id)
+                if item is None:
+                    raise WorkbenchError(f"Item {item_id} was not found in run {run_id}.", 404)
+                evidence.append((item, str(row.get("quote") or "")))
+            return 200, {"institution": inst.promote(project, dict(body.get("values") or {}), evidence, actor=actor,
+                                                     entity_id=str(body.get("entity_id") or ""), source_urls=urls)}
+        if rest == "institutions/candidates" and method == "POST":
+            run_id = str(body.get("run_id") or "")
+            items = wb.items(project, run_id)
+            provider, budget = None, None
+            if str(body.get("mode") or "auto") != "deterministic":
+                provider = wb.resolve_provider(project=project, profile_id=str(body.get("provider_id") or ""))
+                budget = inst.LLMBudget(int(body.get("max_calls") or 40))
+            return 200, inst.candidates(project, items, provider=provider, budget=budget)
+        if rest == "institutions/geocode" and method == "POST":
+            return 200, inst.geocode_missing(project, actor=actor, limit=_int(str(body.get("limit") or "25"), 25, 1, 100))
+        match = re.fullmatch(r"institutions/([A-Za-z0-9_\-]+)", rest)
+        if match and method == "GET":
+            return 200, {"institution": inst.institution_detail(project, match.group(1))}
+        match = re.fullmatch(r"institutions/([A-Za-z0-9_\-]+)/history", rest)
+        if match and method == "POST":
+            return 200, inst.page_history(project, match.group(1))
+        match = re.fullmatch(r"institutions/([A-Za-z0-9_\-]+)/(review|merge)", rest)
+        if match and method == "POST":
+            if match.group(2) == "review":
+                return 200, {"institution": inst.verify(project, match.group(1), str(body.get("claim_id") or ""), str(body.get("state") or ""),
+                                                        actor=actor, note=str(body.get("note") or ""))}
+            return 200, {"institution": inst.merge(project, match.group(1), str(body.get("drop_id") or ""), actor=actor, reason=str(body.get("reason") or ""))}
+    except KeyError as exc:
+        raise WorkbenchError(str(exc.args[0]) if exc.args else "Not found.", 404) from exc
+    except ValueError as exc:
+        raise WorkbenchError(str(exc)) from exc
+    return None
+
+
+def _network_routes(method, rest, query, body, wb, project):
+    import base64
+    from . import networks as nets
+    from . import seed_sources as seeds
+    actor = str(body.get("_author") or "Researcher")
+    try:
+        if rest == "networks" and method == "GET":
+            return 200, {"networks": nets.list_networks(project)}
+        if rest == "networks" and method == "POST":
+            return 200, {"networks": [{"name": k, **v} for k, v in nets.set_network(project, str(body.get("name") or ""), role=str(body.get("role") or ""),
+                                                                                   label=str(body.get("label") or ""), color=str(body.get("color") or ""), actor=actor).items()]}
+        if rest == "networks/preview" and method == "POST":
+            try:
+                content = base64.b64decode(str(body.get("content_base64") or ""), validate=True)
+            except ValueError as exc:
+                raise WorkbenchError("The file could not be read.") from exc
+            return 200, nets.preview_upload(project, str(body.get("filename") or ""), content)
+        if rest == "networks/import" and method == "POST":
+            return 200, nets.import_upload(project, str(body.get("file_id") or ""), mapping={str(k): str(v) for k, v in dict(body.get("mapping") or {}).items()},
+                                           network=str(body.get("network") or ""), role=str(body.get("role") or "reference"), dataset_name=str(body.get("dataset_name") or ""),
+                                           geographic_scope=str(body.get("geographic_scope") or ""), known_coverage_limits=str(body.get("known_coverage_limits") or ""),
+                                           license_notes=str(body.get("license_notes") or ""), accept_partial=bool(body.get("accept_partial")), actor=actor)
+        if rest == "networks/seed" and method == "POST":
+            source = str(body.get("source") or "")
+            if source == "wikidata":
+                rows = seeds.search_wikidata(str(body.get("query") or ""), limit=_int(str(body.get("limit") or "15"), 15, 1, 30), language=str(body.get("language") or "en"))
+            elif source == "osm":
+                rows = seeds.search_osm(str(body.get("query") or ""), country_code=str(body.get("country_code") or ""), limit=_int(str(body.get("limit") or "50"), 50, 1, 100))
+            else:
+                raise WorkbenchError("Choose wikidata or osm as the source.")
+            return 200, {"rows": rows}
+        if rest == "networks/seed/import" and method == "POST":
+            return 200, seeds.import_seeds(project, list(body.get("rows") or []), network=str(body.get("network") or ""), role=str(body.get("role") or "subject"), actor=actor)
+        if rest == "overlap" and method == "GET":
+            split = lambda v: [x.strip() for x in str(v or "").split(",") if x.strip()]   # noqa: E731
+            bands = tuple(float(x) for x in split(query.get("bands")) if re.fullmatch(r"\d+(?:\.\d+)?", x)) or nets.DEFAULT_BANDS_KM
+            return 200, nets.overlap(project, subjects=split(query.get("subject")), references=split(query.get("reference")), bands_km=bands,
+                                     include_closed=_bool(query.get("include_closed")), country=query.get("country", ""))
+    except (ValueError, KeyError) as exc:
+        if isinstance(exc, KeyError):
+            raise WorkbenchError(str(exc.args[0]) if exc.args else "Not found.", 404) from exc
+        raise WorkbenchError(str(exc)) from exc
+    return None
+
+
+def _coding_routes(method, rest, query, body, wb, project):
+    from . import activity_coding as ac
+    actor = str(body.get("_author") or "Researcher")
+    try:
+        if rest == "coding" and method == "GET":
+            store = ac.CodingStore(project)
+            if query.get("item_id"):
+                return 200, {"item_id": query["item_id"], **store.state(query["item_id"])}
+            ids = {i.item_id for i in wb.items(project, query["run_id"])} if query.get("run_id") else None
+            return 200, store.summary(ids)
+        if rest == "coding/run" and method == "POST":
+            run_id = str(body.get("run_id") or "")
+            items = wb.items(project, run_id)
+            provider = budget = None
+            if str(body.get("mode") or "auto") != "deterministic":
+                provider = wb.resolve_provider(project=project, profile_id=str(body.get("provider_id") or ""))
+                budget = ac.LLMBudget(int(body.get("max_calls") or 40))
+            return 200, ac.code_items(project, items, provider=provider, budget=budget, actor=actor if provider is None else "SUGAR (model-assisted)")
+        if rest == "coding/decide" and method == "POST":
+            return 200, ac.decide(project, str(body.get("item_id") or ""), str(body.get("field") or ""), str(body.get("label") or ""), str(body.get("decision") or ""),
+                                  actor=actor, run_id=str(body.get("run_id") or ""), quote=str(body.get("quote") or ""))
+        if rest == "coding/apply" and method == "POST":
+            run_id, item_id = str(body.get("run_id") or ""), str(body.get("item_id") or "")
+            item = next((i for i in wb.items(project, run_id) if i.item_id == item_id), None)
+            if item is None:
+                raise WorkbenchError("Item not found.", 404)
+            return 200, ac.apply_to_institution(project, str(body.get("entity_id") or ""), item, actor=actor)
+    except KeyError as exc:
+        raise WorkbenchError(str(exc.args[0]) if exc.args else "Not found.", 404) from exc
+    except ValueError as exc:
+        raise WorkbenchError(str(exc)) from exc
+    return None
+
+
+def _monitor_routes(method, rest, query, body, wb, project):
+    from . import monitoring as mon
+    actor = str(body.get("_author") or "Researcher")
+    try:
+        if rest == "monitors" and method == "GET":
+            return 200, {"monitors": mon.list_monitors(project), "cadences_hours": list(mon.CADENCES_HOURS)}
+        if rest == "monitors" and method == "POST":
+            if body.get("delete") and body.get("id"):
+                mon.delete_monitor(project, str(body["id"]), actor=actor)
+                return 200, {"monitors": mon.list_monitors(project)}
+            saved = mon.save_monitor(project, name=str(body.get("name") or ""), cadence_hours=int(body.get("cadence_hours") or 0), monitor_id=str(body.get("id") or ""),
+                                     enabled=bool(body.get("enabled", True)), note=str(body.get("note") or ""), actor=actor)
+            return 200, {"monitor": saved, "monitors": mon.list_monitors(project)}
+        if rest == "monitors/run" and method == "POST":
+            return 200, mon.run_monitor(wb, project, str(body.get("id") or ""), actor=actor)
+        if rest == "monitors/tick" and method == "POST":
+            made = mon.finalize_finished(wb, project)
+            started = []
+            for monitor in mon.due_monitors(project):
+                try:
+                    started.append(mon.run_monitor(wb, project, monitor["id"], actor=actor)["run_id"])
+                except (RunConflict, WorkbenchError):
+                    continue
+            return 200, {"started": started, "digests": [d["id"] for d in made]}
+        if rest == "digests" and method == "GET":
+            return 200, {"digests": mon.list_digests(project, _int(query.get("limit"), 30, 1, 200))}
+        if rest == "digests/checkpoint" and method == "POST":
+            return 200, {"digest": mon.build_digest(project, trigger="manual")}
+    except KeyError as exc:
+        raise WorkbenchError(str(exc.args[0]) if exc.args else "Not found.", 404) from exc
+    except ValueError as exc:
+        raise WorkbenchError(str(exc)) from exc
+    return None
+
+
+def _profile_routes(method, rest, query, body, wb, project):
+    from . import profiles
+    actor = str(body.get("_author") or "Researcher")
+    try:
+        if method == "GET":
+            return 200, {"profile": profiles.export_profile(wb, project, name=query.get("name", ""), include_institutions=_bool(query.get("institutions")))}
+        if method == "POST":
+            return 200, profiles.apply_profile(wb, project, profiles.parse_profile(body.get("profile") if isinstance(body.get("profile"), dict) else {}), actor=actor,
+                                               include_institutions=bool(body.get("include_institutions", True)))
+    except KeyError as exc:
+        raise WorkbenchError(str(exc.args[0]) if exc.args else "Not found.", 404) from exc
+    except ValueError as exc:
+        raise WorkbenchError(str(exc)) from exc
+    return None
+
+
+def _analysis_routes(method, rest, query, body, wb, project):
+    from . import analysis, brief
+    actor = str(body.get("_author") or "Researcher")
+    try:
+        if rest == "analysis/relevance" and method == "POST":
+            run_id = str(body.get("run_id") or "")
+            items = wb.items(project, run_id)
+            plan = project.load_plan()
+            if plan is None:
+                raise WorkbenchError("This project has no research plan to judge relevance against.", 404)
+            provider = budget = None
+            if str(body.get("mode") or "auto") != "deterministic":
+                provider = wb.resolve_provider(plan, project, profile_id=str(body.get("provider_id") or ""))
+                budget = analysis.LLMBudget(int(body.get("max_calls") or 30))
+            return 200, analysis.score_run(project, items, plan, provider=provider, budget=budget)
+        if rest == "analysis/apply-unlikely" and method == "POST":
+            run_id = str(body.get("run_id") or "")
+            ids = {i.item_id for i in wb.items(project, run_id)}
+            scores = analysis.RelevanceStore(project).latest()
+            reviewed = project.review.state()
+            todo = [iid for iid in ids if scores.get(iid, {}).get("band") == "unlikely" and not reviewed.get(iid, {}).get("verdict")]
+            for iid in todo:
+                project.review.apply(iid, {"kind": "verdict", "verdict": "not_relevant"}, author=actor)
+                project.review.apply(iid, {"kind": "comment", "text": "Marked not relevant in bulk: " + "; ".join(scores[iid].get("reasons", [])[:2])}, author=actor)
+            return 200, {"marked": len(todo), "skipped_already_reviewed": sum(1 for iid in ids if scores.get(iid, {}).get("band") == "unlikely" and reviewed.get(iid, {}).get("verdict"))}
+        if rest == "analysis/themes" and method == "GET":
+            return 200, analysis.themes(wb.items(project, query.get("run_id", "")))
+        if rest == "analysis/sample" and method == "GET":
+            from . import evaluation
+            return 200, {"csv": evaluation.sample_csv(wb.items(project, query.get("run_id", "")), _int(query.get("n"), 60, 10, 300), _int(query.get("seed"), 7, 0, 10_000))}
+        if rest == "analysis/evaluate" and method == "POST":
+            from . import evaluation
+            plan = project.load_plan()
+            if plan is None:
+                raise WorkbenchError("This project has no research plan to score relevance against.", 404)
+            return 200, evaluation.score_labels(str(body.get("labels_csv") or ""), wb.items(project, str(body.get("run_id") or "")), plan, project.meta().get("settings"))
+        if rest == "brief" and method == "POST":
+            run_id = str(body.get("run_id") or "")
+            provider = None
+            if str(body.get("mode") or "deterministic") == "auto":
+                provider = wb.resolve_provider(project=project, profile_id=str(body.get("provider_id") or ""))
+            built = brief.build_brief(wb, project, run_id, provider=provider, title=str(body.get("title") or ""))
+            files = brief.write_brief(project, built["markdown"])
+            project.log("brief_created", {"run_id": run_id, "files": files}, actor=actor)
+            return 200, {**built, "files": files}
+    except KeyError as exc:
+        raise WorkbenchError(str(exc.args[0]) if exc.args else "Not found.", 404) from exc
+    except ValueError as exc:
+        raise WorkbenchError(str(exc)) from exc
+    return None
+
+
 def _research_routes(method, rest, query, body, wb, project):
+    if rest.startswith("analysis/") or rest == "brief":
+        return _analysis_routes(method, rest, query, body, wb, project)
+    if rest == "profile":
+        return _profile_routes(method, rest, query, body, wb, project)
+    if rest.startswith("monitors") or rest.startswith("digests"):
+        return _monitor_routes(method, rest, query, body, wb, project)
+    if rest == "coding" or rest.startswith("coding/"):
+        return _coding_routes(method, rest, query, body, wb, project)
+    if rest.startswith("networks") or rest == "overlap":
+        return _network_routes(method, rest, query, body, wb, project)
+    if rest == "institutions" or rest.startswith("institutions/"):
+        return _institution_routes(method, rest, query, body, wb, project)
     if rest == "" and method == "GET":
         return 200, wb.project_overview(project)
     if rest == "plan" and method == "POST":
@@ -232,7 +479,7 @@ def _run_routes(method, rest, query, body, wb, project):
     if sub == "results" and method == "GET":
         return 200, wb.results(project, run_id, group_by=query.get("group_by", "none"), text=query.get("q", ""), platform=query.get("platform", ""),
                                language=query.get("language", ""), status=query.get("status", "accepted"), geography=query.get("geography", ""),
-                               translated=query.get("translated", ""), verdict=query.get("verdict", ""), tag=query.get("tag", ""), new_only=_bool(query.get("new_only")), limit=_int(query.get("limit"), 200, 1, 1000),
+                               translated=query.get("translated", ""), verdict=query.get("verdict", ""), tag=query.get("tag", ""), relevance=query.get("relevance", ""), new_only=_bool(query.get("new_only")), limit=_int(query.get("limit"), 200, 1, 1000),
                                offset=_int(query.get("offset"), 0))
     match = re.fullmatch(r"items/(it_[A-Za-z0-9]+)", sub)
     if match and method == "GET":
