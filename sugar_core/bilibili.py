@@ -106,6 +106,10 @@ def _unwrap(payload: Any, operation: str) -> dict[str, Any]:
         return {}
     if not isinstance(data, dict):
         raise RuntimeError(f"Bilibili {operation} returned an unexpected data shape.")
+    if operation == "video search" and data.get("v_voucher") and "result" not in data:
+        raise BilibiliAccessError(
+            "Bilibili public video search returned an access control challenge for this anonymous session."
+        )
     return data
 
 
