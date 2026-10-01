@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "SUGAR · Research workspace",
+        "title": "SUGAR \u00b7 Research workspace",
         "width": 1420,
         "height": 920,
         "minWidth": 1040,
@@ -48,7 +48,12 @@
     "category": "Education",
     "shortDescription": "Research workspace",
     "longDescription": "SUGAR is a structured research workspace for evidence-backed institutional analysis.",
-    "externalBin": ["binaries/sugar-bridge"]
+    "externalBin": [
+      "binaries/sugar-bridge"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    }
   },
   "plugins": {
     "shell": {

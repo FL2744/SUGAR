@@ -204,7 +204,8 @@ test("browser creates a project and saves its research requirement", async ({ pa
     notes: "Coordinate the review and preserve source context.",
     members: [{ name: "Analyst One", email: "analyst@example.test", role: "analyst" }],
   });
-  await page.getByLabel("Collection sources").fill("x, bluesky");
+  await page.getByLabel("Collect from X", { exact: true }).check();
+  await page.getByLabel("Collect from Bluesky", { exact: true }).check();
   await page.getByLabel("Excluded topics").fill("unrelated tourism");
   await page.getByRole("button", { name: /Save research requirement/ }).click();
 
@@ -231,6 +232,18 @@ test("browser creates a project and saves its research requirement", async ({ pa
     post_languages: ["es", "zh"],
   });
   await expect(page.getByText("1 source records")).toBeVisible();
+  for (const width of [1040, 1420]) {
+    await page.setViewportSize({ width, height: 920 });
+    const panel = await page.locator(".evidence-panel").boundingBox();
+    expect(panel).not.toBeNull();
+    for (const name of ["Summarize geography", "Create evidence map", "Export data"]) {
+      const bounds = await page.getByRole("button", { name, exact: true }).boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(panel!.x);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(panel!.x + panel!.width);
+    }
+  }
+
   await expect(page.getByText("sugar-workspace://project-1/data/raw/live_collection.csv")).toBeVisible();
   await expect(page.getByRole("button", { name: "Generate coded findings" })).toBeVisible();
 });
@@ -275,7 +288,8 @@ test("active collection accepts scope edits, source retries, and cooperative sto
   await page.getByRole("navigation", { name: "Main navigation" })
     .getByRole("button", { name: "Evidence & handoff" }).click();
   await page.getByLabel(/Research question/).fill("Which public programs are documented?");
-  await page.getByLabel("Collection sources").fill("x, bluesky");
+  await page.getByLabel("Collect from X", { exact: true }).check();
+  await page.getByLabel("Collect from Bluesky", { exact: true }).check();
   await page.getByRole("button", { name: /Save research requirement/ }).click();
   await expect.poll(() => calls.some((call) => call.operation === "research-requirement")).toBe(true);
   await page.getByRole("button", { name: /Build research plan/ }).click();
@@ -371,7 +385,7 @@ test("AI interpretation, translation, geographic summary, coded findings, and ex
   await page.getByLabel("Research requirement template").selectOption("public-service-access");
   await page.getByRole("button", { name: "Use template" }).click();
   await page.getByLabel(/Research question/).fill("¿Cómo participan los estudiantes en programas públicos de idiomas en Ciudad Ejemplo?");
-  await page.getByLabel("Collection sources").fill("x");
+  await page.getByLabel("Collect from X", { exact: true }).check();
   await page.getByLabel("Translate collected posts").check();
   await page.getByLabel("Infer broad locations for mapping").check();
   await page.getByLabel("New research template name").fill("Spanish education scan");

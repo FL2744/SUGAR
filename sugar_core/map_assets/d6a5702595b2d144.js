@@ -1,0 +1,7 @@
+/**
+ * Minified by jsDelivr using Terser v5.48.0.
+ * Original file: /gh/ardhi/Leaflet.MousePosition@HEAD/src/L.Control.MousePosition.js
+ *
+ * Do NOT use SRI with dynamically generated files! More information: https://www.jsdelivr.com/using-sri-with-dynamic-files
+ */
+L.Control.MousePosition=L.Control.extend({options:{position:"bottomleft",separator:" : ",emptyString:"Unavailable",lngFirst:!1,numDigits:5,lngFormatter:void 0,latFormatter:void 0,prefix:""},onAdd:function(o){return this._container=L.DomUtil.create("div","leaflet-control-mouseposition"),L.DomEvent.disableClickPropagation(this._container),o.on("mousemove",this._onMouseMove,this),this._container.innerHTML=this.options.emptyString,this._container},onRemove:function(o){o.off("mousemove",this._onMouseMove)},_onMouseMove:function(o){var t=this.options.lngFormatter?this.options.lngFormatter(o.latlng.lng):L.Util.formatNum(o.latlng.lng,this.options.numDigits),i=this.options.latFormatter?this.options.latFormatter(o.latlng.lat):L.Util.formatNum(o.latlng.lat,this.options.numDigits),n=this.options.lngFirst?t+this.options.separator+i:i+this.options.separator+t,s=this.options.prefix+" "+n;this._container.innerHTML=s}}),L.Map.mergeOptions({positionControl:!1}),L.Map.addInitHook(function(){this.options.positionControl&&(this.positionControl=new L.Control.MousePosition,this.addControl(this.positionControl))}),L.control.mousePosition=function(o){return new L.Control.MousePosition(o)};

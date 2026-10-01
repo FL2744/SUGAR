@@ -16,6 +16,8 @@ from .research_requirements import (
     _clean,
     _clean_list,
     policy_for_mode,
+    explicit_search_terms,
+    build_initial_search_plan,
 )
 from .utils import JsonCache
 
@@ -869,6 +871,12 @@ def build_search_plan_from_strategy(
         raise ValueError("Compiled strategy and research requirement IDs do not match.")
     if not strategy.approved:
         raise ValueError("Compiled research strategy must be analyst-approved before planning.")
+
+    if explicit_search_terms(requirement.question):
+        plan = build_initial_search_plan(requirement)
+        plan.events.append({"type": "compiled_strategy_plan", "strategy_id": strategy.strategy_id,
+                            "reason": "Preserve the analyst's explicit literal search term."})
+        return plan
 
     policy = policy_for_mode(requirement.collection_mode)
     branches: list[SearchBranch] = []
