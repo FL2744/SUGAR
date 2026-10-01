@@ -4,6 +4,16 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ## Unreleased
 
+### Collection and exported-map fixes
+
+- Keep evidence review, geography, mapping, and export controls inside their panel by wrapping them at narrower window widths.
+
+- Build literal keyword plans without including provider instructions; recognize explicitly named collection sources and discard outdated interpretations when the question changes.
+- Put planning and collection before optional dataset import in the advanced evidence workflow; pass AI configuration through to collection.
+- Export self-contained maps with bundled Natural Earth country boundaries and local map libraries, including the overview map, without tile-server or CDN requests. This background provides country-level context rather than street detail.
+- Show full saved English translations in point popups, with expandable originals and source links. Keep background and heat layers from intercepting point clicks.
+- Include map assets in macOS and Windows packages and retain data attribution while hiding library branding.
+
 ### Added
 
 - **Research workbench.** Plain-language requests are interpreted into a persistent, typed `ResearchPlanSpec` (topic, geography, actors, timeframe, languages, platforms, queries, exclusions, depth, limits, translation, de-duplication, provider, refresh, concurrency, retry, extension fields) that is shown for review (run / edit / advanced) before anything executes.

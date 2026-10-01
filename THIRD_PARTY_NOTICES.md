@@ -45,3 +45,9 @@ The Apache-2.0 license applies to SUGAR software; it does **not** grant rights i
 ## Release verification
 
 Dependency versions and licensing can change. Before each public binary release, maintainers should regenerate or review the dependency inventory, verify licenses for the actual resolved versions, and preserve any required attribution/license files inside the release artifact.
+
+## Self-contained map exports
+
+The assets in `sugar_core/map_assets` are bundled into map HTML so exports work without tile or CDN requests. `SOURCES.txt` and `manifest.json` record their upstream URLs; `LICENSE-*.txt` and the original asset headers retain license notices. These files are third-party assets, not SUGAR-authored code.
+
+Country boundaries come from Natural Earth (public domain), containing geometry only; unused descriptive attributes are omitted. Leaflet, jQuery, Bootstrap, Font Awesome and the map plugins retain their upstream licenses; the library branding prefix is hidden without removing data attribution or source notices.

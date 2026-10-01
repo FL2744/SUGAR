@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .map_display import configure_map_display, add_offline_basemap, add_offline_minimap, save_offline_map
+
 import hashlib
 import html
 import json
@@ -285,6 +287,8 @@ def _normalize_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
                 "_platform": platform.casefold(),
                 "_title": title,
                 "_summary": summary,
+                "_translated_text": _first(row, "translated_text", "translated_en"),
+                "_original_text": _first(row, "original_text"),
                 "_date_raw": date_value,
                 "_location": location,
                 "_country": country,
@@ -498,7 +502,20 @@ def _popup_html(row: pd.Series, max_chars: int) -> str:
             lines.append(
                 f"<div class='sugar-popup-provenance'>{len(spatial_matches) - 1} additional stored nearby reference match(es)</div>"
             )
-    if summary:
+    translated = _clean(row.get("_translated_text"))
+    original = _clean(row.get("_original_text"))
+    if translated or original:
+        post = ["<div class='sugar-post-text'>"]
+        if translated:
+            post.append(f"<b>English translation</b><div class='sugar-popup-post'>{esc(translated)}</div>")
+            if original:
+                post.append(f"<details><summary>Original post</summary><div class='sugar-popup-post'>{esc(original)}</div></details>")
+        else:
+            post.append(f"<b>Original post</b><div class='sugar-popup-post'>{esc(original)}</div><small>No translation is saved for this post.</small>")
+        post.append("</div>")
+        # Keep the full post before metadata; do not truncate the translation.
+        lines.insert(2, "".join(post))
+    elif summary:
         lines.append(f"<div class='sugar-popup-summary'>{esc(summary)}</div>")
 
     provenance: list[str] = []
@@ -761,6 +778,8 @@ def _style_html() -> str:
       .sugar-popup { min-width: 275px; max-width: 430px; font: 12px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
       .sugar-popup-title { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
       .sugar-popup-meta { color: #475569; margin-bottom: 7px; }
+      .sugar-popup-post { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow-y: auto; margin: 8px 0; }
+      .sugar-post-text { margin: 10px 0; }
       .sugar-popup-summary { border-top: 1px solid #e2e8f0; margin-top: 7px; padding-top: 7px; }
       .sugar-popup-provenance { color: #64748b; margin-top: 7px; font-size: 11px; }
       .sugar-popup-id { color: #94a3b8; font-size: 10px; margin-top: 5px; word-break: break-all; }
@@ -833,7 +852,7 @@ def create_map(
     spatial proximity remains separate from analyst-tagged overlap.
     """
     import folium
-    from folium.plugins import Fullscreen, HeatMap, MarkerCluster, MeasureControl, MiniMap, MousePosition
+    from folium.plugins import Fullscreen, HeatMap, MarkerCluster, MeasureControl, MousePosition
 
     options = options or MapOptions()
     work, dataset_type = _normalize_rows(df)
@@ -890,23 +909,9 @@ def create_map(
         prefer_canvas=True,
         world_copy_jump=True,
     )
-    # Local HTML exports must remain usable even when a remote tile service rejects
-    # file:// referrers or changes its terms. Start on a provider-independent canvas;
-    # analysts can enable OSM explicitly when they have network access.
-    folium.FeatureGroup(
-        name="Offline analytic canvas",
-        overlay=False,
-        control=True,
-        show=True,
-    ).add_to(m)
-    folium.TileLayer(
-        tiles="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-        attr="&copy; OpenStreetMap contributors",
-        name="OpenStreetMap (online)",
-        control=True,
-        show=False,
-        max_zoom=19,
-    ).add_to(m)
+    # Embed geographic context so local exports never require a tile service.
+    configure_map_display(m)
+    add_offline_basemap(m)
 
     dimension = "_kind" if dataset_type == "research_observations" else "_platform"
     dimension_prefix = "Type" if dataset_type == "research_observations" else "Platform"
@@ -1126,7 +1131,7 @@ def create_map(
 
     Fullscreen(position="topleft", title="Fullscreen", title_cancel="Exit fullscreen").add_to(m)
     if options.show_minimap:
-        MiniMap(toggle_display=True, minimized=True).add_to(m)
+        add_offline_minimap(m)
     if options.show_measure_control:
         MeasureControl(position="topleft", primary_length_unit="kilometers").add_to(m)
     if options.show_mouse_position:
@@ -1165,5 +1170,5 @@ def create_map(
 
     output_file = str(Path(output_file).expanduser().resolve())
     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-    m.save(output_file)
+    save_offline_map(m, output_file)
     return output_file

@@ -144,8 +144,11 @@ def test_changed_requirement_invalidates_old_compiled_strategy(tmp_path: Path) -
             "question": "How are cultural institutions reaching high school students in Sampleland?",
         }
     )
-    with pytest.raises(ValueError, match="different research requirement"):
-        research_service.create_research_plan({"workspace": str(workspace.root)})
+    outputs = research_service.create_research_plan({"workspace": str(workspace.root)})
+    plan = json.loads(Path(outputs[0]).read_text())
+    requirement = json.loads((workspace.path_for("state") / "research-requirement.json").read_text())
+    assert plan["requirement_id"] == requirement["requirement_id"]
+    assert all("educational institutions" not in branch["query"] for branch in plan["branches"])
 
 
 def test_plan_review_and_analyst_update_round_trip(tmp_path: Path) -> None:
@@ -543,3 +546,33 @@ def test_research_triage_resolves_records_and_registers_observations(tmp_path: P
     assert seen["source"] == records_path.resolve()
     assert seen["kwargs"]["llm"].provider == "arc"
     assert any(path.endswith("research-observations.csv") for path in outputs)
+
+
+def test_literal_search_collects_without_input_dataset(tmp_path, monkeypatch):
+    workspace = _workspace(tmp_path)
+    research_service.create_research_requirement({
+        'workspace': str(workspace.root),
+        'question': 'Search for the term “democracy” from posts originating in the Middle East on X. Use the X Bearer token in the settings. Use OpenAI for inference.',
+        'geographies': ['Middle East'],
+    })
+    research_service.compile_research_strategy({'workspace': str(workspace.root), 'ai_expand': False})
+    research_service.update_research_strategy({'workspace': str(workspace.root), 'decision': 'approved', 'reviewer': 'Analyst'})
+    research_service.create_research_plan({'workspace': str(workspace.root)})
+    from sugar_core import plan_execution
+    calls = []
+    def fake_search(config, secrets, **kwargs):
+        calls.append((config, secrets))
+        output = tmp_path / 'collected.csv'
+        output.write_text('platform,native_id,original_text,query\nx,1,democracy,democracy\n')
+        return [str(output)]
+    monkeypatch.setattr(plan_execution, 'run_search', fake_search)
+    research_service.collect_research_plan({
+        'workspace': str(workspace.root), 'infer_locations': True,
+        'llm': {'provider': 'arc', 'model': 'test-model'},
+    }, secrets={'x_bearer_token': 'fake', 'llm_api_key': 'fake'})
+    assert len(calls) == 1
+    assert calls[0][0]['terms'] == ['democracy']
+    assert calls[0][0]['sources'] == ['x']
+    assert calls[0][0]['llm'] == {'provider': 'arc', 'model': 'test-model'}
+    assert calls[0][0]['infer_locations'] is True
+    assert not list(workspace.path_for('raw').glob('*.csv'))

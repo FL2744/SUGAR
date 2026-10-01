@@ -1,0 +1,88 @@
+.leaflet-control-minimap {
+	border:solid rgba(255, 255, 255, 1.0) 4px;
+	box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+	border-radius: 3px;
+	background: #f8f8f9;
+	transition: all .6s;
+}
+
+.leaflet-control-minimap a {
+	background-color: rgba(255, 255, 255, 1.0);
+	background-repeat: no-repeat;
+	z-index: 99999;
+	transition: all .6s;
+}
+
+.leaflet-control-minimap a.minimized-bottomright {
+	-webkit-transform: rotate(180deg);
+	transform: rotate(180deg);
+	border-radius: 0px;
+}
+
+.leaflet-control-minimap a.minimized-topleft {
+	-webkit-transform: rotate(0deg);
+	transform: rotate(0deg);
+	border-radius: 0px;
+}
+
+.leaflet-control-minimap a.minimized-bottomleft {
+	-webkit-transform: rotate(270deg);
+	transform: rotate(270deg);
+	border-radius: 0px;
+}
+
+.leaflet-control-minimap a.minimized-topright {
+	-webkit-transform: rotate(90deg);
+	transform: rotate(90deg);
+	border-radius: 0px;
+}
+
+.leaflet-control-minimap-toggle-display{
+	background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMTgiIHdpZHRoPSIxOCI+PGRlZnM+PG1hcmtlciBvcmllbnQ9ImF1dG8iIG92ZXJmbG93PSJ2aXNpYmxlIj48cGF0aCBkPSJNLTIuNi0yLjgyOEwtNS40MjggMC0yLjYgMi44MjguMjI4IDAtMi42LTIuODI4eiIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iLjRwdCIvPjwvbWFya2VyPjxtYXJrZXIgb3JpZW50PSJhdXRvIiBvdmVyZmxvdz0idmlzaWJsZSI+PGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9Ii44IiBzdHJva2UtbGluZWNhcD0icm91bmQiPjxwYXRoIGQ9Ik00LjU2NiA0Ljc1TC0uNjUyIDAiLz48cGF0aCBkPSJNMS41NDQgNC43NUwtMy42NzQgMCIvPjxwYXRoIGQ9Ik0tMS41NjYgNC43NUwtNi43ODQgMCIvPjxwYXRoIGQ9Ik00LjU2Ni01LjAxM0wtLjY1Mi0uMjYzIi8+PHBhdGggZD0iTTEuNTQ0LTUuMDEzbC01LjIxOCA0Ljc1Ii8+PHBhdGggZD0iTS0xLjU2Ni01LjAxM2wtNS4yMTggNC43NSIvPjwvZz48L21hcmtlcj48bWFya2VyIG9yaWVudD0iYXV0byIgb3ZlcmZsb3c9InZpc2libGUiPjxwYXRoIGQ9Ik0tNS42LTUuNjU3TC0xMS4yNTcgMC01LjYgNS42NTcuMDU3IDAtNS42LTUuNjU3eiIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iLjhwdCIvPjwvbWFya2VyPjxtYXJrZXIgb3JpZW50PSJhdXRvIiBvdmVyZmxvdz0idmlzaWJsZSI+PHBhdGggZD0iTTQuNjE2IDBsLTYuOTIgNHYtOGw2LjkyIDR6IiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSIuOHB0Ii8+PC9tYXJrZXI+PG1hcmtlciBvcmllbnQ9ImF1dG8iIG92ZXJmbG93PSJ2aXNpYmxlIj48cGF0aCBkPSJNLTEwLjY5LTQuNDM3TDEuMzI4LS4wMTdsLTEyLjAxOCA0LjQyYzEuOTItMi42MSAxLjkxLTYuMTggMC04Ljg0eiIgZm9udC1zaXplPSIxMiIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2Utd2lkdGg9Ii42ODc1IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9tYXJrZXI+PG1hcmtlciBvcmllbnQ9ImF1dG8iIG92ZXJmbG93PSJ2aXNpYmxlIj48cGF0aCBkPSJNLTQuNjE2IDBsNi45Mi00djhsLTYuOTItNHoiIGZpbGwtcnVsZT0iZXZlbm9kZCIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9Ii44cHQiLz48L21hcmtlcj48bWFya2VyIG9yaWVudD0iYXV0byIgb3ZlcmZsb3c9InZpc2libGUiPjxwYXRoIGQ9Ik0xMCAwbDQtNEwwIDBsMTQgNC00LTR6IiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSIuOHB0Ii8+PC9tYXJrZXI+PG1hcmtlciBvcmllbnQ9ImF1dG8iIG92ZXJmbG93PSJ2aXNpYmxlIj48cGF0aCBkPSJNMTAuNjkgNC40MzdMLTEuMzI4LjAxN2wxMi4wMTgtNC40MmMtMS45MiAyLjYxLTEuOTEgNi4xOCAwIDguODR6IiBmb250LXNpemU9IjEyIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIHN0cm9rZS13aWR0aD0iLjY4NzUiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L21hcmtlcj48L2RlZnM+PHBhdGggZD0iTTEzLjE4IDEzLjE0NnYtNS44MWwtNS44MSA1LjgxaDUuODF6IiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMS42NDMiLz48cGF0aCBkPSJNMTIuNzYyIDEyLjcyN2wtNi41MS02LjUxIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMi40ODIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==");
+	background-size: cover;
+	position: absolute;
+	border-radius: 3px 0px 0px 0px;
+}
+
+.leaflet-oldie .leaflet-control-minimap-toggle-display{
+	background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAbUlEQVR4Ae3MpxWCQRAAYVJFqNXQAPSBpjFqIhtyhmXEn+MFe/PeZ6cTcq6LAbxb4IYpqhIYtYfiXTETHGHUCLfMbJKZaMS4cWE2xzk7cppFfk6jqBm0xDLBGT+fkUBrGTbEChq5RR5QfGFZ6A+JBTPPlNVQWgAAAABJRU5ErkJggg==");
+}
+
+.leaflet-control-minimap-toggle-display-bottomright {
+	bottom: 0;
+	right: 0;
+}
+
+.leaflet-control-minimap-toggle-display-topleft{
+	top: 0;
+	left: 0;
+	-webkit-transform: rotate(180deg);
+	transform: rotate(180deg);
+}
+
+.leaflet-control-minimap-toggle-display-bottomleft{
+	bottom: 0;
+	left: 0;
+	-webkit-transform: rotate(90deg);
+	transform: rotate(90deg);
+}
+
+.leaflet-control-minimap-toggle-display-topright{
+	top: 0;
+	right: 0;
+	-webkit-transform: rotate(270deg);
+	transform: rotate(270deg);
+}
+
+/* Old IE */
+.leaflet-oldie .leaflet-control-minimap {
+	border: 1px solid #999;
+}
+
+.leaflet-oldie .leaflet-control-minimap a {
+	background-color: #fff;
+}
+
+.leaflet-oldie .leaflet-control-minimap a.minimized {
+	filter: progid:DXImageTransform.Microsoft.BasicImage(rotation=2);
+}

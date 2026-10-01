@@ -187,9 +187,9 @@ def test_create_map_smoke_contains_plain_analytical_panel_content(tmp_path: Path
     assert "records tagged for U.S. overlap" in text
     assert "not influence" in text
     assert "CartoDB" not in text
-    assert "Offline analytic canvas" in text
-    assert "OpenStreetMap (online)" in text
-    assert "tile.openstreetmap.org" in text
+    assert "Countries (offline)" in text
+    assert "OpenStreetMap (online)" not in text
+    assert "https://tile.openstreetmap.org/{z}/{x}/{y}.png" not in text
     assert '"maxZoom": 19' in text
     assert "tile.openstreetmap.fr" not in text
 
@@ -318,3 +318,42 @@ def test_run_map_supports_generic_reference_layers(tmp_path: Path):
 def test_create_map_rejects_dataset_without_coordinates(tmp_path: Path):
     with pytest.raises(ValueError, match="No valid coordinates"):
         create_map(pd.DataFrame([{"title": "unmapped"}]), tmp_path / "map.html")
+
+
+def test_map_initialization_and_basemap_are_usable(tmp_path):
+    import re
+    result = create_map(_observation_frame(), tmp_path / 'display.html')
+    text = Path(result).read_text()
+    initialization = text.split('= L.map(', 1)[1].split('L.control.scale()', 1)[0]
+    assert '"maxZoom": 19' in initialization
+    assert '.attributionControl.setPrefix(false)' in text
+    assert text.index('.attributionControl.setPrefix(false)') < text.index('L.markerClusterGroup(')
+    assert 'Countries (offline)' in text
+    assert 'Natural Earth' in text
+    assert not re.search(r'<script[^>]+src=|<link[^>]+href=', text)
+    assert 'https://tile.openstreetmap.org/{z}/{x}/{y}.png' not in text
+    assert 'new L.Control.MiniMap(\n      L.geoJSON(' in text
+
+
+def test_post_popup_shows_full_translation_and_original_safely():
+    translated = 'Translated post ' + 'long text ' * 400 + '<script>unsafe()</script>'
+    frame = pd.DataFrame([{'platform': 'x', 'native_id': 'translation-test',
+                          'latitude': 30, 'longitude': 35,
+                          'original_text': 'Original <b>post</b>',
+                          'translated_text': translated}])
+    normalized, _ = _normalize_rows(frame)
+    popup = _popup_html(normalized.iloc[0], 50)
+    assert 'English translation' in popup
+    assert 'long text ' * 400 in popup
+    assert '&lt;script&gt;unsafe()&lt;/script&gt;' in popup
+    assert '<script>unsafe()' not in popup
+    assert '<summary>Original post</summary>' in popup
+    assert 'Original &lt;b&gt;post&lt;/b&gt;' in popup
+    assert popup.index('English translation') < popup.index('sugar-popup-meta')
+
+
+def test_background_layers_do_not_capture_point_clicks(tmp_path):
+    text = Path(create_map(_observation_frame(), tmp_path / 'clicks.html')).read_text()
+    assert 'country-background' in text
+    assert '"interactive": false' in text
+    assert 'pointer-events: none !important' in text

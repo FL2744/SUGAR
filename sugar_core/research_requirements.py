@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -89,7 +90,7 @@ class ResearchRequirement:
         self.languages = _clean_list(self.languages) or ["auto"]
         self.known_entities = _clean_list(self.known_entities)
         self.excluded_topics = _clean_list(self.excluded_topics)
-        self.preferred_sources = _clean_list(self.preferred_sources)
+        self.preferred_sources = _clean_list(self.preferred_sources) or explicit_collection_sources(self.question)
         self.notes = _clean(self.notes)
         self.collection_mode = _clean(self.collection_mode).casefold()  # type: ignore[assignment]
         if self.collection_mode not in {"quick", "standard", "deep"}:
@@ -417,6 +418,28 @@ def policy_for_mode(mode: str) -> SearchPolicy:
     return SearchPolicy(max_hops=2, max_branches=64, min_sample=12)
 
 
+def explicit_search_terms(question: str) -> list[str]:
+    """Extract only an explicitly requested, quoted search term, never instructions."""
+    match = re.search(
+        r"\b(?:search\s+for|find|collect)\s+(?:posts\s+(?:containing|about)\s+)?"
+        r"(?:the\s+)?(?:(?:term|keyword|phrase)\s+)?[\"“‘']([^\"”’']+)[\"”’']",
+        question, re.IGNORECASE,
+    )
+    if not match:
+        return []
+    term = _clean(match.group(1))
+    return [f'"{term}"' if " " in term else term] if term else []
+
+
+def explicit_collection_sources(question: str) -> list[str]:
+    """Recognize an explicit platform instruction when no source was selected."""
+    aliases = {"twitter": "x"}
+    return list(dict.fromkeys(
+        aliases.get(name.casefold(), name.casefold())
+        for name in re.findall(r"\b(?:on|from)\s+(X|Twitter|Bluesky|Mastodon|Weibo|Bilibili)\b", question, re.IGNORECASE)
+    ))
+
+
 def build_initial_search_plan(requirement: ResearchRequirement) -> SearchPlan:
     policy = policy_for_mode(requirement.collection_mode)
     branches: list[SearchBranch] = []
@@ -436,6 +459,13 @@ def build_initial_search_plan(requirement: ResearchRequirement) -> SearchPlan:
             parent_concept=concept,
             hop_depth=0,
         ))
+
+    terms = explicit_search_terms(requirement.question)
+    if terms:
+        for term in terms:
+            if not any(topic.casefold() in term.casefold() for topic in requirement.excluded_topics):
+                add(term, "Literal search term requested by the analyst. Provider instructions are configuration; geography requires location review, not a text match.")
+        return SearchPlan(requirement_id=requirement.requirement_id, branches=branches, policy=policy)
 
     for entity in requirement.known_entities:
         add(entity, "Known entity supplied by the research requirement.", entity)
