@@ -113,7 +113,7 @@ jobs:
       - name: Stamp the build with its commit
         shell: bash
         run: python tools/write_build_info.py --commit "${{ needs.release-context.outputs.target }}" --mode "${{ needs.release-context.outputs.mode }}"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -170,7 +170,7 @@ jobs:
       - name: Stamp the build with its commit
         shell: bash
         run: python tools/write_build_info.py --commit "${{ needs.release-context.outputs.target }}" --mode "${{ needs.release-context.outputs.mode }}"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
