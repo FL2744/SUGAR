@@ -10,6 +10,17 @@ Current package version: **1.6.0**.
 
 License: **Apache License 2.0**. Copyright 2026 Alejandro Grenier and contributors.
 
+Authors: **Alejandro Grenier** and **William Taggart**. Developed in connection with **Virginia Tech Diplomacy Lab** coursework and research (see the project-context note at the end of this README).
+
+## Research workbench (plain-language research)
+
+Type a request the way you would say it — *“Search democracy in the Middle East on all platforms.”* — and SUGAR interprets it into a structured, editable research plan, shows you that plan (with every assumption it made), then runs it while you watch: searches, sources, downloads, language detection, live translations, duplicates, and rejections stream into an Activity view. One failing platform does not end the run; the result states explicitly what is incomplete. Every item keeps its provenance and an evidence chain (search result → fetched document → extracted paragraph → translated paragraph → coded finding), and every run is saved as a reproducible record that can be exported with hashes.
+
+- **Interpretation:** an optional LLM provider (OpenAI, OpenAI-compatible, Anthropic, Virginia Tech ARC, or a local endpoint) produces schema-constrained output that is validated and repaired; a deterministic interpreter needs no model and accepts ordinary sentences.
+- **Providers and credentials:** Provider → Credential → Model → Advanced options, with *Test connection*. Credentials live in the OS vault or an owner-only file (or `.env.local` for development) and never in projects, logs, or Git.
+- **Five distinct refresh operations:** Reinterpret request, Rebuild plan, Refresh sources, Reprocess results, Rerun.
+- See [`docs/research-workbench.md`](docs/research-workbench.md). An offline demo with simulated platforms: `python tools/demo_workbench_server.py`.
+
 ## What SUGAR does
 
 SUGAR keeps one shared Python research core and is moving its Windows and macOS desktop interfaces to one Tauri 2 / React frontend. The shared MapLibre map and React workflows run in the same shell on both operating systems, with the Python engine packaged as a sidecar. The supported pipeline is:

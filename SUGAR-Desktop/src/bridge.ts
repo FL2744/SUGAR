@@ -2,7 +2,10 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { BackendEvent, BackendResult, SecretKey } from "./types";
 
 export type Credentials = Partial<Record<SecretKey, string>>;
-export type ApiWorkspace = { id: string; workspace: string; name: string; description?: string };
+export type ApiWorkspace = {
+  id: string; workspace: string; name: string; description?: string;
+  research_question?: string; status?: string; last_activity?: string; updated_at?: string; run_count?: number; path?: string;
+};
 export type ApiMemberAccess = { token: string; email: string; role: string; project_id: string; message: string };
 
 let apiBase = "";
@@ -20,6 +23,7 @@ export function defaultApiUrl(): string {
 }
 
 export function configureApi(url: string, token: string): void {
+  if (isTauri()) return;      // the desktop app always talks to its own loopback sidecar (see ensureLocalApi)
   apiBase = url.trim().replace(/\/+$/, "");
   apiToken = token;
   if (typeof window !== "undefined") {
@@ -33,6 +37,43 @@ function apiHeaders(extra: HeadersInit = {}): HeadersInit {
     ...extra,
     ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
   };
+}
+
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  return apiJson<T>(path, init);
+}
+
+export function apiPost<T>(path: string, body: unknown = {}): Promise<T> {
+  return apiJson<T>(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+
+/** Open a streaming (Server-Sent Events) response with the same auth and address rules as every other call. */
+export async function openEventStream(path: string, signal: AbortSignal): Promise<Response> {
+  const base = apiBase || defaultApiUrl();
+  const response = await fetch(`${base}${path}`, { headers: apiHeaders({ Accept: "text/event-stream" }), signal });
+  if (!response.ok || !response.body) {
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(payload.error || `The activity stream could not be opened (HTTP ${response.status}).`);
+  }
+  return response;
+}
+
+let localApi: Promise<void> | null = null;
+
+/** Desktop: start the loopback research API sidecar (once) and point the client at it. Browser: no-op. */
+export function ensureLocalApi(): Promise<void> {
+  if (!isTauri()) return Promise.resolve();
+  if (!localApi) {
+    localApi = invoke<{ url: string; token: string }>("start_local_api").then((info) => {
+      apiBase = info.url.replace(/\/+$/, "");
+      apiToken = info.token;
+    }).catch((issue) => { localApi = null; throw issue; });
+  }
+  return localApi;
+}
+
+export async function openLocalFolder(path: string, create = false, name = ""): Promise<ApiWorkspace> {
+  return apiPost<ApiWorkspace>("/api/workspaces/open", { path, create, name });
 }
 
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {

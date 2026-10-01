@@ -1,11 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { configureApi, createWorkspace, defaultApiUrl, downloadWorkspaceFile, hubData, issueMemberAccessToken, latestEvent, listWorkspaces, revokeMemberAccessToken, runBackend, uploadWorkspaceFile, type ApiWorkspace, type Credentials } from "./bridge";
+import { api, configureApi, createWorkspace, defaultApiUrl, downloadWorkspaceFile, ensureLocalApi, hubData, issueMemberAccessToken, latestEvent, listWorkspaces, openLocalFolder, revokeMemberAccessToken, runBackend, uploadWorkspaceFile, type ApiWorkspace, type Credentials } from "./bridge";
 import { InstitutionMap, institutionCoordinates } from "./map-view";
-import type { BackendEvent, Institution, SecretKey } from "./types";
+import type { BackendEvent, Institution } from "./types";
+import { AboutPage } from "./about-page";
+import { ActivityView } from "./activity-view";
+import { usePrefs } from "./prefs";
+import { Onboarding } from "./onboarding";
+import { CommandPalette, ShortcutHelp, type Command } from "./command-palette";
+import { ToastHost, type Toast } from "./ui";
+import { ProjectsPage } from "./projects-page";
+import { research } from "./research-api";
+import { ResearchPage } from "./research-page";
+import type { ProjectOverview, RunSummary } from "./research-types";
+import { ResultsView } from "./results-view";
+import { SettingsPage } from "./settings-page";
+import { TimelinePage } from "./timeline-page";
+import { StatusPill } from "./ui";
 
-type Page = "home" | "project" | "institutions" | "activity" | "settings";
+type Page = "research" | "activity" | "results" | "projects" | "home" | "project" | "institutions" | "timeline" | "settings" | "about";
 type ActivityItem = { id: number; time: string; title: string; detail: string; kind: "ok" | "error" | "info" };
 type Dashboard = {
   name?: string;
@@ -53,20 +67,23 @@ function commaList(value: string): string[] {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
-const NAV: Array<{ id: Page; label: string; icon: string }> = [
+const NAV_BASIC: Array<{ id: Page; label: string; icon: string }> = [
+  { id: "research", label: "Research", icon: "⌕" },
+  { id: "activity", label: "Activity", icon: "↗" },
+  { id: "results", label: "Results", icon: "▤" },
+  { id: "projects", label: "Projects", icon: "⌂" },
+];
+// Advanced mode adds the evidence, map, and audit surfaces.
+const NAV_ADVANCED: Array<{ id: Page; label: string; icon: string }> = [
   { id: "home", label: "Overview", icon: "◫" },
-  { id: "project", label: "Research project", icon: "⌕" },
+  { id: "project", label: "Evidence & handoff", icon: "☷" },
   { id: "institutions", label: "Institutions & map", icon: "⌖" },
-  { id: "activity", label: "Run history", icon: "↗" },
+  { id: "timeline", label: "Project timeline", icon: "◷" },
 ];
-const SECRET_FIELDS: Array<{ key: SecretKey; label: string; placeholder: string }> = [
-  { key: "llm_api_key", label: "LLM provider key", placeholder: "Optional · for assisted workflows" },
-  { key: "x_bearer_token", label: "X bearer token", placeholder: "Optional" },
-  { key: "bluesky_identifier", label: "Bluesky identifier", placeholder: "Optional" },
-  { key: "bluesky_app_password", label: "Bluesky app password", placeholder: "Optional" },
-  { key: "mastodon_token", label: "Mastodon access token", placeholder: "Optional" },
-  { key: "weibo_cookie", label: "Weibo cookie", placeholder: "Optional" },
-];
+const PAGE_TITLES: Record<Page, string> = {
+  research: "Research", activity: "Activity", results: "Results", projects: "Projects", home: "Overview", project: "Evidence & handoff",
+  institutions: "Institutions & map", timeline: "Project timeline", settings: "Settings", about: "About",
+};
 
 function titleCase(value: string) {
   return value.replaceAll("_", " ").replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -110,8 +127,28 @@ function extractEvidence(row: Institution): Array<{ label: string; url: string }
 }
 
 export function App() {
-  const [page, setPage] = useState<Page>("home");
+  const [page, setPage] = useState<Page>("research");
+  const [prefs, savePrefs] = usePrefs();
+  const [prefill, setPrefill] = useState<{ text: string; n: number }>({ text: "", n: 0 });
+  const [showSetup, setShowSetup] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastId = useRef(0);
+  const notify = useCallback((text: string, tone: Toast["tone"] = "info", action?: Toast["action"]) => {
+    const id = ++toastId.current;
+    setToasts((current) => [...current.slice(-2), { id, tone, text, action }]);
+    window.setTimeout(() => setToasts((current) => current.filter((t) => t.id !== id)), action ? 9000 : 5000);
+  }, []);
   const [workspace, setWorkspace] = useState(() => localStorage.getItem("sugar.workspace") || "");
+  const [projectId, setProjectId] = useState(() => localStorage.getItem("sugar.projectId") || "");
+  const [projects, setProjects] = useState<ApiWorkspace[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [overview, setOverview] = useState<ProjectOverview | null>(null);
+  const [runId, setRunId] = useState("");
+  const [timelineKey, setTimelineKey] = useState(0);
+  const [createSignal, setCreateSignal] = useState(0);
+  const settingsDirty = useRef(false);
   const [projectName, setProjectName] = useState("State Research Project");
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [registry, setRegistry] = useState<Institution[]>([]);
@@ -123,14 +160,9 @@ export function App() {
   const [engineVersion, setEngineVersion] = useState("");
   const [apiUrl, setApiUrl] = useState(() => defaultApiUrl());
   const [apiToken, setApiToken] = useState("");
-  const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
-  const [remoteWorkspaces, setRemoteWorkspaces] = useState<ApiWorkspace[]>([]);
-  const [remoteProjectName, setRemoteProjectName] = useState("State Research Project");
   const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [credentials, setCredentials] = useState<Credentials>({});
-  const [theme, setTheme] = useState<"light" | "dark">(() =>
-    localStorage.getItem("sugar.theme") === "dark" ? "dark" : "light",
-  );
+  // Credentials are managed in Settings and stored securely by the engine; operations resolve them there.
+  const credentials = useMemo<Credentials>(() => ({}), []);
   const [question, setQuestion] = useState("");
   const [geography, setGeography] = useState("");
   const [knownEntities, setKnownEntities] = useState("");
@@ -170,9 +202,6 @@ export function App() {
   const [collectionRetrySource, setCollectionRetrySource] = useState("x");
   const [collectionControlBusy, setCollectionControlBusy] = useState(false);
   const [collectionControlMessage, setCollectionControlMessage] = useState("");
-  const [vaultMessage, setVaultMessage] = useState("");
-  const [vaultAvailability, setVaultAvailability] = useState<boolean | null>(null);
-  const [savedCredentialNames, setSavedCredentialNames] = useState<string[]>([]);
   const [evidenceFile, setEvidenceFile] = useState("");
   const [publicItemSource, setPublicItemSource] = useState("weibo");
   const [publicItemUrl, setPublicItemUrl] = useState("");
@@ -206,11 +235,6 @@ export function App() {
   const datasetInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => configureApi(apiUrl, apiToken), [apiUrl, apiToken]);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem("sugar.theme", theme);
-  }, [theme]);
 
   const addActivity = useCallback((title: string, detail: string, kind: ActivityItem["kind"] = "ok") => {
     setActivity((items) => [{ id: Date.now() + Math.random(), time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), title, detail, kind }, ...items].slice(0, 100));
@@ -302,15 +326,19 @@ export function App() {
     }
   }, [workspace, execute]);
 
+  // The legacy evidence/registry dashboard spawns several engine operations; load it only when one of its pages is opened.
+  const legacyLoaded = useRef("");
   useEffect(() => {
-    if (!workspace) return;
+    if (!workspace || !["home", "project", "institutions"].includes(page) || legacyLoaded.current === workspace) return;
+    legacyLoaded.current = workspace;
     void refreshDashboard(workspace);
-  }, [workspace]);
+  }, [workspace, page]);
 
   useEffect(() => {
     let active = true;
     setEngineState("checking");
-    void runBackend("diagnostics", undefined, credentials).then((result) => {
+    // Desktop: start the loopback research API first; live runs and the research workbench use it.
+    void ensureLocalApi().then(() => runBackend("diagnostics", undefined, credentials)).then((result) => {
       if (!active) return;
       const diagnostics = latestEvent<Record<string, unknown>>(result.events, "diagnostics");
       setEngineVersion(String(diagnostics?.version || ""));
@@ -332,70 +360,94 @@ export function App() {
   const networks = useMemo(() => ["All networks", ...new Set(registry.map((row) => row.network).filter((item): item is string => Boolean(item)))], [registry]);
   const locatedCount = useMemo(() => registry.filter((row) => institutionCoordinates(row) !== null).length, [registry]);
 
-  const chooseWorkspace = async () => {
-    if (!isTauri()) {
-      setBusy("loading-projects");
-      setError("");
-      try {
-        setRemoteWorkspaces(await listWorkspaces());
-        setRemoteProjectName(projectName || "Research project");
-        setWorkspacePickerOpen(true);
-      } catch (issue) {
-        setError(issue instanceof Error ? issue.message : String(issue));
-      } finally { setBusy(""); }
-      return;
+  // ---- projects (research workbench) ------------------------------------------------------------------
+  const loadProjects = useCallback(async () => {
+    setProjectsLoading(true);
+    try { setProjects(await listWorkspaces()); } catch (issue) { setError(issue instanceof Error ? issue.message : String(issue)); } finally { setProjectsLoading(false); }
+  }, []);
+
+  const refreshOverview = useCallback(async (id = projectId) => {
+    if (!id) { setOverview(null); return; }
+    try {
+      const data = await research.overview(id);
+      setOverview(data);
+      setProjectName(data.summary.name);
+      setRunId((current) => (current && data.runs.some((r) => r.run_id === current) ? current : data.runs[0]?.run_id || ""));
+      setTimelineKey((n) => n + 1);
+    } catch (issue) {
+      const message = issue instanceof Error ? issue.message : String(issue);
+      if (/not found/i.test(message)) { setProjectId(""); setOverview(null); } else setError(message);
     }
+  }, [projectId]);
+
+  const activateProject = useCallback((project: ApiWorkspace) => {
+    setProjectId(project.id);
+    setProjectName(project.name);
+    // Browser projects are addressed by reference; the desktop app also knows the folder for its file dialogs.
+    const reference = isTauri() ? (project.path || "") : project.workspace;
+    setWorkspace(reference);
+    try { localStorage.setItem("sugar.projectId", project.id); localStorage.setItem("sugar.workspace", reference); } catch { /* storage may be unavailable */ }
+    setRunId("");
+    setOverview(null);
+  }, []);
+
+  const changePage = useCallback((next: Page) => {
+    if (page === "settings" && next !== "settings" && settingsDirty.current && !window.confirm("You have unsaved settings. Leave without saving them?")) return;
+    setError("");
+    setPage(next);
+    if (next === "projects") void loadProjects();
+    if (next === "institutions" && registry.length === 0 && workspace) void refreshRegistry();
+  }, [page, loadProjects, registry.length, workspace]);
+
+  const openProject = (project: ApiWorkspace) => {
+    activateProject(project);
+    addActivity("Project opened", project.name, "ok");
+    setPage("research");
+  };
+
+  const createProject = async (name: string, question = ""): Promise<string> => {
+    setBusy("creating-project");
+    setError("");
+    try {
+      const created = await createWorkspace(name, question);
+      setProjects((items) => [created, ...items]);
+      activateProject(created);
+      if (isTauri()) { const listed = (await listWorkspaces()).find((item) => item.id === created.id); if (listed?.path) { setWorkspace(listed.path); localStorage.setItem("sugar.workspace", listed.path); } }
+      if (question) await api(`/api/workspaces/${created.id}/research/requirement`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: question }) }).catch(() => undefined);
+      addActivity("Project created", name, "ok");
+      setPage("research");
+      return created.id;
+    } catch (issue) {
+      setError(issue instanceof Error ? issue.message : String(issue));
+      throw issue;
+    } finally { setBusy(""); }
+  };
+
+  const openFolder = async () => {
     const selectedPath = await open({ directory: true, multiple: false, title: "Select a SUGAR project folder" });
     if (typeof selectedPath !== "string") return;
     setBusy("workspace-status");
     try {
-      let result = await runBackend("workspace-status", { workspace: selectedPath }, credentials);
-      let status = latestEvent<Record<string, unknown>>(result.events, "workspace_status");
-      if (!status) {
-        result = await runBackend("workspace-init", { workspace: selectedPath, name: projectName.trim() || "Research project", exist_ok: true }, credentials);
-        status = latestEvent<Record<string, unknown>>(result.events, "workspace_status");
-      }
-      setWorkspace(selectedPath);
-      localStorage.setItem("sugar.workspace", selectedPath);
-      if (status?.name) setProjectName(String(status.name));
-      addActivity("Project opened", String(status?.name || selectedPath), "ok");
-      setPage("home");
-    } catch (issue) {
-      const message = issue instanceof Error ? issue.message : String(issue);
-      if (message.includes("No such file") || message.includes("does not exist") || message.includes("FileNotFoundError")) {
-        const created = await runBackend("workspace-init", { workspace: selectedPath, name: projectName.trim() || "Research project", exist_ok: true }, credentials).catch(() => null);
-        if (created) {
-          setWorkspace(selectedPath);
-          localStorage.setItem("sugar.workspace", selectedPath);
-          addActivity("Project created", projectName, "ok");
-          setPage("home");
-        } else setError(message);
-      } else setError(message);
-    } finally { setBusy(""); }
+      const linked = await openLocalFolder(selectedPath, true, projectName.trim() || "Research project");
+      activateProject({ ...linked, path: selectedPath });
+      addActivity("Project opened", linked.name, "ok");
+      setPage("research");
+    } catch (issue) { setError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
   };
 
-  const openRemoteWorkspace = (item: ApiWorkspace) => {
-    setWorkspace(item.workspace);
-    setProjectName(item.name);
-    localStorage.setItem("sugar.workspace", item.workspace);
-    setWorkspacePickerOpen(false);
-    addActivity("Project opened", item.name, "ok");
-    setPage("home");
+  const ensureProject = async (suggested: string): Promise<string> => {
+    if (projectId) return projectId;
+    const name = suggested.trim() ? suggested.trim().replace(/^./, (c) => c.toUpperCase()) : "New research project";
+    return createProject(name.slice(0, 120));
   };
 
-  const createRemoteWorkspace = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!remoteProjectName.trim()) return;
-    setBusy("creating-project");
-    setError("");
-    try {
-      const created = await createWorkspace(remoteProjectName.trim());
-      setRemoteWorkspaces((items) => [created, ...items]);
-      openRemoteWorkspace(created);
-    } catch (issue) {
-      setError(issue instanceof Error ? issue.message : String(issue));
-    } finally { setBusy(""); }
-  };
+  const handleRunStarted = useCallback((id: string, run: RunSummary) => {
+    setRunId(run.run_id);
+    setPage("activity");
+    void refreshOverview(id);
+  }, [refreshOverview]);
+
+  const chooseWorkspace = () => changePage("projects");
 
   const connectResearchEngine = async () => {
     configureApi(apiUrl, apiToken);
@@ -411,56 +463,6 @@ export function App() {
       setEngineState("unavailable");
       setError(issue instanceof Error ? issue.message : String(issue));
     } finally { setBusy(""); }
-  };
-
-  const readVaultStatus = async () => {
-    const result = await runBackend("credential-vault-status", {}, {});
-    const completed = latestEvent<Record<string, unknown>>(result.events, "complete");
-    const outputs = Array.isArray(completed?.outputs) ? completed.outputs : [];
-    const status = outputs.length && typeof outputs[0] === "string" ? JSON.parse(outputs[0] as string) as Record<string, unknown> : {};
-    setVaultAvailability(Boolean(status.available));
-    const stored = status.stored && typeof status.stored === "object" ? status.stored as Record<string, unknown> : {};
-    setSavedCredentialNames(Object.entries(stored).filter(([, value]) => Boolean(value)).map(([name]) => name));
-    return status;
-  };
-
-  const saveVaultCredentials = async () => {
-    setVaultMessage("Saving credentials to the operating-system vault…");
-    try {
-      await runBackend("credential-vault-save", {}, credentials);
-      const status = await readVaultStatus();
-      if (!status.available) throw new Error(String(status.message || "No supported operating-system vault is available."));
-      setVaultMessage("Credentials saved in the operating-system vault.");
-    } catch (issue) {
-      setVaultMessage(issue instanceof Error ? issue.message : String(issue));
-    }
-  };
-
-  const loadVaultCredentials = async () => {
-    setVaultMessage("Loading credentials from the operating-system vault…");
-    try {
-      const result = await runBackend("credential-vault-load", {}, {});
-      const completed = latestEvent<Record<string, unknown>>(result.events, "complete");
-      const outputs = Array.isArray(completed?.outputs) ? completed.outputs : [];
-      const loaded = outputs.length && typeof outputs[0] === "string" ? JSON.parse(outputs[0] as string) as Record<string, unknown> : {};
-      const values = loaded.credentials && typeof loaded.credentials === "object" ? loaded.credentials as Credentials : {};
-      setCredentials((current) => ({ ...current, ...values }));
-      const status = await readVaultStatus();
-      setVaultMessage(status.available ? "Saved credentials loaded into this session." : String(status.message || "Credential vault unavailable."));
-    } catch (issue) {
-      setVaultMessage(issue instanceof Error ? issue.message : String(issue));
-    }
-  };
-
-  const deleteVaultCredentials = async () => {
-    setVaultMessage("Removing saved credentials from the operating-system vault…");
-    try {
-      await runBackend("credential-vault-delete", {}, {});
-      setSavedCredentialNames([]);
-      setVaultMessage("Saved credentials removed from the operating-system vault. Current session values remain until cleared.");
-    } catch (issue) {
-      setVaultMessage(issue instanceof Error ? issue.message : String(issue));
-    }
   };
 
   const refreshRegistry = async () => {
@@ -673,10 +675,7 @@ export function App() {
   };
 
   const interpretRequirement = async () => {
-    if (!workspace || !credentials.llm_api_key?.trim()) {
-      setError("Add an OpenAI-compatible provider key in Settings before interpreting the requirement.");
-      return;
-    }
+    if (!workspace) return;
     const result = await execute("research-compile", { workspace, ai_expand: true });
     const reviewed = result && latestEvent<Record<string, unknown>>(result.events, "strategy-review");
     if (reviewed) {
@@ -919,10 +918,6 @@ export function App() {
 
   const codeEvidence = async () => {
     if (!workspace || !evidenceRecordsPath) return;
-    if (!credentials.llm_api_key?.trim()) {
-      setError("Add an LLM provider key in Settings to generate AI-coded findings.");
-      return;
-    }
     const result = await execute("research-triage", { workspace, records_file: evidenceRecordsPath });
     const completed = result && latestEvent<{ outputs?: string[] }>(result.events, "triage-complete");
     const output = completed?.outputs?.find((item) => item.toLowerCase().endsWith(".csv"));
@@ -1115,13 +1110,41 @@ export function App() {
     }
   };
 
-  const changePage = (next: Page) => {
-    setError("");
-    setPage(next);
-    if (next === "institutions" && registry.length === 0 && workspace) void refreshRegistry();
-  };
+  const title = PAGE_TITLES[page];
+  const navItems = prefs.mode === "advanced" ? [...NAV_BASIC, ...NAV_ADVANCED] : NAV_BASIC;
+  const activeRunSummary = overview?.runs.find((r) => ["running", "paused", "queued", "cancelling"].includes(r.status));
+  const author = prefs.name.trim() || "Researcher";
 
-  const title = NAV.find((item) => item.id === page)?.label || "Settings";
+  // The project list (project chip, Projects page) and the open project's overview load once the engine is reachable.
+  useEffect(() => { void ensureLocalApi().catch(() => undefined).then(() => loadProjects()); }, [loadProjects, apiUrl]);
+  useEffect(() => { void refreshOverview(projectId); }, [projectId, refreshOverview]);
+  useEffect(() => { if (activeRunSummary && !runId) setRunId(activeRunSummary.run_id); }, [activeRunSummary, runId]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = Boolean(target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)));
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPaletteOpen((open) => !open); }
+      else if (event.key === "?" && !typing && !event.ctrlKey && !event.metaKey) { event.preventDefault(); setHelpOpen(true); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const commands: Command[] = [
+    { id: "go-research", label: "Go to Research", keywords: "new request interpret", run: () => changePage("research") },
+    { id: "go-activity", label: "Go to Activity", keywords: "live run progress", run: () => changePage("activity") },
+    { id: "go-results", label: "Go to Results", keywords: "items review", run: () => changePage("results") },
+    { id: "go-projects", label: "Go to Projects", keywords: "switch open", run: () => changePage("projects") },
+    { id: "go-settings", label: "Open Settings", keywords: "providers keys credentials preferences", run: () => changePage("settings") },
+    { id: "go-about", label: "About SUGAR", keywords: "credits version", run: () => changePage("about") },
+    { id: "new-project", label: "New project", keywords: "create", run: () => { changePage("projects"); setCreateSignal((n) => n + 1); } },
+    { id: "setup", label: "Run first-time setup", keywords: "onboarding wizard ai model", run: () => setShowSetup(true) },
+    { id: "mode", label: prefs.mode === "basic" ? "Switch to Advanced mode" : "Switch to Basic mode", keywords: "experience", run: () => savePrefs({ ...prefs, mode: prefs.mode === "basic" ? "advanced" : "basic" }) },
+    { id: "theme", label: prefs.theme === "dark" ? "Use light theme" : "Use dark theme", keywords: "appearance color", run: () => savePrefs({ ...prefs, theme: prefs.theme === "dark" ? "light" : "dark" }) },
+    { id: "help", label: "Keyboard shortcuts", hint: "?", keywords: "help keys", run: () => setHelpOpen(true) },
+  ];
+
+  const openNewProject = () => { changePage("projects"); setCreateSignal((n) => n + 1); };
 
   return (
     <div className="app-shell">
@@ -1129,27 +1152,28 @@ export function App() {
       <input ref={datasetInputRef} className="sr-only" aria-label="Choose reference dataset file" type="file" accept=".csv,.tsv,.xlsx,.xls,.json,.jsonl" onChange={(event) => { const file = event.currentTarget.files?.[0]; void uploadRegistryFile(file); event.currentTarget.value = ""; }} />
       <aside className="sidebar">
         <div className="brand-row"><div className="brand-mark">S</div><div><div className="brand-name">SUGAR</div><div className="brand-subtitle">Research workspace</div></div></div>
-        <div className="side-caption">WORKSPACE</div>
+        <div className="side-caption">RESEARCH</div>
         <nav className="nav-list" aria-label="Main navigation">
-          {NAV.map((item) => <button key={item.id} className={`nav-item ${page === item.id ? "active" : ""}`} onClick={() => changePage(item.id)}><span className="nav-icon">{item.icon}</span>{item.label}{item.id === "activity" && activity.length > 0 && <span className="nav-count">{Math.min(activity.length, 99)}</span>}</button>)}
+          {navItems.map((item) => <button key={item.id} className={`nav-item ${page === item.id ? "active" : ""}`} aria-current={page === item.id ? "page" : undefined} onClick={() => changePage(item.id)}><span className="nav-icon" aria-hidden="true">{item.icon}</span><span className="nav-label">{item.label}</span>{item.id === "activity" && activeRunSummary && <span className="nav-live" title="A run is in progress" />}</button>)}
         </nav>
         <div className="side-caption secondary-caption">PROJECT</div>
-        <button className="project-chip" onClick={() => changePage("project")}><span className={`project-indicator ${workspace ? "connected" : ""}`} /><span className="project-chip-copy"><strong>{projectName || "No project open"}</strong><small>{workspace ? workspace.split(/[\\/]/).at(-1) : "Choose a project folder"}</small></span><span className="chevron">›</span></button>
+        <button className="side-new-project" onClick={openNewProject}><span aria-hidden="true">＋</span> New project</button>
+        <button className="project-chip" onClick={() => changePage("projects")} title="Switch project"><span className={`project-indicator ${projectId ? "connected" : ""}`} /><span className="project-chip-copy"><strong>{projectId ? projectName : "No project open"}</strong><small>{projectId ? (overview?.summary.status ? titleCase(overview.summary.status) : "Open") : "Create or choose one"}</small></span><span className="chevron" aria-hidden="true">›</span></button>
         <div className="sidebar-spacer" />
         <div className="engine-card"><div className={`engine-light ${engineState}`} /><div><strong>{engineState === "checking" ? "Connecting to engine" : engineState === "unavailable" ? "Engine unavailable" : engineState === "preview" ? "Browser preview" : isTauri() ? "Local research engine" : "SUGAR API connected"}</strong><small>{engineState === "ready" ? `Python core · ${engineVersion || "connected"}` : engineState === "unavailable" ? "Check the API address and credentials" : engineState === "preview" ? "Connect a research API to work" : "Checking Python core"}</small></div></div>
-        <button className={`nav-item settings-link ${page === "settings" ? "active" : ""}`} onClick={() => changePage("settings")}><span className="nav-icon">⚙</span>Settings</button>
-        <div className="sidebar-version">SUGAR Desktop <span>1.4</span></div>
+        <button className={`nav-item settings-link ${page === "settings" ? "active" : ""}`} onClick={() => changePage("settings")} title="Settings"><span className="nav-icon" aria-hidden="true">⚙</span><span className="nav-label">Settings</span></button>
+        <button className={`nav-item about-link ${page === "about" ? "active" : ""}`} onClick={() => changePage("about")} title="About SUGAR"><span className="nav-icon" aria-hidden="true">ⓘ</span><span className="nav-label">About</span></button>
+        <div className="sidebar-version">SUGAR <span>{engineVersion || "1.4"}</span> · Diplomacy Lab</div>
       </aside>
 
       <main className="main-area">
         <header className="topbar">
           <div className="breadcrumbs"><span>SUGAR</span><b>/</b><strong>{title}</strong></div>
-          <div className="topbar-actions"><div className={`connection-badge ${busy ? "working" : workspace ? "connected" : ""}`}><i />{busy ? `${titleCase(busy)} running` : workspace ? "Project connected" : "No project open"}</div><button className="button button-primary button-small" onClick={() => void chooseWorkspace()} disabled={Boolean(busy)}><span>＋</span> Open project</button></div>
+          <div className="topbar-actions"><div className={`connection-badge ${busy || activeRunSummary ? "working" : projectId ? "connected" : ""}`}><i />{busy ? "Working…" : activeRunSummary ? "Research running" : projectId ? "Project open" : "No project open"}</div>{overview && <StatusPill status={overview.summary.status} />}<button className="button button-primary button-small" onClick={openNewProject} disabled={Boolean(busy)}><span aria-hidden="true">＋</span> New project</button></div>
         </header>
 
-        {error && <div className="error-banner" role="alert"><span className="error-symbol">!</span><div><strong>Action needs attention</strong><p>{error}</p></div><button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
+        {error && <div className="error-banner" role="alert"><span className="error-symbol">!</span><div><strong>Action needs attention</strong><p>{error}</p></div>{/Could not reach|Failed to fetch/i.test(error) && <button className="button button-secondary button-small" onClick={() => { setError(""); changePage("settings"); }}>Connection settings</button>}<button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
         {busy && <div className="progress-line"><i /></div>}
-        {workspacePickerOpen && <div className="workspace-picker-backdrop" onClick={() => setWorkspacePickerOpen(false)}><section className="workspace-picker" role="dialog" aria-modal="true" aria-labelledby="workspace-picker-title" onClick={(event) => event.stopPropagation()}><div className="workspace-picker-heading"><div><span className="eyebrow">SUGAR API</span><h2 id="workspace-picker-title">Choose a research project</h2><p>Projects are stored by the connected Python service.</p></div><button className="inspector-close" onClick={() => setWorkspacePickerOpen(false)} aria-label="Close project picker">×</button></div><div className="workspace-picker-list">{remoteWorkspaces.map((item) => <button className="workspace-option" key={item.id} onClick={() => openRemoteWorkspace(item)}><span className="project-current-mark">⌂</span><span><strong>{item.name}</strong><small>{item.description || "SUGAR project workspace"}</small></span><b>Open →</b></button>)}{!remoteWorkspaces.length && <div className="workspace-picker-empty"><span>⌂</span><strong>No projects on this API yet</strong><p>Create a project below to start a research workspace.</p></div>}</div><form className="workspace-create-form" onSubmit={(event) => void createRemoteWorkspace(event)}><label className="field-block"><span>New project name</span><input value={remoteProjectName} onChange={(event) => setRemoteProjectName(event.target.value)} maxLength={120} placeholder="e.g. Public diplomacy in Ghana" /></label><button className="button button-primary" type="submit" disabled={!remoteProjectName.trim() || Boolean(busy)}>Create project <span>→</span></button></form></section></div>}
 
         {page === "home" && <section className="page-content overview-page">
           <div className="page-heading"><div><div className="eyebrow">RESEARCH DESK <span className="eyebrow-line" /></div><h1>Good work starts with a clear question.</h1><p>A focused workspace for planning, collecting, and inspecting evidence.</p></div><div className="date-stamp">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}</div></div>
@@ -1173,7 +1197,7 @@ export function App() {
             <div className="panel requirement-panel"><div className="section-title"><div className="section-icon violet">⌕</div><div><h3>Research requirement</h3><p>A precise question gives the search plan a useful starting point.</p></div><span className="step-badge">STEP 1</span></div><div className="research-template-toolbar"><label className="field-block"><span>Research requirement template</span><select aria-label="Research requirement template" value={selectedResearchTemplate} onChange={(event) => setSelectedResearchTemplate(event.target.value)}><option value="">Choose a saved or starter template</option>{researchTemplates.map((template) => <option key={template.template_id} value={template.template_id}>{template.name}</option>)}</select></label><div className="research-template-actions"><button className="button button-quiet" type="button" onClick={() => void loadResearchTemplates()} disabled={!workspace || Boolean(busy)}>Load templates</button><button className="button button-secondary" type="button" onClick={applyResearchTemplate} disabled={!selectedResearchTemplate}>Use template</button></div><label className="field-block"><span>Save current requirement as a template</span><input aria-label="New research template name" value={researchTemplateName} onChange={(event) => setResearchTemplateName(event.target.value)} placeholder="e.g. Annual regional scan" /></label><button className="button button-quiet" type="button" onClick={() => void saveResearchTemplate()} disabled={!workspace || !researchTemplateName.trim() || Boolean(busy)}>Save template</button></div><form className="research-form" onSubmit={(event) => void createRequirement(event)}><label className="field-block"><span>Research question <em>Required</em></span><textarea value={question} onChange={(event) => setQuestion(event.target.value)} required rows={3} placeholder="What would you like to understand?" /></label><label className="field-block"><span>Project notes</span><textarea aria-label="Project notes" value={projectNotes} onChange={(event) => setProjectNotes(event.target.value)} rows={2} placeholder="Context, constraints, or analyst notes to keep with this requirement" /></label><div className="field-grid"><label className="field-block"><span>Geographies</span><input value={geography} onChange={(event) => setGeography(event.target.value)} placeholder="Countries, regions, or cities" /><small>Separate multiple places with commas.</small></label><label className="field-block"><span>Known institutions or entities</span><input value={knownEntities} onChange={(event) => setKnownEntities(event.target.value)} placeholder="Names already in scope" /><small>Optional starting points for the plan.</small></label></div><label className="field-block"><span>Intended audience</span><input value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Who will use the results?" /></label><div className="field-grid"><label className="field-block"><span>Start date</span><input aria-label="Start date" type="date" value={timeframeStart} onChange={(event) => setTimeframeStart(event.target.value)} /></label><label className="field-block"><span>End date</span><input aria-label="End date" type="date" value={timeframeEnd} onChange={(event) => setTimeframeEnd(event.target.value)} /></label></div><div className="field-grid"><label className="field-block"><span>Languages</span><input aria-label="Languages" value={languages} onChange={(event) => setLanguages(event.target.value)} placeholder="auto or language codes, e.g. es, zh" /><small>Use language codes separated by commas; auto leaves filtering open.</small></label><label className="field-block"><span>Collection sources</span><input aria-label="Collection sources" value={preferredSources} onChange={(event) => setPreferredSources(event.target.value)} placeholder="x, bluesky, mastodon, weibo, bilibili" /><small>Use x or bluesky for keyword search. Mastodon needs a token for keywords; without one, use a #hashtag query. Weibo and Bilibili keyword search may require provider access.</small></label></div><label className="field-block"><span>Excluded topics</span><input aria-label="Excluded topics" value={excludedTopics} onChange={(event) => setExcludedTopics(event.target.value)} placeholder="Topics to leave out of the search plan" /><small>Separate exclusions with commas.</small></label><label className="check-field"><input aria-label="Translate collected posts" type="checkbox" checked={translatePosts} onChange={(event) => setTranslatePosts(event.target.checked)} /><span>Translate collected posts to English during collection<small>Uses the provider key in Settings; originals remain available.</small></span></label><label className="check-field"><input aria-label="Infer broad locations for mapping" type="checkbox" checked={inferLocations} onChange={(event) => setInferLocations(event.target.checked)} /><span>Infer broad locations for mapping<small>Uses the provider key and geocodes only supported public place evidence; records without a supported location remain unmapped.</small></span></label><div className="form-footer"><span className="privacy-note"><span>◉</span> The requirement is saved in this project folder.</span><button className="button button-primary" type="submit" disabled={!workspace || !question.trim() || Boolean(busy)}>Save research requirement <span>→</span></button></div></form></div>
             <div className="panel public-item-panel"><div className="section-title"><div className="section-icon green">↗</div><div><h3>Collect a public item by URL</h3><p>Use a known public Weibo post, Bilibili video, or WeChat article when keyword search is restricted.</p></div></div><div className="field-grid"><label className="field-block"><span>Source</span><select aria-label="Public item source" value={publicItemSource} onChange={(event) => setPublicItemSource(event.target.value)}><option value="weibo">Weibo post</option><option value="bilibili">Bilibili video</option><option value="wechat">WeChat article</option></select></label><label className="field-block"><span>Public URL</span><input aria-label="Public item URL" type="url" value={publicItemUrl} onChange={(event) => setPublicItemUrl(event.target.value)} placeholder="https://…" /></label></div><button className="button button-secondary" type="button" onClick={() => void importPublicItem()} disabled={!workspace || !publicItemUrl.trim() || Boolean(busy)}>Collect public item</button><p className="muted-copy">A collected item becomes the selected evidence dataset for inspection and coding. Provider access rules still apply.</p></div>
             <div className="panel public-hashtag-panel"><div className="section-title"><div className="section-icon green">#</div><div><h3>Collect a public Mastodon hashtag</h3><p>Collect public posts from mastodon.social without a search token. This searches one hashtag, not all text across the network.</p></div></div><div className="field-grid"><label className="field-block"><span>Hashtag</span><input aria-label="Mastodon public hashtag" value={mastodonHashtag} onChange={(event) => setMastodonHashtag(event.target.value)} placeholder="#education" /></label><button className="button button-secondary" type="button" onClick={() => void collectPublicHashtag()} disabled={!workspace || !mastodonHashtag.trim() || Boolean(busy)}>Collect hashtag</button></div></div>
-            <div className="panel evidence-panel"><div className="section-title"><div className="section-icon blue">▤</div><div><h3>Import and inspect research records</h3><p>Bring in an authorized CSV or JSONL dataset and inspect its source fields.</p></div><span className="step-badge">STEP 2</span></div><div className="evidence-import-row"><div className="evidence-file"><span className="file-mark">▧</span><div><strong>{evidenceFile ? evidenceFile.split(/[\\/]/).at(-1) : evidenceRecordsPath ? "Research records are in this project" : "No evidence dataset selected"}</strong><small>{evidenceRecordsPath || "Choose a CSV or JSONL file to begin an auditable import."}</small></div></div><div className="evidence-actions"><button className="button button-secondary" onClick={() => void chooseEvidenceFile()} disabled={!workspace || Boolean(busy)}>Choose data</button>{evidenceFile && <button className="button button-primary" onClick={() => void importEvidence()} disabled={Boolean(busy)}>Import records <span>→</span></button>}</div></div>{evidenceRecordsPath && <div className="evidence-review-row"><span className={`review-state ${reviewPrepared ? "ready" : "pending"}`}><i />{reviewPrepared ? "Human-review draft prepared" : "Evidence selected · awaiting review draft"}</span><div className="evidence-actions"><button className="button button-quiet" onClick={() => void inspectEvidence()} disabled={Boolean(busy)}>Inspect records</button><button className="button button-secondary" onClick={() => void prepareEvidenceReview()} disabled={reviewPrepared || Boolean(busy)}>{reviewPrepared ? "Review draft ready" : "Prepare human review"}</button><button className="button button-secondary" onClick={() => void codeEvidence()} disabled={!credentials.llm_api_key?.trim() || Boolean(busy)} title={!credentials.llm_api_key?.trim() ? "Add an LLM provider key in Settings first" : "Generate AI-coded findings for review"}>Generate coded findings</button><label className="field-block export-format-select"><span>Export as</span><select aria-label="Evidence export format" value={evidenceExportFormat} onChange={(event) => setEvidenceExportFormat(event.target.value)}><option value="csv">CSV</option><option value="xlsx">Excel</option><option value="jsonl">JSON Lines</option><option value="json">JSON</option><option value="geojson">GeoJSON</option></select></label><label className="field-block geography-group-select"><span>Geographic grouping</span><select aria-label="Geographic grouping" value={geographyGroupBy} onChange={(event) => setGeographyGroupBy(event.target.value)}><option value="auto">Automatic hierarchy</option><option value="country">Country</option><option value="region">Region</option><option value="city">City</option><option value="coordinate_grid">Coordinate cells</option></select></label><button className="button button-secondary" onClick={() => void summarizeEvidenceGeography()} disabled={Boolean(busy)}>Summarize geography</button><button className="button button-secondary" onClick={() => void createEvidenceMap()} disabled={Boolean(busy)}>Create evidence map</button><button className="button button-quiet" onClick={() => void exportEvidence()} disabled={Boolean(busy)}>Export data</button></div></div>}{evidenceMapPath && <div className="evidence-map-result" role="status"><strong>Interactive evidence map ready</strong><span>{evidenceMapPath}</span>{!isTauri() && <button className="button button-secondary" type="button" onClick={() => void downloadEvidenceMap()}>Download map</button>}</div>}{evidencePreview && <div className="evidence-preview"><div className="preview-summary"><strong>{evidencePreview.row_count ?? 0} source records</strong><span>Showing {evidencePreview.rows?.length || 0} · source text and URL retained</span></div><div className="evidence-table-scroll"><table className="evidence-table"><thead><tr>{(evidencePreview.columns || []).filter((column) => ["platform", "author_name", "content_type", "original_text", "canonical_url", "source_url", "published_at", "query"].includes(column)).slice(0, 6).map((column) => <th key={column}>{titleCase(column)}</th>)}</tr></thead><tbody>{(evidencePreview.rows || []).map((row, index) => <tr key={String(row.record_key || row.native_id || index)}>{(evidencePreview.columns || []).filter((column) => ["platform", "author_name", "content_type", "original_text", "canonical_url", "source_url", "published_at", "query"].includes(column)).slice(0, 6).map((column) => <td key={column} title={String(row[column] ?? "")}>{String(row[column] ?? "—")}</td>)}</tr>)}</tbody></table></div></div>}{geographySummary && <section className="geography-summary" aria-label="Geographic summary"><div className="preview-summary"><strong>Geographic groups · {geographySummary.total_rows || 0} records</strong><span>{geographySummary.located_rows || 0} located · {geographySummary.unlocated_rows || 0} unlocated · {titleCase(geographySummary.group_by || "auto")}</span></div><div className="geography-summary-list">{(geographySummary.groups || []).slice(0, 12).map((group) => <div key={String(group.label)}><span>{String(group.label || "Unspecified")}</span><strong>{group.records || 0}</strong></div>)}</div><p className="muted-copy">{geographySummary.guardrail}</p></section>}<section className="geography-review-tools" aria-label="Geographic review">
+            <div className="panel evidence-panel"><div className="section-title"><div className="section-icon blue">▤</div><div><h3>Import and inspect research records</h3><p>Bring in an authorized CSV or JSONL dataset and inspect its source fields.</p></div><span className="step-badge">STEP 2</span></div><div className="evidence-import-row"><div className="evidence-file"><span className="file-mark">▧</span><div><strong>{evidenceFile ? evidenceFile.split(/[\\/]/).at(-1) : evidenceRecordsPath ? "Research records are in this project" : "No evidence dataset selected"}</strong><small>{evidenceRecordsPath || "Choose a CSV or JSONL file to begin an auditable import."}</small></div></div><div className="evidence-actions"><button className="button button-secondary" onClick={() => void chooseEvidenceFile()} disabled={!workspace || Boolean(busy)}>Choose data</button>{evidenceFile && <button className="button button-primary" onClick={() => void importEvidence()} disabled={Boolean(busy)}>Import records <span>→</span></button>}</div></div>{evidenceRecordsPath && <div className="evidence-review-row"><span className={`review-state ${reviewPrepared ? "ready" : "pending"}`}><i />{reviewPrepared ? "Human-review draft prepared" : "Evidence selected · awaiting review draft"}</span><div className="evidence-actions"><button className="button button-quiet" onClick={() => void inspectEvidence()} disabled={Boolean(busy)}>Inspect records</button><button className="button button-secondary" onClick={() => void prepareEvidenceReview()} disabled={reviewPrepared || Boolean(busy)}>{reviewPrepared ? "Review draft ready" : "Prepare human review"}</button><button className="button button-secondary" onClick={() => void codeEvidence()} disabled={Boolean(busy)} title="Uses the default provider configured in Settings">Generate coded findings</button><label className="field-block export-format-select"><span>Export as</span><select aria-label="Evidence export format" value={evidenceExportFormat} onChange={(event) => setEvidenceExportFormat(event.target.value)}><option value="csv">CSV</option><option value="xlsx">Excel</option><option value="jsonl">JSON Lines</option><option value="json">JSON</option><option value="geojson">GeoJSON</option></select></label><label className="field-block geography-group-select"><span>Geographic grouping</span><select aria-label="Geographic grouping" value={geographyGroupBy} onChange={(event) => setGeographyGroupBy(event.target.value)}><option value="auto">Automatic hierarchy</option><option value="country">Country</option><option value="region">Region</option><option value="city">City</option><option value="coordinate_grid">Coordinate cells</option></select></label><button className="button button-secondary" onClick={() => void summarizeEvidenceGeography()} disabled={Boolean(busy)}>Summarize geography</button><button className="button button-secondary" onClick={() => void createEvidenceMap()} disabled={Boolean(busy)}>Create evidence map</button><button className="button button-quiet" onClick={() => void exportEvidence()} disabled={Boolean(busy)}>Export data</button></div></div>}{evidenceMapPath && <div className="evidence-map-result" role="status"><strong>Interactive evidence map ready</strong><span>{evidenceMapPath}</span>{!isTauri() && <button className="button button-secondary" type="button" onClick={() => void downloadEvidenceMap()}>Download map</button>}</div>}{evidencePreview && <div className="evidence-preview"><div className="preview-summary"><strong>{evidencePreview.row_count ?? 0} source records</strong><span>Showing {evidencePreview.rows?.length || 0} · source text and URL retained</span></div><div className="evidence-table-scroll"><table className="evidence-table"><thead><tr>{(evidencePreview.columns || []).filter((column) => ["platform", "author_name", "content_type", "original_text", "canonical_url", "source_url", "published_at", "query"].includes(column)).slice(0, 6).map((column) => <th key={column}>{titleCase(column)}</th>)}</tr></thead><tbody>{(evidencePreview.rows || []).map((row, index) => <tr key={String(row.record_key || row.native_id || index)}>{(evidencePreview.columns || []).filter((column) => ["platform", "author_name", "content_type", "original_text", "canonical_url", "source_url", "published_at", "query"].includes(column)).slice(0, 6).map((column) => <td key={column} title={String(row[column] ?? "")}>{String(row[column] ?? "—")}</td>)}</tr>)}</tbody></table></div></div>}{geographySummary && <section className="geography-summary" aria-label="Geographic summary"><div className="preview-summary"><strong>Geographic groups · {geographySummary.total_rows || 0} records</strong><span>{geographySummary.located_rows || 0} located · {geographySummary.unlocated_rows || 0} unlocated · {titleCase(geographySummary.group_by || "auto")}</span></div><div className="geography-summary-list">{(geographySummary.groups || []).slice(0, 12).map((group) => <div key={String(group.label)}><span>{String(group.label || "Unspecified")}</span><strong>{group.records || 0}</strong></div>)}</div><p className="muted-copy">{geographySummary.guardrail}</p></section>}<section className="geography-review-tools" aria-label="Geographic review">
               {evidencePreview && <div className="manual-geography-panel"><div><strong>Analyst-assigned geography</strong><p>Assignments are kept as separate annotations; source fields are preserved. Edits are tied to this exact file version.</p></div><label className="field-block"><span>Dataset row</span><select aria-label="Geography assignment record" value={geographyAssignmentRow} onChange={(event) => setGeographyAssignmentRow(event.target.value)}>{(evidencePreview.rows || []).map((row, index) => { const rowNumber = Number(row._sugar_row_number ?? index); return <option key={rowNumber} value={rowNumber}>Row {rowNumber + 1} · {String(row.record_id || row.record_key || row.native_id || row.original_text || `record ${rowNumber + 1}`).slice(0, 80)}</option>; })}</select></label><div className="field-grid"><label className="field-block"><span>Country</span><input aria-label="Assigned country" value={geographyAssignmentCountry} onChange={(event) => setGeographyAssignmentCountry(event.target.value)} /></label><label className="field-block"><span>Region</span><input aria-label="Assigned region" value={geographyAssignmentRegion} onChange={(event) => setGeographyAssignmentRegion(event.target.value)} /></label><label className="field-block"><span>City</span><input aria-label="Assigned city" value={geographyAssignmentCity} onChange={(event) => setGeographyAssignmentCity(event.target.value)} /></label></div><label className="field-block"><span>Assignment note</span><input aria-label="Geography assignment note" value={geographyAssignmentNote} onChange={(event) => setGeographyAssignmentNote(event.target.value)} placeholder="Evidence or rationale for this location" /></label><button className="button button-secondary" type="button" onClick={() => void assignEvidenceGeography()} disabled={!evidenceRecordsPath || ![geographyAssignmentCountry, geographyAssignmentRegion, geographyAssignmentCity].some((value) => value.trim()) || Boolean(busy)}>Save analyst assignment</button></div>}
               <div className="region-comparison-panel"><div><strong>Compare two geographic distributions</strong><p>Uses the selected grouping and any current analyst annotations.</p></div><label className="field-block"><span>Comparison dataset path</span><input aria-label="Comparison dataset path" value={geographyComparisonFile} onChange={(event) => setGeographyComparisonFile(event.target.value)} placeholder="Project file path or sugar-file reference" /></label><button className="button button-secondary" type="button" onClick={() => void compareEvidenceGeography()} disabled={!evidenceRecordsPath || !geographyComparisonFile.trim() || Boolean(busy)}>Compare regions</button>{geographyComparison && <><div className="preview-summary"><strong>{geographyComparison.left_total || 0} baseline · {geographyComparison.right_total || 0} comparison records</strong><span>{titleCase(geographyComparison.group_by || geographyGroupBy)}</span></div><div className="evidence-table-scroll"><table className="evidence-table"><thead><tr><th>Geographic group</th><th>Baseline</th><th>Comparison</th><th>Share difference</th></tr></thead><tbody>{(geographyComparison.groups || []).map((group) => <tr key={String(group.label)}><td>{String(group.label || "Unspecified")}</td><td>{group.left_records || 0} · {((group.left_share || 0) * 100).toFixed(1)}%</td><td>{group.right_records || 0} · {((group.right_share || 0) * 100).toFixed(1)}%</td><td>{((group.share_difference || 0) * 100).toFixed(1)} pp</td></tr>)}</tbody></table></div><p className="muted-copy">{geographyComparison.guardrail}</p></>}</div>
             </section></div>
@@ -1192,12 +1216,21 @@ export function App() {
           {selected && <div className="inspector-backdrop" onClick={() => setSelected(null)}><aside className="evidence-inspector" onClick={(event) => event.stopPropagation()}><div className="inspector-top"><div><span className="eyebrow">INSTITUTION RECORD</span><button className="inspector-close" onClick={() => setSelected(null)} aria-label="Close inspector">×</button></div><div className="inspector-identity"><div className="inspector-avatar">{(selected.name || "?").slice(0, 1).toUpperCase()}</div><div><h2>{selected.name || "Unnamed institution"}</h2><span>{[selected.city, selected.country].filter(Boolean).join(", ") || "Location not recorded"}</span></div></div><div className="inspector-badges"><span className={`status-pill status-pill-${String(selected.status || "unknown").toLowerCase()}`}>{titleCase(selected.status || "unknown")}</span><span className="network-pill">{selected.network || titleCase(selected.entity_type || "Institution")}</span></div></div><div className="inspector-content"><div className="inspector-section"><span className="eyebrow">PROFILE</span><p>{selected.description || "No descriptive profile has been recorded for this institution."}</p><div className="profile-facts"><div><span>Entity type</span><strong>{titleCase(selected.entity_type || "institution")}</strong></div><div><span>Coordinates</span><strong>{coordinatesText(selected)}</strong></div><div><span>Registry ID</span><strong>{selected.entity_id}</strong></div></div></div><div className="inspector-section"><div className="evidence-heading"><span className="eyebrow">EVIDENCE & SOURCES</span><span className="source-count">{extractEvidence(selected).length}</span></div>{extractEvidence(selected).length ? <div className="source-list">{extractEvidence(selected).map((source) => <a className="source-link" key={source.url} href={source.url} target="_blank" rel="noreferrer"><span className="source-icon">↗</span><span><strong>{source.label}</strong><small>{new URL(source.url).hostname}</small></span></a>)}</div> : <div className="evidence-gap"><span>◷</span><div><strong>Evidence gap</strong><p>No source URL has been attached yet. Verify this record before relying on its status or location.</p></div></div>}</div></div><div className="inspector-footer"><span>Claim-level source provenance is retained in the project registry.</span></div></aside></div>}
         </section>}
 
-        {page === "activity" && <section className="page-content"><div className="page-heading compact-heading"><div><div className="eyebrow">AUDIT TRAIL <span className="eyebrow-line" /></div><h1>Project run history.</h1><p>Review the recent operations recorded for this workspace.</p></div><button className="button button-secondary" onClick={() => void refreshDashboard()} disabled={!workspace || Boolean(busy)}>↻ Refresh history</button></div><div className="panel history-panel"><div className="history-head"><div><strong>Recent project activity</strong><span>{activity.length} recorded events</span></div><div className="history-cols"><span>DETAIL</span><span>TIME</span></div></div>{activity.length ? activity.map((item) => <ActivityRow key={item.id} item={item} expanded />) : <div className="empty-state"><div className="empty-state-icon">↗</div><h3>No project history yet</h3><p>Research operations, imports, and exports will be recorded here.</p></div>}</div></section>}
+        {page === "research" && <ResearchPage prefill={prefill} projectId={projectId} projectName={projectName} prefs={prefs} overview={overview} onOverview={() => refreshOverview(projectId)} ensureProject={ensureProject} onRunStarted={handleRunStarted} onOpenSettings={() => changePage("settings")} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onError={setError} />}
+        {page === "activity" && <ActivityView onRunSettled={(finished) => { void refreshOverview(projectId); const kept = finished.counts?.processed ?? finished.counts?.collected ?? 0; if (finished.status === "failed") notify("The run could not finish. Open Activity for details.", "warn"); else if (finished.status === "cancelled") notify(`Run cancelled — ${kept} items kept.`, "info"); else notify(`Run finished — ${kept} item${kept === 1 ? "" : "s"} kept${finished.status === "completed_with_warnings" ? ", with some sources incomplete" : ""}.`, finished.status === "completed" ? "ok" : "warn", { label: "View results", run: () => changePage("results") }); }} projectId={projectId} runId={runId} prefs={prefs} author={author} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onNewRun={() => changePage("research")} onOpenSettings={() => changePage("settings")} onRunStarted={handleRunStarted} onError={setError} />}
+        {page === "results" && <ResultsView projectId={projectId} runId={runId || overview?.runs[0]?.run_id || ""} runs={overview?.runs || []} prefs={prefs} author={author} projectPath={workspace.startsWith("sugar-workspace://") ? "" : workspace} onSelectRun={setRunId} onOpenActivity={(id) => { setRunId(id); changePage("activity"); }} onOpenResearch={() => changePage("research")} onRunStarted={handleRunStarted} onError={setError} />}
+        {page === "projects" && <ProjectsPage projects={projects} currentId={projectId} loading={projectsLoading} advanced={prefs.mode === "advanced"} createSignal={createSignal} onOpen={openProject} onCreate={async (name, question) => { await createProject(name, question); }} onOpenFolder={() => void openFolder()} onRefresh={() => void loadProjects()} />}
+        {page === "timeline" && <TimelinePage projectId={projectId} refreshKey={timelineKey} />}
+        {page === "about" && <AboutPage version="1.4" engineVersion={engineVersion} />}
+        {page === "settings" && <SettingsPage onRunSetup={() => setShowSetup(true)} prefs={prefs} onSavePrefs={savePrefs} onDirtyChange={(dirty) => { settingsDirty.current = dirty; }} engineState={engineState} apiUrl={apiUrl} apiToken={apiToken} onApiUrl={setApiUrl} onApiToken={setApiToken} onConnect={() => void connectResearchEngine()} busy={Boolean(busy)} onError={setError} />}
 
-        {page === "settings" && <section className="page-content"><div className="page-heading compact-heading"><div><div className="eyebrow">PREFERENCES <span className="eyebrow-line" /></div><h1>Connection settings.</h1><p>Connect the browser to a SUGAR Python service and manage optional provider credentials.</p></div><span className={`workflow-state ${engineState === "ready" ? "ready" : "pending"}`}><i />{engineState === "ready" ? "Engine connected" : "Connection needed"}</span></div><div className="settings-layout"><div className="panel settings-panel"><div className="section-title"><div className="section-icon blue">◐</div><div><h3>Appearance</h3><p>Choose a light or dark workspace theme.</p></div></div><label className="field-block appearance-field"><span>Color theme</span><select aria-label="Color theme" value={theme} onChange={(event) => setTheme(event.target.value === "dark" ? "dark" : "light")}><option value="light">Light</option><option value="dark">Dark</option></select></label><div className="settings-divider" />{!isTauri() && <><div className="section-title"><div className="section-icon blue">↗</div><div><h3>Research API</h3><p>The same browser interface works with a local service or an approved hosted endpoint.</p></div></div><div className="api-connection-fields"><label className="field-block"><span>API address</span><input type="url" value={apiUrl} onChange={(event) => setApiUrl(event.target.value)} placeholder="http://127.0.0.1:8765" /></label><label className="field-block"><span>API token <small>Only needed when the service requires one</small></span><input type="password" autoComplete="off" value={apiToken} onChange={(event) => setApiToken(event.target.value)} placeholder="Session only" /></label><div className="api-connect-footer"><span>Use HTTPS for a remotely hosted API. The token stays in this browser session.</span><button className="button button-primary" onClick={() => void connectResearchEngine()} disabled={Boolean(busy)}>Test connection</button></div></div><div className="settings-divider" /></>}
-          <div className="section-title"><div className="section-icon amber">⌘</div><div><h3>Provider credentials</h3><p>Credentials are sent only with the research operation that needs them.</p></div><span className="secure-badge"><span>◉</span> {savedCredentialNames.length ? "OS vault" : "Session only"}</span></div><div className="credential-list">{SECRET_FIELDS.map(({ key, label, placeholder }) => <label className="field-block" key={key}><span>{label}</span><input type="password" autoComplete="off" value={credentials[key] || ""} onChange={(event) => setCredentials((current) => ({ ...current, [key]: event.target.value }))} placeholder={placeholder} /></label>)}</div>{isTauri() && <div className="vault-actions"><span>{vaultAvailability === false ? "OS credential vault not available on this device." : savedCredentialNames.length ? `${savedCredentialNames.length} credential type(s) saved securely.` : "Optionally remember credentials in the operating-system vault."}</span><button className="button button-secondary" onClick={() => void loadVaultCredentials()}>Load saved</button><button className="button button-primary" onClick={() => void saveVaultCredentials()} disabled={!Object.values(credentials).some(Boolean)}>Save securely</button><button className="button button-quiet" onClick={() => void deleteVaultCredentials()} disabled={!savedCredentialNames.length}>Forget saved</button></div>}<div className="settings-footnote"><span>i</span><p>Credentials remain in memory unless you explicitly save them. SUGAR uses the Windows Credential Manager, macOS Keychain, or a supported Linux system vault. It never falls back to a plaintext credential file. {isTauri() ? "Remote API connections should use HTTPS." : "This browser-only mode does not access the desktop operating-system vault."}</p></div>{vaultMessage && <p className="collection-live-status" role="status" aria-live="polite">{vaultMessage}</p>}</div><aside className="connection-summary"><div className="summary-head"><span className="summary-icon">◉</span><div><strong>Research engine</strong><small>{isTauri() ? "Packaged Python sidecar" : "Python HTTP API"}</small></div></div><div className="summary-divider" /><div className="summary-row"><span>Interface</span><strong>Browser UI</strong></div><div className="summary-row"><span>Desktop wrapper</span><strong>Optional Tauri app</strong></div><div className="summary-row"><span>Project storage</span><strong>{isTauri() ? "Selected local folder" : "API workspace root"}</strong></div><div className="summary-map-note"><span>⌖</span><p>MapLibre uses OpenFreeMap vector tiles for the background map. Institution records remain in the project workspace.</p></div></aside></div></section>}
 
-        <footer className="statusbar"><div><span className={`status-dot ${workspace ? "active" : "unknown"}`} /><span>{workspace ? `Workspace · ${workspace.split(/[\\/]/).at(-1)}` : "Local workspace not selected"}</span></div><span className="statusbar-right">SUGAR research engine <b>·</b> Python core</span></footer>
+        {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
+        {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
+        <ToastHost toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))} />
+        {(showSetup || (!prefs.onboarded && engineState === "ready")) && <Onboarding prefs={prefs} onSavePrefs={savePrefs} onOpenSettings={() => changePage("settings")}
+          onFinish={() => setShowSetup(false)} onTryExample={(text) => { setPrefill((p) => ({ text, n: p.n + 1 })); changePage("research"); }} />}
+        <footer className="statusbar"><div><span className={`status-dot ${workspace ? "active" : "unknown"}`} /><span>{workspace ? (workspace.startsWith("sugar-workspace://") ? `Project · ${projectName}` : `Workspace · ${workspace.split(/[\\/]/).at(-1)}`) : "No project open"}</span></div><span className="statusbar-right">SUGAR research engine <b>·</b> Python core</span></footer>
       </main>
     </div>
   );

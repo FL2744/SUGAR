@@ -137,6 +137,27 @@ async function mockApi(page: Page, calls: ApiCall[], collectionGate?: Promise<vo
   });
 }
 
+async function useAdvancedMode(page: Page) {
+  await page.addInitScript(() => {
+    if (!window.localStorage.getItem("sugar.prefs.v1")) {
+      window.localStorage.setItem("sugar.prefs.v1", JSON.stringify({ mode: "advanced", debug: false, density: "comfortable", textScale: 1, interpreter: "auto", theme: "light", name: "", onboarded: true }));
+    }
+  });
+}
+
+async function openOverview(page: Page) {
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Overview" }).click();
+}
+
+async function createProject(page: Page, name: string) {
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await navigation.getByRole("button", { name: "Projects" }).click();
+  await page.getByRole("button", { name: "Create a new project" }).click();
+  await page.getByLabel(/^Project name/).fill(name);
+  await page.getByRole("button", { name: "Create project", exact: true }).click();
+  await expect(page.getByText(`Project open`).first()).toBeVisible();
+}
+
 async function expectAccessible(page: Page, surface: string) {
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
@@ -157,19 +178,17 @@ async function expectAccessible(page: Page, surface: string) {
 test("browser creates a project and saves its research requirement", async ({ page }) => {
   const calls: ApiCall[] = [];
   await mockApi(page, calls);
+  await useAdvancedMode(page);
   await page.goto("/");
+  await openOverview(page);
 
   await expect(page.getByRole("heading", { name: "Good work starts with a clear question." })).toBeVisible();
-  await page.getByRole("button", { name: /Create or open project/ }).click();
-  const picker = page.getByRole("dialog", { name: "Choose a research project" });
-  await expect(picker).toBeVisible();
-  await expectAccessible(page, "project picker");
-  await picker.getByLabel("New project name").fill("Browser Test Project");
-  await picker.getByRole("button", { name: /Create project/ }).click();
+  await createProject(page, "Browser Test Project");
 
+  await openOverview(page);
   await expect(page.getByRole("heading", { name: "Browser Test Project" })).toBeVisible();
   await page.getByRole("navigation", { name: "Main navigation" })
-    .getByRole("button", { name: "Research project" }).click();
+    .getByRole("button", { name: "Evidence & handoff" }).click();
   await page.getByLabel(/Research question/).fill("Which public programs are documented?");
   await page.getByLabel("Start date").fill("2025-01-01");
   await page.getByLabel("End date").fill("2025-12-31");
@@ -219,13 +238,12 @@ test("browser creates a project and saves its research requirement", async ({ pa
 test("known public items become inspectable evidence", async ({ page }) => {
   const calls: ApiCall[] = [];
   await mockApi(page, calls);
+  await useAdvancedMode(page);
   await page.goto("/");
-  await page.getByRole("button", { name: /Create or open project/ }).click();
-  const picker = page.getByRole("dialog", { name: "Choose a research project" });
-  await picker.getByLabel("New project name").fill("Browser Test Project");
-  await picker.getByRole("button", { name: /Create project/ }).click();
+  await openOverview(page);
+  await createProject(page, "Browser Test Project");
   await page.getByRole("navigation", { name: "Main navigation" })
-    .getByRole("button", { name: "Research project" }).click();
+    .getByRole("button", { name: "Evidence & handoff" }).click();
   await page.getByLabel("Public item source").selectOption("weibo");
   await page.getByLabel("Public item URL").fill("https://weibo.com/2/detail/5341549823267451");
   await page.getByRole("button", { name: "Collect public item" }).click();
@@ -250,13 +268,12 @@ test("active collection accepts scope edits, source retries, and cooperative sto
   let releaseCollection!: () => void;
   const collectionGate = new Promise<void>((resolve) => { releaseCollection = resolve; });
   await mockApi(page, calls, collectionGate);
+  await useAdvancedMode(page);
   await page.goto("/");
-  await page.getByRole("button", { name: /Create or open project/ }).click();
-  const picker = page.getByRole("dialog", { name: "Choose a research project" });
-  await picker.getByLabel("New project name").fill("Live Control Project");
-  await picker.getByRole("button", { name: /Create project/ }).click();
+  await openOverview(page);
+  await createProject(page, "Live Control Project");
   await page.getByRole("navigation", { name: "Main navigation" })
-    .getByRole("button", { name: "Research project" }).click();
+    .getByRole("button", { name: "Evidence & handoff" }).click();
   await page.getByLabel(/Research question/).fill("Which public programs are documented?");
   await page.getByLabel("Collection sources").fill("x, bluesky");
   await page.getByRole("button", { name: /Save research requirement/ }).click();
@@ -295,9 +312,11 @@ test("active collection accepts scope edits, source retries, and cooperative sto
 test("research text remains comfortably readable without page overflow", async ({ page }) => {
   await mockApi(page, []);
   await page.setViewportSize({ width: 1280, height: 820 });
+  await useAdvancedMode(page);
   await page.goto("/");
+  await openOverview(page);
   await page.getByRole("navigation", { name: "Main navigation" })
-    .getByRole("button", { name: "Research project" }).click();
+    .getByRole("button", { name: "Evidence & handoff" }).click();
 
   const fontSizes = await page.locator(
     ".page-content :is(p, small, .eyebrow, .field-block > span, button, input, textarea, select)",
@@ -317,13 +336,12 @@ test("research text remains comfortably readable without page overflow", async (
 test("AI interpretation, translation, geographic summary, coded findings, and export are wired to the backend", async ({ page }) => {
   const calls: ApiCall[] = [];
   await mockApi(page, calls, undefined, true);
+  await useAdvancedMode(page);
   await page.goto("/");
-  await page.getByRole("button", { name: /Create or open project/ }).click();
-  const picker = page.getByRole("dialog", { name: "Choose a research project" });
-  await picker.getByLabel("New project name").fill("Complete Workflow Project");
-  await picker.getByRole("button", { name: /Create project/ }).click();
+  await openOverview(page);
+  await createProject(page, "Complete Workflow Project");
 
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Research project" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Evidence & handoff" }).click();
   await page.getByRole("textbox", { name: "Project comment" }).fill("Check the scope before the scheduled run.");
   await page.getByRole("button", { name: "Add comment" }).click();
   await expect(page.getByRole("log", { name: "Project comments" })).toContainText("Check the scope before the scheduled run.");
@@ -362,13 +380,6 @@ test("AI interpretation, translation, geographic summary, coded findings, and ex
   await page.getByRole("button", { name: /Save research requirement/ }).click();
   await expect.poll(() => calls.some((call) => call.operation === "research-requirement")).toBe(true);
 
-  await page.getByRole("button", { name: "Settings" }).click();
-  await page.getByLabel("LLM provider key").fill("test-openai-key");
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Research project" }).click();
-  await page.getByRole("button", { name: "Interpret with AI" }).click();
-  await expect(page.getByText("AI interpretation · draft")).toBeVisible();
-  await page.getByRole("button", { name: "Approve interpretation" }).click();
-  await expect(page.getByText("AI interpretation · approved")).toBeVisible();
   await page.getByRole("button", { name: "Build research plan" }).click();
   await expect.poll(() => calls.some((call) => call.operation === "research-plan")).toBe(true);
   await page.getByText("Per-platform collection limits").click();
@@ -404,39 +415,74 @@ test("AI interpretation, translation, geographic summary, coded findings, and ex
 
 test("provider credentials remain session-only in the browser", async ({ page }) => {
   await mockApi(page, []);
+  await useAdvancedMode(page);
   await page.goto("/");
+  await openOverview(page);
   await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: /Connection/ }).click();
   const secret = "playwright-session-secret";
-  const keyField = page.getByLabel("LLM provider key");
+  const keyField = page.getByLabel(/^API token/);
   await keyField.fill(secret);
 
   const savedValues = await page.evaluate(() => JSON.stringify(Object.values(localStorage)));
   expect(savedValues).not.toContain(secret);
   await page.reload();
   await page.getByRole("button", { name: "Settings" }).click();
-  await expect(page.getByLabel("LLM provider key")).toHaveValue("");
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: /Connection/ }).click();
+  await expect(page.getByLabel(/^API token/)).toHaveValue("");
 });
 
 test("main browser screens have no automated WCAG 2.2 A/AA violations", async ({ page }) => {
   await mockApi(page, []);
+  await useAdvancedMode(page);
   await page.goto("/");
+  await openOverview(page);
   await expect(page.getByRole("heading", { name: "Good work starts with a clear question." })).toBeVisible();
   await expectAccessible(page, "overview");
 
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
-  await navigation.getByRole("button", { name: "Research project" }).click();
+  await navigation.getByRole("button", { name: "Evidence & handoff" }).click();
   await expectAccessible(page, "research project");
   await navigation.getByRole("button", { name: "Institutions & map" }).click();
   await expectAccessible(page, "institutions and map");
-  await navigation.getByRole("button", { name: "Run history" }).click();
-  await expectAccessible(page, "run history");
+  await navigation.getByRole("button", { name: "Project timeline" }).click();
+  await expectAccessible(page, "project timeline");
   await page.getByRole("button", { name: "Settings" }).click();
   await expectAccessible(page, "settings");
-  await page.getByLabel("Color theme").selectOption("dark");
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: /Interface/ }).click();
+  await page.getByRole("radiogroup", { name: "Color theme" }).getByRole("radio", { name: "Dark" }).click();
+  await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expectAccessible(page, "dark settings");
   await navigation.getByRole("button", { name: "Overview" }).click();
   await expectAccessible(page, "dark overview");
-  await navigation.getByRole("button", { name: "Research project" }).click();
+  await navigation.getByRole("button", { name: "Evidence & handoff" }).click();
   await expectAccessible(page, "dark research project");
+});
+
+test("first-run setup is offered once, can be skipped, and is remembered", async ({ page }) => {
+  await mockApi(page, []);
+  await page.goto("/");
+  const setup = page.getByRole("dialog", { name: "Welcome to SUGAR" });
+  await expect(setup).toBeVisible();
+  await expectAccessible(page, "first-run setup");
+  await setup.getByLabel(/What should we call you/).fill("Test Researcher");
+  await setup.getByRole("button", { name: "Skip setup" }).click();
+  await expect(setup).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("dialog", { name: "Welcome to SUGAR" })).toHaveCount(0);
+});
+
+test("command palette jumps between pages from the keyboard", async ({ page }) => {
+  await mockApi(page, []);
+  await useAdvancedMode(page);
+  await page.goto("/");
+  await page.keyboard.press("Control+k");
+  const palette = page.getByRole("dialog", { name: "Command palette" });
+  await expect(palette).toBeVisible();
+  await expectAccessible(page, "command palette");
+  await page.keyboard.type("settings");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+  await expect(palette).toHaveCount(0);
 });

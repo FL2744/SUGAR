@@ -2,9 +2,9 @@
 
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::{collections::HashMap, fs, time::{SystemTime, UNIX_EPOCH}};
-use tauri::{AppHandle, Emitter};
-use tauri_plugin_shell::ShellExt;
+use std::{collections::HashMap, fs, sync::Mutex, time::{SystemTime, UNIX_EPOCH}};
+use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 
 const OPERATIONS: &[&str] = &[
     "workspace-init", "workspace-status", "workspace-register", "workspace-hub",
@@ -29,6 +29,13 @@ const SECRET_ENV: &[(&str, &str)] = &[
     ("mastodon_token", "SUGAR_MASTODON_TOKEN"),
     ("weibo_cookie", "SUGAR_WEIBO_COOKIE"),
 ];
+
+/// The long-lived local research API (loopback only, random port, random token) used for live runs.
+#[derive(Default)]
+struct LocalApi {
+    child: Mutex<Option<CommandChild>>,
+    info: Mutex<Option<Value>>,
+}
 
 #[derive(Serialize)]
 struct BackendResult {
@@ -62,7 +69,11 @@ async fn run_backend(
         fs::write(&config_path, bytes).map_err(|e| format!("Could not prepare backend request: {e}"))?;
         command = command.args([operation.as_str(), "--config", config_path.to_string_lossy().as_ref()]);
         for (key, variable) in SECRET_ENV {
-            command = command.env(*variable, secrets.as_ref().and_then(|m| m.get(*key)).map(String::as_str).unwrap_or(""));
+            // Only pass a credential that was explicitly supplied; otherwise the engine falls back to the
+            // environment and then to credentials saved in Settings (never sent through the UI).
+            if let Some(value) = secrets.as_ref().and_then(|m| m.get(*key)).filter(|value| !value.is_empty()) {
+                command = command.env(*variable, value.as_str());
+            }
         }
         let result = command.output().await;
         let _ = fs::remove_file(config_path);
@@ -70,6 +81,59 @@ async fn run_backend(
     }
     let output = command.output().await.map_err(|error| error.to_string())?;
     finish_result(&app, operation, output, None)
+}
+
+/// Start (once) the local SUGAR API sidecar and return `{url, token, workspace_root}`.
+/// The frontend streams research activity from it; nothing is reachable beyond this computer.
+#[tauri::command]
+async fn start_local_api(app: AppHandle, state: State<'_, LocalApi>) -> Result<Value, String> {
+    if let Some(info) = state.info.lock().map_err(|e| e.to_string())?.clone() {
+        return Ok(info);
+    }
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Could not locate the app data folder: {e}"))?
+        .join("workspaces");
+    fs::create_dir_all(&root).map_err(|e| format!("Could not create the project folder: {e}"))?;
+    let root_text = root.to_string_lossy().to_string();
+    let (mut rx, child) = app
+        .shell()
+        .sidecar("sugar-bridge")
+        .map_err(|e| e.to_string())?
+        .args(["serve", "--port", "0", "--generate-token", "--ready-json", "--expose-paths", "--workspace-root", root_text.as_str()])
+        .spawn()
+        .map_err(|e| format!("Could not start the research engine: {e}"))?;
+    let mut ready: Option<Value> = None;
+    let mut diagnostics = String::new();
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(bytes) => {
+                let text = String::from_utf8_lossy(&bytes).to_string();
+                if let Ok(value) = serde_json::from_str::<Value>(text.trim()) {
+                    if value.get("event").and_then(Value::as_str) == Some("api_ready") {
+                        ready = Some(value);
+                        break;
+                    }
+                }
+            }
+            CommandEvent::Stderr(bytes) => {
+                if diagnostics.len() < 2000 {
+                    diagnostics.push_str(&String::from_utf8_lossy(&bytes));
+                }
+            }
+            CommandEvent::Terminated(payload) => {
+                return Err(format!("The research engine stopped before it was ready (exit {:?}). {}", payload.code, diagnostics.trim()));
+            }
+            _ => {}
+        }
+    }
+    let info = ready.ok_or_else(|| format!("The research engine did not report that it was ready. {}", diagnostics.trim()))?;
+    // Keep draining the sidecar's output so it can never block on a full pipe.
+    tauri::async_runtime::spawn(async move { while rx.recv().await.is_some() {} });
+    *state.child.lock().map_err(|e| e.to_string())? = Some(child);
+    *state.info.lock().map_err(|e| e.to_string())? = Some(info.clone());
+    Ok(info)
 }
 
 fn finish_result(
@@ -107,10 +171,22 @@ fn redact_secrets(mut text: String, secrets: Option<&HashMap<String, String>>) -
 }
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![run_backend])
-        .run(tauri::generate_context!())
-        .expect("error while running SUGAR desktop");
+        .manage(LocalApi::default())
+        .invoke_handler(tauri::generate_handler![run_backend, start_local_api])
+        .build(tauri::generate_context!())
+        .expect("error while building SUGAR desktop");
+    app.run(|handle, event| {
+        if let tauri::RunEvent::Exit = event {
+            if let Some(state) = handle.try_state::<LocalApi>() {
+                if let Ok(mut guard) = state.child.lock() {
+                    if let Some(child) = guard.take() {
+                        let _ = child.kill();
+                    }
+                }
+            }
+        }
+    });
 }

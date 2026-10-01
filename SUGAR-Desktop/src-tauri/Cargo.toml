@@ -2,7 +2,7 @@
 name = "sugar-desktop"
 version = "1.6.1"
 description = "SUGAR cross-platform desktop research workspace"
-authors = ["SUGAR"]
+authors = ["Alejandro Grenier", "William Taggart"]
 edition = "2021"
 
 [build-dependencies]

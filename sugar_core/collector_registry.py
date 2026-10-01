@@ -18,6 +18,7 @@ from .collectors import (
     create_session,
 )
 from .models import PostRecord
+from .open_sources import collect_gdelt, collect_openalex, collect_rss, collect_wikipedia
 from .paged_collectors import collect_bilibili_page_range, collect_weibo_page_range
 from .weibo import collect_weibo_comments, collect_weibo_public, fetch_weibo_status
 from .wechat import fetch_wechat_article
@@ -68,6 +69,8 @@ class CollectorSpec:
     comments: CommentsAdapter | None = None
     required_secrets: tuple[str, ...] = ()
     description: str = ""
+    # Source that is only part of an "all platforms" run once this config key is set (e.g. feed addresses).
+    enabled_by: str = ""
 
     def _validate_secrets(self, request: CollectorRequest) -> None:
         missing = [key for key in self.required_secrets if not request.secrets.get(key, "").strip()]
@@ -127,6 +130,22 @@ def _collect_mastodon(request: CollectorRequest) -> list[PostRecord]:
         include_reposts=bool(request.config.get("include_retweets", False)),
         **_common(request),
     )
+
+
+def _collect_wikipedia(request: CollectorRequest) -> list[PostRecord]:
+    return collect_wikipedia(languages=request.config.get("post_languages") or ["en"], **_common(request))
+
+
+def _collect_gdelt(request: CollectorRequest) -> list[PostRecord]:
+    return collect_gdelt(**_common(request))
+
+
+def _collect_openalex(request: CollectorRequest) -> list[PostRecord]:
+    return collect_openalex(api_key=request.secrets.get("openalex_api_key", ""), **_common(request))
+
+
+def _collect_rss(request: CollectorRequest) -> list[PostRecord]:
+    return collect_rss(feeds=request.config.get("rss_feeds") or [], **_common(request))
 
 
 def _set_thread_root(record: PostRecord, conversation_id: str | None = None) -> PostRecord:
@@ -268,6 +287,26 @@ def _fetch_wechat(identifier: str, request: CollectorRequest) -> PostRecord:
 
 
 COLLECTORS: dict[str, CollectorSpec] = {
+    "wikipedia": CollectorSpec(
+        name="wikipedia", search=_collect_wikipedia,
+        capabilities=CollectorCapabilities(keyword_search=True, anonymous_search=True),
+        description="Encyclopedia articles in any language edition: institution background, histories, lists. No account needed.",
+    ),
+    "gdelt": CollectorSpec(
+        name="gdelt", search=_collect_gdelt,
+        capabilities=CollectorCapabilities(keyword_search=True, anonymous_search=True),
+        description="Worldwide news coverage in 100+ languages (headline, outlet, country, date). No account needed.",
+    ),
+    "openalex": CollectorSpec(
+        name="openalex", search=_collect_openalex,
+        capabilities=CollectorCapabilities(keyword_search=True, anonymous_search=True),
+        description="Scholarly works: title, abstract, authors, venue, citations. No account needed; a key only raises limits.",
+    ),
+    "rss": CollectorSpec(
+        name="rss", search=_collect_rss, enabled_by="rss_feeds",
+        capabilities=CollectorCapabilities(keyword_search=True, anonymous_search=True),
+        description="News, ministry, embassy and institution feeds you name (RSS/Atom). Used once you add feed addresses.",
+    ),
     "x": CollectorSpec(
         name="x",
         search=_collect_x,
