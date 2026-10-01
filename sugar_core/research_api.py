@@ -343,7 +343,25 @@ def _monitor_routes(method, rest, query, body, wb, project):
     return None
 
 
+def _profile_routes(method, rest, query, body, wb, project):
+    from . import profiles
+    actor = str(body.get("_author") or "Researcher")
+    try:
+        if method == "GET":
+            return 200, {"profile": profiles.export_profile(wb, project, name=query.get("name", ""), include_institutions=_bool(query.get("institutions")))}
+        if method == "POST":
+            return 200, profiles.apply_profile(wb, project, profiles.parse_profile(body.get("profile") if isinstance(body.get("profile"), dict) else {}), actor=actor,
+                                               include_institutions=bool(body.get("include_institutions", True)))
+    except KeyError as exc:
+        raise WorkbenchError(str(exc.args[0]) if exc.args else "Not found.", 404) from exc
+    except ValueError as exc:
+        raise WorkbenchError(str(exc)) from exc
+    return None
+
+
 def _research_routes(method, rest, query, body, wb, project):
+    if rest == "profile":
+        return _profile_routes(method, rest, query, body, wb, project)
     if rest.startswith("monitors") or rest.startswith("digests"):
         return _monitor_routes(method, rest, query, body, wb, project)
     if rest == "coding" or rest.startswith("coding/"):

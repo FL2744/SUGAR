@@ -123,12 +123,19 @@ def _number(raw: str) -> int:
     return int(re.sub(r"[,\s]", "", raw))
 
 
-def propose_by_pattern(item: ResearchItem) -> list[dict[str, Any]]:
-    """Proposals from phrases in the item. Each carries the sentence it came from."""
+def _extra_lexicon(extra: dict[str, dict[str, list[str]]] | None) -> dict[str, dict[str, re.Pattern[str]]]:
+    return {kind: {label: _compile(tuple(terms)) for label, terms in (extra or {}).get(kind, {}).items() if terms} for kind in ("audience", "program")}
+
+
+def propose_by_pattern(item: ResearchItem, extra: dict[str, dict[str, list[str]]] | None = None) -> list[dict[str, Any]]:
+    """Proposals from phrases in the item. Each carries the sentence it came from.
+
+    ``extra`` adds a study's own wording per label (from a method profile) to the built-in lexicon."""
+    own = _extra_lexicon(extra)
     out: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for sentence in _sentences(_text(item)):
-        for field, lexicon in (("audience", _AUDIENCE_RE), ("program", _PROGRAM_RE), ("activity_type", _ACTIVITY_RE)):
+        for field, lexicon in (("audience", {**_AUDIENCE_RE, **own["audience"]}), ("program", {**_PROGRAM_RE, **own["program"]}), ("activity_type", _ACTIVITY_RE)):
             for label, pattern in lexicon.items():
                 if (field, label) not in seen and pattern.search(sentence):
                     seen.add((field, label))
@@ -266,7 +273,8 @@ class CodingStore:
 def code_items(project: Any, items: list[ResearchItem], *, provider: LLMProvider | None = None, budget: LLMBudget | None = None, actor: str = "SUGAR") -> dict[str, Any]:
     """Propose codes for the items (patterns always; the model too when one is supplied). Existing decisions are kept."""
     store = CodingStore(project)
-    proposals: dict[str, list[dict[str, Any]]] = {i.item_id: propose_by_pattern(i) for i in items}
+    extra = (project.meta().get("settings") or {}).get("coding_terms")
+    proposals: dict[str, list[dict[str, Any]]] = {i.item_id: propose_by_pattern(i, extra) for i in items}
     warnings: list[str] = []
     if provider is not None:
         model_rows, warnings = propose_by_model(items, provider, budget)
