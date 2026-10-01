@@ -260,12 +260,20 @@ class ResearchProject:
                          "topic": payload.get("topic"), "queries": len(payload.get("queries", []))})
         return sorted(rows, key=lambda r: int(r.get("version") or 0))
 
+    @property
+    def review(self):
+        from .research_review import ReviewStore
+        return ReviewStore(self)
+
     # -- settings, members, notes ----------------------------------------------------------
     def update_settings(self, changes: dict[str, Any], *, actor: str = "analyst") -> dict[str, Any]:
-        allowed = {"enabled_sources", "provider_profile_id", "debug", "notes_visible"}
+        allowed = {"enabled_sources", "provider_profile_id", "debug", "notes_visible", "rss_feeds"}
         meta = self.meta()
         settings = dict(meta.get("settings") or {})
         applied = {k: v for k, v in changes.items() if k in allowed}
+        if "rss_feeds" in applied:      # feed addresses: http(s) only, de-duplicated, bounded
+            raw = applied["rss_feeds"] if isinstance(applied["rss_feeds"], list) else str(applied["rss_feeds"] or "").split()
+            applied["rss_feeds"] = list(dict.fromkeys(f.strip() for f in raw if isinstance(f, str) and f.strip().lower().startswith(("http://", "https://"))))[:50]
         settings.update(applied)
         meta["settings"] = settings
         self._save_meta(meta)

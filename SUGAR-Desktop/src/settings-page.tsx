@@ -14,7 +14,7 @@ function stageHint(stage: string): string {
   return ({ reachable: "Check the address and your network.", credential: "Re-enter the key for this provider.", model: "Choose a model this credential can use.", rate_limit: "Wait a moment and test again.", inference: "The provider answered with an error." } as Record<string, string>)[stage] || "";
 }
 
-function ConnectionResult({ report }: { report: ConnectionReport }) {
+export function ConnectionResult({ report }: { report: ConnectionReport }) {
   return (
     <div className={`test-result ${report.ok ? "ok" : "failed"}`} role="status">
       <strong>{report.ok ? `Connected — ${report.total_ms.toFixed(0)} ms` : "Connection failed"}</strong>
@@ -25,8 +25,8 @@ function ConnectionResult({ report }: { report: ConnectionReport }) {
   );
 }
 
-export function SettingsPage({ prefs, onSavePrefs, onDirtyChange, engineState, apiUrl, apiToken, onApiUrl, onApiToken, onConnect, busy, onError }: {
-  prefs: Prefs; onSavePrefs: (prefs: Prefs) => boolean; onDirtyChange: (dirty: boolean) => void; engineState: string;
+export function SettingsPage({ onRunSetup, prefs, onSavePrefs, onDirtyChange, engineState, apiUrl, apiToken, onApiUrl, onApiToken, onConnect, busy, onError }: {
+  onRunSetup?: () => void; prefs: Prefs; onSavePrefs: (prefs: Prefs) => boolean; onDirtyChange: (dirty: boolean) => void; engineState: string;
   apiUrl: string; apiToken: string; onApiUrl: (value: string) => void; onApiToken: (value: string) => void; onConnect: () => void; busy: boolean; onError: (message: string) => void;
 }) {
   const [section, setSection] = useState<Section>("providers");
@@ -256,6 +256,8 @@ export function SettingsPage({ prefs, onSavePrefs, onDirtyChange, engineState, a
                   <input type="range" min={85} max={150} step={5} value={Math.round(draftPrefs.textScale * 100)} onChange={(event) => setDraftPrefs({ ...draftPrefs, textScale: Number(event.target.value) / 100 })} aria-label="Text size" />
                   <small>This adjusts SUGAR's text on top of your operating system's display scaling. Everything, including buttons and spacing, scales with it.</small>
                   <p className="text-sample">The quick brown fox — تجربة النص — 文本示例</p></div>
+                {onRunSetup && <div><button type="button" className="button button-secondary button-small" onClick={onRunSetup}>Run first-time setup again</button></div>}
+                <label className="field-block"><span>Your name <small>Shown on your reviews and comments</small></span><input value={draftPrefs.name} maxLength={60} onChange={(event) => setDraftPrefs({ ...draftPrefs, name: event.target.value })} placeholder="e.g. Alex Rivera" /></label>
                 <div className="field-block"><span>Color theme</span>
                   <Segmented label="Color theme" value={draftPrefs.theme} onChange={(theme) => setDraftPrefs({ ...draftPrefs, theme })} options={[{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} /></div>
                 <div className="field-block"><span>Density</span>

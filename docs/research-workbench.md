@@ -59,3 +59,25 @@ Provider → Credential → Model → Advanced options. Types: `openai`, `openai
 ## Performance
 
 Timing is recorded for interpretation, search, download, parsing, extraction, translation, model calls, de-duplication, serialization, and UI event delivery, and is shown in Debug Mode.
+
+
+## Sources that do not depend on social platforms
+
+Social platforms change access rules often. These sources read stable public interfaces and need no account:
+
+| Source | What it returns | Notes |
+|---|---|---|
+| Wikipedia | Article intro text, any language edition | Dates are last-edited times; the request's languages choose the editions |
+| News (GDELT) | Headline, outlet, country, language, date | Headline only; follow the link for the article. Calls are spaced to GDELT's limit |
+| Scholarly (OpenAlex) | Title, abstract, authors, venue, citations | An optional API key only raises limits |
+| News and institution feeds | Entries from RSS/Atom feeds you list | Opt-in per project (Research → News & institution feeds); only included in "all platforms" once feeds are saved |
+
+A rate limit from any of them is reported like any other platform's: the pipeline backs off and retries, and the run is marked incomplete if a source still fails.
+
+## Team review
+
+Every collected item can carry a verdict, tags and comments. Review state is an append-only log (`research/review.jsonl`), so history is never overwritten. The author of each action is the authenticated member; a client cannot choose it. Items keep their id across runs, so a verdict survives reruns. Roles: viewers read, reviewers and above annotate.
+
+## Model choice and budget
+
+The Research page has an AI model chooser (OpenAI, Virginia Tech ARC, any configured provider, or *No AI*). The choice is stored in the plan and honoured by the run. If the chosen provider cannot be used, SUGAR says so and uses its built-in interpreter; it never switches to a different provider on its own. Each run has a soft cap on model calls (`limits.llm_calls`, default 500, 0 = unlimited). When the cap is reached optional AI work (translation) pauses with a single notice; collection and the run itself continue.

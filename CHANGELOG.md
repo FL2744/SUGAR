@@ -16,9 +16,16 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - Workbench runs share main's request pacer and provider cooldowns, search Mastodon as public `#hashtag` timelines when no token is saved (explaining each adaptation), read credentials saved in the OS vault, and enforce project roles (viewer/reviewer/analyst/owner) on every workbench route; providers, credentials, diagnostics and folder access are administrator-only.
 - Desktop app starts a loopback research API sidecar for live runs; `sugar-bridge serve`.
 - `tools/demo_workbench_server.py` offline demo with simulated platforms and model.
+- **More reliable sources beyond social platforms:** Wikipedia (any language edition), worldwide news coverage (GDELT), scholarly works (OpenAlex), and news/institution feeds you name (RSS/Atom, saved per project). They need no account, return the same record shape, and share de-duplication, translation and provenance.
+- **Team review:** per-item verdicts (relevant / not relevant / follow up), tags, and comment threads kept as an append-only log with the real author taken from the authenticated member; quick triage on each result, review filters and progress in Results, and entries in the project timeline. Reviewers can annotate; viewers read only.
+- **First-run setup** (name, choose OpenAI, Virginia Tech ARC or no AI, test the key and pick from the account's models, see which sources are ready, try an example), skippable and repeatable from Settings.
+- **Explicit AI model choice** on the Research page (OpenAI, Virginia Tech ARC, or no AI) carried into the plan and run; an unusable choice warns and never falls back to another provider.
+- **Soft per-run model-call budget** (default 500, 0 = unlimited): when spent, optional translation pauses with one notice; collection and the run are never failed or blocked.
+- Command palette (Ctrl/⌘+K), keyboard-shortcut help (?), and completion toasts.
 
 ### Changed
 
+- Plan summaries show readable dates ("1 Apr 2026 – 1 Oct 2026") and language names; incomplete collection is listed one source per row with a retry button; the plan's Run/Edit bar stays visible; the phone layout uses a compact top bar.
 - "Refresh plan" is replaced by five distinct operations (Reinterpret request, Rebuild plan, Refresh sources, Reprocess results, Rerun).
 - Credentials are no longer entered as session-only fields; bridge operations resolve them from the environment and then from saved Settings.
 - Project authors now include William Taggart.

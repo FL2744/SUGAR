@@ -34,12 +34,14 @@ from .research_results import item_row, query_items
 from .research_runs import TERMINAL_STATUSES, ResearchProject
 from .workspace import SugarWorkspace
 
-PLATFORM_LABELS = {"x": "X (Twitter)", "bluesky": "Bluesky", "mastodon": "Mastodon", "bilibili": "Bilibili", "weibo": "Weibo", "wechat": "WeChat"}
+PLATFORM_LABELS = {"x": "X (Twitter)", "bluesky": "Bluesky", "mastodon": "Mastodon", "bilibili": "Bilibili", "weibo": "Weibo", "wechat": "WeChat",
+                   "wikipedia": "Wikipedia", "gdelt": "News (GDELT)", "openalex": "Scholarly (OpenAlex)", "rss": "News & institution feeds"}
 PLATFORM_SECRET_HELP = {
     "x": [("x_bearer_token", "X bearer token", True)],
     "bluesky": [("bluesky_identifier", "Bluesky identifier (optional)", False), ("bluesky_app_password", "Bluesky app password (optional)", False)],
     "mastodon": [("mastodon_token", "Mastodon access token", True)],
     "weibo": [("weibo_cookie", "Weibo session cookie (optional)", False)],
+    "openalex": [("openalex_api_key", "OpenAlex API key (optional, raises limits)", False)],
 }
 PLAN_REASONS = {"interpreted", "edited", "reinterpreted", "rebuilt", "saved", "manual"}
 
@@ -261,6 +263,7 @@ class ResearchWorkbench:
         settings = project.meta().get("settings") or {}
         pipeline = ResearchPipeline(project, run, plan, secrets=self.platform_secrets(secret_overrides), provider=provider, registry=self.registry,
                                     enabled_sources=settings.get("enabled_sources") or None, known_items=known, source_items=source_items,
+                                    extra_config={"rss_feeds": [f for f in (settings.get("rss_feeds") or []) if isinstance(f, str)]},
                                     **({"sleeper": self.sleeper} if self.sleeper else {}))
         with self._lock:
             self._live[(project.project_id, run.run_id)] = pipeline
@@ -371,11 +374,23 @@ class ResearchWorkbench:
             raise WorkbenchError("Run not found.", 404)
         return project.load_items(run_id)
 
-    def results(self, project: ResearchProject, run_id: str, **filters: Any) -> dict[str, Any]:
+    def results(self, project: ResearchProject, run_id: str, *, verdict: str = "", tag: str = "", **filters: Any) -> dict[str, Any]:
+        items = all_items = self.items(project, run_id)
+        review = project.review.state()
+        if verdict:
+            items = [i for i in items if (review.get(i.item_id, {}).get("verdict", "") or "unreviewed") == verdict]
+        if tag:
+            items = [i for i in items if tag.casefold() in review.get(i.item_id, {}).get("tags", [])]
         try:
-            return query_items(self.items(project, run_id), **filters)
+            result = query_items(items, **filters)
         except ValueError as exc:
             raise WorkbenchError(str(exc)) from exc
+        rows = result["items"] + [row for group in result["groups"] for row in group["items"]]
+        for row in rows:
+            state = review.get(row["item_id"])
+            row["review"] = {"verdict": state["verdict"], "tags": state["tags"], "comments": len(state["comments"])} if state else {"verdict": "", "tags": [], "comments": 0}
+        result["review"] = project.review.summary({i.item_id for i in all_items})
+        return result
 
     def item_detail(self, project: ResearchProject, run_id: str, item_id: str) -> dict[str, Any]:
         item = next((i for i in self.items(project, run_id) if i.item_id == item_id), None)
@@ -384,6 +399,7 @@ class ResearchWorkbench:
         detail = item_row(item, detail=True)
         detail["translations"] = [t for t in project.load_translations(run_id) if t.get("item_id") == item_id]
         detail["notes"] = [n for n in project.notes() if n.get("item_id") == item_id]
+        detail["review"] = project.review.state(item_id)
         return detail
 
     def export(self, project: ResearchProject, run_id: str) -> dict[str, Any]:

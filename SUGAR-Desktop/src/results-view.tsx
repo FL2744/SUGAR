@@ -2,15 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { downloadWorkspaceFile } from "./bridge";
 import { research } from "./research-api";
-import type { ResultItem, ResultsPayload, RunSummary } from "./research-types";
+import type { ResultItem, ResultsPayload, RunSummary, Verdict } from "./research-types";
 import type { Prefs } from "./prefs";
 import { ItemInspector } from "./item-inspector";
-import { CopyButton, EmptyState, IncompleteNotice, Pill, Segmented, Spinner, StatusPill, languageName, platformLabel, relativeTime, titleCase } from "./ui";
+import { CopyButton, EmptyState, IncompleteNotice, Pill, Segmented, Spinner, StatusPill, VERDICTS, VerdictPill, languageName, platformLabel, relativeTime, titleCase } from "./ui";
 
 type TextMode = "original" | "translation" | "both";
 const GROUPS = [["none", "No grouping"], ["platform", "Platform"], ["language", "Language"], ["geography", "Geography"], ["query", "Search query"], ["author", "Author"]] as const;
 
-function ItemRow({ item, mode, onInspect }: { item: ResultItem; mode: TextMode; onInspect: () => void }) {
+function ItemRow({ item, mode, onInspect, onReview }: { item: ResultItem; mode: TextMode; onInspect: () => void; onReview: (verdict: Verdict) => void }) {
   const translated = item.translated_text;
   const showTranslation = mode !== "original" && translated;
   return (
@@ -25,6 +25,9 @@ function ItemRow({ item, mode, onInspect }: { item: ResultItem; mode: TextMode; 
         {item.status === "rejected" && <Pill tone="warn" title={item.rejection_reason}>Rejected</Pill>}
         {item.is_new && item.known_from_run === "" && <span className="new-dot" title="Not seen in an earlier run" />}
         {item.geography.slice(0, 2).map((g) => <Pill key={g} tone="neutral">{g}</Pill>)}
+        <VerdictPill verdict={item.review?.verdict || ""} />
+        {(item.review?.tags || []).slice(0, 3).map((t) => <span key={t} className="tag-chip">#{t}</span>)}
+        {(item.review?.comments || 0) > 0 && <span className="muted" title="Comments on this item">💬 {item.review?.comments}</span>}
       </div>
       {mode === "both" && translated ? (
         <div className="result-both"><p dir="auto">{item.original_text}</p><p dir="auto" className="translated">{translated}</p></div>
@@ -35,6 +38,10 @@ function ItemRow({ item, mode, onInspect }: { item: ResultItem; mode: TextMode; 
       <div className="item-actions">
         {item.url && <a className="text-button" href={item.url} target="_blank" rel="noreferrer">Open source ↗</a>}
         <button className="text-button" onClick={onInspect}>Provenance</button>
+        <span className="triage" role="group" aria-label="Review this item">
+          {VERDICTS.map((v) => <button key={v.id} type="button" className={`triage-btn ${item.review?.verdict === v.id ? "on" : ""}`} aria-pressed={item.review?.verdict === v.id}
+            onClick={() => onReview(item.review?.verdict === v.id ? "" : v.id)} title={v.label}><span aria-hidden="true">{v.mark}</span> {v.label}</button>)}
+        </span>
         <small className="muted">query: {item.query}</small>
       </div>
     </li>
@@ -56,6 +63,8 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
   const [geography, setGeography] = useState("");
   const [status, setStatus] = useState("accepted");
   const [translated, setTranslated] = useState("");
+  const [verdictFilter, setVerdictFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
   const [newOnly, setNewOnly] = useState(false);
   const [mode, setMode] = useState<TextMode>("original");
   const [inspect, setInspect] = useState("");
@@ -69,18 +78,30 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
     setLoading(true);
     try {
       const [payload, summary] = await Promise.all([
-        research.results(projectId, runId, { group_by: group, q, platform, language, geography, status, translated, new_only: newOnly, limit: 300 }),
+        research.results(projectId, runId, { group_by: group, q, platform, language, geography, status, translated, verdict: verdictFilter, tag: tagFilter, new_only: newOnly, limit: 300 }),
         research.run(projectId, runId),
       ]);
       setData(payload); setRun(summary);
     } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setLoading(false); }
-  }, [projectId, runId, group, q, platform, language, geography, status, translated, newOnly, onError]);
+  }, [projectId, runId, group, q, platform, language, geography, status, translated, verdictFilter, tagFilter, newOnly, onError]);
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), q ? 250 : 0); return () => window.clearTimeout(timer); }, [load, q]);
   useEffect(() => { setExportInfo(null); }, [runId]);
 
   const facets = data?.facets;
   const hasTranslations = useMemo(() => Boolean(facets?.languages.some((l) => l.key !== "en" && l.key !== "und")), [facets]);
+
+  // Judge an item from the list. The row updates in place; filters and counts refresh from the server's answer.
+  const reviewItem = async (item: ResultItem, verdict: Verdict) => {
+    try {
+      const result = await research.postReview(projectId, item.item_id, { kind: "verdict", verdict }, author);
+      setData((current) => {
+        if (!current) return current;
+        const patch = (row: ResultItem) => row.item_id === item.item_id ? { ...row, review: { verdict: result.review.verdict, tags: result.review.tags, comments: result.review.comments.length } } : row;
+        return { ...current, review: result.summary, items: current.items.map(patch), groups: current.groups.map((g) => ({ ...g, items: g.items.map(patch) })) };
+      });
+    } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); }
+  };
 
   const exportRun = async () => {
     setBusy("export");
@@ -101,7 +122,7 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
       Collected items appear here with their sources, languages, translations, and provenance.</EmptyState></section>);
 
   const selected = runs.find((r) => r.run_id === runId);
-  const renderItems = (items: ResultItem[]) => <ul className="result-list">{items.map((item) => <ItemRow key={item.item_id + item.run_id} item={item} mode={mode} onInspect={() => setInspect(item.item_id)} />)}</ul>;
+  const renderItems = (items: ResultItem[]) => <ul className="result-list">{items.map((item) => <ItemRow key={item.item_id + item.run_id} item={item} mode={mode} onInspect={() => setInspect(item.item_id)} onReview={(v) => void reviewItem(item, v)} />)}</ul>;
 
   return (
     <section className="page-content results-page">
@@ -141,9 +162,17 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
         {(advanced || (facets?.geographies.length || 0) > 1) && <select value={geography} onChange={(event) => setGeography(event.target.value)} aria-label="Geography"><option value="">Everywhere</option>{facets?.geographies.map((f) => <option key={f.key} value={f.key}>{f.key} ({f.count})</option>)}</select>}
         {advanced && <select value={translated} onChange={(event) => setTranslated(event.target.value)} aria-label="Translation"><option value="">Any translation state</option><option value="yes">Translated</option><option value="no">Not translated</option></select>}
         {advanced && <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Status"><option value="accepted">Kept</option><option value="duplicate">Duplicates ({data?.duplicates ?? 0})</option><option value="rejected">Rejected ({data?.rejected ?? 0})</option><option value="excluded">Excluded ({data?.excluded ?? 0})</option><option value="all">Everything</option></select>}
+        <select value={verdictFilter} onChange={(event) => setVerdictFilter(event.target.value)} aria-label="Review status"><option value="">Any review status</option><option value="unreviewed">Not yet reviewed</option>{VERDICTS.map((v) => <option key={v.id} value={v.id}>{v.label} ({data?.review?.verdicts[v.id] ?? 0})</option>)}</select>
+        {Object.keys(data?.review?.tags || {}).length > 0 && <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} aria-label="Tag"><option value="">Any tag</option>{Object.entries(data?.review?.tags || {}).map(([t, n]) => <option key={t} value={t}>#{t} ({n})</option>)}</select>}
         {run?.kind === "refresh_sources" && <label className="check-row"><input type="checkbox" checked={newOnly} onChange={(event) => setNewOnly(event.target.checked)} /><span>New since last run</span></label>}
         {(hasTranslations || mode !== "original") && <Segmented label="Text shown" value={mode} onChange={setMode} options={[{ value: "original", label: "Original" }, { value: "translation", label: "Translated" }, { value: "both", label: "Side by side" }]} />}
       </div>
+
+      {data?.review && data.all_items > 0 && (
+        <div className="review-progress" role="status" aria-label="Review progress">
+          <div className="review-bar" aria-hidden="true"><i style={{ width: `${Math.min(100, Math.round((data.review.reviewed / data.all_items) * 100))}%` }} /></div>
+          <span><strong>{data.review.reviewed}</strong> of {data.all_items} reviewed · {data.review.verdicts.relevant ?? 0} relevant · {data.review.verdicts.follow_up ?? 0} to follow up{data.review.commented ? ` · ${data.review.commented} discussed` : ""}</span>
+        </div>)}
 
       {loading && !data && <div className="loading-block"><Spinner /> Loading results…</div>}
       {data && data.total === 0 && <EmptyState icon="∅" title="Nothing matches">{data.all_items === 0 ? "This run did not keep any items. Check the Activity view for warnings." : "Try clearing a filter."}</EmptyState>}

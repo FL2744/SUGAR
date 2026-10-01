@@ -140,7 +140,7 @@ async function mockApi(page: Page, calls: ApiCall[], collectionGate?: Promise<vo
 async function useAdvancedMode(page: Page) {
   await page.addInitScript(() => {
     if (!window.localStorage.getItem("sugar.prefs.v1")) {
-      window.localStorage.setItem("sugar.prefs.v1", JSON.stringify({ mode: "advanced", debug: false, density: "comfortable", textScale: 1, interpreter: "auto", theme: "light" }));
+      window.localStorage.setItem("sugar.prefs.v1", JSON.stringify({ mode: "advanced", debug: false, density: "comfortable", textScale: 1, interpreter: "auto", theme: "light", name: "", onboarded: true }));
     }
   });
 }
@@ -458,4 +458,31 @@ test("main browser screens have no automated WCAG 2.2 A/AA violations", async ({
   await expectAccessible(page, "dark overview");
   await navigation.getByRole("button", { name: "Evidence & handoff" }).click();
   await expectAccessible(page, "dark research project");
+});
+
+test("first-run setup is offered once, can be skipped, and is remembered", async ({ page }) => {
+  await mockApi(page, []);
+  await page.goto("/");
+  const setup = page.getByRole("dialog", { name: "Welcome to SUGAR" });
+  await expect(setup).toBeVisible();
+  await expectAccessible(page, "first-run setup");
+  await setup.getByLabel(/What should we call you/).fill("Test Researcher");
+  await setup.getByRole("button", { name: "Skip setup" }).click();
+  await expect(setup).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("dialog", { name: "Welcome to SUGAR" })).toHaveCount(0);
+});
+
+test("command palette jumps between pages from the keyboard", async ({ page }) => {
+  await mockApi(page, []);
+  await useAdvancedMode(page);
+  await page.goto("/");
+  await page.keyboard.press("Control+k");
+  const palette = page.getByRole("dialog", { name: "Command palette" });
+  await expect(palette).toBeVisible();
+  await expectAccessible(page, "command palette");
+  await page.keyboard.type("settings");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+  await expect(palette).toHaveCount(0);
 });

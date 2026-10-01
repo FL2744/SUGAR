@@ -7,6 +7,9 @@ import type { BackendEvent, Institution } from "./types";
 import { AboutPage } from "./about-page";
 import { ActivityView } from "./activity-view";
 import { usePrefs } from "./prefs";
+import { Onboarding } from "./onboarding";
+import { CommandPalette, ShortcutHelp, type Command } from "./command-palette";
+import { ToastHost, type Toast } from "./ui";
 import { ProjectsPage } from "./projects-page";
 import { research } from "./research-api";
 import { ResearchPage } from "./research-page";
@@ -126,6 +129,17 @@ function extractEvidence(row: Institution): Array<{ label: string; url: string }
 export function App() {
   const [page, setPage] = useState<Page>("research");
   const [prefs, savePrefs] = usePrefs();
+  const [prefill, setPrefill] = useState<{ text: string; n: number }>({ text: "", n: 0 });
+  const [showSetup, setShowSetup] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastId = useRef(0);
+  const notify = useCallback((text: string, tone: Toast["tone"] = "info", action?: Toast["action"]) => {
+    const id = ++toastId.current;
+    setToasts((current) => [...current.slice(-2), { id, tone, text, action }]);
+    window.setTimeout(() => setToasts((current) => current.filter((t) => t.id !== id)), action ? 9000 : 5000);
+  }, []);
   const [workspace, setWorkspace] = useState(() => localStorage.getItem("sugar.workspace") || "");
   const [projectId, setProjectId] = useState(() => localStorage.getItem("sugar.projectId") || "");
   const [projects, setProjects] = useState<ApiWorkspace[]>([]);
@@ -1099,12 +1113,37 @@ export function App() {
   const title = PAGE_TITLES[page];
   const navItems = prefs.mode === "advanced" ? [...NAV_BASIC, ...NAV_ADVANCED] : NAV_BASIC;
   const activeRunSummary = overview?.runs.find((r) => ["running", "paused", "queued", "cancelling"].includes(r.status));
-  const author = "analyst";
+  const author = prefs.name.trim() || "Researcher";
 
   // The project list (project chip, Projects page) and the open project's overview load once the engine is reachable.
   useEffect(() => { void ensureLocalApi().catch(() => undefined).then(() => loadProjects()); }, [loadProjects, apiUrl]);
   useEffect(() => { void refreshOverview(projectId); }, [projectId, refreshOverview]);
   useEffect(() => { if (activeRunSummary && !runId) setRunId(activeRunSummary.run_id); }, [activeRunSummary, runId]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = Boolean(target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)));
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPaletteOpen((open) => !open); }
+      else if (event.key === "?" && !typing && !event.ctrlKey && !event.metaKey) { event.preventDefault(); setHelpOpen(true); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const commands: Command[] = [
+    { id: "go-research", label: "Go to Research", keywords: "new request interpret", run: () => changePage("research") },
+    { id: "go-activity", label: "Go to Activity", keywords: "live run progress", run: () => changePage("activity") },
+    { id: "go-results", label: "Go to Results", keywords: "items review", run: () => changePage("results") },
+    { id: "go-projects", label: "Go to Projects", keywords: "switch open", run: () => changePage("projects") },
+    { id: "go-settings", label: "Open Settings", keywords: "providers keys credentials preferences", run: () => changePage("settings") },
+    { id: "go-about", label: "About SUGAR", keywords: "credits version", run: () => changePage("about") },
+    { id: "new-project", label: "New project", keywords: "create", run: () => { changePage("projects"); setCreateSignal((n) => n + 1); } },
+    { id: "setup", label: "Run first-time setup", keywords: "onboarding wizard ai model", run: () => setShowSetup(true) },
+    { id: "mode", label: prefs.mode === "basic" ? "Switch to Advanced mode" : "Switch to Basic mode", keywords: "experience", run: () => savePrefs({ ...prefs, mode: prefs.mode === "basic" ? "advanced" : "basic" }) },
+    { id: "theme", label: prefs.theme === "dark" ? "Use light theme" : "Use dark theme", keywords: "appearance color", run: () => savePrefs({ ...prefs, theme: prefs.theme === "dark" ? "light" : "dark" }) },
+    { id: "help", label: "Keyboard shortcuts", hint: "?", keywords: "help keys", run: () => setHelpOpen(true) },
+  ];
+
   const openNewProject = () => { changePage("projects"); setCreateSignal((n) => n + 1); };
 
   return (
@@ -1177,15 +1216,20 @@ export function App() {
           {selected && <div className="inspector-backdrop" onClick={() => setSelected(null)}><aside className="evidence-inspector" onClick={(event) => event.stopPropagation()}><div className="inspector-top"><div><span className="eyebrow">INSTITUTION RECORD</span><button className="inspector-close" onClick={() => setSelected(null)} aria-label="Close inspector">×</button></div><div className="inspector-identity"><div className="inspector-avatar">{(selected.name || "?").slice(0, 1).toUpperCase()}</div><div><h2>{selected.name || "Unnamed institution"}</h2><span>{[selected.city, selected.country].filter(Boolean).join(", ") || "Location not recorded"}</span></div></div><div className="inspector-badges"><span className={`status-pill status-pill-${String(selected.status || "unknown").toLowerCase()}`}>{titleCase(selected.status || "unknown")}</span><span className="network-pill">{selected.network || titleCase(selected.entity_type || "Institution")}</span></div></div><div className="inspector-content"><div className="inspector-section"><span className="eyebrow">PROFILE</span><p>{selected.description || "No descriptive profile has been recorded for this institution."}</p><div className="profile-facts"><div><span>Entity type</span><strong>{titleCase(selected.entity_type || "institution")}</strong></div><div><span>Coordinates</span><strong>{coordinatesText(selected)}</strong></div><div><span>Registry ID</span><strong>{selected.entity_id}</strong></div></div></div><div className="inspector-section"><div className="evidence-heading"><span className="eyebrow">EVIDENCE & SOURCES</span><span className="source-count">{extractEvidence(selected).length}</span></div>{extractEvidence(selected).length ? <div className="source-list">{extractEvidence(selected).map((source) => <a className="source-link" key={source.url} href={source.url} target="_blank" rel="noreferrer"><span className="source-icon">↗</span><span><strong>{source.label}</strong><small>{new URL(source.url).hostname}</small></span></a>)}</div> : <div className="evidence-gap"><span>◷</span><div><strong>Evidence gap</strong><p>No source URL has been attached yet. Verify this record before relying on its status or location.</p></div></div>}</div></div><div className="inspector-footer"><span>Claim-level source provenance is retained in the project registry.</span></div></aside></div>}
         </section>}
 
-        {page === "research" && <ResearchPage projectId={projectId} projectName={projectName} prefs={prefs} overview={overview} onOverview={() => refreshOverview(projectId)} ensureProject={ensureProject} onRunStarted={handleRunStarted} onOpenSettings={() => changePage("settings")} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onError={setError} />}
-        {page === "activity" && <ActivityView onRunSettled={() => void refreshOverview(projectId)} projectId={projectId} runId={runId} prefs={prefs} author={author} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onNewRun={() => changePage("research")} onOpenSettings={() => changePage("settings")} onRunStarted={handleRunStarted} onError={setError} />}
+        {page === "research" && <ResearchPage prefill={prefill} projectId={projectId} projectName={projectName} prefs={prefs} overview={overview} onOverview={() => refreshOverview(projectId)} ensureProject={ensureProject} onRunStarted={handleRunStarted} onOpenSettings={() => changePage("settings")} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onError={setError} />}
+        {page === "activity" && <ActivityView onRunSettled={(finished) => { void refreshOverview(projectId); const kept = finished.counts?.processed ?? finished.counts?.collected ?? 0; if (finished.status === "failed") notify("The run could not finish. Open Activity for details.", "warn"); else if (finished.status === "cancelled") notify(`Run cancelled — ${kept} items kept.`, "info"); else notify(`Run finished — ${kept} item${kept === 1 ? "" : "s"} kept${finished.status === "completed_with_warnings" ? ", with some sources incomplete" : ""}.`, finished.status === "completed" ? "ok" : "warn", { label: "View results", run: () => changePage("results") }); }} projectId={projectId} runId={runId} prefs={prefs} author={author} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onNewRun={() => changePage("research")} onOpenSettings={() => changePage("settings")} onRunStarted={handleRunStarted} onError={setError} />}
         {page === "results" && <ResultsView projectId={projectId} runId={runId || overview?.runs[0]?.run_id || ""} runs={overview?.runs || []} prefs={prefs} author={author} projectPath={workspace.startsWith("sugar-workspace://") ? "" : workspace} onSelectRun={setRunId} onOpenActivity={(id) => { setRunId(id); changePage("activity"); }} onOpenResearch={() => changePage("research")} onRunStarted={handleRunStarted} onError={setError} />}
         {page === "projects" && <ProjectsPage projects={projects} currentId={projectId} loading={projectsLoading} advanced={prefs.mode === "advanced"} createSignal={createSignal} onOpen={openProject} onCreate={async (name, question) => { await createProject(name, question); }} onOpenFolder={() => void openFolder()} onRefresh={() => void loadProjects()} />}
         {page === "timeline" && <TimelinePage projectId={projectId} refreshKey={timelineKey} />}
         {page === "about" && <AboutPage version="1.4" engineVersion={engineVersion} />}
-        {page === "settings" && <SettingsPage prefs={prefs} onSavePrefs={savePrefs} onDirtyChange={(dirty) => { settingsDirty.current = dirty; }} engineState={engineState} apiUrl={apiUrl} apiToken={apiToken} onApiUrl={setApiUrl} onApiToken={setApiToken} onConnect={() => void connectResearchEngine()} busy={Boolean(busy)} onError={setError} />}
+        {page === "settings" && <SettingsPage onRunSetup={() => setShowSetup(true)} prefs={prefs} onSavePrefs={savePrefs} onDirtyChange={(dirty) => { settingsDirty.current = dirty; }} engineState={engineState} apiUrl={apiUrl} apiToken={apiToken} onApiUrl={setApiUrl} onApiToken={setApiToken} onConnect={() => void connectResearchEngine()} busy={Boolean(busy)} onError={setError} />}
 
 
+        {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
+        {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
+        <ToastHost toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))} />
+        {(showSetup || (!prefs.onboarded && engineState === "ready")) && <Onboarding prefs={prefs} onSavePrefs={savePrefs} onOpenSettings={() => changePage("settings")}
+          onFinish={() => setShowSetup(false)} onTryExample={(text) => { setPrefill((p) => ({ text, n: p.n + 1 })); changePage("research"); }} />}
         <footer className="statusbar"><div><span className={`status-dot ${workspace ? "active" : "unknown"}`} /><span>{workspace ? (workspace.startsWith("sugar-workspace://") ? `Project · ${projectName}` : `Workspace · ${workspace.split(/[\\/]/).at(-1)}`) : "No project open"}</span></div><span className="statusbar-right">SUGAR research engine <b>·</b> Python core</span></footer>
       </main>
     </div>

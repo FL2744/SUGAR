@@ -36,6 +36,7 @@ PLATFORM_SECRET_ENV = {
     "bluesky_app_password": "SUGAR_BLUESKY_APP_PASSWORD",
     "mastodon_token": "SUGAR_MASTODON_TOKEN",
     "weibo_cookie": "SUGAR_WEIBO_COOKIE",
+    "openalex_api_key": "SUGAR_OPENALEX_API_KEY",
 }
 LEGACY_LLM_ENV = "SUGAR_LLM_API_KEY"
 

@@ -1,7 +1,7 @@
 import { api, apiPost, openEventStream } from "./bridge";
 import type {
   ActivityEvent, ConnectionReport, Interpretation, PlanSpec, PlatformRow, ProjectOverview, ProviderProfileRow, ProviderType,
-  ResultItem, ResultsPayload, RunSummary, TimelineEvent,
+  ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
 } from "./research-types";
 
 const ws = (id: string) => `/api/workspaces/${encodeURIComponent(id)}`;
@@ -44,6 +44,9 @@ export const research = {
   events: (id: string, runId: string, after = 0, filters: Record<string, string> = {}) =>
     api<{ events: ActivityEvent[]; last_seq: number; finished: boolean; live: boolean }>(`${ws(id)}/runs/${runId}/events${query({ after, limit: 2000, ...filters })}`),
   control: (id: string, runId: string, body: Record<string, unknown>) => apiPost<{ run: RunSummary }>(`${ws(id)}/runs/${runId}/control`, body).then((r) => r.run),
+  review: (id: string, itemId: string) => api<{ item_id: string; review: ReviewState }>(`${ws(id)}/research/review${query({ item_id: itemId })}`),
+  postReview: (id: string, itemId: string, action: Record<string, unknown>, author = "") =>
+    apiPost<{ item_id: string; review: ReviewState; summary: ReviewSummary }>(`${ws(id)}/research/review`, { item_id: itemId, author, ...action }),
   results: (id: string, runId: string, params: Record<string, string | number | boolean | undefined> = {}) => api<ResultsPayload>(`${ws(id)}/runs/${runId}/results${query(params)}`),
   item: (id: string, runId: string, itemId: string) => api<{ item: ResultItem }>(`${ws(id)}/runs/${runId}/items/${itemId}`).then((r) => r.item),
   exportRun: (id: string, runId: string) => apiPost<{ archive: string; directory: string; files: string[] }>(`${ws(id)}/runs/${runId}/export`),

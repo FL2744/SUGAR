@@ -500,8 +500,23 @@ class LLMProvider:
             checks.append(ConnectionCheck("credential", "failed", f"No {self.profile.meta.credential_label} is saved for this provider."))
             return report(False, "credential", f"No {self.profile.meta.credential_label} is saved for “{self.profile.name}”. Enter it in Settings → LLM Providers.")
         if not self.model:
+            # No model chosen yet: still verify the endpoint and credential and offer the account's models to pick from.
+            t0 = time.perf_counter()
+            try:
+                models = self.list_models()
+            except ProviderError as exc:
+                if exc.stage in {"reachable", "credential"}:
+                    checks.append(ConnectionCheck("reachable", "failed" if exc.stage == "reachable" else "ok", str(exc) if exc.stage == "reachable" else f"Reached {self.endpoint}", _ms(t0)))
+                    if exc.stage == "credential":
+                        checks.append(ConnectionCheck("credential", "failed", str(exc)))
+                    return report(False, exc.stage, str(exc))
+                models = []
+            else:
+                checks.append(ConnectionCheck("reachable", "ok", f"Reached {self.endpoint}", _ms(t0)))
+                checks.append(ConnectionCheck("credential", "ok" if needs_credential else "skipped", "Credential accepted." if needs_credential else "No credential required for this provider."))
             checks.append(ConnectionCheck("model", "failed", "No model is selected."))
-            return report(False, "model", f"Choose a model for “{self.profile.name}” before testing the connection.")
+            hint = f" {len(models)} models are available to this credential; choose one and test again." if models else ""
+            return report(False, "model", f"Choose a model for “{self.profile.name}” before the final test.{hint}")
 
         # 1-3: reachability, credential, and model presence via the model listing
         listing_supported = True

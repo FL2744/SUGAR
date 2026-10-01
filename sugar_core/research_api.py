@@ -193,6 +193,16 @@ def _research_routes(method, rest, query, body, wb, project):
     if rest == "notes" and method == "POST":
         return 200, {"note": project.add_note(str(body.get("text") or ""), author=str(body.get("author") or "analyst"), item_id=str(body.get("item_id") or ""),
                                               run_id=str(body.get("run_id") or ""))}
+    if rest == "review" and method == "GET":
+        item_id = str(query.get("item_id") or "")
+        return 200, ({"item_id": item_id, "review": project.review.state(item_id)} if item_id else {"summary": project.review.summary()})
+    if rest == "review" and method == "POST":
+        try:
+            state = project.review.apply(str(body.get("item_id") or ""), {k: v for k, v in body.items() if k != "item_id"},
+                                         author=str(body.get("_author") or "Researcher"))
+        except ValueError as exc:
+            raise WorkbenchError(str(exc)) from exc
+        return 200, {"item_id": str(body.get("item_id")), "review": state, "summary": project.review.summary()}
     if rest == "notes" and method == "GET":
         return 200, {"notes": project.notes()}
     return None
@@ -222,7 +232,7 @@ def _run_routes(method, rest, query, body, wb, project):
     if sub == "results" and method == "GET":
         return 200, wb.results(project, run_id, group_by=query.get("group_by", "none"), text=query.get("q", ""), platform=query.get("platform", ""),
                                language=query.get("language", ""), status=query.get("status", "accepted"), geography=query.get("geography", ""),
-                               translated=query.get("translated", ""), new_only=_bool(query.get("new_only")), limit=_int(query.get("limit"), 200, 1, 1000),
+                               translated=query.get("translated", ""), verdict=query.get("verdict", ""), tag=query.get("tag", ""), new_only=_bool(query.get("new_only")), limit=_int(query.get("limit"), 200, 1, 1000),
                                offset=_int(query.get("offset"), 0))
     match = re.fullmatch(r"items/(it_[A-Za-z0-9]+)", sub)
     if match and method == "GET":

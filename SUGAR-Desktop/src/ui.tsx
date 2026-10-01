@@ -41,7 +41,7 @@ export const LANGUAGE_NAMES: Record<string, string> = {
 };
 export const languageName = (code: string) => LANGUAGE_NAMES[code] || code.toUpperCase();
 
-export const PLATFORM_LABELS: Record<string, string> = { x: "X", bluesky: "Bluesky", mastodon: "Mastodon", bilibili: "Bilibili", weibo: "Weibo", wechat: "WeChat" };
+export const PLATFORM_LABELS: Record<string, string> = { x: "X", bluesky: "Bluesky", mastodon: "Mastodon", bilibili: "Bilibili", weibo: "Weibo", wechat: "WeChat", wikipedia: "Wikipedia", gdelt: "News (GDELT)", openalex: "Scholarly (OpenAlex)", rss: "News & institution feeds" };
 export const platformLabel = (id: string) => PLATFORM_LABELS[id] || titleCase(id);
 
 export function Pill({ tone = "neutral", children, title }: { tone?: "neutral" | "ok" | "warn" | "error" | "info" | "busy"; children: ReactNode; title?: string }) {
@@ -158,6 +158,33 @@ export function IncompleteNotice({ run, onRetry, busy }: { run: IncompleteRun; o
         })}
       </ul>
       {extra.map((note) => <p key={note} className="muted">{note}</p>)}
+    </div>
+  );
+}
+
+export const VERDICTS: Array<{ id: "relevant" | "not_relevant" | "follow_up"; label: string; mark: string; tone: "ok" | "neutral" | "warn" }> = [
+  { id: "relevant", label: "Relevant", mark: "✓", tone: "ok" },
+  { id: "not_relevant", label: "Not relevant", mark: "✕", tone: "neutral" },
+  { id: "follow_up", label: "Follow up", mark: "⚑", tone: "warn" },
+];
+
+export function VerdictPill({ verdict }: { verdict: string }) {
+  const v = VERDICTS.find((entry) => entry.id === verdict);
+  return v ? <Pill tone={v.tone} title={`Marked ${v.label.toLowerCase()}`}>{v.mark} {v.label}</Pill> : null;
+}
+
+export type Toast = { id: number; tone: "info" | "ok" | "warn"; text: string; action?: { label: string; run: () => void } };
+
+/** Short, non-blocking confirmations ("Run finished — 14 items"). Polite live region; they dismiss themselves. */
+export function ToastHost({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+  return (
+    <div className="toast-host" role="status" aria-live="polite">
+      {toasts.map((toast) => (
+        <div key={toast.id} className={`toast ${toast.tone}`}>
+          <span>{toast.text}</span>
+          {toast.action && <button className="toast-action" onClick={() => { toast.action?.run(); onDismiss(toast.id); }}>{toast.action.label}</button>}
+          <button aria-label="Dismiss" onClick={() => onDismiss(toast.id)}>×</button>
+        </div>))}
     </div>
   );
 }

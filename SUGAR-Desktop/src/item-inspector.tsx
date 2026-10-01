@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { research } from "./research-api";
-import type { ResultItem } from "./research-types";
-import { Pill, Spinner, formatTime, languageName, platformLabel, titleCase } from "./ui";
+import type { ResultItem, ReviewState, Verdict } from "./research-types";
+import { Pill, Spinner, VERDICTS, formatTime, languageName, platformLabel, titleCase } from "./ui";
 
 const CHAIN_LABELS: Record<string, string> = {
   search_result: "Search result", fetched_document: "Fetched document", extracted_paragraph: "Extracted paragraph",
@@ -12,21 +12,21 @@ const CHAIN_LABELS: Record<string, string> = {
 export function ItemInspector({ projectId, runId, itemId, author, onClose }: { projectId: string; runId: string; itemId: string; author: string; onClose: () => void }) {
   const [item, setItem] = useState<ResultItem | null>(null);
   const [error, setError] = useState("");
-  const [note, setNote] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [review, setReview] = useState<ReviewState | null>(null);
+  const [comment, setComment] = useState("");
+  const [tag, setTag] = useState("");
+  const [reviewError, setReviewError] = useState("");
   useEffect(() => {
     let active = true;
-    setItem(null); setError("");
-    research.item(projectId, runId, itemId).then((value) => { if (active) setItem(value); }).catch((issue) => { if (active) setError(issue instanceof Error ? issue.message : String(issue)); });
+    setItem(null); setError(""); setReview(null); setReviewError("");
+    research.item(projectId, runId, itemId).then((value) => { if (active) { setItem(value); setReview((value as unknown as { review?: ReviewState }).review || null); } }).catch((issue) => { if (active) setError(issue instanceof Error ? issue.message : String(issue)); });
     return () => { active = false; };
   }, [projectId, runId, itemId]);
 
-  const addNote = async () => {
-    if (!note.trim()) return;
-    await research.addNote(projectId, note.trim(), author, itemId, runId);
-    setNote(""); setSaved(true);
-    setItem(await research.item(projectId, runId, itemId));
-    setTimeout(() => setSaved(false), 1500);
+  const act = async (action: Record<string, unknown>) => {
+    setReviewError("");
+    try { setReview((await research.postReview(projectId, itemId, action, author)).review); }
+    catch (issue) { setReviewError(issue instanceof Error ? issue.message : String(issue)); }
   };
 
   const chain = item?.evidence_chain || [];
@@ -52,6 +52,25 @@ export function ItemInspector({ projectId, runId, itemId, author, onClose }: { p
         <div className="inspector-content">
           {error && <div className="inline-error">{error}</div>}
           {item && <>
+            <div className="inspector-section review-section"><span className="eyebrow">TEAM REVIEW</span>
+              <div className="verdict-row" role="group" aria-label="Verdict">
+                {VERDICTS.map((v) => <button key={v.id} type="button" className={`button button-secondary button-small ${review?.verdict === v.id ? "on" : ""}`} aria-pressed={review?.verdict === v.id}
+                  onClick={() => void act({ kind: "verdict", verdict: (review?.verdict === v.id ? "" : v.id) as Verdict })}><span aria-hidden="true">{v.mark}</span> {v.label}</button>)}
+              </div>
+              {review?.verdict && <small className="muted">Marked {VERDICTS.find((v) => v.id === review.verdict)?.label.toLowerCase()} by {review.verdict_by || "a team member"}{review.verdict_at ? ` · ${formatTime(review.verdict_at, true)}` : ""}</small>}
+              <div className="tag-row" aria-label="Tags">
+                {(review?.tags || []).map((t) => <span key={t} className="tag-chip">#{t}<button type="button" aria-label={`Remove tag ${t}`} onClick={() => void act({ kind: "tag_remove", tag: t })}>×</button></span>)}
+                <input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="Add a tag" aria-label="Add a tag" maxLength={40}
+                  onKeyDown={(event) => { if (event.key === "Enter" && tag.trim()) { void act({ kind: "tag_add", tag }); setTag(""); } }} />
+              </div>
+              <ol className="comment-thread" aria-label="Comments">
+                {(review?.comments || []).map((c) => <li key={c.id}><strong>{c.author}</strong> <small className="muted">{formatTime(c.at, true)}</small><p>{c.text}</p></li>)}
+              </ol>
+              <div className="note-add"><input value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Comment for your team" aria-label="Add a comment"
+                onKeyDown={(event) => { if (event.key === "Enter" && comment.trim()) { void act({ kind: "comment", text: comment }); setComment(""); } }} />
+                <button className="button button-secondary button-small" disabled={!comment.trim()} onClick={() => { void act({ kind: "comment", text: comment }); setComment(""); }}>Comment</button></div>
+              {reviewError && <div className="inline-error" role="alert">{reviewError}</div>}
+            </div>
             <div className="inspector-section"><span className="eyebrow">ORIGINAL</span><p className="item-text" dir="auto">{item.original_text}</p>
               {item.url && <a className="source-link" href={item.url} target="_blank" rel="noreferrer"><span className="source-icon">↗</span><span><strong>Open the original</strong><small>{item.url}</small></span></a>}</div>
             {item.translated_text && <div className="inspector-section"><span className="eyebrow">TRANSLATION</span><p className="item-text" dir="auto">{item.translated_text}</p>
@@ -76,10 +95,8 @@ export function ItemInspector({ projectId, runId, itemId, author, onClose }: { p
             <div className="inspector-section"><span className="eyebrow">TRANSFORMATIONS</span>
               <ol className="transform-list">{(item.transformations || []).map((step, index) => (
                 <li key={index}><strong>{titleCase(String(step.step))}</strong><small>{formatTime(String(step.at || ""), true)}{Object.entries(step).filter(([k]) => !["step", "at"].includes(k)).map(([k, v]) => ` · ${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`).join("")}</small></li>))}</ol></div>
-            <div className="inspector-section"><span className="eyebrow">NOTES</span>
-              {(item.notes || []).map((n) => <p className="note-line" key={String(n.note_id)}><strong>{String(n.author)}</strong> {String(n.text)}</p>)}
-              <div className="note-add"><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add a note about this item" onKeyDown={(event) => { if (event.key === "Enter") void addNote(); }} aria-label="Note" />
-                <button className="button button-secondary button-small" disabled={!note.trim()} onClick={() => void addNote()}>{saved ? "Saved ✓" : "Add"}</button></div></div>
+            <div className="inspector-section"><span className="eyebrow">NOTES (EARLIER)</span>
+              {(item.notes || []).map((n) => <p className="note-line" key={String(n.note_id)}><strong>{String(n.author)}</strong> {String(n.text)}</p>)}</div>
           </>}
         </div>
       </aside>

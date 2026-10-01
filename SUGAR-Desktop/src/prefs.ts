@@ -7,9 +7,11 @@ export type Prefs = {
   textScale: number;          // 0.85 – 1.5, multiplies the base font size (OS scaling still applies on top)
   interpreter: "auto" | "deterministic";
   theme: "light" | "dark";
+  name: string;               // shown as the author of reviews and comments
+  onboarded: boolean;         // the first-run setup has been completed or skipped
 };
 
-export const DEFAULT_PREFS: Prefs = { mode: "basic", debug: false, density: "comfortable", textScale: 1, interpreter: "auto", theme: "light" };
+export const DEFAULT_PREFS: Prefs = { mode: "basic", debug: false, density: "comfortable", textScale: 1, interpreter: "auto", theme: "light", name: "", onboarded: false };
 const KEY = "sugar.prefs.v1";
 
 export function loadPrefs(): Prefs {
@@ -31,6 +33,8 @@ export function normalizePrefs(prefs: Prefs): Prefs {
     textScale: Math.min(1.5, Math.max(0.85, Number(prefs.textScale) || 1)),
     interpreter: prefs.interpreter === "deterministic" ? "deterministic" : "auto",
     theme: prefs.theme === "dark" ? "dark" : "light",
+    name: String(prefs.name || "").trim().slice(0, 60),
+    onboarded: Boolean(prefs.onboarded),
   };
 }
 

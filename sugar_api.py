@@ -485,6 +485,8 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             return "viewer"
         if area == "research" and rest == "settings":
             return "owner"
+        if area == "research" and rest == "review":
+            return "reviewer"          # reviewers may judge, tag and comment; viewers can only read
         return "analyst"
 
     def _authorize_research(self, method: str, path: str, body: dict[str, Any] | None) -> bool:
@@ -503,6 +505,10 @@ class SugarApiHandler(BaseHTTPRequestHandler):
         if not self._authorize_research(method, route.path, body):
             return
         query = {key: values[-1] for key, values in parse_qs(route.query).items()}
+        if isinstance(body, dict):
+            body.pop("_author", None)      # the author of a review action is the authenticated member, never client input
+            if method == "POST" and self.principal:
+                body["_author"] = self.principal.get("email") or str(body.get("author") or "").strip()[:80] or "Researcher"
         result = research_dispatch(method, route.path, query, body, wb=get_workbench(), resolve_project=resolve_project,
                                    list_projects=list_research_projects)
         if result is None:

@@ -83,15 +83,21 @@ export type ResultItem = {
   original_text: string; translated_text: string; translation_status: string; translation_provider: string; translation_model: string;
   translation_at: string; geography: string[]; coordinates: Record<string, number>; is_new: boolean; known_from_run: string; run_id: string;
   derived_from: Record<string, string>; engagement: Record<string, unknown>; content_type: string;
+  review?: { verdict: string; tags: string[]; comments: number };
   // detail only
   project_id?: string; native_id?: string; query_dispatched?: string; transformations?: Array<Record<string, any>>;
   evidence_chain?: Array<{ id: string; type: string; parent: string; created_at: string; data: Record<string, any> }>;
   paragraphs?: Array<{ index: number; node_id: string; text: string }>; translations?: Array<Record<string, any>>; notes?: Array<Record<string, any>>;
   translation?: Record<string, any>; language_method?: string; warnings?: string[]; source_mode?: string;
+  review_detail?: ReviewState;
 };
+export type Verdict = "" | "relevant" | "not_relevant" | "follow_up";
+export type ReviewState = { verdict: Verdict; verdict_by: string; verdict_at: string; tags: string[]; comments: Array<{ id: string; author: string; text: string; at: string }> };
+export type ReviewSummary = { verdicts: Record<string, number>; tags: Record<string, number>; commented: number; reviewed: number };
 export type ResultsPayload = {
   total: number; all_items: number; group_by: string; groups: Array<{ key: string; count: number; items: ResultItem[] }>; items: ResultItem[];
   facets: Record<string, Array<{ key: string; count: number }>>; duplicates: number; rejected: number; excluded: number;
+  review?: ReviewSummary;
 };
 
 export type TimelineEvent = { event_id: string; event_type: string; occurred_at: string; actor: string; details: Record<string, any> };
@@ -99,6 +105,6 @@ export type TimelineEvent = { event_id: string; event_type: string; occurred_at:
 export type ProjectOverview = {
   summary: { project_id: string; name: string; research_question: string; status: string; last_activity: string; updated_at: string; run_count: number };
   requirement_text: string; plan: PlanSpec | null; plan_summary: SummaryRow[]; plan_versions: Array<{ version: number; updated_at: string }>;
-  settings: { enabled_sources?: string[]; provider_profile_id?: string; debug?: boolean };
+  settings: { enabled_sources?: string[]; provider_profile_id?: string; debug?: boolean; rss_feeds?: string[] };
   members: Array<{ name: string; role: string }>; runs: RunSummary[]; notes: Array<Record<string, any>>;
 };

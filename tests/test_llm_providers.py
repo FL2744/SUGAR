@@ -252,3 +252,13 @@ def test_redaction_patterns_and_secret_named_keys():
     assert data["nested"]["max_tokens"] == 10 and data["nested"]["credential_ref"] == "provider:a"
     assert "zzzzzzzz" not in json.dumps(data)
     assert redaction.mask_for_display("sk-abcdefghijklmnop") == "••••••••mnop"
+
+
+def test_testing_without_a_model_still_verifies_credentials_and_offers_the_models():
+    with FakeLLMServer() as server:
+        report = create_provider(profile(server, model=""), KEY).test_connection()
+        assert not report.ok and report.error_stage == "model"
+        assert [c.name for c in report.checks if c.status == "ok"][:2] == ["reachable", "credential"] and report.available_models
+        assert "choose one" in report.message
+        bad = create_provider(profile(server, model=""), "wrong-key-000000000").test_connection()
+        assert not bad.ok and bad.error_stage == "credential"          # a bad key is still reported as a bad key

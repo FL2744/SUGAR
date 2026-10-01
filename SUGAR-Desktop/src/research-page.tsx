@@ -13,6 +13,7 @@ const EXAMPLES = [
 ];
 
 type Props = {
+  prefill?: { text: string; n: number };
   projectId: string;
   projectName: string;
   prefs: Prefs;
@@ -32,6 +33,27 @@ const OPERATIONS = [
   { id: "reprocess", label: "Reprocess results", detail: "Repeat translation and extraction on the last run's items without collecting anything again." },
   { id: "rerun", label: "Rerun", detail: "Execute the previous plan again exactly as it was recorded, including edits." },
 ] as const;
+
+/** Feed addresses for news, ministry, embassy and institution sites. Saved per project; used on the next run. */
+function FeedsCard({ projectId, saved, onSaved, onError }: { projectId: string; saved: string[]; onSaved: () => void; onError: (m: string) => void }) {
+  const [text, setText] = useState(saved.join("\n"));
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  useEffect(() => { setText(saved.join("\n")); }, [saved]);
+  const save = async () => {
+    setBusy(true); setDone(false);
+    try { await research.saveSettings(projectId, { rss_feeds: text.split(/\s+/).filter(Boolean) }); setDone(true); onSaved(); }
+    catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(false); }
+  };
+  return (
+    <Collapsible title="News & institution feeds (optional)" hint={saved.length ? `${saved.length} feed${saved.length === 1 ? "" : "s"} included in runs` : "Add RSS/Atom addresses of sites you want searched"}>
+      <label className="field-block"><span>Feed addresses, one per line</span>
+        <textarea rows={4} value={text} onChange={(event) => { setText(event.target.value); setDone(false); }} placeholder="https://example.org/news/feed.xml" spellCheck={false} /></label>
+      <p className="footnote">Entries whose title or summary mention your search are collected. Only http(s) addresses are used. Wikipedia, news coverage (GDELT) and scholarly works (OpenAlex) are searched automatically and need no setup.</p>
+      <div className="preview-actions"><button type="button" className="button button-secondary" onClick={() => void save()} disabled={busy}>{busy ? <><Spinner /> Saving…</> : "Save feeds"}</button>{done && <span className="muted" role="status">Saved — used on the next run.</span>}</div>
+    </Collapsible>
+  );
+}
 
 function providerState(p: ProviderProfileRow): { mark: string; text: string } {
   if (!p.has_credential && p.type !== "local") return { mark: "⚠", text: "key missing" };
@@ -146,8 +168,9 @@ function ManualEntry({ initial, platforms, onSubmit, busy }: { initial: string; 
   );
 }
 
-export function ResearchPage({ projectId, projectName, prefs, overview, onOverview, ensureProject, onRunStarted, onOpenSettings, onOpenResults, onError }: Props) {
+export function ResearchPage({ projectId, projectName, prefs, overview, onOverview, ensureProject, onRunStarted, onOpenSettings, onOpenResults, onError, prefill }: Props) {
   const [text, setText] = useState("");
+  useEffect(() => { if (prefill?.text) setText(prefill.text); }, [prefill]);
   const [interpretation, setInterpretation] = useState<Interpretation | null>(null);
   const [plan, setPlan] = useState<PlanSpec | null>(null);
   const [summary, setSummary] = useState<SummaryRow[]>([]);
@@ -297,6 +320,8 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
           {interpretation.issues.filter((i) => i.field !== "topic").map((i) => <div className="notice notice-warn" key={i.message}>{i.message}</div>)}
           <ManualEntry initial={interpretation.request} platforms={platforms} onSubmit={(fields) => void submitManual(fields)} busy={busy === "manual"} />
         </>)}
+
+      {projectId && <FeedsCard projectId={projectId} saved={overview?.settings?.rss_feeds || []} onSaved={() => void onOverview()} onError={onError} />}
 
       {plan && <PlanPreview summary={summary} interpretation={interpretation} plan={plan} advanced={advanced} running={busy === "run"} canRun onRun={() => void runNow()}
         onEdit={() => setEditing("basic")} onAdvanced={() => setEditing("advanced")} onOpenSettings={onOpenSettings} />}

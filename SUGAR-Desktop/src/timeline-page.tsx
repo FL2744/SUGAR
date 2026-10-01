@@ -7,7 +7,7 @@ const LABELS: Record<string, string> = {
   requirement_edited: "Requirement edited", plan_interpreted: "Request interpreted into a plan", plan_edited: "Plan edited", plan_saved: "Plan saved",
   plan_reinterpreted: "Request reinterpreted", plan_rebuilt: "Plan rebuilt", plan_manual: "Plan entered manually", run_started: "Run started", run_completed: "Run completed",
   run_failed: "Run failed", run_cancelled: "Run cancelled", sources_refreshed: "Sources refreshed", results_reprocessed: "Results reprocessed", run_exported: "Run exported",
-  settings_changed: "Project settings changed", member_changed: "Member or role changed", note_added: "Note added", finding_coded: "Finding coded",
+  settings_changed: "Project settings changed", member_changed: "Member or role changed", note_added: "Note added", item_reviewed: "Item reviewed", finding_coded: "Finding coded",
   research_run: "Legacy operation", workspace_hub_action: "Workspace action",
 };
 

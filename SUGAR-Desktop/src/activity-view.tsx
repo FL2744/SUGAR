@@ -157,7 +157,7 @@ function TranslationList({ cards, translating, onInspect, itemLanguages }: { car
 }
 
 export function ActivityView({ projectId, runId, prefs, author, onOpenResults, onNewRun, onOpenSettings, onRunStarted, onRunSettled, onError }: {
-  projectId: string; runId: string; prefs: Prefs; author: string; onRunSettled?: () => void;
+  projectId: string; runId: string; prefs: Prefs; author: string; onRunSettled?: (run: RunSummary) => void;
   onOpenResults: (runId: string) => void; onNewRun: () => void; onOpenSettings: () => void;
   onRunStarted: (projectId: string, run: RunSummary) => void; onError: (message: string) => void;
 }) {
@@ -182,7 +182,7 @@ export function ActivityView({ projectId, runId, prefs, author, onOpenResults, o
   useEffect(() => {
     if (!run || active) return;
     const key = `${run.run_id}:${run.status}`;
-    if (settledKey.current !== key) { settledKey.current = key; onRunSettled?.(); }
+    if (settledKey.current !== key) { settledKey.current = key; onRunSettled?.(run); }
   }, [run, active, onRunSettled]);
 
   // Batch incoming events so a burst of hundreds does not re-render the page for every one of them.

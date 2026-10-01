@@ -459,7 +459,8 @@ class ResearchPipeline:
         if plan.source_scope == "selected":
             names = list(plan.platforms)
         else:
-            names = sorted(name for name, spec in self.registry.items() if spec.capabilities.keyword_search)
+            names = sorted(name for name, spec in self.registry.items() if spec.capabilities.keyword_search
+                           and (not spec.enabled_by or self.extra_config.get(spec.enabled_by)))
             if self.enabled_sources:
                 names = [n for n in names if n in self.enabled_sources]
         names = [n for n in names if n not in plan.exclude_platforms]
