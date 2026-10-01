@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://tiles.openfreemap.org https://*.openfreemap.org; script-src 'self'; worker-src 'self' blob:; connect-src ipc: http://ipc.localhost http://127.0.0.1:* https://tiles.openfreemap.org https://*.openfreemap.org"
+      "csp": "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://tiles.openfreemap.org https://*.openfreemap.org; script-src 'self'; worker-src 'self' blob:; connect-src ipc: http://ipc.localhost http://127.0.0.1:* https://tiles.openfreemap.org https://*.openfreemap.org https://*.tile.opentopomap.org"
     }
   },
   "bundle": {

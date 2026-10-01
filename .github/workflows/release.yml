@@ -8,6 +8,19 @@ on:
       - main
     paths:
       - "RELEASE_VERSION"
+  # "Cut release" starts a release this way; "rolling" is the automatic build of main (see rolling.yml).
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "release builds vX.Y.Z from the package version; rolling publishes the latest-main build"
+        type: choice
+        options: [release, rolling]
+        default: release
+  workflow_call:
+    inputs:
+      mode:
+        type: string
+        default: release
 
 permissions:
   contents: write
@@ -18,13 +31,25 @@ jobs:
     outputs:
       tag: ${{ steps.ctx.outputs.tag }}
       target: ${{ steps.ctx.outputs.target }}
+      mode: ${{ steps.ctx.outputs.mode }}
     steps:
       - uses: actions/checkout@v7
       - id: ctx
         shell: bash
+        env:
+          MODE: ${{ inputs.mode || 'release' }}
+          EVENT: ${{ github.event_name }}
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          if [[ "$MODE" == "rolling" ]]; then
+            echo "tag=latest-main" >> "$GITHUB_OUTPUT"
+            echo "target=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "target=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          elif [[ "$EVENT" == "workflow_dispatch" ]]; then
+            version="$(python3 -c 'import re,pathlib; print(re.search(r"^__version__\s*=\s*\"([^\"]+)\"", pathlib.Path("sugar_core/__init__.py").read_text(), re.M).group(1))')"
+            echo "tag=v${version}" >> "$GITHUB_OUTPUT"
             echo "target=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           else
             read -r tag target < RELEASE_VERSION
@@ -56,6 +81,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
       - name: Verify tag and package version agree
+        if: needs.release-context.outputs.mode != 'rolling'
         shell: bash
         run: |
           version="$(python -c 'import sugar_core; print(sugar_core.__version__)')"
@@ -75,18 +101,30 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev,windows]"
+      - name: Stamp the build with its commit
+        shell: bash
+        run: python tools/write_build_info.py --commit "${{ needs.release-context.outputs.target }}" --mode "${{ needs.release-context.outputs.mode }}"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: SUGAR-Desktop/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+      - name: Give the installer an upgradeable version
+        shell: pwsh
+        run: |
+          $v = python tools/set_msi_version.py --mode "${{ needs.release-context.outputs.mode }}"
+          "MSI_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "Installer version $v"
       - name: Build shared Windows application
         shell: pwsh
         run: .\SUGAR-Desktop\scripts\build-windows.ps1
@@ -101,6 +139,15 @@ jobs:
           $installer = Get-ChildItem .\SUGAR-Desktop\src-tauri\target\release\bundle\msi -Filter *.msi | Select-Object -First 1
           if (-not $installer) { throw "Tauri Windows MSI missing" }
           if ($installer.Length -lt 1000000) { throw "Windows MSI is unexpectedly small" }
+          # The installer must carry the version chosen above, or in-app updates would install side by side instead of upgrading.
+          $wi = New-Object -ComObject WindowsInstaller.Installer
+          $db = $wi.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $wi, @($installer.FullName, 0))
+          $view = $db.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $db, "SELECT Value FROM Property WHERE Property='ProductVersion'")
+          $view.GetType().InvokeMember("Execute", "InvokeMethod", $null, $view, $null)
+          $record = $view.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $view, $null)
+          $productVersion = $record.GetType().InvokeMember("StringData", "GetProperty", $null, $record, 1)
+          if ($productVersion -notlike "$env:MSI_VERSION*") { throw "MSI ProductVersion is $productVersion but expected $env:MSI_VERSION" }
+          "MSI ProductVersion $productVersion"
       - name: Validate no-credential State workflow
         shell: pwsh
         run: .\tools\smoke_packaged_no_credentials.ps1 -Bridge .\SUGAR-Desktop\src-tauri\binaries\sugar-bridge-x86_64-pc-windows-msvc.exe
@@ -120,6 +167,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Stamp the build with its commit
+        shell: bash
+        run: python tools/write_build_info.py --commit "${{ needs.release-context.outputs.target }}" --mode "${{ needs.release-context.outputs.mode }}"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -185,7 +235,21 @@ jobs:
           (cd release-assets && sha256sum * > SHA256SUMS)
           (cd release-assets && sha256sum --check SHA256SUMS)
       - name: Write release notes
+        env:
+          MODE: ${{ needs.release-context.outputs.mode }}
+          TARGET: ${{ needs.release-context.outputs.target }}
+          TAG: ${{ needs.release-context.outputs.tag }}
         run: |
+          if [[ "$MODE" == "rolling" ]]; then
+            {
+              echo "Automatic build of the main branch. It passed the test suite; it is not a formal release."
+              echo
+              echo "commit: $TARGET"
+              echo
+              echo "The in-app updater uses this build for the Latest channel."
+            } > RELEASE_NOTES.md
+            exit 0
+          fi
           cat > RELEASE_NOTES.md <<'EOF'
           SUGAR browser and optional desktop release.
 
@@ -197,11 +261,29 @@ jobs:
 
           See `CHANGELOG.md` in the repository for release-specific fixes and methodology notes.
           EOF
+          # Lead with this version's changelog section when it has one.
+          python3 - <<'PY'
+          import os, re, pathlib
+          version = os.environ["TAG"].lstrip("v")
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          m = re.search(rf"^## {re.escape(version)}\b.*?\n(.*?)(?=^## )", text, re.M | re.S)
+          if m and m.group(1).strip():
+              notes = pathlib.Path("RELEASE_NOTES.md").read_text(encoding="utf-8")
+              pathlib.Path("RELEASE_NOTES.md").write_text(m.group(1).strip() + "\n\n---\n\n" + notes, encoding="utf-8")
+          PY
       - name: Create tag and publish GitHub release
         shell: bash
         run: |
           tag="${{ needs.release-context.outputs.tag }}"
           target="${{ needs.release-context.outputs.target }}"
+          if [[ "${{ needs.release-context.outputs.mode }}" == "rolling" ]]; then
+            # One rolling release: replace the previous build so the tag always points at the newest commit.
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+            gh release create "$tag" release-assets/* \
+              --repo "$GITHUB_REPOSITORY" --target "$target" \
+              --title "Latest build" --notes-file RELEASE_NOTES.md --prerelease --latest=false
+            exit 0
+          fi
           if ! git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
             git fetch origin "$target"
             git config user.name "github-actions[bot]"
@@ -209,9 +291,14 @@ jobs:
             git tag -a "$tag" "$target" -m "SUGAR ${tag#v}"
             git push origin "refs/tags/$tag"
           fi
+          channel_flags="--latest"
+          case "$tag" in
+            *-rc*|*-beta*|*-preview*) channel_flags="--prerelease" ;;   # the in-app "Preview" channel
+            *-lts*) channel_flags="--latest=false" ;;                    # long-term line; never replaces the stable release
+          esac
           gh release create "$tag" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$target" \
             --title "SUGAR $tag" \
             --notes-file RELEASE_NOTES.md \
-            --latest
+            $channel_flags

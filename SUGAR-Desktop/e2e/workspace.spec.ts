@@ -17,6 +17,10 @@ async function mockApi(page: Page, calls: ApiCall[], collectionGate?: Promise<vo
       return;
     }
 
+    if (new URL(request.url()).pathname === "/api/update/check") {
+      await route.fulfill({ status: 200, headers: corsHeaders, json: { current: "1.7.0", channel: "stable", available: false, error: "", note: "You are up to date." } });
+      return;
+    }
     if (request.url().endsWith("/api/workspaces") && request.method() === "GET") {
       await route.fulfill({ status: 200, headers: corsHeaders, json: { workspaces: [] } });
       return;
@@ -498,4 +502,88 @@ test("institutions, map and monitoring pages open cleanly and are accessible", a
     await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
     await expectAccessible(page, label);
   }
+});
+
+test("posts appear on the map page with a verify action", async ({ page }) => {
+  await mockApi(page, []);
+  let verified = false;
+  const pin = () => ({ item_id: "it_1", run_id: "run_1", author: "@ana", published_at: "2026-03-01T10:00:00Z", platform: "mastodon", url: "", language: "fr", original_text: "Une conférence à Bruxelles",
+    translated_text: "A conference in Brussels", origin: { latitude: -1.29, longitude: 36.82, kind: "platform coordinates", precision: "exact", label: "Coordinates supplied by the platform" },
+    targets: [{ name: "Belgium", latitude: 50.6, longitude: 4.7, confidence: 0.7, method: "named in the text", precision: "country" }], inferred_location: { name: "Belgium", confidence: 0.7, method: "named in the text" },
+    placement: "origin", latitude: -1.29, longitude: 36.82, verified, verdict: verified ? "relevant" : "", verified_by: verified ? "Dana" : "", verified_at: "" });
+  await page.route(/\/research\/institutions(\?.*)?$/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { institutions: [], unplaced: 0, facets: { countries: [], programs: [], audiences: [] } } }));
+  await page.route(/\/research\/networks$/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { networks: [] } }));
+  await page.route(/\/research\/map\/posts/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { pins: [pin()], targets: [{ name: "Belgium", posts: 1, last_24h: 1, verified: 0, last_at: "2026-03-01T10:00:00Z", item_ids: ["it_1"], platforms: { mastodon: 1 }, languages: { fr: 1 }, cities: { Brussels: 1 }, latitude: 50.6, longitude: 4.7 }], flows: [], note: "" } }));
+  await page.route(/\/research\/review$/, (route) => { verified = true; return route.fulfill({ status: 200, headers: corsHeaders, json: { item_id: "it_1", review: { verdict: "relevant", verdict_by: "Dana", verdict_at: "2026-03-02T00:00:00Z", tags: [], comments: [] }, summary: {} } }); });
+  await useAdvancedMode(page);
+  await page.goto("/");
+  await createProject(page, "Posts Project");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Map", exact: true }).click();
+  await page.getByRole("button", { name: /Belgium/ }).click();
+  const target = page.getByRole("complementary", { name: "Selected target" });
+  await expect(target).toContainText("Posts about Belgium");
+  await expect(target).toContainText("1 in the last 24 hours");
+  await expectAccessible(page, "Map with a target open");
+  await page.getByRole("radio", { name: "List" }).click();
+  await page.getByRole("row", { name: /@ana/ }).click();
+  const detail = page.getByRole("complementary", { name: "Selected post" });
+  await expect(detail).toContainText("Une conférence à Bruxelles");
+  await expect(detail).toContainText("A conference in Brussels");
+  await expect(detail).toContainText("Inferred: Belgium");
+  await expect(detail).toContainText("Not verified");
+  await detail.getByRole("button", { name: /Mark verified/ }).click();
+  await expect(detail).toContainText("Verified by Dana");
+  await expectAccessible(page, "Map with a post open");
+});
+
+test("a newer release is offered on launch and can be skipped", async ({ page }) => {
+  await mockApi(page, []);
+  await page.route(/\/api\/update\/check/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { current: "1.7.0", channel: "stable", available: true, error: "", latest: "1.8.0", tag: "v1.8.0", url: "https://github.com/FL2744/SUGAR/releases/tag/v1.8.0",
+    notes: "Map improvements", asset: { name: "SUGAR-macOS.zip", size: 1000, url: "https://github.com/x" }, ahead: { commits: 1, headlines: ["Fix thing"] } } }));
+  await useAdvancedMode(page);
+  await page.goto("/");
+  const banner = page.getByRole("status").filter({ hasText: "SUGAR 1.8.0 is available" });
+  await expect(banner).toBeVisible();
+  await expectAccessible(page, "Update banner");
+  await banner.getByRole("button", { name: "Skip this version" }).click();
+  await expect(banner).toBeHidden();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Updates" }).click();
+  await expect(page.getByRole("heading", { name: "Updates" })).toBeVisible();
+  await expect(page.getByText("1 change on the main branch since v1.8.0")).toBeVisible();
+});
+
+test("changing the update channel checks again and drops the old channel's answer", async ({ page }) => {
+  await mockApi(page, []);
+  const channels: string[] = [];
+  await page.route(/\/api\/update\/check/, (route) => {
+    const channel = new URL(route.request().url()).searchParams.get("channel") || "";
+    channels.push(channel);
+    return route.fulfill({ status: 200, headers: corsHeaders, json: channel === "latest"
+      ? { current: "1.7.0", channel, available: true, error: "", latest: "abc1234", tag: "latest-main", url: "https://github.com/FL2744/SUGAR/releases/tag/latest-main", ahead: { commits: 2, headlines: ["One", "Two"] }, asset: null }
+      : { current: "1.7.0", channel, available: false, error: "", note: "You are up to date." } });
+  });
+  await useAdvancedMode(page);
+  await page.goto("/");
+  await expect(page.getByText("A newer SUGAR build is available")).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Updates" }).click();
+  await expect(page.getByText("What changed (2)")).toBeVisible();
+  await page.getByRole("radio", { name: /Stable/ }).click();
+  await expect(page.getByText("A newer SUGAR build is available")).toBeHidden();
+  await expect(page.getByText(/You are up to date/)).toBeVisible();
+  expect(channels).toEqual(["latest", "stable"]);
+});
+
+test("a failed update check is explained in Settings and never blocks the app", async ({ page }) => {
+  await mockApi(page, []);
+  await page.route(/\/api\/update\/check/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { current: "1.7.0", channel: "latest", available: false, error: "Could not check for updates: offline" } }));
+  await useAdvancedMode(page);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "What would you like to research?" })).toBeVisible();
+  await expect(page.getByText("A newer SUGAR build is available")).toBeHidden();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Updates" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Could not check for updates" })).toBeVisible();
+  await expectAccessible(page, "Updates settings with an error");
 });

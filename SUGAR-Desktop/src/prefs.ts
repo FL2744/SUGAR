@@ -9,15 +9,18 @@ export type Prefs = {
   theme: "light" | "dark";
   name: string;               // shown as the author of reviews and comments
   onboarded: boolean;         // the first-run setup has been completed or skipped
+  updateChannel: "latest" | "stable" | "preview" | "lts";
+  autoUpdateCheck: boolean;   // look for a newer release when the app opens
+  skippedVersion: string;     // a release the person chose not to be reminded about
 };
 
-export const DEFAULT_PREFS: Prefs = { mode: "basic", debug: false, density: "comfortable", textScale: 1, interpreter: "auto", theme: "light", name: "", onboarded: false };
+export const DEFAULT_PREFS: Prefs = { mode: "basic", debug: false, density: "comfortable", textScale: 1, interpreter: "auto", theme: "dark", name: "", onboarded: false, updateChannel: "latest", autoUpdateCheck: true, skippedVersion: "" };
 const KEY = "sugar.prefs.v1";
 
 export function loadPrefs(): Prefs {
   try {
     const raw = window.localStorage.getItem(KEY);
-    const legacyTheme = window.localStorage.getItem("sugar.theme") === "dark" ? "dark" : "light";
+    const legacyTheme = window.localStorage.getItem("sugar.theme") === "light" ? "light" : "dark";
     if (!raw) return { ...DEFAULT_PREFS, theme: legacyTheme };
     return normalizePrefs({ ...DEFAULT_PREFS, theme: legacyTheme, ...(JSON.parse(raw) as Partial<Prefs>) });
   } catch {
@@ -32,9 +35,12 @@ export function normalizePrefs(prefs: Prefs): Prefs {
     density: prefs.density === "compact" ? "compact" : "comfortable",
     textScale: Math.min(1.5, Math.max(0.85, Number(prefs.textScale) || 1)),
     interpreter: prefs.interpreter === "deterministic" ? "deterministic" : "auto",
-    theme: prefs.theme === "dark" ? "dark" : "light",
+    theme: prefs.theme === "light" ? "light" : "dark",
     name: String(prefs.name || "").trim().slice(0, 60),
     onboarded: Boolean(prefs.onboarded),
+    updateChannel: prefs.updateChannel === "stable" || prefs.updateChannel === "preview" || prefs.updateChannel === "lts" ? prefs.updateChannel : "latest",
+    autoUpdateCheck: prefs.autoUpdateCheck !== false,
+    skippedVersion: String(prefs.skippedVersion || "").slice(0, 40),
   };
 }
 

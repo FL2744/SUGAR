@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { research } from "./research-api";
-import type { Institution, InstitutionList, NetworkRow, OverlapResult } from "./research-types";
-import { NetworkMap, type Line, type MapMode } from "./network-map";
+import type { Institution, InstitutionList, NetworkRow, OverlapResult, PostMap } from "./research-types";
+import { NetworkMap, type Basemap, type Line, type MapMode, type PostLayers } from "./network-map";
 import { ConfidencePill } from "./institutions-page";
-import { EmptyState, Pill, Spinner, relativeTime, titleCase } from "./ui";
+import { Collapsible, EmptyState, Pill, Spinner, formatTime, relativeTime, titleCase } from "./ui";
 
 const WINDOWS: Array<[string, string]> = [["", "All time"], ["2024-01-01", "Since 2024"], ["12m", "Last 12 months"], ["6m", "Last 6 months"]];
 const sinceDate = (value: string): string => {
@@ -30,6 +30,13 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   const [overlap, setOverlap] = useState<OverlapResult | null>(null);
   const [view, setView] = useState<"map" | "list">("map");
   const [selected, setSelected] = useState("");
+  const [posts, setPosts] = useState<PostMap | null>(null);
+  const [basemap, setBasemap] = useState<Basemap>(dark ? "dark" : "streets");
+  const [layers, setLayers] = useState<PostLayers>({ posts: true, targets: true, flows: false, institutions: true });
+  const [selectedPost, setSelectedPost] = useState("");
+  const [verdictFilter, setVerdictFilter] = useState("");
+  const [days, setDays] = useState("");
+  const [selectedTarget, setSelectedTarget] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -37,10 +44,11 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
     if (!projectId) return;
     setLoading(true); setError("");
     try {
-      const [list, nets] = await Promise.all([research.institutions(projectId, { status, confidence: level, country, program, audience, since: sinceDate(windowKey) }), research.networks(projectId)]);
-      setData(list); setNetworks(nets);
+      const [list, nets, pm] = await Promise.all([research.institutions(projectId, { status, confidence: level, country, program, audience, since: sinceDate(windowKey) }), research.networks(projectId),
+        research.postMap(projectId, { verdict: verdictFilter, days }).catch(() => null)]);
+      setData(list); setNetworks(nets); setPosts(pm);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setLoading(false); }
-  }, [projectId, status, level, country, program, audience, windowKey]);
+  }, [projectId, status, level, country, program, audience, windowKey, verdictFilter, days]);
   useEffect(() => { void load(); }, [load]);
 
   const subjects = useMemo(() => networks.filter((n) => n.role === "subject").map((n) => n.name), [networks]);
@@ -61,6 +69,26 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
     });
   }, [showLines, overlap, byId, nearKm, hidden]);
 
+  const pickedTarget = posts?.targets.find((t) => t.name === selectedTarget);
+  const targetPosts = pickedTarget ? (posts?.pins || []).filter((p) => pickedTarget.item_ids.includes(p.item_id)) : [];
+  const exportTarget = () => {
+    if (!pickedTarget) return;
+    const esc = (v: string) => `"${String(v ?? "").replace(/"/g, '""').replace(/\s+/g, " ")}"`;
+    const rows = [["author", "platform", "published_at", "language", "verified", "posted_from", "original", "translation", "url"].join(","),
+      ...targetPosts.map((p) => [p.author, p.platform, p.published_at, p.language, p.verified ? "yes" : "no", p.origin?.label || "", p.original_text, p.translated_text, p.url].map(esc).join(","))];
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([rows.join("\n")], { type: "text/csv" }));
+    link.download = `posts-about-${pickedTarget.name.replace(/\W+/g, "-").toLowerCase()}.csv`;
+    link.click(); URL.revokeObjectURL(link.href);
+  };
+  const pickedPost = posts?.pins.find((p) => p.item_id === selectedPost);
+  const setVerified = async (itemId: string, verified: boolean) => {
+    try {
+      const done = await research.postReview(projectId, itemId, { kind: "verdict", verdict: verified ? "relevant" : "" });
+      setPosts((cur) => cur && { ...cur, pins: cur.pins.map((p) => p.item_id === itemId ? { ...p, verified, verdict: done.review.verdict, verified_by: verified ? done.review.verdict_by : "", verified_at: verified ? done.review.verdict_at : "" } : p) });
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  };
+
   if (!projectId) return <section className="page-content"><EmptyState icon="⌖" title="Open a project first">The map shows the institutions recorded in a project.</EmptyState></section>;
   const picked: Institution | undefined = byId[selected];
   const pickedOverlap = overlap?.rows.find((r) => r.entity_id === selected);
@@ -70,7 +98,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
     <section className="page-content map-page">
       <div className="page-heading compact-heading">
         <div><div className="eyebrow">MAP <span className="eyebrow-line" /></div><h1>Where institutions are, and where networks meet</h1>
-          <p>Markers come from verified-or-pending records, each one open to its sources. Distances are computed from recorded coordinates; they are not findings of influence.</p></div>
+          <p>Distances are computed from recorded coordinates, not findings of influence.</p></div>
         <div className="run-controls">
           <div className="segmented" role="radiogroup" aria-label="View">{(["map", "list"] as const).map((v) => <button key={v} role="radio" aria-checked={view === v} className={view === v ? "on" : ""} onClick={() => setView(v)}>{titleCase(v)}</button>)}</div>
           <button className="button button-secondary" onClick={onOpenInstitutions}>Institutions</button>
@@ -79,32 +107,51 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
 
       <div className="map-layout">
-        <aside className="map-filters" aria-label="Map filters">
-          <div className="field-block"><span>Networks</span>
-            {networks.length === 0 && <small className="muted">No networks yet. Import a directory on the Institutions page.</small>}
-            {networks.map((n) => <label key={n.name || "none"} className="check-row"><input type="checkbox" checked={!hidden[n.name]} onChange={(e) => setHidden({ ...hidden, [n.name]: !e.target.checked })} />
-              <span><span className={`swatch ${n.role}`} aria-hidden="true" /> {n.label} <small className="muted">{n.institutions}</small></span></label>)}</div>
-          <label className="field-block"><span>Evidence from</span><select value={windowKey} onChange={(e) => setWindowKey(e.target.value)}>{WINDOWS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
-          <label className="field-block"><span>Status</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Any</option>{["active", "closed", "renamed", "relocated", "unknown"].map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}</select></label>
-          <label className="field-block"><span>Confidence</span><select value={level} onChange={(e) => setLevel(e.target.value)}><option value="">Any</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
-          <label className="field-block"><span>Country</span><select value={country} onChange={(e) => setCountry(e.target.value)}><option value="">All</option>{data?.facets.countries.map((f) => <option key={f.key} value={f.key === "unknown" ? "" : f.key}>{f.key} ({f.count})</option>)}</select></label>
-          <label className="field-block"><span>Program</span><select value={program} onChange={(e) => setProgram(e.target.value)}><option value="">Any</option>{data?.facets.programs.map((f) => <option key={f.key} value={f.key}>{titleCase(f.key)} ({f.count})</option>)}</select></label>
-          <label className="field-block"><span>Audience</span><select value={audience} onChange={(e) => setAudience(e.target.value)}><option value="">Any</option>{data?.facets.audiences.map((f) => <option key={f.key} value={f.key}>{titleCase(f.key)} ({f.count})</option>)}</select></label>
-          <div className="field-block"><span>Map style</span>
-            <div className="segmented" role="radiogroup" aria-label="Map style">{([["points", "Points"], ["heat", "Activity heat"]] as const).map(([v, l]) => <button key={v} role="radio" aria-checked={mode === v} className={mode === v ? "on" : ""} onClick={() => setMode(v)}>{l}</button>)}</div>
-            <small className="muted">Heat reflects recent linked items and recorded programs for the subject network, not a measure of influence.</small></div>
-          {references.length > 0 && subjects.length > 0 && <div className="field-block"><label className="check-row"><input type="checkbox" checked={showLines} onChange={(e) => setShowLines(e.target.checked)} /><span>Link each subject to its nearest reference within</span></label>
-            <select value={nearKm} onChange={(e) => setNearKm(Number(e.target.value))} aria-label="Distance"><option value={5}>5 km</option><option value={25}>25 km</option><option value={100}>100 km</option><option value={250}>250 km</option></select></div>}
-        </aside>
-
         <div className="map-main">
+          <div className="map-toolbar" role="toolbar" aria-label="Map layers">
+            <div className="chip-group" role="group" aria-label="Layers">
+              <button className="chip-toggle" aria-pressed={layers.posts} onClick={() => setLayers({ ...layers, posts: !layers.posts })}><span className="swatch post" aria-hidden="true" /> Posts <small>{posts?.pins.length ?? 0}</small></button>
+              <button className="chip-toggle" aria-pressed={layers.targets} onClick={() => setLayers({ ...layers, targets: !layers.targets })}><span className="swatch target" aria-hidden="true" /> Targets <small>{posts?.targets.length ?? 0}</small></button>
+              <button className="chip-toggle" aria-pressed={layers.flows} onClick={() => setLayers({ ...layers, flows: !layers.flows })}>Origin → target</button>
+              <button className="chip-toggle" aria-pressed={layers.institutions} onClick={() => setLayers({ ...layers, institutions: !layers.institutions })}>Institutions</button>
+              {networks.map((n) => <button key={n.name || "none"} className="chip-toggle chip-sub" aria-pressed={!hidden[n.name]} title={`Show or hide ${n.label}`} onClick={() => setHidden({ ...hidden, [n.name]: !hidden[n.name] })}><span className={`swatch ${n.role}`} aria-hidden="true" /> {n.label} <small>{n.institutions}</small></button>)}
+            </div>
+            <div className="map-toolbar-end">
+              <div className="segmented" role="radiogroup" aria-label="Basemap">{(["dark", "streets", "terrain"] as const).map((v) => <button key={v} role="radio" aria-checked={basemap === v} className={basemap === v ? "on" : ""} onClick={() => setBasemap(v)}>{titleCase(v)}</button>)}</div>
+            </div>
+          </div>
+          <Collapsible title="Filters and options" hint="Time, verification, status, place, program, audience, style"
+            badge={[days, verdictFilter, windowKey, status, level, country, program, audience].filter(Boolean).length ? <Pill tone="info">{[days, verdictFilter, windowKey, status, level, country, program, audience].filter(Boolean).length} on</Pill> : undefined}>
+            <div className="filter-grid">
+              <label className="field-block"><span>Posts shown</span><select value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)}><option value="">All posts</option><option value="relevant">Verified only</option><option value="none">Not yet checked</option></select></label>
+              <label className="field-block"><span>Posted in</span><select value={days} onChange={(e) => setDays(e.target.value)}><option value="">Any time</option><option value="1">Last 24 hours</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
+              <label className="field-block"><span>Institution evidence from</span><select value={windowKey} onChange={(e) => setWindowKey(e.target.value)}>{WINDOWS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+              <label className="field-block"><span>Status</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Any</option>{["active", "closed", "renamed", "relocated", "unknown"].map((x) => <option key={x} value={x}>{titleCase(x)}</option>)}</select></label>
+              <label className="field-block"><span>Confidence</span><select value={level} onChange={(e) => setLevel(e.target.value)}><option value="">Any</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+              <label className="field-block"><span>Country</span><select value={country} onChange={(e) => setCountry(e.target.value)}><option value="">All</option>{data?.facets.countries.map((f) => <option key={f.key} value={f.key === "unknown" ? "" : f.key}>{f.key} ({f.count})</option>)}</select></label>
+              <label className="field-block"><span>Program</span><select value={program} onChange={(e) => setProgram(e.target.value)}><option value="">Any</option>{data?.facets.programs.map((f) => <option key={f.key} value={f.key}>{titleCase(f.key)} ({f.count})</option>)}</select></label>
+              <label className="field-block"><span>Audience</span><select value={audience} onChange={(e) => setAudience(e.target.value)}><option value="">Any</option>{data?.facets.audiences.map((f) => <option key={f.key} value={f.key}>{titleCase(f.key)} ({f.count})</option>)}</select></label>
+              <div className="field-block"><span>Institution style</span>
+                <div className="segmented" role="radiogroup" aria-label="Map style">{([["points", "Points"], ["heat", "Activity heat"]] as const).map(([v, l]) => <button key={v} role="radio" aria-checked={mode === v} className={mode === v ? "on" : ""} onClick={() => setMode(v)}>{l}</button>)}</div>
+                <small className="muted">Heat reflects recent linked items and recorded programs, not influence.</small></div>
+              {references.length > 0 && subjects.length > 0 && <div className="field-block"><label className="check-row"><input type="checkbox" checked={showLines} onChange={(e) => setShowLines(e.target.checked)} /><span>Link each subject to its nearest reference within</span></label>
+                <select value={nearKm} onChange={(e) => setNearKm(Number(e.target.value))} aria-label="Distance"><option value={5}>5 km</option><option value={25}>25 km</option><option value={100}>100 km</option><option value={250}>250 km</option></select></div>}
+            </div>
+          </Collapsible>
+          {(posts?.targets.length ?? 0) > 0 && <div className="top-strip" role="group" aria-label="Top targets"><span className="muted">Where posts are about:</span>
+            {posts!.targets.slice(0, 8).map((t) => <button key={t.name} className={`chip-toggle ${selectedTarget === t.name ? "on" : ""}`} aria-pressed={selectedTarget === t.name} onClick={() => { setSelected(""); setSelectedPost(""); setSelectedTarget(t.name); }}>{t.name} <strong>{t.posts}</strong>{t.last_24h > 0 && <small> · {t.last_24h} today</small>}</button>)}</div>}
+
           <div className="map-stats" role="status">
-            {loading && <Spinner />}<strong>{visible.filter((r) => r.placed).length}</strong> on the map · <strong>{data?.unplaced ?? 0}</strong> not placed
+            {loading && <Spinner />}<strong>{visible.filter((r) => r.placed).length}</strong> on the map · <strong>{data?.unplaced ?? 0}</strong> not placed · <strong>{posts?.pins.length ?? 0}</strong> posts
             {overlap && <> · <strong>{near}</strong> subject institutions have a reference institution within {nearKm} km</>}
           </div>
-          {view === "map" ? <NetworkMap rows={visible} networks={networks} mode={mode} lines={lines} selectedId={selected} onSelect={setSelected} dark={dark} />
+          {view === "map" ? <NetworkMap rows={visible} networks={networks} mode={mode} lines={lines} selectedId={selected} onSelect={(id) => { setSelectedPost(""); setSelectedTarget(""); setSelected(id); }} basemap={basemap}
+            posts={posts} layers={layers} selectedPost={selectedPost} onSelectPost={(id) => { setSelected(""); setSelectedTarget(""); setSelectedPost(id); }}
+            selectedTarget={selectedTarget} onSelectTarget={(name) => { setSelected(""); setSelectedPost(""); setSelectedTarget(name); }} />
             : <div className="project-table" role="table" aria-label="Institutions on the map">
                 <div className="project-table-head" role="row"><span role="columnheader">Institution</span><span role="columnheader">Status</span><span role="columnheader">Where</span><span role="columnheader">Support</span></div>
+                {layers.posts && (posts?.pins || []).map((p) => <button key={p.item_id} className="project-row" role="row" onClick={() => { setSelected(""); setSelectedPost(p.item_id); }}><span role="cell"><strong dir="auto">{p.author || "Unknown author"}</strong> <small className="muted">{p.platform} · post</small></span>
+                  <span role="cell">{p.verified ? "Verified" : "Not verified"}</span><span role="cell">{p.origin ? p.origin.label : p.inferred_location ? `About ${p.inferred_location.name}` : "—"}</span><span role="cell"><small dir="auto">{p.original_text.slice(0, 80)}</small></span></button>)}
                 {visible.map((r) => <button key={r.entity_id} className="project-row" role="row" onClick={() => setSelected(r.entity_id)}><span role="cell"><strong dir="auto">{r.name}</strong> <small className="muted">{r.network}</small></span>
                   <span role="cell">{titleCase(r.status)}</span><span role="cell">{[r.city, r.country].filter(Boolean).join(", ") || "—"}{r.placed ? "" : " · not placed"}</span><span role="cell"><ConfidencePill confidence={r.confidence} /></span></button>)}
               </div>}
@@ -114,7 +161,32 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             <p className="footnote">{overlap.method}</p></details>}
         </div>
 
-        {picked && (
+        {pickedTarget && !pickedPost && (
+          <aside className="map-detail target-detail" aria-label="Selected target">
+            <button className="inspector-close" onClick={() => setSelectedTarget("")} aria-label="Close">×</button>
+            <h3>Posts about {pickedTarget.name}</h3>
+            <div className="pill-row"><Pill tone="info">{pickedTarget.posts} post{pickedTarget.posts === 1 ? "" : "s"}</Pill>{pickedTarget.last_24h > 0 && <Pill tone="warn">{pickedTarget.last_24h} in the last 24 hours</Pill>}<Pill tone={pickedTarget.verified ? "ok" : "neutral"}>{pickedTarget.verified} verified</Pill></div>
+            <p className="muted">Where posts are about, from places named in the text. Country-level unless a city is named.</p>
+            <p><strong>Platforms</strong> {Object.entries(pickedTarget.platforms).map(([k, v]) => `${k} ${v}`).join(" · ")}<br /><strong>Languages</strong> {Object.entries(pickedTarget.languages).map(([k, v]) => `${k} ${v}`).join(" · ")}
+              {Object.keys(pickedTarget.cities).length > 0 && <><br /><strong>Cities named</strong> {Object.entries(pickedTarget.cities).map(([k, v]) => `${k} ${v}`).join(" · ")}</>}</p>
+            <ul className="post-list">{targetPosts.slice(0, 40).map((p) => <li key={p.item_id}><button className="button button-quiet button-small" onClick={() => { setSelectedTarget(""); setSelectedPost(p.item_id); }}><strong dir="auto">{p.author || "Unknown"}</strong> · <span dir="auto">{p.original_text.slice(0, 70)}</span></button></li>)}</ul>
+            <button className="button button-secondary button-small" onClick={exportTarget}>Download these posts (CSV)</button>
+          </aside>)}
+        {pickedPost && (
+          <aside className="map-detail post-detail" aria-label="Selected post">
+            <button className="inspector-close" onClick={() => setSelectedPost("")} aria-label="Close">×</button>
+            <h3 dir="auto">{pickedPost.author || "Unknown author"}</h3>
+            <p className="muted">{pickedPost.platform} · {pickedPost.published_at ? formatTime(pickedPost.published_at) : "date unknown"}</p>
+            <div className="pill-row">{pickedPost.verified ? <Pill tone="ok">Verified by {pickedPost.verified_by || "a reviewer"}</Pill> : <Pill tone="warn">Not verified</Pill>}
+              {pickedPost.inferred_location && <Pill tone="info" title={pickedPost.inferred_location.method}>Inferred: {pickedPost.inferred_location.name} · {Math.round(pickedPost.inferred_location.confidence * 100)}%</Pill>}</div>
+            <div><strong>Original{pickedPost.language ? ` (${pickedPost.language})` : ""}</strong><p dir="auto" className="post-text">{pickedPost.original_text}</p></div>
+            {pickedPost.translated_text && <div><strong>Translation</strong><p className="post-text">{pickedPost.translated_text}</p></div>}
+            <p><strong>Posted from</strong> {pickedPost.origin ? `${pickedPost.origin.label} (${pickedPost.origin.kind})` : "Not known. The pin sits at a place the text names."}</p>
+            {pickedPost.targets.length > 0 && <p><strong>About</strong> {pickedPost.targets.map((t) => t.city ? `${t.city}, ${t.name}` : t.name).join(", ")} <small className="muted">named in the text; country-level</small></p>}
+            <div className="pill-row"><button className={`button ${pickedPost.verified ? "button-secondary" : "button-primary"} button-small`} onClick={() => void setVerified(pickedPost.item_id, !pickedPost.verified)}>{pickedPost.verified ? "✓ Verified. Undo" : "✓ Mark verified"}</button>
+              {pickedPost.url && <a className="button button-quiet button-small" href={pickedPost.url} target="_blank" rel="noreferrer noopener">Open post</a>}</div>
+          </aside>)}
+        {picked && !pickedPost && !pickedTarget && (
           <aside className="map-detail" aria-label="Selected institution">
             <button className="inspector-close" onClick={() => setSelected("")} aria-label="Close">×</button>
             <h3 dir="auto">{picked.name}</h3>

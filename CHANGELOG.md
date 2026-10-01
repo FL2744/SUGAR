@@ -2,6 +2,44 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
+## Unreleased
+
+### Update hardening
+
+- Downloads follow redirects one hop at a time and only to GitHub's release hosts (lookalike hosts such as `evilgithubusercontent.com` are refused); a download without a published checksum is never installed; failures show the reason with "Try again" and a link to the release page.
+- Switching the update channel in Settings checks again at once and clears the previous channel's answer.
+- Windows rolling builds get an installer version that outranks the previous build, so Latest updates actually upgrade instead of installing beside it; the workflow verifies the finished MSI.
+- Packaged builds from before commit stamping are offered the newest build once so they can start tracking.
+
+### Interface pass
+
+- Navigation grouped by what you are doing (Ask, Places, Project, Audit) instead of one long list.
+- Map: layers are on/off chips with a check mark (not color alone), basemap switch and filters sit above a much larger map; top targets are a strip of chips.
+- Research box: pick a model and press Interpret on one row, examples below. Forms (Monitoring and others) get proper spacing; segmented controls no longer wrap; the Institutions search and map frame read correctly in dark theme.
+- New `polish.css` states the color roles once (blue = next step, green = verified, amber = needs a look, red = problem, yellow = posts). Both themes pass the automated accessibility scans.
+
+### Map: quick response and precision
+
+- **Target panel:** click a ringed country (or "Top targets") for posts about it: counts, how many in the last 24 hours, verified count, platforms, languages, cities named, each post one click away, and a CSV download. A "Posted in" filter limits posts to the last 24 hours, 7 days or 30 days.
+- **City-level placement:** about 140 major cities are recognised in text, so a post naming a city sits on that city (still labeled as mentioned, not posted-from) and its country's target notes the city.
+- **Flashier map:** curved animated arcs, pulsing target rings, glowing pins, fly-to on selection and a small legend; motion stops when the system asks for reduced motion.
+- `docs/state-deployment.md`: install, network allow-list, signing, data handling and licensing checks for an office deployment.
+
+### Updates and polish
+
+- **Updates follow commits, not releases:** a new **Latest** channel (the default) offers every change that lands on `main` and passes the tests. `rolling.yml` builds and publishes the single `latest-main` release automatically on each push; the app compares commits, shows what changed, and downloads the verified build. Stable, Preview and Long-term stay available for people who want a formal release.
+- **Releases are one click:** the "Cut release" workflow (Actions tab, or weekly when the `AUTO_RELEASE` variable is `true`) bumps the version in every file, rolls the changelog into release notes (or lists commit headlines), commits to main, and starts the release build. Locally: `python tools/cut_release.py patch`.
+- **In-app updates:** SUGAR checks this project's GitHub releases when it opens (can be turned off), shows a banner with release notes, and downloads the installer or archive for the system with its checksum verified; Windows opens the installer, a Mac reveals the zip. Channels: Stable, Preview (release candidates) and Long-term (`-lts` tags). Also `sugar update [--download]`, `sugar serve` and `sugar doctor`.
+- Release workflow publishes `-rc`/`-beta`/`-preview` tags as pre-releases and `-lts` tags without taking "latest".
+- New typography (Inter Tight and Barlow Semi Condensed), dark theme by default, map filters tucked into one collapsible group.
+- `docs/privacy.md`: what stays local, what leaves and when.
+
+### Map (from classmate feedback)
+
+- **Posts on the map:** each post is a pin showing author, date and time, platform, original text, translation, inferred location with confidence, and a one-click "Mark verified" check (a reviewer verdict; no extra accounts). Pins are yellow where the post came from (platform coordinates or a linked located institution) and hollow where only a place named in the text is known.
+- **Target layer:** countries the posts name are ringed and counted (where a message is about, not where it came from), with optional origin-to-target lines.
+- **Layers and basemaps:** posts, targets, lines and institutions toggle independently; Dark, Streets and Terrain basemaps; the post list view mirrors the map.
+
 ## 1.7.0 - 2026-10-01
 
 ### Added (institution workflow)

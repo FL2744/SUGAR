@@ -126,3 +126,32 @@ SUGAR is licensed under the Apache License, Version 2.0. Before publication, ver
 - GPL-only Qt modules are not introduced into an Apache-2.0 SUGAR binary without a separate compatibility review;
 - any third-party datasets, platform content, logos, fonts, or other non-SUGAR assets are distributed only when their terms permit it;
 - the release does not describe SUGAR as an official Virginia Tech or U.S. Department of State product merely because it was developed in the Diplomacy Lab context.
+
+## Releases without the checklist
+
+Nobody has to remember the steps above to ship:
+
+1. **Every push to `main`** runs `rolling.yml`: the full test suite, then Windows and Mac builds, published as the single `latest-main` pre-release (its notes carry `commit: <sha>`). The app's **Latest** channel reads it.
+2. **A formal release** is the **Cut release** workflow (Actions → Cut release → Run workflow → patch/minor/major). It runs `tools/cut_release.py` (bumps every version file, turns "Unreleased" in `CHANGELOG.md` into the release notes, or lists commit headlines if that section is empty), commits to `main`, and starts the release build. Set the repository variable `AUTO_RELEASE` to `true` to have it cut a patch release every Monday when `main` has new commits.
+3. If `main` is branch-protected, allow GitHub Actions to push to it (or the commit step will fail).
+
+## In-app updates and channels
+
+The desktop app and `sugar update` read this repository's GitHub Releases. Which release a person is offered depends on its tag:
+
+- `latest-main` (automatic): **Latest**, the default. Newer means `main` has moved past the commit the app was built from.
+- `vX.Y.Z`: **Stable**, published as the latest release. This is what classmates run.
+- `vX.Y.Z-rc.N`, `-beta.N`, `-preview.N`: **Preview**, published as pre-releases.
+- `vX.Y.Z-lts.N`: **Long-term**, a maintenance line that receives fixes only and never becomes "latest".
+
+Every release must include the Windows installer (`.msi`), `SUGAR-macOS.zip` and `SHA256SUMS`; the app verifies downloads against that file. Updating is a download plus a hand-off to the OS installer. Silent in-place replacement would need signed update bundles (a Tauri updater key and, for macOS, notarization), which is a decision for the organization that distributes the app.
+
+### How an update installs
+
+1. The app (or `sugar update --download`) reads release metadata from GitHub, picks the file for the system (`.msi` on Windows, `SUGAR-macOS.zip` on a Mac), and downloads it from GitHub's release hosts only. Every redirect is checked; a lookalike host is refused.
+2. The file's SHA-256 must match the release's `SHA256SUMS`. A release without a published checksum is never installed automatically.
+3. Windows opens the installer, which upgrades in place. A Mac reveals the zip to drag into Applications.
+
+Windows Installer compares only the first three version fields, so rolling builds would not replace each other (or a release of the same package version). The release workflow therefore sets the installer version with `tools/set_msi_version.py`: a release `X.Y.Z` is `X.Y.(Z*1000+999)` and a rolling build after it is `X.Y.((Z+1)*1000+n)`, so every rolling build outranks the release before it and the next release outranks every rolling build. The workflow reads the finished MSI and fails if its `ProductVersion` is not the intended one. This limits a minor version to 64 patch releases.
+
+Someone running a build from before updates existed has to install once by hand from the Releases page (or the `latest-main` release); after that the app updates itself. A packaged build that was not stamped with its commit is offered the newest rolling build once so it can start tracking.
