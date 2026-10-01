@@ -113,3 +113,34 @@ def write_build_info(commit: str, mode: str, root: Path = ROOT, *, version: str 
     info = {"commit": commit, "mode": mode, "version": version or current_version(root), "built_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}
     path.write_text("# Generated at build time; not committed.\nBUILD = " + json.dumps(info, indent=2) + "\n", encoding="utf-8", newline="\n")
     return path
+
+
+def msi_version(package_version: str, mode: str, commits_since_release: int = 0) -> str:
+    """The Windows installer version for a build.
+
+    Windows Installer compares only the first three fields, so a rolling build and a release of the same package version would
+    look identical and install side by side instead of upgrading. The third field therefore carries a build number:
+
+    * a release ``X.Y.Z`` is ``X.Y.(Z*1000+999)``;
+    * a rolling build made after it is ``X.Y.((Z+1)*1000+n)``, ``n`` being the commits since the last release (at most 998).
+
+    So every rolling build outranks the release it follows, and the next release outranks every rolling build before it.
+    """
+    match = _SEMVER.match(package_version)
+    if not match:
+        raise ValueError(f"{package_version!r} is not a plain MAJOR.MINOR.PATCH version.")
+    major, minor, patch = (int(g) for g in match.groups())
+    build = patch * 1000 + 999 if mode != "rolling" else (patch + 1) * 1000 + max(0, min(int(commits_since_release), 998))
+    if major > 255 or minor > 255 or build > 65535:
+        raise ValueError(f"Version {package_version} is too large for a Windows installer (major and minor up to 255, patch up to 64).")
+    return f"{major}.{minor}.{build}"
+
+
+def set_msi_version(mode: str, root: Path = ROOT, *, commits: int = 0) -> str:
+    """Write the installer version into the Tauri config (build-time only; the change is not committed)."""
+    path = root / "SUGAR-Desktop" / "src-tauri" / "tauri.conf.json"
+    config = json.loads(path.read_text(encoding="utf-8"))
+    version = msi_version(current_version(root), mode, commits)
+    config.setdefault("bundle", {}).setdefault("windows", {}).setdefault("wix", {})["version"] = version
+    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8", newline="\n")
+    return version

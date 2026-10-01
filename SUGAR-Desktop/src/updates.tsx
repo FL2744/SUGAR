@@ -33,6 +33,15 @@ export function useUpdates(prefs: Prefs, ready: boolean) {
     void check(false);
   }, [ready, prefs.autoUpdateCheck, check]);
 
+  // Choosing another channel in Settings looks again right away, and never shows the old channel's answer meanwhile.
+  const lastChannel = useRef(prefs.updateChannel);
+  useEffect(() => {
+    if (lastChannel.current === prefs.updateChannel) return;
+    lastChannel.current = prefs.updateChannel;
+    setInfo(null); setJob({ state: "idle" }); setMessage("");
+    if (ready) void check(true);
+  }, [prefs.updateChannel, ready, check]);
+
   useEffect(() => {
     if (job.state !== "downloading") return;
     const timer = window.setInterval(() => { void api<Job>("/api/update/status").then(setJob).catch(() => undefined); }, 700);
@@ -57,6 +66,7 @@ function DownloadControls({ updates }: { updates: Updates }) {
   if (!info?.available) return null;
   if (!isTauri()) return <a className="button button-primary button-small" href={info.url} target="_blank" rel="noreferrer noopener">View release</a>;
   if (job.state === "downloading") return <span role="status"><Spinner /> Downloading {job.name} {job.total ? `${mb(job.received || 0)} of ${mb(job.total)}` : ""}</span>;
+  if (job.state === "error") return <><span className="notice notice-warn" role="alert">{job.error || "The download failed."}</span><button className="button button-secondary button-small" onClick={() => void updates.download()}>Try again</button>{info.url && <a className="button button-quiet button-small" href={info.url} target="_blank" rel="noreferrer noopener">Open release page</a>}</>;
   if (job.state === "done") return <><Pill tone="ok">{job.verified ? "Downloaded and verified" : "Downloaded"}</Pill><button className="button button-primary button-small" onClick={() => void updates.open()}>Install update</button></>;
   return <button className="button button-primary button-small" onClick={() => void updates.download()} disabled={!info.asset}>{info.asset ? `Download ${info.asset.size ? `(${mb(info.asset.size)})` : "update"}` : "No download for this system"}</button>;
 }

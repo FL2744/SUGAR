@@ -101,6 +101,9 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
@@ -116,6 +119,12 @@ jobs:
           cache: npm
           cache-dependency-path: SUGAR-Desktop/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+      - name: Give the installer an upgradeable version
+        shell: pwsh
+        run: |
+          $v = python tools/set_msi_version.py --mode "${{ needs.release-context.outputs.mode }}"
+          "MSI_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "Installer version $v"
       - name: Build shared Windows application
         shell: pwsh
         run: .\SUGAR-Desktop\scripts\build-windows.ps1
@@ -130,6 +139,15 @@ jobs:
           $installer = Get-ChildItem .\SUGAR-Desktop\src-tauri\target\release\bundle\msi -Filter *.msi | Select-Object -First 1
           if (-not $installer) { throw "Tauri Windows MSI missing" }
           if ($installer.Length -lt 1000000) { throw "Windows MSI is unexpectedly small" }
+          # The installer must carry the version chosen above, or in-app updates would install side by side instead of upgrading.
+          $wi = New-Object -ComObject WindowsInstaller.Installer
+          $db = $wi.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $wi, @($installer.FullName, 0))
+          $view = $db.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $db, "SELECT Value FROM Property WHERE Property='ProductVersion'")
+          $view.GetType().InvokeMember("Execute", "InvokeMethod", $null, $view, $null)
+          $record = $view.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $view, $null)
+          $productVersion = $record.GetType().InvokeMember("StringData", "GetProperty", $null, $record, 1)
+          if ($productVersion -notlike "$env:MSI_VERSION*") { throw "MSI ProductVersion is $productVersion but expected $env:MSI_VERSION" }
+          "MSI ProductVersion $productVersion"
       - name: Validate no-credential State workflow
         shell: pwsh
         run: .\tools\smoke_packaged_no_credentials.ps1 -Bridge .\SUGAR-Desktop\src-tauri\binaries\sugar-bridge-x86_64-pc-windows-msvc.exe

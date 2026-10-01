@@ -3,6 +3,7 @@ import hashlib
 import pytest
 
 from sugar_core import updater as u
+from test_research_api import api   # noqa: F401  (fixture reuse)
 
 
 def rel(tag, *, pre=False, draft=False, assets=None):
@@ -135,3 +136,116 @@ def test_latest_channel_follows_commits_not_versions(tmp_path, monkeypatch):
         def get(self, url, **kw):
             return Resp({}, status=404)
     assert "No automatic build" in u.check("latest", current="1.7.0", session=NoBuild([]), force=True)["note"]
+
+
+def test_host_check_rejects_lookalikes():
+    assert u._allowed("https://github.com/x") and u._allowed("https://objects.githubusercontent.com/x") and u._allowed("https://release-assets.githubusercontent.com/x")
+    assert not u._allowed("https://evilgithubusercontent.com/x") and not u._allowed("https://github.com.evil.example/x") and not u._allowed("http://github.com/x")
+
+
+class Redirecting(Http):
+    def __init__(self, hops, body=b"hello"):
+        super().__init__([], body=body)
+        self.hops = hops
+
+    def get(self, url, **kw):
+        self.calls.append(url)
+        assert kw.get("allow_redirects") is False or "SHA256SUMS" in url
+        if url in self.hops:
+            r = Resp(status=302, url=url)
+            r.headers = {"location": self.hops[url]}
+            r.close = lambda: None
+            return r
+        return super().get(url, **kw)
+
+
+def info_for(tmp_path, monkeypatch, url="https://github.com/FL2744/SUGAR/releases/download/v1/SUGAR-macOS.zip"):
+    monkeypatch.setenv("SUGAR_HOME", str(tmp_path))
+    return {"asset": {"name": "SUGAR-macOS.zip", "size": 5, "url": url}, "sums_url": "https://github.com/FL2744/SUGAR/releases/download/v1/SHA256SUMS"}
+
+
+def test_download_follows_checked_redirects_and_refuses_foreign_ones(tmp_path, monkeypatch):
+    info = info_for(tmp_path, monkeypatch)
+    ok = Redirecting({info["asset"]["url"]: "https://release-assets.githubusercontent.com/abc"})
+    assert u.download(info, session=ok, dest=tmp_path)["state"] == "done"
+    assert ok.calls[-1] == "https://release-assets.githubusercontent.com/abc"
+    evil = Redirecting({info["asset"]["url"]: "https://evil.example/payload"})
+    with pytest.raises(ValueError, match="redirected somewhere unexpected"):
+        u.download(info, session=evil, dest=tmp_path)
+    assert not any("evil.example" in c for c in evil.calls)         # never even requested
+    assert u.status()["state"] == "error"
+    loop = Redirecting({info["asset"]["url"]: info["asset"]["url"]})
+    with pytest.raises(ValueError, match="too many times"):
+        u.download(info, session=loop, dest=tmp_path)
+
+
+def test_download_without_a_published_checksum_is_refused(tmp_path, monkeypatch):
+    info = info_for(tmp_path, monkeypatch)
+    info["sums_url"] = ""
+    with pytest.raises(ValueError, match="does not publish a checksum"):
+        u.download(info, session=Http([]), dest=tmp_path)
+    assert not (tmp_path / "SUGAR-macOS.zip").exists() and not list(tmp_path.glob("*.part"))
+
+
+def test_open_download_only_opens_files_in_the_downloads_folder(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUGAR_HOME", str(tmp_path))
+    monkeypatch.setattr(u, "downloads_dir", lambda: tmp_path / "dl")
+    (tmp_path / "dl").mkdir()
+    outside = tmp_path / "other.msi"
+    outside.write_bytes(b"x")
+    with pytest.raises(ValueError, match="no downloaded update"):
+        u.open_download(str(outside))
+    with pytest.raises(ValueError):
+        u.open_download(str(tmp_path / "dl" / "missing.msi"))
+
+
+def test_unstamped_packaged_build_is_offered_the_latest_build(tmp_path, monkeypatch):
+    import sys
+    monkeypatch.setenv("SUGAR_HOME", str(tmp_path))
+    monkeypatch.setattr(u, "_platform_key", lambda: "macos")
+    monkeypatch.setattr(u, "current_commit", lambda: "")
+    release = {**rel("latest-main"), "prerelease": True, "body": "commit: " + "c" * 40}
+
+    class H(Http):
+        def get(self, url, **kw):
+            return Resp(release)
+    assert not u.check("latest", current="1.7.0", session=H([]), force=True)["available"]          # a dev checkout stays quiet
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    info = u.check("latest", current="1.7.0", session=H([]), force=True)
+    assert info["available"] and "predates automatic updates" in info["note"]
+
+
+def test_repository_not_found_is_explained(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUGAR_HOME", str(tmp_path))
+
+    class Missing:
+        def get(self, url, **kw):
+            return Resp({}, status=404)
+    assert "could not be found" in u.check("stable", current="1.7.0", session=Missing(), force=True)["error"]
+
+
+def test_update_routes_are_admin_only_and_local_only(api, monkeypatch, tmp_path):   # noqa: F811
+    base, session, _wb = api
+    monkeypatch.setenv("SUGAR_HOME", str(tmp_path / "h"))
+    calls = []
+    info = {"current": "1.7.0", "channel": "latest", "available": True, "error": "", "latest": "abc1234", "asset": {"name": "SUGAR-macOS.zip", "size": 5, "url": "https://github.com/x/SUGAR-macOS.zip"}, "sums_url": ""}
+    monkeypatch.setattr(u, "check", lambda channel, **kw: calls.append(channel) or info)
+    monkeypatch.setattr(u, "start_download", lambda i: {"state": "downloading", "name": i["asset"]["name"]})
+    assert session.get(f"{base}/api/update/check?channel=stable").json()["latest"] == "abc1234" and calls == ["stable"]
+    session.get(f"{base}/api/update/check")
+    assert calls[-1] == "latest"                                                    # the default channel
+    assert session.get(f"{base}/api/update/status").status_code == 200
+    import requests
+    anonymous = requests.get(f"{base}/api/update/check")
+    assert anonymous.status_code in {401, 403}
+    # downloading is only for the local desktop app (the server exposes paths only then)
+    import sugar_api
+    monkeypatch.setattr(sugar_api.SugarApiHandler, "expose_paths", False)
+    blocked = session.post(f"{base}/api/update/download", json={"channel": "latest"})
+    assert blocked.status_code == 403 and "desktop app" in blocked.json()["error"]
+    monkeypatch.setattr(sugar_api.SugarApiHandler, "expose_paths", True)
+    started = session.post(f"{base}/api/update/download", json={})
+    assert started.status_code == 202 and started.json()["state"] == "downloading"
+    info["available"] = False
+    assert session.post(f"{base}/api/update/download", json={}).status_code == 409
+    assert session.post(f"{base}/api/update/open", json={}).status_code == 409           # nothing downloaded

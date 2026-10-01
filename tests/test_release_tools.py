@@ -55,3 +55,22 @@ def test_build_info_is_importable(tmp_path):
     ns: dict = {}
     exec(path.read_text(), ns)
     assert ns["BUILD"]["commit"] == "abc123" and ns["BUILD"]["mode"] == "rolling" and ns["BUILD"]["version"] == "1.7.0"
+
+
+def test_msi_versions_always_upgrade_in_order():
+    release = lambda v: tuple(int(x) for x in rt.msi_version(v, "release").split("."))          # noqa: E731
+    rolling = lambda v, n: tuple(int(x) for x in rt.msi_version(v, "rolling", n).split("."))    # noqa: E731
+    assert rt.msi_version("1.7.0", "release") == "1.7.999" and rt.msi_version("1.7.0", "rolling", 12) == "1.7.1012"
+    assert release("1.7.0") < rolling("1.7.0", 0) < rolling("1.7.0", 40) < release("1.7.1") < rolling("1.7.1", 0)
+    assert rolling("1.7.0", 5000) < release("1.7.1")                                            # capped, never overtakes the next release
+    assert release("1.7.9") < release("1.8.0") and release("1.255.0") > release("1.7.9")
+    with pytest.raises(ValueError):
+        rt.msi_version("1.7.70", "release")
+
+
+def test_set_msi_version_writes_the_tauri_config(tmp_path):
+    root = make_root(tmp_path)
+    (root / "SUGAR-Desktop" / "src-tauri" / "tauri.conf.json").write_text(json.dumps({"version": "1.7.0", "bundle": {"active": True}}))
+    assert rt.set_msi_version("rolling", root, commits=3) == "1.7.1003"
+    config = json.loads((root / "SUGAR-Desktop" / "src-tauri" / "tauri.conf.json").read_text())
+    assert config["bundle"]["windows"]["wix"]["version"] == "1.7.1003" and config["bundle"]["active"] is True

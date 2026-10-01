@@ -37,7 +37,8 @@ API = f"https://api.github.com/repos/{REPO}"
 CHANNELS = ("latest", "stable", "preview", "lts")
 ROLLING_TAG = "latest-main"
 CACHE_SECONDS = 6 * 3600
-_HOSTS = (".github.com", "githubusercontent.com")
+_HOSTS = ("github.com", "githubusercontent.com")      # exact host or any subdomain of these
+MAX_REDIRECTS = 5
 _TAG = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:[-.](.+))?$")
 _LOCK = threading.Lock()
 _JOB: dict[str, Any] = {"state": "idle"}
@@ -153,6 +154,8 @@ def check(channel: str = "stable", *, current: str = __version__, session: reque
         response = http.get(f"{API}/releases", params={"per_page": 20}, headers=_headers(), timeout=12)
         if response.status_code == 403 and "rate limit" in response.text.lower():
             raise RuntimeError("GitHub is limiting requests from this network right now. Try again in a while.")
+        if response.status_code == 404:
+            raise RuntimeError("The release list could not be found. Check that the repository is public and the network allows github.com.")
         response.raise_for_status()
         release = choose_release(response.json(), channel)
         if release is None:
@@ -193,15 +196,18 @@ def _check_latest(http: requests.Session, result: dict[str, Any], cache: dict[st
         moved: dict[str, Any] = {"commits": 0, "headlines": []}
         if latest and mine and latest != mine and not (latest.startswith(mine) or mine.startswith(latest)):
             moved = _compare(http, mine, latest)
-        available = bool(latest and mine and moved["commits"] > 0)
+        migrating = bool(latest and not mine and getattr(sys, "frozen", False))    # a packaged build made before builds were stamped
+        available = bool(latest and mine and moved["commits"] > 0) or migrating
         result.update({
             "latest": latest[:7], "tag": ROLLING_TAG, "name": f"Latest build ({latest[:7]})", "published_at": release.get("published_at", ""), "url": release.get("html_url", ""),
             "prerelease": True, "notes": "", "asset": {"name": asset["name"], "size": asset.get("size", 0), "url": asset.get("browser_download_url", "")} if asset else None,
             "sums_url": next((a.get("browser_download_url", "") for a in release.get("assets") or [] if a.get("name") == "SHA256SUMS"), ""),
             "available": available, "ahead": moved, "build": mine[:7],
         })
-        if not mine:
+        if not mine and not migrating:
             result["note"] = "This copy of SUGAR does not know which commit it was built from, so it cannot tell whether a newer build exists."
+        elif migrating:
+            result["note"] = "This build predates automatic updates. Installing the latest build enables them."
         elif not available:
             result["note"] = "You have the newest build."
     cache[result["channel"]] = result
@@ -236,8 +242,24 @@ def _ahead(http: requests.Session, tag: str) -> dict[str, Any]:
 # ------------------------------------------------------------------------------------------------ download
 def _allowed(url: str) -> bool:
     parts = urlparse(url)
-    host = parts.hostname or ""
-    return parts.scheme == "https" and any(host == h.lstrip(".") or host.endswith(h) for h in _HOSTS)
+    host = (parts.hostname or "").lower()
+    return parts.scheme == "https" and any(host == h or host.endswith("." + h) for h in _HOSTS)
+
+
+def _open_checked(http: requests.Session, url: str):
+    """GET ``url`` following redirects by hand, so every hop is checked against the allowed hosts before anything is read."""
+    for _ in range(MAX_REDIRECTS + 1):
+        if not _allowed(url):
+            raise ValueError("The download was redirected somewhere unexpected.")
+        response = http.get(url, headers=_headers(), stream=True, timeout=30, allow_redirects=False)
+        if response.status_code in {301, 302, 303, 307, 308}:
+            location = response.headers.get("location", "")
+            response.close()
+            url = requests.compat.urljoin(url, location)
+            continue
+        response.raise_for_status()
+        return response
+    raise ValueError("The download was redirected too many times.")
 
 
 def downloads_dir() -> Path:
@@ -286,11 +308,12 @@ def download(info: dict[str, Any], *, session: requests.Session | None = None, d
     partial = target.with_suffix(target.suffix + ".part")
     _set(state="downloading", name=name, received=0, total=int(asset.get("size") or 0), error="", path="")
     digest = hashlib.sha256()
+    expected = ""
     try:
-        with http.get(url, headers=_headers(), stream=True, timeout=30) as response:
-            response.raise_for_status()
-            if not _allowed(response.url):
-                raise ValueError("The download was redirected somewhere unexpected.")
+        expected = _expected_hash(http, str(info.get("sums_url", "")), name)
+        if not expected:
+            raise ValueError("This release does not publish a checksum for its download, so SUGAR will not install it automatically. Open the release page to download it yourself.")
+        with _open_checked(http, url) as response:
             total = int(response.headers.get("content-length") or asset.get("size") or 0)
             received = 0
             with partial.open("wb") as stream:
@@ -299,14 +322,13 @@ def download(info: dict[str, Any], *, session: requests.Session | None = None, d
                     digest.update(chunk)
                     received += len(chunk)
                     _set(received=received, total=total)
-        expected = _expected_hash(http, str(info.get("sums_url", "")), name)
-        if expected and expected != digest.hexdigest():
+        if expected != digest.hexdigest():
             partial.unlink(missing_ok=True)
             raise ValueError("The downloaded file did not match its published checksum, so it was discarded.")
         os.replace(partial, target)
     except (requests.RequestException, OSError, ValueError) as exc:
         partial.unlink(missing_ok=True)
-        _set(state="error", error=str(exc))
+        _set(state="error", error=str(exc) or exc.__class__.__name__)
         raise
     _set(state="done", path=str(target), verified=bool(expected), sha256=digest.hexdigest())
     return status()

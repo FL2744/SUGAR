@@ -552,3 +552,38 @@ test("a newer release is offered on launch and can be skipped", async ({ page })
   await expect(page.getByRole("heading", { name: "Updates" })).toBeVisible();
   await expect(page.getByText("1 change on the main branch since v1.8.0")).toBeVisible();
 });
+
+test("changing the update channel checks again and drops the old channel's answer", async ({ page }) => {
+  await mockApi(page, []);
+  const channels: string[] = [];
+  await page.route(/\/api\/update\/check/, (route) => {
+    const channel = new URL(route.request().url()).searchParams.get("channel") || "";
+    channels.push(channel);
+    return route.fulfill({ status: 200, headers: corsHeaders, json: channel === "latest"
+      ? { current: "1.7.0", channel, available: true, error: "", latest: "abc1234", tag: "latest-main", url: "https://github.com/FL2744/SUGAR/releases/tag/latest-main", ahead: { commits: 2, headlines: ["One", "Two"] }, asset: null }
+      : { current: "1.7.0", channel, available: false, error: "", note: "You are up to date." } });
+  });
+  await useAdvancedMode(page);
+  await page.goto("/");
+  await expect(page.getByText("A newer SUGAR build is available")).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Updates" }).click();
+  await expect(page.getByText("What changed (2)")).toBeVisible();
+  await page.getByRole("radio", { name: /Stable/ }).click();
+  await expect(page.getByText("A newer SUGAR build is available")).toBeHidden();
+  await expect(page.getByText(/You are up to date/)).toBeVisible();
+  expect(channels).toEqual(["latest", "stable"]);
+});
+
+test("a failed update check is explained in Settings and never blocks the app", async ({ page }) => {
+  await mockApi(page, []);
+  await page.route(/\/api\/update\/check/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { current: "1.7.0", channel: "latest", available: false, error: "Could not check for updates: offline" } }));
+  await useAdvancedMode(page);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "What would you like to research?" })).toBeVisible();
+  await expect(page.getByText("A newer SUGAR build is available")).toBeHidden();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Updates" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Could not check for updates" })).toBeVisible();
+  await expectAccessible(page, "Updates settings with an error");
+});

@@ -4,6 +4,13 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ## Unreleased
 
+### Update hardening
+
+- Downloads follow redirects one hop at a time and only to GitHub's release hosts (lookalike hosts such as `evilgithubusercontent.com` are refused); a download without a published checksum is never installed; failures show the reason with "Try again" and a link to the release page.
+- Switching the update channel in Settings checks again at once and clears the previous channel's answer.
+- Windows rolling builds get an installer version that outranks the previous build, so Latest updates actually upgrade instead of installing beside it; the workflow verifies the finished MSI.
+- Packaged builds from before commit stamping are offered the newest build once so they can start tracking.
+
 ### Interface pass
 
 - Navigation grouped by what you are doing (Ask, Places, Project, Audit) instead of one long list.
