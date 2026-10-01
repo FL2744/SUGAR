@@ -4,15 +4,44 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - main
+    paths:
+      - "RELEASE_VERSION"
 
 permissions:
   contents: write
 
 jobs:
+  release-context:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ctx.outputs.tag }}
+      target: ${{ steps.ctx.outputs.target }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: ctx
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "target=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          else
+            read -r tag target < RELEASE_VERSION
+            test -n "$tag"
+            test -n "$target"
+            [[ "$tag" == v* ]]
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "target=$target" >> "$GITHUB_OUTPUT"
+          fi
+
   validate-release:
+    needs: release-context
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-context.outputs.target }}
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
@@ -23,17 +52,18 @@ jobs:
         shell: bash
         run: |
           version="$(python -c 'import sugar_core; print(sugar_core.__version__)')"
-          tag_version="${GITHUB_REF_NAME#v}"
+          release_tag="${{ needs.release-context.outputs.tag }}"
+          tag_version="${release_tag#v}"
           tag_version="${tag_version%%-*}"
           test "$tag_version" = "$version" || {
-            echo "Release tag $GITHUB_REF_NAME does not match package version $version" >&2
+            echo "Release tag $release_tag does not match package version $version" >&2
             exit 1
           }
       - name: Run deterministic suite
         run: python -m pytest -q
 
   windows-x64:
-    needs: validate-release
+    needs: [release-context, validate-release]
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
@@ -74,7 +104,7 @@ jobs:
           if-no-files-found: error
 
   macos-apple-silicon:
-    needs: validate-release
+    needs: [release-context, validate-release]
     runs-on: macos-15
     timeout-minutes: 40
     steps:
@@ -109,7 +139,7 @@ jobs:
           if-no-files-found: error
 
   python-distributions:
-    needs: validate-release
+    needs: [release-context, validate-release]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -129,7 +159,7 @@ jobs:
           if-no-files-found: error
 
   publish-release:
-    needs: [windows-x64, macos-apple-silicon, python-distributions]
+    needs: [release-context, windows-x64, macos-apple-silicon, python-distributions]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -160,11 +190,21 @@ jobs:
 
           See `CHANGELOG.md` in the repository for release-specific fixes and methodology notes.
           EOF
-      - name: Publish GitHub release
+      - name: Create tag and publish GitHub release
+        shell: bash
         run: |
-          gh release create "$GITHUB_REF_NAME" release-assets/* \
+          tag="${{ needs.release-context.outputs.tag }}"
+          target="${{ needs.release-context.outputs.target }}"
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            git fetch origin "$target"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" "$target" -m "SUGAR ${tag#v}"
+            git push origin "refs/tags/$tag"
+          fi
+          gh release create "$tag" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "SUGAR $GITHUB_REF_NAME" \
+            --target "$target" \
+            --title "SUGAR $tag" \
             --notes-file RELEASE_NOTES.md \
             --latest
