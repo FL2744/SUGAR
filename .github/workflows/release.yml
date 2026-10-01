@@ -221,6 +221,10 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+      # The publish step needs the repository: it reads CHANGELOG.md for the release notes and pushes the tag.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v7
         with:
           pattern: release-*
