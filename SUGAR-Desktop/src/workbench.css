@@ -495,3 +495,6 @@ kbd { padding: 0 .4rem; border: 1px solid var(--wb-line2); border-radius: .3rem;
 .theme-list { list-style: none; margin: .3rem 0; padding: 0; display: grid; gap: .5rem; } .theme-list q { display: block; color: var(--wb-ink2); font-style: italic; overflow-wrap: anywhere; }
 .brief-preview { max-height: 22rem; overflow: auto; white-space: pre-wrap; padding: .7rem; background: var(--wb-soft); border-radius: .4rem; font-size: 1rem; }
 .file-button { cursor: pointer; display: inline-flex; align-items: center; }
+.inspector-identity > div > span { color: var(--wb-muted); }
+.accuracy-table { width: 100%; border-collapse: collapse; margin: .5rem 0; } .accuracy-table th, .accuracy-table td { padding: .3rem .5rem; border-bottom: 1px solid var(--wb-line); text-align: left; }
+.steps { padding-left: 1.2rem; display: grid; gap: .4rem; }

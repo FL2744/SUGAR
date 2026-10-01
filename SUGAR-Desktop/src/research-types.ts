@@ -156,3 +156,10 @@ export type Digest = {
 
 export type ThemeRow = { label: string; key: string; count: number; share: number; also: string[]; platforms: Record<string, number>; languages: Record<string, number>; examples: Array<{ item_id: string; url: string; text: string }> };
 export type BriefResult = { markdown: string; title: string; references: string[]; model_summary: boolean; warnings: string[]; files: { markdown: string; docx: string } };
+
+export type Prf = { precision: number | null; recall: number | null; f1: number | null; tp: number; fp: number; fn: number };
+export type AccuracyReport = {
+  labeled_relevance: number; labeled_coding: number; unknown_item_ids: number; note: string;
+  relevance: Prf & { threshold: number; true_negatives: number; by_threshold: Record<string, Prf> };
+  audience: { overall: Prf; by_label: Record<string, Prf> }; program: { overall: Prf; by_label: Record<string, Prf> };
+};

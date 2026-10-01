@@ -5,6 +5,7 @@ import { research } from "./research-api";
 import type { BriefResult, ResultItem, ResultsPayload, RunSummary, ThemeRow, Verdict } from "./research-types";
 import type { Prefs } from "./prefs";
 import { ItemInspector } from "./item-inspector";
+import { AccuracyPanel } from "./accuracy-panel";
 import { CopyButton, EmptyState, IncompleteNotice, Pill, Segmented, Spinner, StatusPill, VERDICTS, VerdictPill, languageName, platformLabel, relativeTime, titleCase } from "./ui";
 
 type TextMode = "original" | "translation" | "both";
@@ -67,6 +68,7 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
   const [verdictFilter, setVerdictFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [relFilter, setRelFilter] = useState("");
+  const [accuracyOpen, setAccuracyOpen] = useState(false);
   const [newOnly, setNewOnly] = useState(false);
   const [mode, setMode] = useState<TextMode>("original");
   const [inspect, setInspect] = useState("");
@@ -230,6 +232,7 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
           {(data?.relevance_bands?.unlikely ?? 0) > 0 && <button className="button button-quiet" disabled={Boolean(busy)} onClick={() => void markUnlikely()}>Mark {data?.relevance_bands?.unlikely} likely off-topic items…</button>}
           <button className="button button-secondary" disabled={Boolean(busy)} onClick={() => void showThemes()}>Show themes</button>
           <button className="button button-primary" disabled={Boolean(busy)} onClick={() => void makeBrief("deterministic")} title="A written brief with numbered sources, coverage limits and method">{busy === "brief" ? <Spinner /> : "Create brief"}</button>
+          <button className="button button-quiet" onClick={() => setAccuracyOpen(true)} title="Label a sample and measure how well the suggestions match you">Accuracy check…</button>
           <button className="button button-quiet" onClick={onOpenResearch}>Rebuild plan or reinterpret request…</button>
         </div>
         {codingNote && <div className="notice notice-info" role="status">{codingNote}</div>}
@@ -240,6 +243,7 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
           <details><summary>Preview</summary><pre className="brief-preview">{brief.markdown}</pre></details></div>}
         <p className="muted">Each of these does exactly one thing. See the Research page for details.</p>
       </section>
+      {accuracyOpen && <AccuracyPanel projectId={projectId} runId={runId} onClose={() => setAccuracyOpen(false)} onError={onError} />}
       {inspect && <ItemInspector projectId={projectId} runId={runId} itemId={inspect} author={author} onClose={() => setInspect("")} />}
     </section>
   );

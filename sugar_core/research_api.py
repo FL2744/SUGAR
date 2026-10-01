@@ -386,6 +386,15 @@ def _analysis_routes(method, rest, query, body, wb, project):
             return 200, {"marked": len(todo), "skipped_already_reviewed": sum(1 for iid in ids if scores.get(iid, {}).get("band") == "unlikely" and reviewed.get(iid, {}).get("verdict"))}
         if rest == "analysis/themes" and method == "GET":
             return 200, analysis.themes(wb.items(project, query.get("run_id", "")))
+        if rest == "analysis/sample" and method == "GET":
+            from . import evaluation
+            return 200, {"csv": evaluation.sample_csv(wb.items(project, query.get("run_id", "")), _int(query.get("n"), 60, 10, 300), _int(query.get("seed"), 7, 0, 10_000))}
+        if rest == "analysis/evaluate" and method == "POST":
+            from . import evaluation
+            plan = project.load_plan()
+            if plan is None:
+                raise WorkbenchError("This project has no research plan to score relevance against.", 404)
+            return 200, evaluation.score_labels(str(body.get("labels_csv") or ""), wb.items(project, str(body.get("run_id") or "")), plan, project.meta().get("settings"))
         if rest == "brief" and method == "POST":
             run_id = str(body.get("run_id") or "")
             provider = None

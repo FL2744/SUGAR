@@ -1,7 +1,7 @@
 import { api, apiPost, openEventStream } from "./bridge";
 import type {
   ActivityEvent, ConnectionReport, Interpretation, PlanSpec, PlatformRow, ProjectOverview, ProviderProfileRow, ProviderType,
-  BriefResult, CodeRow, CodingSummary, ThemeRow, Digest, Monitor, InstitutionCandidate, InstitutionDetail, InstitutionList, NetworkPreview, NetworkRow, OverlapResult, SeedRow, ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
+  AccuracyReport, BriefResult, CodeRow, CodingSummary, ThemeRow, Digest, Monitor, InstitutionCandidate, InstitutionDetail, InstitutionList, NetworkPreview, NetworkRow, OverlapResult, SeedRow, ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
 } from "./research-types";
 
 const ws = (id: string) => `/api/workspaces/${encodeURIComponent(id)}`;
@@ -84,6 +84,8 @@ export const research = {
   brief: (id: string, runId: string, mode: "deterministic" | "auto") => apiPost<BriefResult>(`${ws(id)}/research/brief`, { run_id: runId, mode }),
   exportProfile: (id: string, withInstitutions: boolean) => api<{ profile: Record<string, unknown> }>(`${ws(id)}/research/profile${query({ institutions: withInstitutions })}`).then((r) => r.profile),
   applyProfile: (id: string, profile: Record<string, unknown>, includeInstitutions: boolean) => apiPost<{ name: string; applied: string[] }>(`${ws(id)}/research/profile`, { profile, include_institutions: includeInstitutions }),
+  accuracySample: (id: string, runId: string, n = 60) => api<{ csv: string }>(`${ws(id)}/research/analysis/sample${query({ run_id: runId, n })}`).then((r) => r.csv),
+  accuracyScore: (id: string, runId: string, labelsCsv: string) => apiPost<AccuracyReport>(`${ws(id)}/research/analysis/evaluate`, { run_id: runId, labels_csv: labelsCsv }),
   geocodeInstitutions: (id: string) => apiPost<{ placed: string[]; failed: Array<{ entity_id: string; reason: string }> }>(`${ws(id)}/research/institutions/geocode`, {}),
   results: (id: string, runId: string, params: Record<string, string | number | boolean | undefined> = {}) => api<ResultsPayload>(`${ws(id)}/runs/${runId}/results${query(params)}`),
   item: (id: string, runId: string, itemId: string) => api<{ item: ResultItem }>(`${ws(id)}/runs/${runId}/items/${itemId}`).then((r) => r.item),

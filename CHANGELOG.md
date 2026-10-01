@@ -39,6 +39,13 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - **Explicit AI model choice** on the Research page (OpenAI, Virginia Tech ARC, or no AI) carried into the plan and run; an unusable choice warns and never falls back to another provider.
 - **Soft per-run model-call budget** (default 500, 0 = unlimited): when spent, optional translation pauses with one notice; collection and the run are never failed or blocked.
 - Command palette (Ctrl/⌘+K), keyboard-shortcut help (?), and completion toasts.
+- **Institution workflow:** institutions as source-backed records (claims with evidence, human verification with reviewer and date, merge, explainable confidence); candidates found in a run with quoted sentences; geocoding; Internet Archive page history for closure and rename leads.
+- **Websites as a source:** a polite, SSRF-safe page reader that follows news and event pages (robots.txt honoured).
+- **Networks and overlap:** roles (subject/reference), directory import with confirmed column mapping, Wikidata and OpenStreetMap seeds, nearest-reference distances and shared recorded audiences, with the standing caution that these are computed facts.
+- **Map page** with network layers, status, confidence and recency filters, activity heat, nearest-reference links and drill-down to sources; list view for the same data.
+- **Activity coding:** audiences, programs, activity types and reported attendance proposed with quotes (multilingual patterns, optional model), confirmed by a person, applied to institutions with citations.
+- **Monitoring:** schedules, a background scheduler, institution-level change detection and digests.
+- **Analysis:** relevance scoring with reasons and a reviewed bulk action, themes, and a grounded brief (Markdown and Word) with numbered sources, coverage limits and method; method profiles to reuse a study's method; an accuracy check against a human-labeled sample.
 
 ### Changed
 

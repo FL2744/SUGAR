@@ -83,12 +83,12 @@ const NAV_BASIC: Array<{ id: Page; label: string; icon: string }> = [
 const NAV_ADVANCED: Array<{ id: Page; label: string; icon: string }> = [
   { id: "home", label: "Overview", icon: "◫" },
   { id: "project", label: "Evidence & handoff", icon: "☷" },
-  { id: "institutions", label: "Institutions & map", icon: "⌖" },
+  { id: "institutions", label: "Reference registry", icon: "☰" },
   { id: "timeline", label: "Project timeline", icon: "◷" },
 ];
 const PAGE_TITLES: Record<Page, string> = {
   research: "Research", activity: "Activity", results: "Results", network: "Institutions", map: "Map", monitoring: "Monitoring", projects: "Projects", home: "Overview", project: "Evidence & handoff",
-  institutions: "Institutions & map", timeline: "Project timeline", settings: "Settings", about: "About",
+  institutions: "Reference registry", timeline: "Project timeline", settings: "Settings", about: "About",
 };
 
 function titleCase(value: string) {

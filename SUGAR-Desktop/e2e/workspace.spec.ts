@@ -443,8 +443,8 @@ test("main browser screens have no automated WCAG 2.2 A/AA violations", async ({
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await navigation.getByRole("button", { name: "Evidence & handoff" }).click();
   await expectAccessible(page, "research project");
-  await navigation.getByRole("button", { name: "Institutions & map" }).click();
-  await expectAccessible(page, "institutions and map");
+  await navigation.getByRole("button", { name: "Reference registry" }).click();
+  await expectAccessible(page, "reference registry");
   await navigation.getByRole("button", { name: "Project timeline" }).click();
   await expectAccessible(page, "project timeline");
   await page.getByRole("button", { name: "Settings" }).click();

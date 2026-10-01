@@ -54,3 +54,5 @@ Use this index to find the current design or methodology document for the part o
 
 When documentation and code disagree, treat that as a defect: behavior changes should update the relevant methodology/design document in the same pull request.
 - [Research workbench](research-workbench.md): plain-language requests, plans, live runs, providers, credentials, refresh operations, exports.
+- [Institution workflow](institution-workflow.md): from collected items to verified, mapped, monitored records and a brief
+- [Operations runbook](operations-runbook.md): keeping an installation running
