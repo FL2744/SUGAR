@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -110,6 +111,114 @@ def _load_dataset_rows(source_file: str) -> tuple[list[dict[str, Any]], list[str
     return load_reference_table(source)
 
 
+def _dataset_fingerprint(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _geography_assignments_path(workspace: SugarWorkspace) -> Path:
+    return workspace.internal_path / "geography-assignments.json"
+
+
+def _read_geography_assignments(workspace: SugarWorkspace) -> dict[str, Any]:
+    path = _geography_assignments_path(workspace)
+    if not path.is_file():
+        return {"datasets": {}}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("Geography annotations are unreadable; restore or remove .sugar/geography-assignments.json.") from exc
+    if not isinstance(value, dict) or not isinstance(value.get("datasets", {}), dict):
+        raise ValueError("Geography annotations have an invalid format.")
+    return value
+
+
+def _apply_geography_assignments(
+    workspace: SugarWorkspace, source: Path, rows: list[dict[str, Any]], *, include_row_number: bool = False,
+) -> list[dict[str, Any]]:
+    dataset_id = hashlib.sha256(str(source.resolve()).encode("utf-8")).hexdigest()
+    dataset = _read_geography_assignments(workspace).get("datasets", {}).get(dataset_id, {})
+    if dataset.get("sha256") != _dataset_fingerprint(source):
+        return rows
+    assignments = dataset.get("rows", {})
+    result = []
+    for index, original in enumerate(rows):
+        row = dict(original)
+        row_number = int(row.get("_sugar_row_number", index))
+        annotation = assignments.get(str(row_number)) if isinstance(assignments, dict) else None
+        if isinstance(annotation, dict):
+            for field in ("country", "region", "city"):
+                value = str(annotation.get(field) or "").strip()
+                if value:
+                    row[f"analyst_{field}"] = value
+            row["location_provenance"] = "analyst_manual"
+            row["location_note"] = str(annotation.get("note") or "")
+        if include_row_number:
+            row["_sugar_row_number"] = row_number
+        result.append(row)
+    return result
+
+
+def _assign_dataset_geography(workspace: SugarWorkspace, source: Path, row_number: int, values: dict[str, Any]) -> dict[str, Any]:
+    rows, _columns = _load_dataset_rows(str(source))
+    if row_number < 0 or row_number >= len(rows):
+        raise ValueError(f"Dataset row number must be between 0 and {max(0, len(rows) - 1)}.")
+    location = {field: str(values.get(field) or "").strip() for field in ("country", "region", "city")}
+    if not any(location.values()):
+        raise ValueError("Enter at least one analyst-assigned country, region, or city.")
+    note = str(values.get("note") or "").strip()
+    if len(note) > 2000:
+        raise ValueError("Geography assignment notes must be 2,000 characters or fewer.")
+    dataset_id = hashlib.sha256(str(source.resolve()).encode("utf-8")).hexdigest()
+    document = _read_geography_assignments(workspace)
+    datasets = document.setdefault("datasets", {})
+    current_hash = _dataset_fingerprint(source)
+    dataset = datasets.get(dataset_id, {})
+    if dataset.get("sha256") != current_hash:
+        dataset = {"source_name": source.name, "sha256": current_hash, "rows": {}}
+    assignments = dataset.setdefault("rows", {})
+    annotation = {
+        **location, "note": note,
+        "assigned_by": str(values.get("actor") or "Analyst")[:120],
+        "assigned_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "provenance": "analyst_manual",
+    }
+    assignments[str(row_number)] = annotation
+    datasets[dataset_id] = dataset
+    path = Path(_write_json(_geography_assignments_path(workspace), document))
+    workspace.register_artifact("geography_assignments", path, label="Analyst-assigned dataset geography", metadata={"dataset": source.name, "row_number": row_number})
+    log_project_event(workspace, "dataset_geography_assigned", {"dataset": source.name, "row_number": row_number, "provenance": "analyst_manual"})
+    return {"row_number": row_number, **annotation, "source_file": str(source)}
+
+
+def _compare_region_groups(left: list[dict[str, Any]], right: list[dict[str, Any]], level: str) -> dict[str, Any]:
+    left_summary = _geography_summary(left, level)
+    right_summary = _geography_summary(right, level)
+    left_groups = {str(item["label"]).casefold(): item for item in left_summary["groups"]}
+    right_groups = {str(item["label"]).casefold(): item for item in right_summary["groups"]}
+    groups = []
+    for key in sorted(set(left_groups) | set(right_groups)):
+        left_item, right_item = left_groups.get(key, {}), right_groups.get(key, {})
+        left_share = float(left_item.get("share", 0.0))
+        right_share = float(right_item.get("share", 0.0))
+        groups.append({
+            "label": left_item.get("label") or right_item.get("label"),
+            "left_records": int(left_item.get("records", 0)), "right_records": int(right_item.get("records", 0)),
+            "left_share": left_share, "right_share": right_share,
+            "share_difference": round(right_share - left_share, 4),
+        })
+    return {
+        "group_by": left_summary["group_by"],
+        "left_total": left_summary["total_rows"], "right_total": right_summary["total_rows"],
+        "left_located": left_summary["located_rows"], "right_located": right_summary["located_rows"],
+        "groups": groups,
+        "guardrail": "This is a descriptive comparison of supplied or analyst-assigned location labels. Different sample sizes, source coverage, and collection methods can explain differences; the comparison does not establish change, influence, or causation.",
+    }
+
+
 def _filter_dataset_rows(rows: list[dict[str, Any]], column: str = "", value: str = "") -> list[dict[str, Any]]:
     if not column or not value:
         return rows
@@ -120,9 +229,9 @@ def _filter_dataset_rows(rows: list[dict[str, Any]], column: str = "", value: st
 def _geography_value(row: dict[str, Any], level: str) -> str:
     row = {str(key).casefold(): value for key, value in row.items()}
     aliases = {
-        "country": ("country", "country_name", "country_code"),
-        "region": ("region", "admin1", "admin_region", "state", "province"),
-        "city": ("city", "town", "locality"),
+        "country": ("analyst_country", "country", "country_name", "country_code"),
+        "region": ("analyst_region", "region", "admin1", "admin_region", "state", "province"),
+        "city": ("analyst_city", "city", "town", "locality"),
     }
     if level == "coordinate_grid":
         try:
@@ -135,7 +244,7 @@ def _geography_value(row: dict[str, Any], level: str) -> str:
         return f"{latitude:.2f}, {longitude:.2f}"
     if level == "hierarchy":
         parts = []
-        for key in ("country", "country_name", "region", "admin1", "admin_region", "state", "province", "city", "town", "locality"):
+        for key in ("analyst_country", "country", "country_name", "analyst_region", "region", "admin1", "admin_region", "state", "province", "analyst_city", "city", "town", "locality"):
             value = str(row.get(key) or "").strip()
             if value and value.casefold() not in {part.casefold() for part in parts}:
                 parts.append(value)
@@ -204,6 +313,45 @@ def _project_research_state(workspace: SugarWorkspace) -> dict[str, Any]:
 
 def _project_profile_path(workspace: SugarWorkspace) -> Path:
     return workspace.internal_path / "project-profile.json"
+
+
+def _project_comments_path(workspace: SugarWorkspace) -> Path:
+    return workspace.internal_path / "project-comments.jsonl"
+
+
+def _load_project_comments(workspace: SugarWorkspace) -> list[dict[str, Any]]:
+    path = _project_comments_path(workspace)
+    if not path.is_file():
+        return []
+    comments = []
+    with path.open(encoding="utf-8") as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            item = json.loads(line)
+            if isinstance(item, dict):
+                comments.append(item)
+    return comments[-100:]
+
+
+def _add_project_comment(workspace: SugarWorkspace, config: dict[str, Any]) -> dict[str, Any]:
+    body = str(config.get("body") or "").strip()
+    if not body or len(body) > 10_000:
+        raise ValueError("A project comment must contain 1 to 10,000 characters.")
+    actor = str(config.get("actor") or "Analyst").strip()[:120] or "Analyst"
+    comment = {
+        "comment_id": uuid.uuid4().hex,
+        "actor": actor,
+        "body": body,
+        "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+    }
+    path = _project_comments_path(workspace)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write(json.dumps(comment, ensure_ascii=False) + "\n")
+    workspace.register_artifact("project_comments", path, label="Project discussion", metadata={"comment_count": len(_load_project_comments(workspace))})
+    log_project_event(workspace, "project_comment_added", {"comment_id": comment["comment_id"], "actor": actor})
+    return comment
 
 
 def _load_project_profile(workspace: SugarWorkspace) -> dict[str, Any]:
@@ -417,6 +565,24 @@ def run_workspace_hub(
         )
         return _event_result(progress, action, profile)
 
+    if action == "project-comment-list":
+        return _event_result(progress, action, {"comments": _load_project_comments(workspace)})
+
+    if action == "project-comment-add":
+        return _event_result(progress, action, _add_project_comment(workspace, config))
+
+    if action == "research-template-list":
+        from .research_templates import list_research_templates
+        return _event_result(progress, action, {"templates": list_research_templates(workspace)})
+
+    if action == "research-template-save":
+        from .research_templates import save_research_template
+        fields = config.get("fields") or {}
+        if not isinstance(fields, dict):
+            raise ValueError("Research template fields must be an object.")
+        template = save_research_template(workspace, str(config.get("name") or ""), fields)
+        return _event_result(progress, action, template)
+
     if action == "project-create-subproject":
         child = create_subproject(workspace, str(config.get("name") or ""), description=str(config.get("description") or ""))
         return _event_result(progress, action, {"project_id": child.manifest.project_id,
@@ -476,6 +642,8 @@ def run_workspace_hub(
     if action == "dataset-browse":
         source_file = str(_project_file_path(workspace, config.get("source_file")))
         rows, columns = _load_dataset_rows(source_file)
+        rows = [{**row, "_sugar_row_number": index} for index, row in enumerate(rows)]
+        rows = _apply_geography_assignments(workspace, Path(source_file), rows, include_row_number=True)
         filtered = _filter_dataset_rows(rows, str(config.get("filter_column") or ""), str(config.get("filter_value") or ""))
         maximum = max(1, min(5000, int(config.get("max_rows", 500))))
         return _event_result(progress, action, {"source_file": str(Path(source_file).expanduser().resolve()),
@@ -486,12 +654,35 @@ def run_workspace_hub(
     if action == "dataset-geography-summary":
         source_file = str(_project_file_path(workspace, config.get("source_file")))
         rows, _columns = _load_dataset_rows(source_file)
+        rows = _apply_geography_assignments(workspace, Path(source_file), rows)
         filtered = _filter_dataset_rows(rows, str(config.get("filter_column") or ""), str(config.get("filter_value") or ""))
         return _event_result(progress, action, _geography_summary(filtered, str(config.get("group_by") or "auto")))
+
+    if action == "dataset-geography-assign":
+        source_file = _project_file_path(workspace, config.get("source_file"))
+        try:
+            row_number = int(str(config.get("row_number", "")).strip())
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Dataset row number must be a non-negative integer.") from exc
+        if row_number < 0:
+            raise ValueError("Dataset row number must be a non-negative integer.")
+        assigned = _assign_dataset_geography(workspace, source_file, row_number, config)
+        return _event_result(progress, action, assigned)
+
+    if action == "dataset-region-compare":
+        left_path = _project_file_path(workspace, config.get("source_file"))
+        right_path = _project_file_path(workspace, config.get("comparison_file"))
+        left, _left_columns = _load_dataset_rows(str(left_path))
+        right, _right_columns = _load_dataset_rows(str(right_path))
+        left = _apply_geography_assignments(workspace, left_path, left)
+        right = _apply_geography_assignments(workspace, right_path, right)
+        level = str(config.get("group_by") or "auto")
+        return _event_result(progress, action, _compare_region_groups(left, right, level))
 
     if action == "dataset-export":
         source_file = str(_project_file_path(workspace, config.get("source_file")))
         rows, _columns = _load_dataset_rows(source_file)
+        rows = _apply_geography_assignments(workspace, Path(source_file), rows)
         filtered = _filter_dataset_rows(rows, str(config.get("filter_column") or ""), str(config.get("filter_value") or ""))
         export_format = str(config.get("format") or "").strip().casefold().lstrip(".")
         extension_for_format = {"csv": ".csv", "jsonl": ".jsonl", "ndjson": ".jsonl", "xlsx": ".xlsx", "json": ".json", "geojson": ".geojson"}

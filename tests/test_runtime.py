@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from sugar_bridge import backend_info, load_config
 from sugar_core.models import PostRecord
 from sugar_core import service
@@ -53,6 +55,61 @@ def test_search_progress_reports_major_stages(monkeypatch, tmp_path: Path):
     assert "saving" in names
     assert names[-1] == "saved"
     assert all(Path(path).exists() for path in outputs)
+
+
+def test_search_applies_per_platform_limits(monkeypatch, tmp_path: Path):
+    requests = []
+
+    def collect(source, request):
+        requests.append((source, request.max_posts_per_query, request.max_pages_per_query))
+        return []
+
+    monkeypatch.setattr(service, "collect_registered_source", collect)
+    service.run_search(
+        {
+            "sources": ["bluesky", "bilibili"],
+            "terms": ["test"],
+            "max_posts_per_query": 10,
+            "max_pages_per_query": 2,
+            "max_records": 20,
+            "max_parallel_sources": 2,
+            "translate_posts": False,
+            "infer_locations": False,
+            "platform_tuning": {
+                "bluesky": {"max_posts_per_query": 3, "max_pages_per_query": 4},
+                "bilibili": {"max_posts_per_query": 7},
+            },
+            "output_directory": str(tmp_path),
+        },
+        {},
+    )
+
+    assert sorted(requests) == [("bilibili", 7, 2), ("bluesky", 3, 4)]
+
+
+@pytest.mark.parametrize(
+    "tuning,match",
+    [
+        ([], "must be an object"),
+        ({"unknown-source": {"max_posts_per_query": 2}}, "Unsupported platform_tuning source"),
+        ({"bluesky": {"unknown_limit": 2}}, "Unsupported platform_tuning field"),
+        ({"bluesky": {"max_pages_per_query": 0}}, "positive integer"),
+        ({"bluesky": {"max_posts_per_query": 1.5}}, "positive integer"),
+    ],
+)
+def test_search_rejects_invalid_per_platform_limits(tmp_path: Path, tuning, match: str):
+    with pytest.raises(ValueError, match=match):
+        service.run_search(
+            {
+                "sources": ["bluesky"],
+                "terms": ["test"],
+                "translate_posts": False,
+                "infer_locations": False,
+                "platform_tuning": tuning,
+                "output_directory": str(tmp_path),
+            },
+            {},
+        )
 
 
 def test_search_preflight_rejects_missing_x_token(tmp_path: Path):

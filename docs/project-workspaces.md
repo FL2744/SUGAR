@@ -9,6 +9,7 @@ A workspace is intentionally boring and inspectable:
 - `sugar-project.json` is the portable project manifest. It contains identity, schema version, description, and canonical directory layout. It must never contain API keys, passwords, cookies, session tokens, or other secrets.
 - `sugar-artifacts.json` is the portable artifact catalog. It records the artifact kind, portable path, label, timestamps, metadata, workspace/schema versions, and SUGAR software version needed to interpret the project on another machine.
 - `.sugar/workspace.sqlite3` is a local mutable index over that artifact catalog. It is optimized for normal lookup/discovery but is rebuildable from `sugar-artifacts.json` and is not required to preserve the evidentiary record.
+- Other `.sugar` files hold project-local notes, append-only comments, saved requirement templates, and analyst geography annotations. The HTTP API keeps hashes of issued member tokens in a separate file under its configured workspace root, outside each exported project.
 - Research products remain ordinary files. CSV, XLSX, JSONL, GeoJSON, HTML, Word, PDF, and other outputs are not hidden inside SQLite.
 - Paths inside the workspace are stored relatively so the project directory can be moved between machines. External reference files are allowed but are explicitly reported as external/non-portable artifacts.
 - Missing registered files remain visible in workspace status rather than silently disappearing from project history.

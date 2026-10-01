@@ -70,6 +70,38 @@ def _llm_config(config: dict[str, Any], secrets: dict[str, str]) -> LLMConfig:
     )
 
 
+def _platform_tuning(config: dict[str, Any]) -> dict[str, dict[str, int]]:
+    raw = config.get("platform_tuning", {})
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError("platform_tuning must be an object keyed by source name.")
+    supported = {"max_posts_per_query": 1000, "max_pages_per_query": 100}
+    result: dict[str, dict[str, int]] = {}
+    for source_value, options in raw.items():
+        source = str(source_value).strip().casefold()
+        if source not in COLLECTORS:
+            raise ValueError(f"Unsupported platform_tuning source: {source or '(empty)'}.")
+        if not isinstance(options, dict):
+            raise ValueError(f"platform_tuning for {source} must be an object.")
+        unknown = sorted(set(options) - set(supported))
+        if unknown:
+            raise ValueError(f"Unsupported platform_tuning field(s) for {source}: {', '.join(unknown)}.")
+        normalized: dict[str, int] = {}
+        for key, maximum in supported.items():
+            if key not in options or options[key] in (None, ""):
+                continue
+            try:
+                value = int(str(options[key]).strip())
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{source} {key} must be a positive integer.") from exc
+            if value < 1:
+                raise ValueError(f"{source} {key} must be a positive integer.")
+            normalized[key] = min(maximum, value)
+        result[source] = normalized
+    return result
+
+
 def _translated_terms(
     terms: list[str], languages: list[str], llm: LLMConfig, cache_dir: Path,
     progress: ProgressCallback | None = None, *, max_workers: int = 8,
@@ -139,6 +171,7 @@ def run_search(
 
     max_posts = min(1000, max(1, int(config.get("max_posts_per_query", 10))))
     max_pages = min(100, max(1, int(config.get("max_pages_per_query", 1))))
+    platform_tuning = _platform_tuning(config)
     max_records = min(20_000, max(1, int(config.get("max_records", 20_000))))
     max_collection_calls = min(10_000, max(1, int(config.get("max_collection_calls", 10_000))))
     max_memory_bytes = min(512 * 1024 * 1024, max(1024 * 1024, int(config.get("max_memory_bytes", 64 * 1024 * 1024))))
@@ -278,7 +311,7 @@ def run_search(
             if len(work) > remaining_budget:
                 work = work[:remaining_budget]
             memory_request_limit = max(1, max_memory_bytes // max(1, len(work) * 128 * 1024))
-            per_request_limit = min(max_posts, max(1, remaining_budget // len(work)), memory_request_limit)
+            per_request_budget = min(max(1, remaining_budget // len(work)), memory_request_limit)
 
             futures = {}
             for source, term, retry_id in work:
@@ -302,17 +335,22 @@ def run_search(
                 if term not in used_terms:
                     used_terms.append(term)
                 request_config = dict(config)
+                source_options = platform_tuning.get(source, {})
+                source_max_posts = source_options.get("max_posts_per_query", max_posts)
+                source_max_pages = source_options.get("max_pages_per_query", max_pages)
                 request_config.update({
                     "sources": [source],
                     "post_languages": scope["post_languages"],
                     "excluded_topics": scope["excluded_topics"],
+                    "max_posts_per_query": min(source_max_posts, per_request_budget),
+                    "max_pages_per_query": source_max_pages,
                 })
                 request = CollectorRequest(
                     search_terms=[term],
                     since=scope.get("since") or None,
                     until=scope.get("until") or None,
-                    max_posts_per_query=per_request_limit,
-                    max_pages_per_query=max_pages,
+                    max_posts_per_query=min(source_max_posts, per_request_budget),
+                    max_pages_per_query=source_max_pages,
                     config=request_config,
                     secrets=secrets,
                 )
@@ -441,6 +479,7 @@ def run_search(
         "collection_memory_limit_reached": memory_limit_reached,
         "max_parallel_sources": max_parallel_sources,
         "shared_request_interval_seconds": shared_request_interval,
+        "platform_tuning": platform_tuning,
         "llm_provider": llm.provider if (translate or infer) else None,
         "llm_model": llm.model if (translate or infer) else None,
         "workspace_project_id": workspace.manifest.project_id if workspace is not None else None,

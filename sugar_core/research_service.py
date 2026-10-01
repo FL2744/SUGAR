@@ -712,6 +712,7 @@ def collect_research_plan(
                 "sources": sources,
                 "max_posts_per_query": max(1, int(config.get("max_posts_per_query") or 20)),
                 "max_pages_per_query": max(1, int(config.get("max_pages_per_query") or 1)),
+                "platform_tuning": config.get("platform_tuning") or {},
                 "output_directory": config.get("output_directory"),
                 "workspace": config.get("workspace"),
                 "since": str(config.get("since") or requirement.timeframe.start or ""),

@@ -87,6 +87,66 @@ def test_dataset_virtual_file_references_are_project_scoped(tmp_path: Path):
         _hub("dataset-browse", workspace, source_file="sugar-workspace://other-project/data/raw/records.csv")
 
 
+def test_manual_geography_annotations_are_provenanced_and_comparable(tmp_path: Path):
+    workspace = SugarWorkspace.create(tmp_path / "project", name="Geography review")
+    left = workspace.path_for("raw") / "left.csv"
+    right = workspace.path_for("raw") / "right.csv"
+    pd.DataFrame([
+        {"record_id": "a", "country": "Exampleland", "region": "Unverified", "city": "Harbor"},
+        {"record_id": "b", "country": "Exampleland", "region": "South", "city": "Lake"},
+    ]).to_csv(left, index=False)
+    pd.DataFrame([
+        {"record_id": "c", "country": "Exampleland", "region": "North", "city": "Harbor"},
+        {"record_id": "d", "country": "Sample State", "region": "South", "city": "Lake"},
+    ]).to_csv(right, index=False)
+
+    _, annotation = _hub(
+        "dataset-geography-assign", workspace, source_file=str(left), row_number=0,
+        country="Exampleland", region="North", city="Harbor", note="Verified in the source register", actor="Reviewer A",
+    )
+    assert annotation["provenance"] == "analyst_manual"
+    assert annotation["assigned_by"] == "Reviewer A"
+
+    _, preview = _hub("dataset-browse", workspace, source_file=str(left), max_rows=5)
+    assert preview["rows"][0]["_sugar_row_number"] == 0
+    assert preview["rows"][0]["analyst_region"] == "North"
+    assert preview["rows"][0]["location_provenance"] == "analyst_manual"
+
+    _, summary = _hub("dataset-geography-summary", workspace, source_file=str(left), group_by="region")
+    assert summary["groups"][0]["label"] == "North"
+
+    _, comparison = _hub(
+        "dataset-region-compare", workspace, source_file=str(left), comparison_file=str(right), group_by="region",
+    )
+    by_name = {row["label"]: row for row in comparison["groups"]}
+    assert by_name["North"]["left_records"] == 1
+    assert by_name["North"]["right_records"] == 1
+    assert by_name["South"]["share_difference"] == 0.0
+    assert "does not establish" in comparison["guardrail"]
+
+    left.write_text(left.read_text(encoding="utf-8").replace("Unverified", "West"), encoding="utf-8")
+    _, changed_summary = _hub("dataset-geography-summary", workspace, source_file=str(left), group_by="region")
+    assert "West" in {group["label"] for group in changed_summary["groups"]}
+
+
+def test_project_comments_and_reusable_research_templates(tmp_path: Path):
+    workspace = SugarWorkspace.create(tmp_path / "project", name="Reusable project")
+    _, starter = _hub("research-template-list", workspace)
+    assert len(starter["templates"]) >= 3
+    _, saved = _hub(
+        "research-template-save", workspace, name="Annual scan",
+        fields={"question": "What services changed this year?", "languages": ["en", "es"], "preferred_sources": ["x"]},
+    )
+    assert saved["template_id"] == "custom-annual-scan"
+    _, templates = _hub("research-template-list", workspace)
+    assert next(item for item in templates["templates"] if item["template_id"] == saved["template_id"])["question"] == "What services changed this year?"
+
+    _, comment = _hub("project-comment-add", workspace, body="Check the date range before collection.", actor="Analyst One")
+    _, comments = _hub("project-comment-list", workspace)
+    assert comments["comments"] == [comment]
+    assert comment["actor"] == "Analyst One"
+
+
 @pytest.mark.parametrize("export_format", ["csv", "xlsx", "jsonl", "json", "geojson"])
 def test_dataset_export_formats_and_geographic_grouping(tmp_path: Path, export_format: str):
     workspace = SugarWorkspace.create(tmp_path / "project", name="Export project")

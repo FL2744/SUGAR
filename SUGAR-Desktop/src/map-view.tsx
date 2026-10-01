@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
+import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent } from "maplibre-gl";
 import type { Institution } from "./types";
 
 const SOURCE = "sugar-institutions";
+type LayerKey = "active" | "proposed" | "closed" | "unknown";
+
+function layerKey(status?: string): LayerKey {
+  const value = (status || "unknown").toLowerCase();
+  if (["active", "operational"].includes(value)) return "active";
+  if (value === "proposed") return "proposed";
+  if (["closed", "inactive"].includes(value)) return "closed";
+  return "unknown";
+}
 
 export function institutionCoordinates(row: Institution): [number, number] | null {
   if (
@@ -17,11 +26,11 @@ export function institutionCoordinates(row: Institution): [number, number] | nul
   return [longitude, latitude];
 }
 
-function featureCollection(rows: Institution[]): GeoJSON.FeatureCollection {
+function featureCollection(rows: Institution[], override?: { id: string; coordinates: [number, number] }): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
     features: rows.flatMap((row) => {
-      const point = institutionCoordinates(row);
+      const point = override?.id === row.entity_id ? override.coordinates : institutionCoordinates(row);
       if (!point) return [];
       return [{
         type: "Feature" as const,
@@ -42,18 +51,25 @@ function featureCollection(rows: Institution[]): GeoJSON.FeatureCollection {
 export function InstitutionMap({
   rows,
   onSelect,
+  onMove,
 }: {
   rows: Institution[];
   onSelect: (id: string) => void;
+  onMove?: (id: string, latitude: number, longitude: number) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const onSelectRef = useRef(onSelect);
+  const onMoveRef = useRef(onMove);
+  const rowsRef = useRef(rows);
+  const dragging = useRef<{ id: string; moved: boolean; startX: number; startY: number } | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState("");
-  const geojson = featureCollection(rows);
+  const [visibleLayers, setVisibleLayers] = useState<Record<LayerKey, boolean>>({ active: true, proposed: true, closed: true, unknown: true });
+  const visibleRows = rows.filter((row) => visibleLayers[layerKey(row.status)]);
+  const geojson = featureCollection(visibleRows);
 
-  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+  useEffect(() => { onSelectRef.current = onSelect; onMoveRef.current = onMove; rowsRef.current = rows; }, [onSelect, onMove, rows]);
 
   useEffect(() => {
     if (!container.current || map.current) return;
@@ -157,8 +173,39 @@ export function InstitutionMap({
           const id = event.features?.[0]?.properties?.id;
           if (id) onSelectRef.current(String(id));
         });
+        mapInstance.on("mousedown", "institution-points", (event) => {
+          const id = event.features?.[0]?.properties?.id;
+          if (!id || event.originalEvent.button !== 0) return;
+          dragging.current = { id: String(id), moved: false, startX: event.point.x, startY: event.point.y };
+          mapInstance.dragPan.disable();
+          mapInstance.getCanvas().style.cursor = "grabbing";
+          event.preventDefault();
+        });
+        mapInstance.on("mousemove", (event) => {
+          const current = dragging.current;
+          if (!current) return;
+          if (Math.abs(event.point.x - current.startX) + Math.abs(event.point.y - current.startY) > 3) current.moved = true;
+          if (!current.moved) return;
+          const source = mapInstance.getSource(SOURCE) as GeoJSONSource;
+          source.setData(featureCollection(rowsRef.current, { id: current.id, coordinates: [event.lngLat.lng, event.lngLat.lat] }));
+        });
+        const finishDrag = (event?: MapMouseEvent) => {
+          const current = dragging.current;
+          if (!current) return;
+          dragging.current = null;
+          mapInstance.dragPan.enable();
+          mapInstance.getCanvas().style.cursor = "";
+          if (current.moved && event && Number.isFinite(event.lngLat.lat) && Number.isFinite(event.lngLat.lng)) {
+            onMoveRef.current?.(current.id, event.lngLat.lat, event.lngLat.lng);
+          }
+          if (!current.moved) return;
+          const source = mapInstance.getSource(SOURCE) as GeoJSONSource;
+          source.setData(featureCollection(rowsRef.current));
+        };
+        mapInstance.on("mouseup", finishDrag);
+        mapInstance.on("mouseout", () => finishDrag());
         mapInstance.on("mouseenter", "institution-points", () => { mapInstance.getCanvas().style.cursor = "pointer"; });
-        mapInstance.on("mouseleave", "institution-points", () => { mapInstance.getCanvas().style.cursor = ""; });
+        mapInstance.on("mouseleave", "institution-points", () => { if (!dragging.current) mapInstance.getCanvas().style.cursor = ""; });
         setMapReady(true);
       });
     }).catch((error: unknown) => {
@@ -184,19 +231,18 @@ export function InstitutionMap({
       [Math.min(...longitudes), Math.min(...latitudes)],
       [Math.max(...longitudes), Math.max(...latitudes)],
     ], { padding: 72, maxZoom: 5, duration: 450 });
-  }, [rows, mapReady]);
+  }, [visibleRows, mapReady]);
 
   return (
     <div className="map-frame">
       <div ref={container} className="map-canvas" />
       {mapError && <div className="map-fallback"><span className="status-dot warn" />{mapError}</div>}
-      <div className="map-legend">
-        <span><i className="legend-dot active" />Active</span>
-        <span><i className="legend-dot proposed" />Proposed</span>
-        <span><i className="legend-dot closed" />Closed</span>
-        <span><i className="legend-dot unknown" />Unverified</span>
+      <div className="map-legend" aria-label="Map layers">
+        {(["active", "proposed", "closed", "unknown"] as LayerKey[]).map((layer) => <label key={layer}><input type="checkbox" aria-label={`Map layer ${layer === "unknown" ? "Unverified" : titleCase(layer)}`} checked={visibleLayers[layer]} onChange={(event) => setVisibleLayers((current) => ({ ...current, [layer]: event.target.checked }))} /><i className={`legend-dot ${layer}`} />{layer === "unknown" ? "Unverified" : titleCase(layer)}</label>)}
       </div>
-      <div className="map-count">{geojson.features.length} mapped · {rows.length - geojson.features.length} without coordinates</div>
+      <div className="map-count">{geojson.features.length} visible · drag a point to adjust its location · {rows.length - visibleRows.length} hidden by layers</div>
     </div>
   );
 }
+
+function titleCase(value: string): string { return value.replace(/^\w/, (letter) => letter.toUpperCase()); }

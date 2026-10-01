@@ -1,14 +1,14 @@
 """Small HTTP boundary for the browser based SUGAR interface.
 
-The API is single-operator by design. It keeps every project under one configured
-workspace root and exposes only the operations already implemented by
-``sugar_bridge``. Bind to loopback for local use. A remotely reachable instance
-requires an API token and should sit behind an HTTPS reverse proxy and an
-institutional identity layer.
+The API keeps projects under one configured workspace root. The operator token
+is an administrator credential; project-scoped member tokens are issued to named
+roster members and checked against their current role on every request. Bind to
+loopback for local use. Remote use requires the administrator token and HTTPS.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import hmac
 import json
 import mimetypes
@@ -17,6 +17,7 @@ import re
 import secrets
 import subprocess
 import sys
+import threading
 import tempfile
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -35,10 +36,19 @@ VIRTUAL_SCHEMES = {"sugar-workspace", "sugar-file"}
 PATH_KEYS = {
     "workspace", "path", "source_file", "records_file", "bundle_directory",
     "output_directory", "artifact", "artifact_path", "input_file", "output_file",
-    "file_path", "csv_path", "jsonl_path", "image_path",
+    "file_path", "csv_path", "jsonl_path", "image_path", "comparison_file",
 }
 OPTIONAL_PATH_KEYS = {"output_directory", "artifact", "artifact_path", "output_file"}
 DIRECTORY_PATH_KEYS = {"workspace", "bundle_directory"}
+ROLE_LEVELS = {"viewer": 0, "reviewer": 1, "analyst": 2, "owner": 3}
+_member_token_lock = threading.Lock()
+VIEWER_ACTIONS = {
+    "dashboard", "project-history", "project-profile", "registry-list", "registry-profile",
+    "dataset-browse", "dataset-geography-summary", "monitor-list", "monitor-feed",
+    "project-comment-list", "research-template-list", "dataset-region-compare",
+}
+REVIEWER_ACTIONS = {"monitor-review", "research-triage", "dataset-export", "registry-export", "project-bundle-export"}
+OWNER_ACTIONS = {"project-profile-update", "project-create-subproject", "project-bundle-import"}
 SECRET_ENV = {
     "llm_api_key": "SUGAR_LLM_API_KEY",
     "x_bearer_token": "SUGAR_X_BEARER_TOKEN",
@@ -53,6 +63,61 @@ class ApiError(Exception):
     def __init__(self, status: int, message: str) -> None:
         super().__init__(message)
         self.status = status
+
+
+def _role_name(value: Any) -> str:
+    normalized = re.sub(r"[^a-z]+", " ", str(value or "").casefold()).strip()
+    aliases = {
+        "owner": "owner", "project owner": "owner", "lead": "owner", "lead analyst": "analyst",
+        "administrator": "owner", "admin": "owner", "analyst": "analyst", "editor": "analyst",
+        "contributor": "analyst", "reviewer": "reviewer", "review": "reviewer",
+        "viewer": "viewer", "observer": "viewer", "read only": "viewer",
+    }
+    return aliases.get(normalized, "viewer")
+
+
+def _member_token_store() -> Path:
+    return get_workspace_root() / ".sugar-member-access.json"
+
+
+def _read_member_tokens() -> dict[str, dict[str, str]]:
+    try:
+        payload = json.loads(_member_token_store().read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ApiError(500, "The SUGAR member access registry could not be read.") from exc
+    if not isinstance(payload, dict):
+        raise ApiError(500, "The SUGAR member access registry has an invalid format.")
+    return {str(key): value for key, value in payload.items() if isinstance(value, dict)}
+
+
+def _write_member_tokens(payload: dict[str, dict[str, str]]) -> None:
+    target = _member_token_store()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix=".sugar-member-access-", suffix=".tmp", dir=target.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+        try:
+            os.chmod(temporary, 0o600)
+        except OSError:
+            pass
+        os.replace(temporary, target)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def _project_member(root: Path, email: str) -> dict[str, Any] | None:
+    try:
+        payload = json.loads((root / ".sugar" / "project-profile.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    members = payload.get("members", []) if isinstance(payload, dict) else []
+    if not isinstance(members, list):
+        return None
+    return next((row for row in members if isinstance(row, dict) and str(row.get("email", "")).casefold() == email.casefold()), None)
 
 
 def _workspace_id(value: str) -> str:
@@ -181,7 +246,7 @@ class SugarApiHandler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Avoid logging request bodies, query strings, or authorization headers.
-        super().log_message("%s", fmt.split(" ", 1)[0])
+        super().log_message("SUGAR API request")
 
     def _send(self, status: int, payload: Any, content_type: str = "application/json; charset=utf-8", headers: dict[str, str] | None = None) -> None:
         body = payload if isinstance(payload, bytes) else json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -194,7 +259,7 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         if headers:
             for key, value in headers.items():
                 self.send_header(key, value)
@@ -206,13 +271,64 @@ class SugarApiHandler(BaseHTTPRequestHandler):
         if origin and self.allowed_origins and origin not in self.allowed_origins:
             self._send(403, {"error": "This browser origin is not allowed by the SUGAR API."})
             return False
-        if self.api_token:
-            supplied = self.headers.get("Authorization", "")
-            prefix = "Bearer "
-            if not supplied.startswith(prefix) or not hmac.compare_digest(supplied[len(prefix):], self.api_token):
-                self._send(401, {"error": "A valid SUGAR API token is required."})
-                return False
+        supplied = self.headers.get("Authorization", "")
+        prefix = "Bearer "
+        token = supplied[len(prefix):] if supplied.startswith(prefix) else ""
+        self.principal: dict[str, str] | None = None
+        if self.api_token and token and hmac.compare_digest(token, self.api_token):
+            self.principal = {"email": "", "role": "owner", "project_id": ""}
+        elif token:
+            digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+            member = _read_member_tokens().get(digest)
+            if member:
+                self.principal = {key: str(value) for key, value in member.items()}
+        elif not self.api_token:
+            # No token is configured only for loopback development; treat that
+            # local operator as the administrator, matching the bind policy.
+            self.principal = {"email": "", "role": "owner", "project_id": ""}
+        if self.principal is None:
+            self._send(401, {"error": "A valid SUGAR API token is required."})
+            return False
         return True
+
+    def _require_admin(self) -> bool:
+        if self.principal and self.principal.get("role") == "owner" and not self.principal.get("email"):
+            return True
+        self._send(403, {"error": "Only the SUGAR API administrator can manage project access."})
+        return False
+
+    def _require_project(self, identifier: str, minimum_role: str = "viewer") -> bool:
+        if not self.principal:
+            self._send(401, {"error": "A valid SUGAR API token is required."})
+            return False
+        if self.principal.get("role") == "owner" and not self.principal.get("email"):
+            return True
+        if self.principal.get("project_id") != identifier:
+            self._send(403, {"error": "This member token is scoped to a different project."})
+            return False
+        root = _virtual_path(f"sugar-workspace://{identifier}", workspace_id=identifier)
+        member = _project_member(root, self.principal.get("email", ""))
+        if member is None:
+            self._send(403, {"error": "This account is not listed as a member of the project."})
+            return False
+        actual_level = ROLE_LEVELS[_role_name(member.get("role"))]
+        required_level = ROLE_LEVELS[minimum_role]
+        if actual_level < required_level:
+            self._send(403, {"error": f"The project role '{_role_name(member.get('role'))}' cannot perform this operation."})
+            return False
+        return True
+
+    def _required_role(self, operation: str, config: dict[str, Any]) -> str:
+        action = str(config.get("action") or "") if operation == "workspace-hub" else ""
+        if action in OWNER_ACTIONS:
+            return "owner"
+        if action in REVIEWER_ACTIONS or operation in {"research-strategy-approve", "research-review-apply"}:
+            return "reviewer"
+        if operation in {"research-strategy-update", "research-workbook-apply"} and str(config.get("review_state") or "").casefold() in {"approved", "rejected", "needs_followup"}:
+            return "reviewer"
+        if action in VIEWER_ACTIONS or operation in {"diagnostics", "research-status"}:
+            return "viewer"
+        return "analyst"
 
     def _json_body(self, maximum: int = MAX_JSON_BYTES) -> dict[str, Any]:
         try:
@@ -245,18 +361,27 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             return
         if route.path == "/api/workspaces":
             rows = []
+            scoped_project_id = self.principal.get("project_id", "") if self.principal else ""
             for candidate in sorted(get_workspace_root().iterdir()):
                 if not candidate.is_dir() or not re.fullmatch(r"[0-9a-fA-F-]{36}", candidate.name):
+                    continue
+                if scoped_project_id and candidate.name.casefold() != scoped_project_id.casefold():
                     continue
                 manifest = _read_manifest(candidate)
                 if manifest:
                     identifier = _workspace_id(candidate.name)
+                    if not self._require_project(identifier, "viewer"):
+                        if scoped_project_id:
+                            return
+                        continue
                     rows.append({"id": identifier, "workspace": f"sugar-workspace://{identifier}", "name": manifest.get("name") or candidate.name, "description": manifest.get("description", "")})
             self._send(200, {"workspaces": rows})
             return
         match = re.fullmatch(r"/api/workspaces/([0-9a-fA-F-]+)/files/(.+)", route.path)
         if match:
             identifier = _workspace_id(match.group(1))
+            if not self._require_project(identifier, "viewer"):
+                return
             reference = f"sugar-file://{identifier}/{match.group(2)}"
             try:
                 path = _virtual_path(reference, workspace_id=identifier)
@@ -276,8 +401,14 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             if route.path == "/api/workspaces":
                 self._create_workspace()
                 return
+            access_match = re.fullmatch(r"/api/workspaces/([0-9a-fA-F-]+)/access", route.path)
+            if access_match:
+                self._issue_member_access(access_match.group(1))
+                return
             upload_match = re.fullmatch(r"/api/workspaces/([0-9a-fA-F-]+)/uploads/(.+)", route.path)
             if upload_match:
+                if not self._require_project(_workspace_id(upload_match.group(1)), "analyst"):
+                    return
                 self._upload(upload_match.group(1), upload_match.group(2))
                 return
             if route.path == "/api/run":
@@ -289,7 +420,55 @@ class SugarApiHandler(BaseHTTPRequestHandler):
         except Exception as exc:  # Keep internal paths and tracebacks out of browser responses.
             self._send(500, {"error": f"SUGAR API operation failed ({type(exc).__name__})."})
 
+    def do_DELETE(self) -> None:
+        if not self._authorized():
+            return
+        match = re.fullmatch(r"/api/workspaces/([0-9a-fA-F-]+)/access/(.+)", urlsplit(self.path).path)
+        if not match:
+            self._send(404, {"error": "API route not found."})
+            return
+        identifier = _workspace_id(match.group(1))
+        if not self._require_project(identifier, "owner"):
+            return
+        email = unquote(match.group(2)).strip().casefold()
+        with _member_token_lock:
+            tokens = _read_member_tokens()
+            updated = {key: row for key, row in tokens.items()
+                       if not (str(row.get("project_id", "")).casefold() == identifier.casefold()
+                               and str(row.get("email", "")).casefold() == email)}
+            _write_member_tokens(updated)
+        self._send(200, {"revoked": len(tokens) - len(updated), "email": email})
+
+    def _issue_member_access(self, raw_identifier: str) -> None:
+        identifier = _workspace_id(raw_identifier)
+        if not self._require_project(identifier, "owner"):
+            return
+        root = _virtual_path(f"sugar-workspace://{identifier}", workspace_id=identifier)
+        payload = self._json_body()
+        email = str(payload.get("email") or "").strip().casefold()
+        if len(email) > 254 or "@" not in email or any(ch.isspace() for ch in email):
+            raise ApiError(400, "A valid project-member email address is required.")
+        member = _project_member(root, email)
+        if member is None:
+            raise ApiError(404, "Add this person to the project roster before issuing access.")
+        role = _role_name(member.get("role"))
+        if role not in ROLE_LEVELS:
+            raise ApiError(400, "The project member role is not supported.")
+        token = "sugar_member_" + secrets.token_urlsafe(32)
+        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        with _member_token_lock:
+            tokens = _read_member_tokens()
+            tokens = {key: row for key, row in tokens.items()
+                      if not (str(row.get("project_id", "")).casefold() == identifier.casefold()
+                              and str(row.get("email", "")).casefold() == email)}
+            tokens[digest] = {"project_id": identifier, "email": email, "role": "member"}
+            _write_member_tokens(tokens)
+        self._send(201, {"token": token, "email": email, "role": role, "project_id": identifier,
+                         "message": "This token is shown once. Share it with the member through your approved secure channel."})
+
     def _create_workspace(self) -> None:
+        if not self._require_admin():
+            return
         payload = self._json_body()
         name = str(payload.get("name") or "").strip()
         if not name:
@@ -344,7 +523,15 @@ class SugarApiHandler(BaseHTTPRequestHandler):
         if not isinstance(config, dict) or not isinstance(credentials, dict):
             raise ApiError(400, "Configuration and credentials must be JSON objects.")
         identifier = _find_workspace_id(config)
+        if identifier:
+            if not self._require_project(identifier, self._required_role(operation, config)):
+                return
+        elif self.principal and self.principal.get("email"):
+            self._send(403, {"error": "Member tokens require an explicit project scope."})
+            return
         prepared = _rewrite_config(config, workspace_id=identifier)
+        if self.principal and self.principal.get("email"):
+            prepared["actor"] = self.principal["email"]
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as stream:
             json.dump(prepared, stream, ensure_ascii=False)
             config_path = Path(stream.name)

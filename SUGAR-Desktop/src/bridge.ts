@@ -3,6 +3,7 @@ import type { BackendEvent, BackendResult, SecretKey } from "./types";
 
 export type Credentials = Partial<Record<SecretKey, string>>;
 export type ApiWorkspace = { id: string; workspace: string; name: string; description?: string };
+export type ApiMemberAccess = { token: string; email: string; role: string; project_id: string; message: string };
 
 let apiBase = "";
 let apiToken = "";
@@ -77,6 +78,22 @@ export async function uploadWorkspaceFile(workspace: string, file: File): Promis
     headers: { "Content-Type": "application/octet-stream" },
     body: file,
   });
+}
+
+export async function issueMemberAccessToken(workspace: string, email: string): Promise<ApiMemberAccess> {
+  const parsed = new URL(workspace);
+  if (parsed.protocol !== "sugar-workspace:") throw new Error("Member access tokens are managed by a connected SUGAR API.");
+  return apiJson<ApiMemberAccess>(`/api/workspaces/${encodeURIComponent(parsed.hostname)}/access`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function revokeMemberAccessToken(workspace: string, email: string): Promise<{ revoked: number }> {
+  const parsed = new URL(workspace);
+  if (parsed.protocol !== "sugar-workspace:") throw new Error("Member access tokens are managed by a connected SUGAR API.");
+  return apiJson<{ revoked: number }>(`/api/workspaces/${encodeURIComponent(parsed.hostname)}/access/${encodeURIComponent(email)}`, { method: "DELETE" });
 }
 
 export async function downloadWorkspaceFile(reference: string, fileName?: string): Promise<void> {

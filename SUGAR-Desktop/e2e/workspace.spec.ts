@@ -4,8 +4,8 @@ import AxeBuilder from "@axe-core/playwright";
 const apiOrigin = "http://127.0.0.1:8765";
 const corsHeaders = {
   "access-control-allow-origin": "http://127.0.0.1:1420",
-  "access-control-allow-methods": "GET, POST, OPTIONS",
-  "access-control-allow-headers": "content-type",
+  "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+  "access-control-allow-headers": "authorization, content-type",
 };
 type ApiCall = { operation: string; config?: Record<string, unknown> };
 
@@ -25,6 +25,18 @@ async function mockApi(page: Page, calls: ApiCall[], collectionGate?: Promise<vo
       const body = request.postDataJSON() as { name: string };
       const workspace = { id: "project-1", workspace: "sugar-workspace://project-1", name: body.name };
       await route.fulfill({ status: 201, headers: corsHeaders, json: workspace });
+      return;
+    }
+    if (/\/api\/workspaces\/[^/]+\/access(?:\/.*)?$/.test(new URL(request.url()).pathname)) {
+      if (request.method() === "POST") {
+        calls.push({ operation: "member-access-issue" });
+        await route.fulfill({ status: 201, headers: corsHeaders, json: { token: "sugar_member_playwright_once", email: "member@example.test", role: "reviewer", project_id: "project-1", message: "Shown once" } });
+      } else if (request.method() === "DELETE") {
+        calls.push({ operation: "member-access-revoke" });
+        await route.fulfill({ status: 200, headers: corsHeaders, json: { revoked: 1 } });
+      } else {
+        await route.fulfill({ status: 405, headers: corsHeaders, json: { error: "Method not allowed." } });
+      }
       return;
     }
     if (!request.url().endsWith("/api/run") || request.method() !== "POST") {
@@ -62,10 +74,30 @@ async function mockApi(page: Page, calls: ApiCall[], collectionGate?: Promise<vo
           ? []
           : action === "project-profile-update"
             ? { notes: body.config?.notes || "", members: body.config?.members || [], access_control: false }
+            : action === "project-comment-list"
+              ? { comments: calls.filter((call) => call.config?.action === "project-comment-add").map((call, index) => ({ comment_id: `comment-${index}`, actor: "Analyst", body: call.config?.body, created_at: "2026-01-01T00:00:00Z" })) }
+              : action === "project-comment-add"
+                ? { comment_id: "comment-created", actor: "Analyst", body: body.config?.body, created_at: "2026-01-01T00:00:00Z" }
+                : action === "research-template-list"
+                  ? { templates: [{ template_id: "public-service-access", name: "Public service access", question: "Where are public services offered?", languages: ["auto"], preferred_sources: ["x"] }] }
+                  : action === "research-template-save"
+                    ? { template_id: "custom-playwright", name: body.config?.name, question: (body.config?.fields as Record<string, unknown>)?.question }
+                    : action === "monitor-list"
+                      ? [{ monitor_id: "monitor-1", name: "Weekly listening", status: calls.some((call) => call.config?.action === "monitor-status" && call.config?.status === "paused") ? "paused" : "active", cadence_minutes: 1440, next_due_at: "2026-01-02T00:00:00Z", terms: ["public education"], sources: ["x"] }]
+                      : action === "monitor-save"
+                        ? { monitor_id: "monitor-1", name: body.config?.name, status: "active", cadence_minutes: body.config?.cadence_minutes, next_due_at: "2026-01-02T00:00:00Z", terms: body.config?.terms, sources: body.config?.sources }
+                        : action === "monitor-status"
+                          ? { monitor_id: body.config?.monitor_id, name: "Weekly listening", status: body.config?.status, cadence_minutes: 1440 }
+                          : action === "monitor-run-due"
+                            ? { due_count: 1, run_count: 1, runs: [{ status: "completed" }] }
             : action === "dataset-browse"
               ? { columns: ["platform", "original_text", "country", "region", "city", "latitude", "longitude"], row_count: 1, matching_rows: 1, rows: [{ platform: "x", original_text: "Public program evidence", country: "Exampleland", region: "North", city: "Harbor", latitude: 12.3, longitude: 45.6 }] }
-              : action === "dataset-geography-summary"
+                : action === "dataset-geography-summary"
                 ? { group_by: "hierarchy", total_rows: 1, located_rows: 1, unlocated_rows: 0, groups: [{ label: "Exampleland / North / Harbor", records: 1, share: 1 }], guardrail: "Geographic groups do not establish influence, coordination, or causation." }
+                : action === "dataset-geography-assign"
+                  ? { row_number: body.config?.row_number, provenance: "analyst_manual", region: body.config?.region }
+                  : action === "dataset-region-compare"
+                    ? { group_by: "hierarchy", left_total: 1, right_total: 1, groups: [{ label: "Exampleland / North / Harbor", left_records: 1, right_records: 1, left_share: 1, right_share: 1, share_difference: 0 }], guardrail: "Descriptive comparison; no causal inference." }
                 : undefined;
       if (action === "dataset-export") {
         event = { event: "complete", outputs: [`sugar-workspace://project-1/outputs/exports/example.${String(body.config?.format || "csv")}`] };
@@ -135,12 +167,12 @@ test("browser creates a project and saves its research requirement", async ({ pa
   await page.getByRole("button", { name: "＋ Add member" }).click();
   await page.getByLabel("Member 1 name").fill("Analyst One");
   await page.getByLabel("Member 1 email").fill("analyst@example.test");
-  await page.getByLabel("Member 1 role").fill("Lead analyst");
+  await page.getByLabel("Member 1 role").selectOption("analyst");
   await page.getByRole("button", { name: "Save project profile" }).click();
   await expect.poll(() => calls.some((call) => call.config?.action === "project-profile-update")).toBe(true);
   expect(calls.find((call) => call.config?.action === "project-profile-update")?.config).toMatchObject({
     notes: "Coordinate the review and preserve source context.",
-    members: [{ name: "Analyst One", email: "analyst@example.test", role: "Lead analyst" }],
+    members: [{ name: "Analyst One", email: "analyst@example.test", role: "analyst" }],
   });
   await page.getByLabel("Collection sources").fill("x, bluesky");
   await page.getByLabel("Excluded topics").fill("unrelated tourism");
@@ -249,9 +281,40 @@ test("AI interpretation, translation, geographic summary, coded findings, and ex
   await picker.getByRole("button", { name: /Create project/ }).click();
 
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Research project" }).click();
+  await page.getByRole("textbox", { name: "Project comment" }).fill("Check the scope before the scheduled run.");
+  await page.getByRole("button", { name: "Add comment" }).click();
+  await expect(page.getByRole("log", { name: "Project comments" })).toContainText("Check the scope before the scheduled run.");
+
+  await page.getByRole("button", { name: "Add member" }).click();
+  await page.getByLabel("Member 1 name").fill("Project reviewer");
+  await page.getByLabel("Member 1 email").fill("member@example.test");
+  await page.getByLabel("Member 1 role").selectOption("reviewer");
+  await page.getByRole("button", { name: "Save project profile" }).click();
+  await page.getByRole("button", { name: "Issue access" }).click();
+  await expect(page.getByLabel("One-time member access token")).toHaveValue("sugar_member_playwright_once");
+  await page.getByRole("button", { name: "Revoke access" }).click();
+  await expect(page.getByLabel("One-time member access token")).toHaveCount(0);
+  expect(calls.some((call) => call.operation === "member-access-issue")).toBe(true);
+  expect(calls.some((call) => call.operation === "member-access-revoke")).toBe(true);
+
+  await page.getByLabel("Listening post name").fill("Weekly listening");
+  await page.getByLabel("Listening post search terms").fill("public education programs");
+  await page.getByRole("button", { name: "Save listening post" }).click();
+  await expect(page.locator(".monitor-list")).toContainText("Weekly listening");
+  await page.getByRole("button", { name: "Run due checks now" }).click();
+  expect(calls.some((call) => call.config?.action === "monitor-run-due")).toBe(true);
+  await page.getByRole("button", { name: "Pause" }).click();
+  expect(calls.some((call) => call.config?.action === "monitor-status" && call.config?.status === "paused")).toBe(true);
+
+  await page.getByRole("button", { name: "Load templates" }).click();
+  await page.getByLabel("Research requirement template").selectOption("public-service-access");
+  await page.getByRole("button", { name: "Use template" }).click();
   await page.getByLabel(/Research question/).fill("¿Cómo participan los estudiantes en programas públicos de idiomas en Ciudad Ejemplo?");
   await page.getByLabel("Collection sources").fill("x");
   await page.getByLabel("Translate collected posts").check();
+  await page.getByLabel("New research template name").fill("Spanish education scan");
+  await page.getByRole("button", { name: "Save template" }).click();
+  expect(calls.some((call) => call.config?.action === "research-template-save")).toBe(true);
   await page.getByRole("button", { name: /Save research requirement/ }).click();
   await expect.poll(() => calls.some((call) => call.operation === "research-requirement")).toBe(true);
 
@@ -264,13 +327,24 @@ test("AI interpretation, translation, geographic summary, coded findings, and ex
   await expect(page.getByText("AI interpretation · approved")).toBeVisible();
   await page.getByRole("button", { name: "Build research plan" }).click();
   await expect.poll(() => calls.some((call) => call.operation === "research-plan")).toBe(true);
+  await page.getByText("Per-platform collection limits").click();
+  await page.getByLabel("X maximum posts per query").fill("3");
   await page.getByRole("button", { name: /Run plan collection/ }).click();
   await expect.poll(() => calls.some((call) => call.operation === "research-collect")).toBe(true);
   expect(calls.find((call) => call.operation === "research-collect")?.config?.translate_posts).toBe(true);
+  expect(calls.find((call) => call.operation === "research-collect")?.config?.platform_tuning).toEqual({ x: { max_posts_per_query: 3 } });
 
   await page.getByRole("button", { name: "Inspect records" }).click();
   await page.getByRole("button", { name: "Summarize geography" }).click();
   await expect(page.getByRole("region", { name: "Geographic summary" })).toContainText("Exampleland / North / Harbor");
+  await page.getByLabel("Assigned region").fill("Central");
+  await page.getByLabel("Geography assignment note").fill("Confirmed against the source listing");
+  await page.getByRole("button", { name: "Save analyst assignment" }).click();
+  await expect.poll(() => calls.some((call) => call.config?.action === "dataset-geography-assign" && call.config?.region === "Central")).toBe(true);
+  await page.getByLabel("Comparison dataset path").fill("sugar-file://project-1/data/raw/seed.jsonl");
+  await page.getByRole("button", { name: "Compare regions" }).click();
+  await expect.poll(() => calls.some((call) => call.config?.action === "dataset-region-compare")).toBe(true);
+  await expect(page.getByRole("columnheader", { name: "Baseline" })).toBeVisible();
   await page.getByLabel("Evidence export format").selectOption("geojson");
   await page.getByRole("button", { name: "Export data" }).click();
   await expect.poll(() => calls.some((call) => call.config?.action === "dataset-export" && call.config?.format === "geojson")).toBe(true);

@@ -64,6 +64,42 @@ def test_deterministic_compiler_extracts_question_structure_without_ai():
             "participent",
             "Paris",
         ),
+        (
+            "Como os centros alcançam estudantes universitários em Brasília?",
+            "mechanism_assessment",
+            "alcançam",
+            "Brasília",
+        ),
+        (
+            "Wie erreichen Hochschulen Studierende in Berlin?",
+            "mechanism_assessment",
+            "erreichen",
+            "Berlin",
+        ),
+        (
+            "Dove partecipano gli studenti a Roma?",
+            "geographic_mapping",
+            "partecipano",
+            "Roma",
+        ),
+        (
+            "Где зарубежные центры участвуют в Москве?",
+            "geographic_mapping",
+            "участвуют",
+            "Москве",
+        ),
+        (
+            "أين تشارك المراكز التعليمية في كينيا؟",
+            "geographic_mapping",
+            "تشارك",
+            "كينيا",
+        ),
+        (
+            "如何在肯尼亚参与学生项目？",
+            "mechanism_assessment",
+            "参与",
+            "肯尼亚",
+        ),
     ],
 )
 def test_deterministic_compiler_extracts_common_non_english_questions(
@@ -74,6 +110,10 @@ def test_deterministic_compiler_extracts_common_non_english_questions(
     concepts = {(item.kind, item.value) for item in strategy.concepts if item.origin == "explicit"}
     assert ("activity", activity) in concepts
     assert ("geography", geography) in concepts
+    for concept in strategy.concepts:
+        if concept.origin == "explicit":
+            assert concept.source_span is not None
+            assert question[concept.source_span.start:concept.source_span.end] == concept.source_span.text
 
 
 def test_explicit_concept_rejects_fake_source_span():

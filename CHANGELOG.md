@@ -2,6 +2,23 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
+## 1.6.0 — 2026-10-01
+
+### Added
+
+- added API-enforced project roles with one-time project-scoped member tokens, owner-managed issuance/revocation, append-only project comments, and reusable research requirement templates;
+- added analyst-attributed dataset geography assignments, change detection for stale annotations, side-by-side region comparisons, and map layer toggles with draggable coordinate review;
+- connected saved listening posts to the desktop/browser workspace, including schedule editing, pause/resume, and run-due checks; added bounded per-platform collection tuning;
+- expanded deterministic question, activity, and place extraction across Portuguese, German, Italian, Russian, Arabic, and Chinese while retaining exact source spans for explicit concepts;
+- added browser accessibility/readability coverage to CI and raised the package release version.
+
+### Quality
+
+- verified the packaged frontend build, all six headless Chromium workflows, WCAG 2.2 A/AA checks, and focused backend/API/workspace tests;
+- verified the full Python suite, Ruff, a Windows MSI and bundled sidecar, and packaged sidecar access to the OS credential vault;
+- used the vault-saved credentials for OpenAI model discovery, strict structured interpretation with exact source spans, query/text translation, and an X search that returned one record;
+- exercised Bluesky, Bilibili, Mastodon, and Weibo through the real collection pipeline; Bilibili completed with zero results while the other three reported unavailable access for this environment.
+
 ## 1.5.0 — 2026-09-30
 
 ### Added
