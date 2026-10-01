@@ -51,7 +51,7 @@ def test_registry_never_persists_secrets_in_profile_file(tmp_path):
     store = CredentialStore(tmp_path, backend="file")
     registry = ProviderRegistry(tmp_path, store)
     p = registry.upsert(ProviderProfile(id="main", type="openai", model="gpt-x"), secret=KEY, make_default=True)
-    text = (tmp_path / "providers.json").read_text()
+    text = (tmp_path / "providers.json").read_text(encoding="utf-8")
     assert KEY not in text and "provider:main" in text
     assert registry.secret_for(p) == KEY
     public = p.public_dict(store)
@@ -98,7 +98,8 @@ def test_unreachable_endpoint():
     p = ProviderProfile(id="x", type="openai_compatible", endpoint="http://127.0.0.1:9/v1", model="m")
     p.advanced["timeout_seconds"] = 2
     report = create_provider(p, KEY).test_connection()
-    assert report.error_stage == "reachable" and "Could not reach" in report.message
+    # Windows leaves a closed loopback port to time out instead of refusing, so either wording is an unreachable endpoint.
+    assert report.error_stage == "reachable" and ("Could not reach" in report.message or "did not respond" in report.message)
 
 
 def test_server_without_model_listing_falls_back_to_inference_test():

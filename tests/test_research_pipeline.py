@@ -141,7 +141,7 @@ def test_run_record_is_a_reproducible_snapshot_and_contains_no_secrets(tmp_path)
     assert saved.generated_searches and saved.requirement and saved.status == "completed"
     assert saved.metrics["timings"]["categories"]["search"]["count"] >= 1
     assert saved.provider_ref == {} or "api_key" not in saved.provider_ref
-    blob = (project.run_dir(p.run.run_id) / "run.json").read_text() + (project.run_dir(p.run.run_id) / "events.jsonl").read_text()
+    blob = (project.run_dir(p.run.run_id) / "run.json").read_text(encoding="utf-8") + (project.run_dir(p.run.run_id) / "events.jsonl").read_text(encoding="utf-8")
     assert secret not in blob
     assert saved.stage_states["results"]["state"] == "done"
 

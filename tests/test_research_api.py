@@ -86,7 +86,7 @@ def test_provider_lifecycle_never_returns_or_stores_secrets_in_responses(api, tm
         assert profile["has_credential"] is True and profile["credential_ref"] == "provider:main" and profile["credential_label"] == "Endpoint API key"
         listing = session.get(f"{base}/api/providers").json()
         assert listing["default_profile_id"] == "main" and KEY not in json.dumps(listing) and {t["id"] for t in listing["types"]} >= {"openai", "local"}
-        assert KEY not in (tmp_path / "home" / "providers.json").read_text()
+        assert KEY not in (tmp_path / "home" / "providers.json").read_text(encoding="utf-8")
         ok = session.post(f"{base}/api/providers/main/test").json()
         assert ok["report"]["ok"] and ok["profile"]["status"]["state"] == "ok"
         # draft test with a wrong key: nothing saved, provider-specific error returned
