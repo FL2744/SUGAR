@@ -486,3 +486,16 @@ test("command palette jumps between pages from the keyboard", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
   await expect(palette).toHaveCount(0);
 });
+
+test("institutions, map and monitoring pages open cleanly and are accessible", async ({ page }) => {
+  await mockApi(page, []);
+  await useAdvancedMode(page);
+  await page.goto("/");
+  await createProject(page, "Institutions Project");
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  for (const [label, heading] of [["Institutions", /Institutions and what supports them/], ["Map", /Where institutions are/], ["Monitoring", /What changed since last time/]] as const) {
+    await navigation.getByRole("button", { name: label, exact: true }).click();
+    await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
+    await expectAccessible(page, label);
+  }
+});
