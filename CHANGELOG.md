@@ -58,6 +58,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Collection and workflow
 
+- add baseline sync: published institution directories described by run-time baseline packs are fetched, snapshotted (raw + normalized), and bulk-imported with stable IDs and provenance; study-specific names live in packs, not code;
 - retry anonymous Bluesky searches against Bluesky's public AppView when its cached public hostname returns 403; preserve collected first-page records when a later page fails;
 - support explicit public Mastodon `#hashtag` timelines without a search token, with separate provenance from authorized keyword search;
 - restore live collection outputs in the desktop evidence panel, and allow known public Bilibili videos, Weibo posts, and WeChat articles to enter the evidence workflow by URL;
@@ -66,6 +67,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Live verification
 
+- fetched and imported live official directories into a clean workspace through baseline packs, retaining provider coordinates where published;
 - collected and saved real Bluesky and Mastodon posts, completed a research plan using both, and triaged live posts into insight artifacts;
 - ingested and triaged real Bilibili video and Weibo post URLs; generated analysis and maps from live, location-enriched X and Mastodon records;
 - Weibo and Bilibili keyword search still face provider login/access challenges in this environment. WeChat article retrieval encountered a TLS hostname mismatch and remains unavailable here; SUGAR does not disable certificate verification.

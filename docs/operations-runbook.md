@@ -43,3 +43,20 @@ robots.txt refusal, unreachable site). A rate limit is retried automatically; a 
 
 ## Updating
 Update SUGAR, then open a project and run one pass of each monitor. Registry, review and digest files are append-only and forward compatible.
+
+## Baseline packs
+
+The program ships the sync *engine* only. Which directories to pull, and how their fields and status wording map to registry
+fields, are described in a **baseline pack**: a JSON object `{"sources": [spec, ...]}` kept outside the repository.
+
+Where packs are found (first match per source key wins): the project's `references/baseline_packs/`, the path in
+`SUGAR_BASELINE_PACKS`, then `<SUGAR_HOME>/baselines/`. `sugar-project sync-baselines <workspace> --pack pack.json` also takes
+a file directly, and the Institutions page's **Sync official baselines** button uses the installed packs.
+
+A spec has: `key`, `network`, `role` (`subject` or `reference`), `endpoint` (https), optional `landing_url`, `params`,
+`rows_path`, `id_field`, `id_prefix`, a `fields` map from registry columns to source fields, optional `exclude` rules, a
+`status` rule (`field`, `map`, `default`; unmapped wording stays `unknown`), `detail_url` template, `description` parts,
+`coverage_limits` and `license_notes`.
+
+Each sync stores the raw response, a normalized CSV and a manifest under `references/official_baselines/snapshots/<time>/`,
+and imports records with stable IDs, so repeating a sync updates rather than duplicates. Only public https addresses are read.

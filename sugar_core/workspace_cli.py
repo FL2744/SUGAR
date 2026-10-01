@@ -124,6 +124,12 @@ def build_parser() -> argparse.ArgumentParser:
     registry_export.add_argument("output")
     registry_export.add_argument("--format", default="")
 
+    baseline_sync = sub.add_parser("sync-baselines", help="Fetch and import published institution directories described by a baseline pack.")
+    baseline_sync.add_argument("workspace")
+    baseline_sync.add_argument("--pack", action="append", default=[], help="A baseline pack JSON file (also found in the project, SUGAR_BASELINE_PACKS and SUGAR_HOME).")
+    baseline_sync.add_argument("--source", action="append", default=[], help="A source key from the pack; default is every source.")
+    baseline_sync.add_argument("--timeout", type=float, default=30.0)
+
     template = sub.add_parser("reference-template", help="Create a blank source-backed institution/service registry schema.")
     template.add_argument("workspace")
     template.add_argument("template", choices=("american_spaces", "educationusa", "language_education_centers", "technical_training_workshops", "custom"))
@@ -315,6 +321,13 @@ def main(argv=None) -> int:
     if args.command == "registry-export":
         from .reference_registry import export_registry
         print(export_registry(SugarWorkspace.open(args.workspace), args.output, format=args.format or None))
+        return 0
+
+    if args.command == "sync-baselines":
+        from .baseline_sources import load_specs, sync_baselines
+        workspace = SugarWorkspace.open(args.workspace)
+        payload = sync_baselines(workspace, load_specs(workspace, args.pack), args.source or None, timeout=args.timeout)
+        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
 
     if args.command == "reference-template":
