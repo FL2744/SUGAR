@@ -34,23 +34,28 @@ const OPERATIONS = [
   { id: "rerun", label: "Rerun", detail: "Execute the previous plan again exactly as it was recorded, including edits." },
 ] as const;
 
-/** Feed addresses for news, ministry, embassy and institution sites. Saved per project; used on the next run. */
-function FeedsCard({ projectId, saved, onSaved, onError }: { projectId: string; saved: string[]; onSaved: () => void; onError: (m: string) => void }) {
-  const [text, setText] = useState(saved.join("\n"));
+/** Sites and feeds you name: institution websites, ministry and embassy pages, news feeds. Saved per project; used on the next run. */
+function FeedsCard({ projectId, saved, savedSites, onSaved, onError }: { projectId: string; saved: string[]; savedSites: string[]; onSaved: () => void; onError: (m: string) => void }) {
+  const [feeds, setFeeds] = useState(saved.join("\n"));
+  const [sites, setSites] = useState(savedSites.join("\n"));
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  useEffect(() => { setText(saved.join("\n")); }, [saved]);
+  useEffect(() => { setFeeds(saved.join("\n")); }, [saved]);
+  useEffect(() => { setSites(savedSites.join("\n")); }, [savedSites]);
   const save = async () => {
     setBusy(true); setDone(false);
-    try { await research.saveSettings(projectId, { rss_feeds: text.split(/\s+/).filter(Boolean) }); setDone(true); onSaved(); }
+    try { await research.saveSettings(projectId, { rss_feeds: feeds.split(/\s+/).filter(Boolean), web_seeds: sites.split(/\s+/).filter(Boolean) }); setDone(true); onSaved(); }
     catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(false); }
   };
+  const count = saved.length + savedSites.length;
   return (
-    <Collapsible title="News & institution feeds (optional)" hint={saved.length ? `${saved.length} feed${saved.length === 1 ? "" : "s"} included in runs` : "Add RSS/Atom addresses of sites you want searched"}>
-      <label className="field-block"><span>Feed addresses, one per line</span>
-        <textarea rows={4} value={text} onChange={(event) => { setText(event.target.value); setDone(false); }} placeholder="https://example.org/news/feed.xml" spellCheck={false} /></label>
-      <p className="footnote">Entries whose title or summary mention your search are collected. Only http(s) addresses are used. Wikipedia, news coverage (GDELT) and scholarly works (OpenAlex) are searched automatically and need no setup.</p>
-      <div className="preview-actions"><button type="button" className="button button-secondary" onClick={() => void save()} disabled={busy}>{busy ? <><Spinner /> Saving…</> : "Save feeds"}</button>{done && <span className="muted" role="status">Saved — used on the next run.</span>}</div>
+    <Collapsible title="Your own sources (optional)" hint={count ? `${savedSites.length} website${savedSites.length === 1 ? "" : "s"}, ${saved.length} feed${saved.length === 1 ? "" : "s"} included in runs` : "Add institution websites and news feeds to read"}>
+      <label className="field-block"><span>Websites to read, one per line</span>
+        <textarea rows={3} value={sites} onChange={(event) => { setSites(event.target.value); setDone(false); }} placeholder="https://example.org/" spellCheck={false} /></label>
+      <label className="field-block"><span>News and institution feeds (RSS/Atom), one per line</span>
+        <textarea rows={3} value={feeds} onChange={(event) => { setFeeds(event.target.value); setDone(false); }} placeholder="https://example.org/news/feed.xml" spellCheck={false} /></label>
+      <p className="footnote">Pages and feed entries that mention your search are collected, along with the news and event pages a site links to. SUGAR follows each site's robots.txt, reads one page per second, and only public web addresses. Wikipedia, news coverage (GDELT) and scholarly works (OpenAlex) are searched automatically.</p>
+      <div className="preview-actions"><button type="button" className="button button-secondary" onClick={() => void save()} disabled={busy}>{busy ? <><Spinner /> Saving…</> : "Save sources"}</button>{done && <span className="muted" role="status">Saved — used on the next run.</span>}</div>
     </Collapsible>
   );
 }
@@ -321,7 +326,7 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
           <ManualEntry initial={interpretation.request} platforms={platforms} onSubmit={(fields) => void submitManual(fields)} busy={busy === "manual"} />
         </>)}
 
-      {projectId && <FeedsCard projectId={projectId} saved={overview?.settings?.rss_feeds || []} onSaved={() => void onOverview()} onError={onError} />}
+      {projectId && <FeedsCard projectId={projectId} saved={overview?.settings?.rss_feeds || []} savedSites={overview?.settings?.web_seeds || []} onSaved={() => void onOverview()} onError={onError} />}
 
       {plan && <PlanPreview summary={summary} interpretation={interpretation} plan={plan} advanced={advanced} running={busy === "run"} canRun onRun={() => void runNow()}
         onEdit={() => setEditing("basic")} onAdvanced={() => setEditing("advanced")} onOpenSettings={onOpenSettings} />}

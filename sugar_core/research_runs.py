@@ -267,13 +267,14 @@ class ResearchProject:
 
     # -- settings, members, notes ----------------------------------------------------------
     def update_settings(self, changes: dict[str, Any], *, actor: str = "analyst") -> dict[str, Any]:
-        allowed = {"enabled_sources", "provider_profile_id", "debug", "notes_visible", "rss_feeds"}
+        allowed = {"enabled_sources", "provider_profile_id", "debug", "notes_visible", "rss_feeds", "web_seeds"}
         meta = self.meta()
         settings = dict(meta.get("settings") or {})
         applied = {k: v for k, v in changes.items() if k in allowed}
-        if "rss_feeds" in applied:      # feed addresses: http(s) only, de-duplicated, bounded
-            raw = applied["rss_feeds"] if isinstance(applied["rss_feeds"], list) else str(applied["rss_feeds"] or "").split()
-            applied["rss_feeds"] = list(dict.fromkeys(f.strip() for f in raw if isinstance(f, str) and f.strip().lower().startswith(("http://", "https://"))))[:50]
+        for key in ("rss_feeds", "web_seeds"):      # addresses: http(s) only, de-duplicated, bounded
+            if key in applied:
+                raw = applied[key] if isinstance(applied[key], list) else str(applied[key] or "").split()
+                applied[key] = list(dict.fromkeys(f.strip() for f in raw if isinstance(f, str) and f.strip().lower().startswith(("http://", "https://"))))[:50]
         settings.update(applied)
         meta["settings"] = settings
         self._save_meta(meta)

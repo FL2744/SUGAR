@@ -456,3 +456,5 @@ kbd { padding: 0 .4rem; border: 1px solid var(--wb-line2); border-radius: .3rem;
 .institution-drawer .note-add input, .institution-drawer .note-add select { flex: 1 1 12rem; }
 .institutions-page-new .project-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1.6fr) minmax(0, 1fr); }
 @container page (max-width: 52rem) { .institutions-page-new .project-row { grid-template-columns: 1fr; } .institutions-page-new .project-head { display: none; } }
+.history-card { display: grid; gap: .2rem; padding: .6rem .7rem; margin: .4rem 0; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); overflow-wrap: anywhere; }
+.history-card ul { margin: .2rem 0; padding-left: 1.1rem; }

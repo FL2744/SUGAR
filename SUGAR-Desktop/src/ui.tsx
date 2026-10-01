@@ -41,7 +41,7 @@ export const LANGUAGE_NAMES: Record<string, string> = {
 };
 export const languageName = (code: string) => LANGUAGE_NAMES[code] || code.toUpperCase();
 
-export const PLATFORM_LABELS: Record<string, string> = { x: "X", bluesky: "Bluesky", mastodon: "Mastodon", bilibili: "Bilibili", weibo: "Weibo", wechat: "WeChat", wikipedia: "Wikipedia", gdelt: "News (GDELT)", openalex: "Scholarly (OpenAlex)", rss: "News & institution feeds" };
+export const PLATFORM_LABELS: Record<string, string> = { x: "X", bluesky: "Bluesky", mastodon: "Mastodon", bilibili: "Bilibili", weibo: "Weibo", wechat: "WeChat", wikipedia: "Wikipedia", gdelt: "News (GDELT)", openalex: "Scholarly (OpenAlex)", rss: "News & institution feeds", web: "Websites" };
 export const platformLabel = (id: string) => PLATFORM_LABELS[id] || titleCase(id);
 
 export function Pill({ tone = "neutral", children, title }: { tone?: "neutral" | "ok" | "warn" | "error" | "info" | "busy"; children: ReactNode; title?: string }) {

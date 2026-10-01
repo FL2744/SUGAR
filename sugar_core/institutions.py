@@ -447,3 +447,30 @@ def geocode_missing(project: Any, *, actor: str = "analyst", limit: int = 25, ge
                       actor=actor, reason=f"Placed at {precision} level from the recorded location", review_state="unreviewed")
         placed.append(entity["entity_id"])
     return {"placed": placed, "failed": failed}
+
+
+# ------------------------------------------------------------------------------------------------ page history
+def page_history(project: Any, entity_id: str, *, history_fn: Callable[..., dict] | None = None, limit: int = 5) -> dict[str, Any]:
+    """Internet Archive history of the pages this institution is known by (its links and the pages cited for it).
+
+    A page that stops responding is a lead worth checking (a closure, rename or move), not proof of one."""
+    from .web_sources import wayback_history
+    history_fn = history_fn or wayback_history
+    detail = institution_detail(project, entity_id)
+    urls: list[str] = []
+    for field in ("public_links", "source_url"):
+        for claim in detail["fields"].get(field, {}).get("claims", []):
+            for value in (claim["value"] if isinstance(claim["value"], list) else [claim["value"]]):
+                if isinstance(value, str) and value.startswith(("http://", "https://")):
+                    urls.append(value)
+    for ref in detail["evidence"]:
+        if ref.get("kind") == "analyst_cited" and ref.get("source_url"):
+            urls.append(str(ref["source_url"]))
+    pages, errors = [], []
+    for url in list(dict.fromkeys(urls))[:limit]:
+        try:
+            pages.append(history_fn(url))
+        except Exception as exc:        # the archive being slow or down must not break the page
+            errors.append({"url": url, "reason": str(exc)[:200]})
+    return {"entity_id": entity_id, "pages": pages, "errors": errors, "checked": len(pages) + len(errors),
+            "note": "Archive captures are leads to check. A missing capture does not by itself show that an institution closed."}

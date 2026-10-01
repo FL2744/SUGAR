@@ -153,3 +153,18 @@ def test_an_analyst_can_cite_an_official_page_directly(tmp_path):
         inst.promote(p, {"name": "Bad"}, [], actor="ana", source_urls=[{"url": "file:///etc/passwd"}])
     with pytest.raises(ValueError, match="at least one"):
         inst.promote(p, {"name": "Nothing"}, [], actor="ana")
+
+
+def test_page_history_checks_the_pages_an_institution_is_known_by(tmp_path):
+    p = project(tmp_path)
+    detail = inst.promote(p, {"name": "Valley Library", "public_links": ["https://library.example.org/"]}, [], actor="a",
+                          source_urls=[{"url": "https://news.example/story", "note": "cited"}])
+    seen = []
+
+    def fake(url):
+        seen.append(url)
+        if "news" in url:
+            raise RuntimeError("archive busy")
+        return {"url": url, "signals": ["The last good capture is from 2024-01-01; 2 later capture(s) returned 404."], "snapshots": [], "total": 3}
+    result = inst.page_history(p, detail["entity_id"], history_fn=fake)
+    assert sorted(seen) == ["https://library.example.org/", "https://news.example/story"] and len(result["pages"]) == 1 and result["errors"][0]["reason"] == "archive busy"

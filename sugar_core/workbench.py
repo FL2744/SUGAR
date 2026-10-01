@@ -35,7 +35,7 @@ from .research_runs import TERMINAL_STATUSES, ResearchProject
 from .workspace import SugarWorkspace
 
 PLATFORM_LABELS = {"x": "X (Twitter)", "bluesky": "Bluesky", "mastodon": "Mastodon", "bilibili": "Bilibili", "weibo": "Weibo", "wechat": "WeChat",
-                   "wikipedia": "Wikipedia", "gdelt": "News (GDELT)", "openalex": "Scholarly (OpenAlex)", "rss": "News & institution feeds"}
+                   "wikipedia": "Wikipedia", "gdelt": "News (GDELT)", "openalex": "Scholarly (OpenAlex)", "rss": "News & institution feeds", "web": "Websites"}
 PLATFORM_SECRET_HELP = {
     "x": [("x_bearer_token", "X bearer token", True)],
     "bluesky": [("bluesky_identifier", "Bluesky identifier (optional)", False), ("bluesky_app_password", "Bluesky app password (optional)", False)],
@@ -263,7 +263,8 @@ class ResearchWorkbench:
         settings = project.meta().get("settings") or {}
         pipeline = ResearchPipeline(project, run, plan, secrets=self.platform_secrets(secret_overrides), provider=provider, registry=self.registry,
                                     enabled_sources=settings.get("enabled_sources") or None, known_items=known, source_items=source_items,
-                                    extra_config={"rss_feeds": [f for f in (settings.get("rss_feeds") or []) if isinstance(f, str)]},
+                                    extra_config={"rss_feeds": [f for f in (settings.get("rss_feeds") or []) if isinstance(f, str)],
+                                                  "web_seeds": [f for f in (settings.get("web_seeds") or []) if isinstance(f, str)]},
                                     **({"sleeper": self.sleeper} if self.sleeper else {}))
         with self._lock:
             self._live[(project.project_id, run.run_id)] = pipeline

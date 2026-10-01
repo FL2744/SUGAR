@@ -57,6 +57,7 @@ export const research = {
     apiPost<{ institution: InstitutionDetail }>(`${ws(id)}/research/institutions/${encodeURIComponent(keepId)}/merge`, { drop_id: dropId, reason, author }).then((r) => r.institution),
   institutionCandidates: (id: string, runId: string, mode: "auto" | "deterministic") =>
     apiPost<{ candidates: InstitutionCandidate[]; warnings: string[]; scanned: number; model_used: boolean }>(`${ws(id)}/research/institutions/candidates`, { run_id: runId, mode }),
+  institutionHistory: (id: string, entityId: string) => apiPost<{ pages: Array<{ url: string; signals: string[]; total: number; first_seen: string; last_ok: string; snapshots: Array<{ captured_at: string; status: string; archive_url: string }> }>; errors: Array<{ url: string; reason: string }>; note: string }>(`${ws(id)}/research/institutions/${encodeURIComponent(entityId)}/history`, {}),
   geocodeInstitutions: (id: string) => apiPost<{ placed: string[]; failed: Array<{ entity_id: string; reason: string }> }>(`${ws(id)}/research/institutions/geocode`, {}),
   results: (id: string, runId: string, params: Record<string, string | number | boolean | undefined> = {}) => api<ResultsPayload>(`${ws(id)}/runs/${runId}/results${query(params)}`),
   item: (id: string, runId: string, itemId: string) => api<{ item: ResultItem }>(`${ws(id)}/runs/${runId}/items/${itemId}`).then((r) => r.item),

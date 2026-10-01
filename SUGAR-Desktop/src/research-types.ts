@@ -105,7 +105,7 @@ export type TimelineEvent = { event_id: string; event_type: string; occurred_at:
 export type ProjectOverview = {
   summary: { project_id: string; name: string; research_question: string; status: string; last_activity: string; updated_at: string; run_count: number };
   requirement_text: string; plan: PlanSpec | null; plan_summary: SummaryRow[]; plan_versions: Array<{ version: number; updated_at: string }>;
-  settings: { enabled_sources?: string[]; provider_profile_id?: string; debug?: boolean; rss_feeds?: string[] };
+  settings: { enabled_sources?: string[]; provider_profile_id?: string; debug?: boolean; rss_feeds?: string[]; web_seeds?: string[] };
   members: Array<{ name: string; role: string }>; runs: RunSummary[]; notes: Array<Record<string, any>>;
 };
 

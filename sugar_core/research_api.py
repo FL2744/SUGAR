@@ -213,6 +213,9 @@ def _institution_routes(method, rest, query, body, wb, project):
         match = re.fullmatch(r"institutions/([A-Za-z0-9\-]+)", rest)
         if match and method == "GET":
             return 200, {"institution": inst.institution_detail(project, match.group(1))}
+        match = re.fullmatch(r"institutions/([A-Za-z0-9\-]+)/history", rest)
+        if match and method == "POST":
+            return 200, inst.page_history(project, match.group(1))
         match = re.fullmatch(r"institutions/([A-Za-z0-9\-]+)/(review|merge)", rest)
         if match and method == "POST":
             if match.group(2) == "review":

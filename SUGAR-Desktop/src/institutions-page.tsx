@@ -52,6 +52,8 @@ function DetailDrawer({ projectId, entityId, author, others, onClose, onChanged,
   const [source, setSource] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [history, setHistory] = useState<Awaited<ReturnType<typeof research.institutionHistory>> | null>(null);
+  const [checking, setChecking] = useState(false);
   const load = useCallback(() => research.institution(projectId, entityId).then(setDetail).catch((e) => onError(e instanceof Error ? e.message : String(e))), [projectId, entityId, onError]);
   useEffect(() => { setDetail(null); void load(); }, [load]);
   const guard = async (work: () => Promise<InstitutionDetail>) => {
@@ -90,6 +92,15 @@ function DetailDrawer({ projectId, entityId, author, others, onClose, onChanged,
                 <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What it shows (optional)" aria-label="What the source shows" />
                 <button className="button button-secondary button-small" disabled={busy || !/^https?:\/\//i.test(source.trim())}
                   onClick={() => void guard(async () => { const next = await research.recordInstitution(projectId, { values: { name: detail.name }, entity_id: entityId, evidence: [{ url: source.trim(), note }], author }); setSource(""); setNote(""); return next; })}>Add</button></div></div>
+            <div className="inspector-section"><span className="eyebrow">PAGE HISTORY (INTERNET ARCHIVE)</span>
+              <button className="button button-secondary button-small" disabled={checking} onClick={async () => { setChecking(true); try { setHistory(await research.institutionHistory(projectId, entityId)); } catch (e) { onError(e instanceof Error ? e.message : String(e)); } finally { setChecking(false); } }}>{checking ? <><Spinner /> Checking…</> : "Check captured history of its pages"}</button>
+              {history && <>{history.pages.length === 0 && history.errors.length === 0 && <small className="muted">No web pages are recorded for this institution yet. Add a source address above.</small>}
+                {history.pages.map((page) => <div key={page.url} className="history-card"><a href={page.url} target="_blank" rel="noreferrer">{page.url}</a>
+                  <small className="muted">{page.total} capture{page.total === 1 ? "" : "s"}{page.first_seen ? ` · first ${page.first_seen.slice(0, 10)}` : ""}{page.last_ok ? ` · last good ${page.last_ok.slice(0, 10)}` : ""}</small>
+                  <ul>{page.signals.map((sig) => <li key={sig}>{sig}</li>)}</ul>
+                  {page.snapshots.length > 0 && <a href={page.snapshots[page.snapshots.length - 1].archive_url} target="_blank" rel="noreferrer">Open the latest capture ↗</a>}</div>)}
+                {history.errors.map((err) => <div key={err.url} className="notice notice-warn">{err.url}: {err.reason}</div>)}
+                <small className="muted">{history.note}</small></>}</div>
             <div className="inspector-section"><span className="eyebrow">DUPLICATE?</span>
               <div className="note-add"><select value={mergeWith} onChange={(e) => setMergeWith(e.target.value)} aria-label="Merge a duplicate into this record"><option value="">Merge another record into this one…</option>
                 {others.filter((o) => o.entity_id !== entityId).map((o) => <option key={o.entity_id} value={o.entity_id}>{o.name} {o.city ? `· ${o.city}` : ""}</option>)}</select>
