@@ -210,13 +210,13 @@ def _institution_routes(method, rest, query, body, wb, project):
             return 200, inst.candidates(project, items, provider=provider, budget=budget)
         if rest == "institutions/geocode" and method == "POST":
             return 200, inst.geocode_missing(project, actor=actor, limit=_int(str(body.get("limit") or "25"), 25, 1, 100))
-        match = re.fullmatch(r"institutions/([A-Za-z0-9\-]+)", rest)
+        match = re.fullmatch(r"institutions/([A-Za-z0-9_\-]+)", rest)
         if match and method == "GET":
             return 200, {"institution": inst.institution_detail(project, match.group(1))}
-        match = re.fullmatch(r"institutions/([A-Za-z0-9\-]+)/history", rest)
+        match = re.fullmatch(r"institutions/([A-Za-z0-9_\-]+)/history", rest)
         if match and method == "POST":
             return 200, inst.page_history(project, match.group(1))
-        match = re.fullmatch(r"institutions/([A-Za-z0-9\-]+)/(review|merge)", rest)
+        match = re.fullmatch(r"institutions/([A-Za-z0-9_\-]+)/(review|merge)", rest)
         if match and method == "POST":
             if match.group(2) == "review":
                 return 200, {"institution": inst.verify(project, match.group(1), str(body.get("claim_id") or ""), str(body.get("state") or ""),

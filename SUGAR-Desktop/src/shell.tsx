@@ -9,6 +9,7 @@ import { ActivityView } from "./activity-view";
 import { usePrefs } from "./prefs";
 import { Onboarding } from "./onboarding";
 import { InstitutionsPage } from "./institutions-page";
+import { MapPage } from "./map-page";
 import { CommandPalette, ShortcutHelp, type Command } from "./command-palette";
 import { ToastHost, type Toast } from "./ui";
 import { ProjectsPage } from "./projects-page";
@@ -20,7 +21,7 @@ import { SettingsPage } from "./settings-page";
 import { TimelinePage } from "./timeline-page";
 import { StatusPill } from "./ui";
 
-type Page = "research" | "activity" | "results" | "projects" | "network" | "home" | "project" | "institutions" | "timeline" | "settings" | "about";
+type Page = "research" | "activity" | "results" | "projects" | "network" | "map" | "home" | "project" | "institutions" | "timeline" | "settings" | "about";
 type ActivityItem = { id: number; time: string; title: string; detail: string; kind: "ok" | "error" | "info" };
 type Dashboard = {
   name?: string;
@@ -73,6 +74,7 @@ const NAV_BASIC: Array<{ id: Page; label: string; icon: string }> = [
   { id: "activity", label: "Activity", icon: "↗" },
   { id: "results", label: "Results", icon: "▤" },
   { id: "network", label: "Institutions", icon: "◈" },
+  { id: "map", label: "Map", icon: "⌖" },
   { id: "projects", label: "Projects", icon: "⌂" },
 ];
 // Advanced mode adds the evidence, map, and audit surfaces.
@@ -83,7 +85,7 @@ const NAV_ADVANCED: Array<{ id: Page; label: string; icon: string }> = [
   { id: "timeline", label: "Project timeline", icon: "◷" },
 ];
 const PAGE_TITLES: Record<Page, string> = {
-  research: "Research", activity: "Activity", results: "Results", network: "Institutions", projects: "Projects", home: "Overview", project: "Evidence & handoff",
+  research: "Research", activity: "Activity", results: "Results", network: "Institutions", map: "Map", projects: "Projects", home: "Overview", project: "Evidence & handoff",
   institutions: "Institutions & map", timeline: "Project timeline", settings: "Settings", about: "About",
 };
 
@@ -134,6 +136,7 @@ export function App() {
   const [prefill, setPrefill] = useState<{ text: string; n: number }>({ text: "", n: 0 });
   const [showSetup, setShowSetup] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [openInstitution, setOpenInstitution] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastId = useRef(0);
@@ -1137,6 +1140,7 @@ export function App() {
     { id: "go-activity", label: "Go to Activity", keywords: "live run progress", run: () => changePage("activity") },
     { id: "go-results", label: "Go to Results", keywords: "items review", run: () => changePage("results") },
     { id: "go-network", label: "Go to Institutions", keywords: "registry sources verify", run: () => changePage("network") },
+    { id: "go-map", label: "Go to Map", keywords: "heatmap geography overlap", run: () => changePage("map") },
     { id: "go-projects", label: "Go to Projects", keywords: "switch open", run: () => changePage("projects") },
     { id: "go-settings", label: "Open Settings", keywords: "providers keys credentials preferences", run: () => changePage("settings") },
     { id: "go-about", label: "About SUGAR", keywords: "credits version", run: () => changePage("about") },
@@ -1222,7 +1226,8 @@ export function App() {
         {page === "research" && <ResearchPage prefill={prefill} projectId={projectId} projectName={projectName} prefs={prefs} overview={overview} onOverview={() => refreshOverview(projectId)} ensureProject={ensureProject} onRunStarted={handleRunStarted} onOpenSettings={() => changePage("settings")} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onError={setError} />}
         {page === "activity" && <ActivityView onRunSettled={(finished) => { void refreshOverview(projectId); const kept = finished.counts?.processed ?? finished.counts?.collected ?? 0; if (finished.status === "failed") notify("The run could not finish. Open Activity for details.", "warn"); else if (finished.status === "cancelled") notify(`Run cancelled — ${kept} items kept.`, "info"); else notify(`Run finished — ${kept} item${kept === 1 ? "" : "s"} kept${finished.status === "completed_with_warnings" ? ", with some sources incomplete" : ""}.`, finished.status === "completed" ? "ok" : "warn", { label: "View results", run: () => changePage("results") }); }} projectId={projectId} runId={runId} prefs={prefs} author={author} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onNewRun={() => changePage("research")} onOpenSettings={() => changePage("settings")} onRunStarted={handleRunStarted} onError={setError} />}
         {page === "results" && <ResultsView projectId={projectId} runId={runId || overview?.runs[0]?.run_id || ""} runs={overview?.runs || []} prefs={prefs} author={author} projectPath={workspace.startsWith("sugar-workspace://") ? "" : workspace} onSelectRun={setRunId} onOpenActivity={(id) => { setRunId(id); changePage("activity"); }} onOpenResearch={() => changePage("research")} onRunStarted={handleRunStarted} onError={setError} />}
-        {page === "network" && <InstitutionsPage projectId={projectId} runs={overview?.runs || []} author={author} onError={setError} onOpenMap={() => changePage("institutions")} />}
+        {page === "network" && <InstitutionsPage projectId={projectId} runs={overview?.runs || []} author={author} onError={setError} onOpenMap={() => changePage("map")} openId={openInstitution} onOpened={() => setOpenInstitution("")} />}
+        {page === "map" && <MapPage projectId={projectId} dark={prefs.theme === "dark"} onOpenInstitutions={() => changePage("network")} onOpenRecord={(id) => { setOpenInstitution(id); changePage("network"); }} />}
         {page === "projects" && <ProjectsPage projects={projects} currentId={projectId} loading={projectsLoading} advanced={prefs.mode === "advanced"} createSignal={createSignal} onOpen={openProject} onCreate={async (name, question) => { await createProject(name, question); }} onOpenFolder={() => void openFolder()} onRefresh={() => void loadProjects()} />}
         {page === "timeline" && <TimelinePage projectId={projectId} refreshKey={timelineKey} />}
         {page === "about" && <AboutPage version="1.4" engineVersion={engineVersion} />}

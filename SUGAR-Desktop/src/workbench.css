@@ -459,3 +459,21 @@ kbd { padding: 0 .4rem; border: 1px solid var(--wb-line2); border-radius: .3rem;
 .history-card { display: grid; gap: .2rem; padding: .6rem .7rem; margin: .4rem 0; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); overflow-wrap: anywhere; }
 .history-card ul { margin: .2rem 0; padding-left: 1.1rem; }
 .short-input { width: 8rem; min-height: 2.35rem; padding: .3rem .6rem; border: 1px solid var(--wb-line2); border-radius: .4rem; font-size: 1rem; background: var(--wb-card); color: var(--wb-ink); }
+
+/* Map page */
+.map-layout { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 1rem; align-items: start; }
+.map-layout:has(.map-detail) { grid-template-columns: 15rem minmax(0, 1fr) 17rem; }
+.map-filters { display: grid; gap: .8rem; padding: .8rem; border: 1px solid var(--wb-line); border-radius: .6rem; background: var(--wb-card); }
+.map-main { display: grid; gap: .6rem; min-width: 0; }
+.map-main .map-frame { position: relative; height: min(62dvh, 40rem); min-height: 22rem; border: 1px solid var(--wb-line); border-radius: .6rem; overflow: hidden; }
+.map-main .map-canvas { position: absolute; inset: 0; }
+.map-stats { color: var(--wb-ink2); }
+.map-detail { position: relative; display: grid; gap: .5rem; padding: .9rem; border: 1px solid var(--wb-line); border-radius: .6rem; background: var(--wb-card); }
+.map-detail h3 { margin: 0; padding-right: 1.5rem; }
+.map-detail p { margin: 0; }
+.map-detail .inspector-close { position: absolute; top: .4rem; right: .5rem; }
+.swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; vertical-align: -.1rem; background: #d2691e; } .swatch.reference { background: #1f8f6a; }
+.overlap-table summary { cursor: pointer; font-weight: 600; } .overlap-table table { width: 100%; border-collapse: collapse; margin-top: .4rem; } .overlap-table th, .overlap-table td { padding: .3rem .5rem; border-bottom: 1px solid var(--wb-line); text-align: left; }
+@container page (max-width: 60rem) { .map-layout, .map-layout:has(.map-detail) { grid-template-columns: 1fr; } }
+.map-filters select { width: 100%; min-width: 0; }
+.map-filters { max-height: 78dvh; overflow: auto; }

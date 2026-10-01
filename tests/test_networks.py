@@ -133,5 +133,8 @@ def test_network_http_flow(api):   # noqa: F811
     assert listed["ref-net"]["role"] == "reference" and listed["ref-net"]["institutions"] == 2
     overlap = session.get(f"{root}/overlap", params={"subject": "ref-net", "reference": "ref-net"}).json()
     assert overlap["counts"]["subject_institutions"] == 1 and "not findings of influence" in overlap["method"]       # the closed site is excluded
+    first = session.get(f"{root}/institutions").json()["institutions"][0]["entity_id"]
+    detail = session.get(f"{root}/institutions/{first}")                              # imported ids are not UUIDs; they must still resolve
+    assert detail.status_code == 200 and detail.json()["institution"]["entity_id"] == first
     assert session.post(f"{root}/networks/seed", json={"source": "nope"}).status_code == 400
     assert session.post(f"{root}/networks", json={"name": "x", "role": "enemy"}).status_code == 400

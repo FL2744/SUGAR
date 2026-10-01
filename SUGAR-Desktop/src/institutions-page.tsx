@@ -164,7 +164,7 @@ function CandidatesPanel({ projectId, runs, author, onClose, onRecorded, onError
   );
 }
 
-export function InstitutionsPage({ projectId, runs, author, onError, onOpenMap }: { projectId: string; runs: RunSummary[]; author: string; onError: (m: string) => void; onOpenMap: () => void }) {
+export function InstitutionsPage({ projectId, runs, author, onError, onOpenMap, openId = "", onOpened }: { projectId: string; runs: RunSummary[]; author: string; onError: (m: string) => void; onOpenMap: () => void; openId?: string; onOpened?: () => void }) {
   const [data, setData] = useState<InstitutionList | null>(null);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
@@ -177,6 +177,7 @@ export function InstitutionsPage({ projectId, runs, author, onError, onOpenMap }
   const [networksOpen, setNetworksOpen] = useState(false);
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
+  useEffect(() => { if (openId) { setOpen(openId); onOpened?.(); } }, [openId, onOpened]);
 
   const load = useCallback(async () => {
     if (!projectId) return;
