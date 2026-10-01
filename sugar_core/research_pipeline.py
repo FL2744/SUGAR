@@ -23,7 +23,8 @@ from . import gazetteer as gz
 from . import redaction
 from .collector_registry import COLLECTORS, CollectorCapabilities, CollectorRequest, CollectorSpec
 from .llm_providers import LLMProvider, ProviderError, call_with_retries
-from .query_planner import dispatch_text
+from .provider_pacing import SHARED_REQUEST_PACER, SharedRequestPacer
+from .query_planner import adapt_for_platform, dispatch_text
 from .research_events import EventLog, STAGES
 from .research_items import (
     DedupIndex, ResearchItem, detect_language, extract_paragraphs, is_language, matches_exclusion, record_to_item,
@@ -163,6 +164,7 @@ class ResearchPipeline:
         sleeper: Callable[[float], None] = time.sleep,
         source_items: list[ResearchItem] | None = None,
         extra_config: dict[str, Any] | None = None,
+        pacer: SharedRequestPacer | None = None,
     ) -> None:
         self.project = project
         self.run = run
@@ -176,6 +178,8 @@ class ResearchPipeline:
         self.sleeper = sleeper
         self.source_items = source_items
         self.extra_config = dict(extra_config or {})
+        self.pacer = pacer or SHARED_REQUEST_PACER
+        self._hashtags_sent: set[str] = set()
         self.controller = RunController()
         self.events = EventLog(run.run_id, project.events_path(run.run_id), capture_debug=run.debug)
         self.timings = self.events.timings
@@ -564,7 +568,18 @@ class ResearchPipeline:
 
     def _run_query(self, handle: SourceHandle, query: QuerySpec) -> bool:
         plan = self.plan
-        dispatched = dispatch_text(query, handle.name, plan.exclusions)
+        adapted, why = adapt_for_platform(query, handle.name, self.secrets)
+        if adapted is None or (handle.name == "mastodon" and adapted in self._hashtags_sent):
+            self.events.emit("query.skipped", source=handle.name, message=why or f"{adapted} was already searched on {handle.name.capitalize()}.",
+                             query_id=query.id, query=query.text, severity="info")
+            with self._lock:
+                self.counts["queries_done"] += 1
+            return True
+        if why:
+            self.events.emit("query.adapted", source=handle.name, message=why, query_id=query.id, query=query.text, adapted=adapted)
+        if handle.name == "mastodon":
+            self._hashtags_sent.add(adapted)
+        dispatched = dispatch_text(QuerySpec(text=adapted, platform=query.platform), handle.name, plan.exclusions)
         limits = plan.limits
         per_source = limits["per_source"].get(handle.name, {})
         request = CollectorRequest(
@@ -581,6 +596,8 @@ class ResearchPipeline:
             self.events.emit("collector.request", debug=True, source=handle.name, stage="search", message="collector request",
                              search_terms=request.search_terms, since=request.since, until=request.until,
                              max_posts=request.max_posts_per_query, max_pages=request.max_pages_per_query)
+            if not self.pacer.acquire(interval_seconds=0.2, cancelled=lambda: self.controller.cancelled):
+                raise RunCancelled()
             started = time.perf_counter()
             try:
                 records = handle.spec.search(request)  # type: ignore[misc]
@@ -597,6 +614,7 @@ class ResearchPipeline:
                     delay = info.get("retry_after") or plan.retry["base_backoff_seconds"] * (2 ** (attempt - 1))
                     delay = min(float(delay), 300.0)
                     if info["kind"] == "rate_limit":
+                        self.pacer.defer(delay)         # every platform's requests wait out a shared provider cooldown
                         self.events.emit("provider.rate_limited", source=handle.name, message=f"{info['message']} SUGAR will retry in {delay:.0f} seconds.",
                                          status=429, retry_in_seconds=delay, attempt=attempt, query_id=query.id)
                     self.events.emit("source.retry.scheduled", source=handle.name,

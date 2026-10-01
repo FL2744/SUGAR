@@ -165,8 +165,6 @@ def test_end_to_end_research_flow_over_http(api):
 
     # notes, members, settings
     assert session.post(f"{base}/api/workspaces/{wid}/research/notes", json={"text": "Look at the Gulf", "author": "Alejandro Grenier"}).json()["note"]["author"] == "Alejandro Grenier"
-    assert session.post(f"{base}/api/workspaces/{wid}/research/members", json={"name": "William Taggart", "role": "editor"}).json()["members"][0]["role"] == "editor"
-    assert session.post(f"{base}/api/workspaces/{wid}/research/members", json={"name": "x", "role": "emperor"}).status_code == 400
     assert session.post(f"{base}/api/workspaces/{wid}/research/settings", json={"changes": {"enabled_sources": ["bluesky"]}}).json()["settings"]["enabled_sources"] == ["bluesky"]
 
     # diagnostics report for bug reports is redacted
@@ -255,3 +253,39 @@ def test_local_folders_can_be_linked_only_when_paths_are_exposed(api, tmp_path, 
     rows = session.get(f"{base}/api/workspaces").json()["workspaces"]
     assert [r["path"] for r in rows if r["id"] == linked["id"]] == [str(folder.resolve())]
     assert session.get(f"{base}/api/workspaces/{linked['id']}/research").json()["summary"]["name"] == "Folder project"
+
+
+def test_member_tokens_follow_project_roles_and_never_reach_admin_routes(api):
+    import json as _json
+    base, session, _ = api
+    wid = session.post(f"{base}/api/workspaces", json={"name": "Team"}).json()["id"]
+    profile = sugar_api.get_workspace_root() / wid / ".sugar" / "project-profile.json"
+    profile.parent.mkdir(exist_ok=True)
+    profile.write_text(_json.dumps({"members": [{"name": "Vera Viewer", "email": "v@example.org", "role": "Viewer"},
+                                                {"name": "Ana Analyst", "email": "a@example.org", "role": "Analyst"}]}))
+    tokens = {}
+    for email in ("v@example.org", "a@example.org"):
+        tokens[email] = session.post(f"{base}/api/workspaces/{wid}/access", json={"email": email}).json()["token"]
+    viewer, analyst = (requests.Session() for _ in range(2))
+    viewer.headers["Authorization"] = f"Bearer {tokens['v@example.org']}"
+    analyst.headers["Authorization"] = f"Bearer {tokens['a@example.org']}"
+    plan = {"topic": "democracy", "platforms": ["bluesky"]}
+    assert viewer.get(f"{base}/api/workspaces/{wid}/research").status_code == 200
+    assert viewer.get(f"{base}/api/workspaces/{wid}/runs").status_code == 200
+    assert viewer.post(f"{base}/api/workspaces/{wid}/research/plan", json={"plan": plan}).status_code == 403
+    assert viewer.post(f"{base}/api/workspaces/{wid}/runs", json={}).status_code == 403
+    assert analyst.post(f"{base}/api/workspaces/{wid}/research/plan", json={"plan": plan}).status_code == 200
+    assert analyst.post(f"{base}/api/workspaces/{wid}/research/settings", json={"changes": {"debug": True}}).status_code == 403   # owner only
+    members = session.get(f"{base}/api/workspaces/{wid}/research").json()["members"]
+    assert {m["email"] for m in members} == {"v@example.org", "a@example.org"}
+    for member in (viewer, analyst):                  # spending money / exposing configuration is administrator-only
+        for method, path in (("get", "/api/providers"), ("get", "/api/diagnostics/report"), ("post", "/api/platform-credentials"),
+                             ("post", "/api/interpret"), ("post", "/api/workspaces/open")):
+            assert getattr(member, method)(f"{base}{path}").status_code in {400, 403}, path
+        assert member.get(f"{base}/api/providers").status_code == 403
+    assert analyst.post(f"{base}/api/interpret", json={"text": "democracy", "mode": "deterministic", "workspace_id": wid}).status_code == 200
+    assert viewer.post(f"{base}/api/interpret", json={"text": "democracy", "workspace_id": wid}).status_code == 403
+    other = session.post(f"{base}/api/workspaces", json={"name": "Other"}).json()["id"]
+    assert viewer.get(f"{base}/api/workspaces/{other}/research").status_code == 403                  # scoped to its own project
+    assert session.delete(f"{base}/api/workspaces/{wid}/access/a@example.org").status_code == 200  # main's revoke still works
+    assert analyst.get(f"{base}/api/workspaces/{wid}/research").status_code == 401

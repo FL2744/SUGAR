@@ -216,6 +216,11 @@ class CredentialStore:
                 value = os.environ[env_name].strip()
                 redaction.register_secret(value)
                 return value
+        if ref.startswith("platform:") or ref == "platform:llm_api_key":
+            vaulted = self._vault_value(ref.split(":", 1)[1])
+            if vaulted:
+                redaction.register_secret(vaulted)
+                return vaulted
         with self._lock:
             if self.backend == "memory":
                 value = self._memory.get(ref, "")
@@ -229,6 +234,15 @@ class CredentialStore:
         if value:
             redaction.register_secret(value)
         return value
+
+    @staticmethod
+    def _vault_value(name: str) -> str:
+        """Value saved through the desktop app's OS credential vault (credential_vault.py), if one is available."""
+        try:
+            from .credential_vault import SERVICE_NAME as vault_service, _keyring_backend
+            return _keyring_backend().get_password(vault_service, name) or ""
+        except Exception:
+            return ""
 
     def has(self, ref: str) -> bool:
         return bool(self.get(ref))

@@ -21,7 +21,7 @@ STAGES = ("plan", "search", "collect", "translate", "process", "results")
 
 # event type -> pipeline stage (section 16)
 EVENT_STAGE: dict[str, str] = {
-    "research.plan.created": "plan", "research.plan.updated": "plan", "query.generated": "plan", "query.disabled": "plan",
+    "research.plan.created": "plan", "research.plan.updated": "plan", "query.generated": "plan", "query.disabled": "plan", "query.adapted": "search", "query.skipped": "search",
     "source.skipped": "plan",
     "source.search.started": "search", "source.search.completed": "search", "provider.rate_limited": "search",
     "source.retry.scheduled": "search", "source.failed": "search",

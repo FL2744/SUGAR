@@ -251,12 +251,9 @@ def test_plan_versions_are_immutable_and_history_is_a_timeline(tmp_path):
     assert proj.load_plan(first["plan_id"], 1).depth == "standard"
     assert wb.save_plan(proj, second, reason="edited")["plan"]["version"] == 2           # unchanged -> no new version
     proj.update_settings({"enabled_sources": ["bluesky"], "debug": True})
-    proj.add_member("William Taggart", "editor")
     proj.add_note("Check the Gulf results", author="Alejandro Grenier")
     kinds = [e["event_type"] for e in proj.timeline()]
-    assert {"requirement_edited", "plan_interpreted", "plan_edited", "settings_changed", "member_changed", "note_added"} <= set(kinds)
-    with pytest.raises(ValueError):
-        proj.add_member("x", "emperor")
+    assert {"requirement_edited", "plan_interpreted", "plan_edited", "settings_changed", "note_added"} <= set(kinds)
 
 
 def test_enabled_sources_setting_limits_all_enabled_scope(tmp_path):

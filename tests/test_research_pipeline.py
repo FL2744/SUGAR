@@ -9,6 +9,7 @@ from sugar_core.collector_registry import CollectorCapabilities, CollectorSpec
 from sugar_core.llm_providers import ChatResult, LLMProvider, ProviderError, ProviderProfile
 from sugar_core.models import PostRecord
 from sugar_core.nl_interpreter import interpret_deterministic
+from sugar_core.provider_pacing import SharedRequestPacer
 from sugar_core.research_items import DedupIndex, detect_language, split_paragraphs
 from sugar_core.research_pipeline import ResearchPipeline, classify_failure
 from sugar_core.research_plan import build_plan
@@ -67,7 +68,7 @@ class FakeTranslator(LLMProvider):
 
 def run_pipeline(project, plan, registry, *, secrets=None, provider=None, kind="run", debug=False, **kw):
     run = project.new_run(kind=kind, plan=plan, debug=debug, requirement=plan.interpretation.get("request", "") or "test")
-    pipeline = ResearchPipeline(project, run, plan, secrets=secrets or {}, provider=provider, registry=registry, sleeper=lambda s: None, **kw)
+    pipeline = ResearchPipeline(project, run, plan, secrets=secrets or {}, provider=provider, registry=registry, sleeper=lambda s: None, pacer=SharedRequestPacer(), **kw)
     pipeline.execute()
     return pipeline
 
@@ -470,3 +471,53 @@ def test_secrets_registered_by_the_pipeline_are_redacted_everywhere(tmp_path):
     p = run_pipeline(project, make_plan(), {"bluesky": spec("bluesky", leaky)}, secrets={"bluesky_app_password": secret})
     assert secret not in json.dumps(p.events.snapshot()) and secret not in json.dumps(p.run.to_dict())
     redaction.clear_registered()
+
+
+def test_mastodon_without_a_token_is_searched_as_hashtags_not_failed(tmp_path):
+    project = make_project(tmp_path)
+    seen = []
+
+    def mastodon(request):
+        term = request.search_terms[0]
+        seen.append(term)
+        if not (term.startswith("#") and " " not in term):
+            raise ValueError("Mastodon keyword status search requires an authorized user token")
+        return [rec("mastodon", term, f"public post tagged {term} about democracy and civic life today")]
+
+    registry = {"mastodon": spec("mastodon", mastodon)}
+    p = run_pipeline(project, make_plan(), registry)
+    assert seen and all(t.startswith("#") and " " not in t for t in seen)             # never sent a keyword the server would reject
+    assert len(seen) == len(set(seen))                                                  # a hashtag is only searched once
+    kinds = [e.type for e in p.events.since(0)]
+    assert "query.adapted" in kinds and "query.skipped" in kinds                         # explained, not silent
+    adapted = next(e for e in p.events.since(0) if e.type == "query.adapted")
+    assert "#democracy" in adapted.message and "public #hashtag" in adapted.message
+    assert p.sources["mastodon"].status == "success" and p.counts["collected"] >= 1
+
+
+def test_mastodon_with_a_token_keeps_keyword_search(tmp_path):
+    project = make_project(tmp_path)
+    seen = []
+
+    def mastodon(request):
+        seen.append(request.search_terms[0])
+        return []
+
+    run_pipeline(project, make_plan(), {"mastodon": spec("mastodon", mastodon)}, secrets={"mastodon_token": "tok-abcdef123456"})
+    assert any(" " in t for t in seen) and not any(t.startswith("#") for t in seen)
+
+
+def test_rate_limit_cooldown_is_shared_across_platforms(tmp_path):
+    project = make_project(tmp_path)
+    pacer = SharedRequestPacer()
+    stamps = []
+
+    def limited(request):
+        raise RuntimeError("X rate limit reached (429).")
+
+    plan = make_plan(retry={"max_attempts": 2, "base_backoff_seconds": 0.3})
+    run = project.new_run(plan=plan, requirement="t")
+    p = ResearchPipeline(project, run, plan, registry={"x": spec("x", limited), "bluesky": spec("bluesky", lambda r: stamps.append(time.monotonic()) or [])},
+                         secrets={"x_bearer_token": "x" * 12}, sleeper=lambda s: None, pacer=pacer)
+    p.execute()
+    assert any(e.type == "provider.rate_limited" for e in p.events.since(0))

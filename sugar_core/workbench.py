@@ -384,5 +384,5 @@ class ResearchWorkbench:
         plan = project.load_plan()
         return {"summary": project.summary(), "requirement_text": meta.get("requirement_text", ""),
                 "plan": plan.to_dict() if plan else None, "plan_summary": plan.summary_rows() if plan else [],
-                "plan_versions": project.plan_versions(), "settings": meta.get("settings", {}), "members": meta.get("members", []),
+                "plan_versions": project.plan_versions(), "settings": meta.get("settings", {}), "members": project.members(),
                 "runs": self.list_runs(project), "notes": project.notes()[-50:], "generated_at": utc_now()}

@@ -35,6 +35,32 @@ def dispatch_text(query: QuerySpec | dict[str, Any], platform: str, exclusions: 
     return text
 
 
+def hashtag_for(text: str) -> str:
+    """'climate policy' -> '#ClimatePolicy' (Mastodon public hashtag timelines take one tag, no spaces)."""
+    words = re.findall(r"[^\W_]+", text.replace('"', " "), re.UNICODE)
+    if not words or len(words) > 3:
+        return ""
+    return "#" + "".join(w if i == 0 and len(words) == 1 else w[:1].upper() + w[1:] for i, w in enumerate(words))
+
+
+def adapt_for_platform(query: QuerySpec, platform: str, secrets: dict[str, str]) -> tuple[str | None, str]:
+    """Adjust a query to what a platform can actually do. Returns (text or None to skip, explanation).
+
+    Mastodon without an access token can only read public ``#hashtag`` timelines, so topic queries are
+    converted to a hashtag and queries that name a place (not expressible as one tag) are skipped.
+    """
+    if platform == "mastodon" and not secrets.get("mastodon_token", "").strip():
+        if query.text.startswith("#"):
+            return query.text, ""
+        if query.geography or query.language:
+            return None, "Mastodon without a token searches public #hashtag timelines only; place and translated variants are searched on other platforms."
+        tag = hashtag_for(query.text)
+        if not tag:
+            return None, f"“{query.text}” cannot be expressed as one #hashtag, which is all Mastodon allows without a token."
+        return tag, f"Mastodon without a token searches public #hashtag timelines, so “{query.text}” is searched as {tag}."
+    return query.text, ""
+
+
 def generate_queries(plan: ResearchPlanSpec, *, available_platforms: list[str] | None = None) -> list[QuerySpec]:
     topic = plan.topic
     seeds = [topic] + [t for t in plan.search_terms if t.casefold() != topic.casefold()]

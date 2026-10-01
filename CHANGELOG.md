@@ -13,6 +13,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - Structured activity events, a concurrent pipeline (Plan → Search → Collect → Translate → Process → Results), live translation view, pause/resume/cancel, query edits and item exclusion during a run, retry of failed sources, failure classes (fatal / source-specific / retryable / skipped / warning), and explicit reporting of incomplete collection.
 - Run objects, project data model, project timeline, provenance and evidence-chain lineage, timing instrumentation, Debug Mode, verifiable export bundles (JSON/JSONL/CSV/GeoJSON/Markdown + manifest with SHA-256).
 - New UI: Research, Activity, Results, Projects, Settings with explicit Save, Basic/Advanced modes, text-size and density settings, rem-based typography for high-DPI displays, prominent *New project*, compact project list, About page with attribution.
+- Workbench runs share main's request pacer and provider cooldowns, search Mastodon as public `#hashtag` timelines when no token is saved (explaining each adaptation), read credentials saved in the OS vault, and enforce project roles (viewer/reviewer/analyst/owner) on every workbench route; providers, credentials, diagnostics and folder access are administrator-only.
 - Desktop app starts a loopback research API sidecar for live runs; `sugar-bridge serve`.
 - `tools/demo_workbench_server.py` offline demo with simulated platforms and model.
 

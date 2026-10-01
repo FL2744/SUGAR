@@ -37,7 +37,6 @@ RUN_KINDS = ("run", "rerun", "refresh_sources", "reprocess")
 RUN_STATUSES = ("queued", "running", "paused", "cancelling", "completed", "completed_with_warnings", "failed", "cancelled")
 TERMINAL_STATUSES = {"completed", "completed_with_warnings", "failed", "cancelled"}
 PROJECT_SCHEMA = "1.0"
-ROLES = ("owner", "editor", "commenter", "viewer")
 
 _locks: dict[str, threading.RLock] = {}
 _locks_guard = threading.Lock()
@@ -168,7 +167,7 @@ class ResearchProject:
             if not isinstance(meta, dict):
                 meta = {
                     "schema_version": PROJECT_SCHEMA, "research_question": "", "requirement_text": "", "status": "draft",
-                    "current_plan_id": "", "current_plan_version": 0, "members": [], "settings": {"enabled_sources": [], "provider_profile_id": ""},
+                    "current_plan_id": "", "current_plan_version": 0, "settings": {"enabled_sources": [], "provider_profile_id": ""},
                     "created_at": utc_now(), "updated_at": utc_now(), "last_activity": "",
                 }
             return meta
@@ -203,7 +202,7 @@ class ResearchProject:
             "project_id": self.project_id, "name": self.workspace.manifest.name, "description": self.workspace.manifest.description,
             "research_question": meta.get("research_question", ""), "status": status, "last_activity": last_activity,
             "updated_at": max(str(meta.get("updated_at", "")), str(self.workspace.manifest.updated_at)),
-            "run_count": len(runs), "member_count": len(meta.get("members", [])),
+            "run_count": len(runs), "member_count": len(self.members()),
         }
 
     # -- requirement and plans ----------------------------------------------------------
@@ -274,19 +273,11 @@ class ResearchProject:
             self.log("settings_changed", {"changed": sorted(applied)}, actor=actor)
         return settings
 
-    def add_member(self, name: str, role: str = "viewer", *, actor: str = "analyst") -> list[dict[str, Any]]:
-        name = " ".join(str(name).split())
-        if not name:
-            raise ValueError("A member needs a name.")
-        if role not in ROLES:
-            raise ValueError(f"Role must be one of {', '.join(ROLES)}.")
-        meta = self.meta()
-        members = [m for m in meta.get("members", []) if m.get("name", "").casefold() != name.casefold()]
-        members.append({"name": name, "role": role, "added_at": utc_now()})
-        meta["members"] = members
-        self._save_meta(meta)
-        self.log("member_changed", {"member": name, "role": role, "action": "added"}, actor=actor)
-        return members
+    def members(self) -> list[dict[str, Any]]:
+        """Project roster from the shared project profile (roles are enforced by the API, not by this view)."""
+        payload = _read_json(self.workspace.internal_path / "project-profile.json", {})
+        rows = payload.get("members", []) if isinstance(payload, dict) else []
+        return [{"name": str(r.get("name", "")), "email": str(r.get("email", "")), "role": str(r.get("role", ""))} for r in rows if isinstance(r, dict)]
 
     def add_note(self, text: str, *, author: str = "analyst", item_id: str = "", run_id: str = "") -> dict[str, Any]:
         text = str(text or "").strip()

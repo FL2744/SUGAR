@@ -190,8 +190,6 @@ def _research_routes(method, rest, query, body, wb, project):
         return 200, {"requirement_text": project.save_requirement(str(body.get("text") or ""), actor=str(body.get("actor") or "analyst"))["requirement_text"]}
     if rest == "settings" and method == "POST":
         return 200, {"settings": project.update_settings(dict(body.get("changes") or {}), actor=str(body.get("actor") or "analyst"))}
-    if rest == "members" and method == "POST":
-        return 200, {"members": project.add_member(str(body.get("name") or ""), str(body.get("role") or "viewer"), actor=str(body.get("actor") or "analyst"))}
     if rest == "notes" and method == "POST":
         return 200, {"note": project.add_note(str(body.get("text") or ""), author=str(body.get("author") or "analyst"), item_id=str(body.get("item_id") or ""),
                                               run_id=str(body.get("run_id") or ""))}

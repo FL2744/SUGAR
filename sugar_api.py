@@ -478,7 +478,30 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             return
         self._research("GET", route, None)
 
+    @staticmethod
+    def _research_role(method: str, area: str, rest: str) -> str:
+        """Minimum project role for a workbench route (reads: viewer; changing plans/runs: analyst; settings: owner)."""
+        if method == "GET":
+            return "viewer"
+        if area == "research" and rest == "settings":
+            return "owner"
+        return "analyst"
+
+    def _authorize_research(self, method: str, path: str, body: dict[str, Any] | None) -> bool:
+        """Project routes follow project roles. Providers, credentials, diagnostics and folder access are administrator-only,
+        because they spend money, expose configuration, or reach outside the project."""
+        match = re.fullmatch(r"/api/workspaces/([0-9a-fA-F-]+)/(research|runs|timeline)(?:/(.*))?", path)
+        if match:
+            return self._require_project(_workspace_id(match.group(1)), self._research_role(method, match.group(2), match.group(3) or ""))
+        if path == "/api/platforms" and method == "GET":
+            return True
+        if path == "/api/interpret" and body and body.get("workspace_id"):
+            return self._require_project(_workspace_id(str(body["workspace_id"])), "analyst")
+        return self._require_admin()
+
     def _research(self, method: str, route, body: dict[str, Any] | None) -> None:
+        if not self._authorize_research(method, route.path, body):
+            return
         query = {key: values[-1] for key, values in parse_qs(route.query).items()}
         result = research_dispatch(method, route.path, query, body, wb=get_workbench(), resolve_project=resolve_project,
                                    list_projects=list_research_projects)
@@ -506,17 +529,6 @@ class SugarApiHandler(BaseHTTPRequestHandler):
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
-
-    def do_DELETE(self) -> None:
-        if not self._authorized():
-            return
-        route = urlsplit(self.path)
-        try:
-            self._research("DELETE", route, None)
-        except ApiError as exc:
-            self._send(exc.status, {"error": str(exc)})
-        except Exception as exc:
-            self._send(500, {"error": f"SUGAR API operation failed ({type(exc).__name__})."})
 
     def do_POST(self) -> None:
         if not self._authorized():
@@ -556,7 +568,12 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             return
         match = re.fullmatch(r"/api/workspaces/([0-9a-fA-F-]+)/access/(.+)", urlsplit(self.path).path)
         if not match:
-            self._send(404, {"error": "API route not found."})
+            try:
+                self._research("DELETE", urlsplit(self.path), None)
+            except ApiError as exc:
+                self._send(exc.status, {"error": str(exc)})
+            except Exception as exc:
+                self._send(500, {"error": f"SUGAR API operation failed ({type(exc).__name__})."})
             return
         identifier = _workspace_id(match.group(1))
         if not self._require_project(identifier, "owner"):
