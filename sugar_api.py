@@ -485,7 +485,7 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             return "viewer"
         if area == "research" and rest == "settings":
             return "owner"
-        if area == "research" and (rest == "review" or (rest.startswith("institutions/") and rest.endswith("/review"))):
+        if area == "research" and (rest in {"review", "coding/decide"} or (rest.startswith("institutions/") and rest.endswith("/review"))):
             return "reviewer"          # reviewers may judge, tag, comment and verify claims; viewers can only read
         return "analyst"
 

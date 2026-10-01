@@ -274,7 +274,43 @@ def _network_routes(method, rest, query, body, wb, project):
     return None
 
 
+def _coding_routes(method, rest, query, body, wb, project):
+    from . import activity_coding as ac
+    actor = str(body.get("_author") or "Researcher")
+    try:
+        if rest == "coding" and method == "GET":
+            store = ac.CodingStore(project)
+            if query.get("item_id"):
+                return 200, {"item_id": query["item_id"], **store.state(query["item_id"])}
+            ids = {i.item_id for i in wb.items(project, query["run_id"])} if query.get("run_id") else None
+            return 200, store.summary(ids)
+        if rest == "coding/run" and method == "POST":
+            run_id = str(body.get("run_id") or "")
+            items = wb.items(project, run_id)
+            provider = budget = None
+            if str(body.get("mode") or "auto") != "deterministic":
+                provider = wb.resolve_provider(project=project, profile_id=str(body.get("provider_id") or ""))
+                budget = ac.LLMBudget(int(body.get("max_calls") or 40))
+            return 200, ac.code_items(project, items, provider=provider, budget=budget, actor=actor if provider is None else "SUGAR (model-assisted)")
+        if rest == "coding/decide" and method == "POST":
+            return 200, ac.decide(project, str(body.get("item_id") or ""), str(body.get("field") or ""), str(body.get("label") or ""), str(body.get("decision") or ""),
+                                  actor=actor, run_id=str(body.get("run_id") or ""), quote=str(body.get("quote") or ""))
+        if rest == "coding/apply" and method == "POST":
+            run_id, item_id = str(body.get("run_id") or ""), str(body.get("item_id") or "")
+            item = next((i for i in wb.items(project, run_id) if i.item_id == item_id), None)
+            if item is None:
+                raise WorkbenchError("Item not found.", 404)
+            return 200, ac.apply_to_institution(project, str(body.get("entity_id") or ""), item, actor=actor)
+    except KeyError as exc:
+        raise WorkbenchError(str(exc.args[0]) if exc.args else "Not found.", 404) from exc
+    except ValueError as exc:
+        raise WorkbenchError(str(exc)) from exc
+    return None
+
+
 def _research_routes(method, rest, query, body, wb, project):
+    if rest == "coding" or rest.startswith("coding/"):
+        return _coding_routes(method, rest, query, body, wb, project)
     if rest.startswith("networks") or rest == "overlap":
         return _network_routes(method, rest, query, body, wb, project)
     if rest == "institutions" or rest.startswith("institutions/"):

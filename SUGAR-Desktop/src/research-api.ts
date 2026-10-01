@@ -1,7 +1,7 @@
 import { api, apiPost, openEventStream } from "./bridge";
 import type {
   ActivityEvent, ConnectionReport, Interpretation, PlanSpec, PlatformRow, ProjectOverview, ProviderProfileRow, ProviderType,
-  InstitutionCandidate, InstitutionDetail, InstitutionList, NetworkPreview, NetworkRow, OverlapResult, SeedRow, ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
+  CodeRow, CodingSummary, InstitutionCandidate, InstitutionDetail, InstitutionList, NetworkPreview, NetworkRow, OverlapResult, SeedRow, ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
 } from "./research-types";
 
 const ws = (id: string) => `/api/workspaces/${encodeURIComponent(id)}`;
@@ -65,6 +65,12 @@ export const research = {
   seedSearch: (id: string, source: "wikidata" | "osm", queryText: string, countryCode = "") => apiPost<{ rows: SeedRow[] }>(`${ws(id)}/research/networks/seed`, { source, query: queryText, country_code: countryCode }).then((r) => r.rows),
   seedImport: (id: string, rows: SeedRow[], network: string, role: "subject" | "reference") => apiPost<{ imported: string[]; skipped: number }>(`${ws(id)}/research/networks/seed/import`, { rows, network, role }),
   overlap: (id: string, params: Record<string, string | number | boolean | undefined>) => api<OverlapResult>(`${ws(id)}/research/overlap${query(params)}`),
+  coding: (id: string, itemId: string) => api<{ codes: CodeRow[] }>(`${ws(id)}/research/coding${query({ item_id: itemId })}`).then((r) => r.codes),
+  codingSummary: (id: string, runId: string) => api<CodingSummary>(`${ws(id)}/research/coding${query({ run_id: runId })}`),
+  runCoding: (id: string, runId: string, mode: "auto" | "deterministic") => apiPost<{ items: number; proposed: number; with_codes: number; model_used: boolean; warnings: string[] }>(`${ws(id)}/research/coding/run`, { run_id: runId, mode }),
+  decideCode: (id: string, itemId: string, runId: string, field: string, label: string, decision: "confirm" | "reject", quote = "", author = "") =>
+    apiPost<{ codes: CodeRow[] }>(`${ws(id)}/research/coding/decide`, { item_id: itemId, run_id: runId, field, label, decision, quote, author }).then((r) => r.codes),
+  applyCodes: (id: string, runId: string, itemId: string, entityId: string, author = "") => apiPost<{ applied: string[] }>(`${ws(id)}/research/coding/apply`, { run_id: runId, item_id: itemId, entity_id: entityId, author }),
   geocodeInstitutions: (id: string) => apiPost<{ placed: string[]; failed: Array<{ entity_id: string; reason: string }> }>(`${ws(id)}/research/institutions/geocode`, {}),
   results: (id: string, runId: string, params: Record<string, string | number | boolean | undefined> = {}) => api<ResultsPayload>(`${ws(id)}/runs/${runId}/results${query(params)}`),
   item: (id: string, runId: string, itemId: string) => api<{ item: ResultItem }>(`${ws(id)}/runs/${runId}/items/${itemId}`).then((r) => r.item),

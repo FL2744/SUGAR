@@ -103,6 +103,15 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
     } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); }
   };
 
+  const [codingNote, setCodingNote] = useState("");
+  const codeRun = async (mode: "auto" | "deterministic") => {
+    setBusy("coding"); setCodingNote("");
+    try {
+      const r = await research.runCoding(projectId, runId, mode);
+      setCodingNote(`Proposed ${r.proposed} labels across ${r.with_codes} of ${r.items} items${r.model_used ? " (patterns and your AI model)" : " (patterns)"}. Open an item's Provenance to confirm or reject them.${r.warnings.length ? " " + r.warnings[0] : ""}`);
+    } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
+  };
+
   const exportRun = async () => {
     setBusy("export");
     try { setExportInfo(await research.exportRun(projectId, runId)); }
@@ -191,8 +200,10 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
           <button className="button button-secondary" disabled={Boolean(busy)} onClick={() => void operate("rerun")} title="Execute the same plan again">Rerun</button>
           <button className="button button-secondary" disabled={Boolean(busy)} onClick={() => void operate("refresh_sources")} title="Search again; flag new and changed items">Refresh sources</button>
           <button className="button button-secondary" disabled={Boolean(busy)} onClick={() => void operate("reprocess")} title="Repeat translation and extraction without collecting again">Reprocess results</button>
+          <button className="button button-secondary" disabled={Boolean(busy)} onClick={() => void codeRun("auto")} title="Propose audiences, programs and reported attendance from each item, with quotes. You confirm them.">Code activity and audiences</button>
           <button className="button button-quiet" onClick={onOpenResearch}>Rebuild plan or reinterpret request…</button>
         </div>
+        {codingNote && <div className="notice notice-info" role="status">{codingNote}</div>}
         <p className="muted">Each of these does exactly one thing. See the Research page for details.</p>
       </section>
       {inspect && <ItemInspector projectId={projectId} runId={runId} itemId={inspect} author={author} onClose={() => setInspect("")} />}

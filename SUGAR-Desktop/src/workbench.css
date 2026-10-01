@@ -477,3 +477,7 @@ kbd { padding: 0 .4rem; border: 1px solid var(--wb-line2); border-radius: .3rem;
 @container page (max-width: 60rem) { .map-layout, .map-layout:has(.map-detail) { grid-template-columns: 1fr; } }
 .map-filters select { width: 100%; min-width: 0; }
 .map-filters { max-height: 78dvh; overflow: auto; }
+.code-list { list-style: none; margin: .3rem 0; padding: 0; display: grid; gap: .5rem; }
+.code-list li { display: grid; gap: .3rem; padding: .55rem .7rem; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); }
+.code-list li.confirmed { border-color: var(--wb-green); }
+.code-list q { display: block; color: var(--wb-ink2); font-style: italic; overflow-wrap: anywhere; }

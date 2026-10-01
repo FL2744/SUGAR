@@ -139,3 +139,6 @@ export type OverlapResult = {
   rows: OverlapRow[]; by_country: Array<{ country: string; subjects: number; references: number; subjects_near_reference: number; shared_audience_pairs: number }>;
   counts: { subject_institutions: number; reference_institutions: number; subjects_not_placed: number; references_not_placed: number }; method: string; near_km: number; bands_km: number[];
 };
+
+export type CodeRow = { field: "audience" | "program" | "activity_type" | "attendance"; label: string; quote: string; methods: string[]; status: "proposed" | "confirmed" | "rejected"; decided_by: string; decided_at: string };
+export type CodingSummary = { proposed: Record<string, Record<string, number>>; confirmed: Record<string, Record<string, number>>; items_coded: number };
