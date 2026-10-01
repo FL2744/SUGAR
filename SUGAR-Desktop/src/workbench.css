@@ -458,3 +458,4 @@ kbd { padding: 0 .4rem; border: 1px solid var(--wb-line2); border-radius: .3rem;
 @container page (max-width: 52rem) { .institutions-page-new .project-row { grid-template-columns: 1fr; } .institutions-page-new .project-head { display: none; } }
 .history-card { display: grid; gap: .2rem; padding: .6rem .7rem; margin: .4rem 0; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); overflow-wrap: anywhere; }
 .history-card ul { margin: .2rem 0; padding-left: 1.1rem; }
+.short-input { width: 8rem; min-height: 2.35rem; padding: .3rem .6rem; border: 1px solid var(--wb-line2); border-radius: .4rem; font-size: 1rem; background: var(--wb-card); color: var(--wb-ink); }

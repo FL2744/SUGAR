@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { research } from "./research-api";
 import type { ClaimView, Confidence, Institution, InstitutionCandidate, InstitutionDetail, InstitutionList, RunSummary } from "./research-types";
+import { NetworksPanel } from "./networks-panel";
 import { EmptyState, Pill, Spinner, formatTime, relativeTime, titleCase } from "./ui";
 
 const STATUSES = ["active", "closed", "renamed", "relocated", "unknown"] as const;
@@ -173,6 +174,7 @@ export function InstitutionsPage({ projectId, runs, author, onError, onOpenMap }
   const [open, setOpen] = useState("");
   const [finder, setFinder] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [networksOpen, setNetworksOpen] = useState(false);
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
 
@@ -204,6 +206,7 @@ export function InstitutionsPage({ projectId, runs, author, onError, onOpenMap }
         <div className="run-controls">
           <button className="button button-secondary" onClick={() => setFinder(true)} disabled={runs.length === 0} title={runs.length ? "" : "Run a search first"}>Find in a run</button>
           <button className="button button-secondary" onClick={() => setAdding(true)}>Add institution</button>
+          <button className="button button-secondary" onClick={() => setNetworksOpen(true)}>Networks &amp; imports</button>
           <button className="button button-primary" onClick={onOpenMap}>View on map</button>
         </div>
       </div>
@@ -235,6 +238,7 @@ export function InstitutionsPage({ projectId, runs, author, onError, onOpenMap }
 
       {open && <DetailDrawer projectId={projectId} entityId={open} author={author} others={data?.institutions || []} onClose={() => setOpen("")} onChanged={() => void load()} onError={onError} />}
       {finder && <CandidatesPanel projectId={projectId} runs={runs} author={author} onClose={() => setFinder(false)} onRecorded={() => void load()} onError={onError} />}
+      {networksOpen && <NetworksPanel projectId={projectId} onClose={() => setNetworksOpen(false)} onChanged={() => void load()} onError={onError} />}
       {adding && <AddInstitution projectId={projectId} author={author} onClose={() => setAdding(false)} onSaved={(id) => { setAdding(false); void load(); setOpen(id); }} onError={onError} />}
     </section>
   );

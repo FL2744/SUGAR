@@ -126,3 +126,16 @@ export type InstitutionCandidate = {
   name: string; mentions: number; item_ids: string[]; evidence: Array<{ item_id: string; quote: string; url: string }>; method: string; country: string; city?: string;
   status_hint: string; already_recorded: boolean; entity_type_hint?: string;
 };
+
+export type NetworkRow = { name: string; role: "subject" | "reference"; label: string; color: string; institutions: number; placed: number };
+export type NetworkPreview = { file_id: string; filename: string; suggested_mapping: Record<string, string>; columns?: string[]; row_count: number; valid_rows: number; error_count: number; errors: string[]; sample: Array<Record<string, unknown>> };
+export type SeedRow = { seed_source: string; seed_id: string; name: string; description: string; aliases: string[]; country: string; city?: string; latitude: number | null; longitude: number | null; opened_date: string; closed_date: string; status: string; website: string; source_url: string };
+export type OverlapRow = {
+  entity_id: string; name: string; country: string; city: string;
+  nearest_reference: { entity_id: string; name: string; city: string; country: string; distance_km: number; band: string; same_city: boolean } | null;
+  references_within_km: Record<string, number>; shared_audiences: string[]; shared_programs: string[];
+};
+export type OverlapResult = {
+  rows: OverlapRow[]; by_country: Array<{ country: string; subjects: number; references: number; subjects_near_reference: number; shared_audience_pairs: number }>;
+  counts: { subject_institutions: number; reference_institutions: number; subjects_not_placed: number; references_not_placed: number }; method: string; near_km: number; bands_km: number[];
+};

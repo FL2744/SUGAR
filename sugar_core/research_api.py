@@ -229,7 +229,54 @@ def _institution_routes(method, rest, query, body, wb, project):
     return None
 
 
+def _network_routes(method, rest, query, body, wb, project):
+    import base64
+    from . import networks as nets
+    from . import seed_sources as seeds
+    actor = str(body.get("_author") or "Researcher")
+    try:
+        if rest == "networks" and method == "GET":
+            return 200, {"networks": nets.list_networks(project)}
+        if rest == "networks" and method == "POST":
+            return 200, {"networks": [{"name": k, **v} for k, v in nets.set_network(project, str(body.get("name") or ""), role=str(body.get("role") or ""),
+                                                                                   label=str(body.get("label") or ""), color=str(body.get("color") or ""), actor=actor).items()]}
+        if rest == "networks/preview" and method == "POST":
+            try:
+                content = base64.b64decode(str(body.get("content_base64") or ""), validate=True)
+            except ValueError as exc:
+                raise WorkbenchError("The file could not be read.") from exc
+            return 200, nets.preview_upload(project, str(body.get("filename") or ""), content)
+        if rest == "networks/import" and method == "POST":
+            return 200, nets.import_upload(project, str(body.get("file_id") or ""), mapping={str(k): str(v) for k, v in dict(body.get("mapping") or {}).items()},
+                                           network=str(body.get("network") or ""), role=str(body.get("role") or "reference"), dataset_name=str(body.get("dataset_name") or ""),
+                                           geographic_scope=str(body.get("geographic_scope") or ""), known_coverage_limits=str(body.get("known_coverage_limits") or ""),
+                                           license_notes=str(body.get("license_notes") or ""), accept_partial=bool(body.get("accept_partial")), actor=actor)
+        if rest == "networks/seed" and method == "POST":
+            source = str(body.get("source") or "")
+            if source == "wikidata":
+                rows = seeds.search_wikidata(str(body.get("query") or ""), limit=_int(str(body.get("limit") or "15"), 15, 1, 30), language=str(body.get("language") or "en"))
+            elif source == "osm":
+                rows = seeds.search_osm(str(body.get("query") or ""), country_code=str(body.get("country_code") or ""), limit=_int(str(body.get("limit") or "50"), 50, 1, 100))
+            else:
+                raise WorkbenchError("Choose wikidata or osm as the source.")
+            return 200, {"rows": rows}
+        if rest == "networks/seed/import" and method == "POST":
+            return 200, seeds.import_seeds(project, list(body.get("rows") or []), network=str(body.get("network") or ""), role=str(body.get("role") or "subject"), actor=actor)
+        if rest == "overlap" and method == "GET":
+            split = lambda v: [x.strip() for x in str(v or "").split(",") if x.strip()]   # noqa: E731
+            bands = tuple(float(x) for x in split(query.get("bands")) if re.fullmatch(r"\d+(?:\.\d+)?", x)) or nets.DEFAULT_BANDS_KM
+            return 200, nets.overlap(project, subjects=split(query.get("subject")), references=split(query.get("reference")), bands_km=bands,
+                                     include_closed=_bool(query.get("include_closed")), country=query.get("country", ""))
+    except (ValueError, KeyError) as exc:
+        if isinstance(exc, KeyError):
+            raise WorkbenchError(str(exc.args[0]) if exc.args else "Not found.", 404) from exc
+        raise WorkbenchError(str(exc)) from exc
+    return None
+
+
 def _research_routes(method, rest, query, body, wb, project):
+    if rest.startswith("networks") or rest == "overlap":
+        return _network_routes(method, rest, query, body, wb, project)
     if rest == "institutions" or rest.startswith("institutions/"):
         return _institution_routes(method, rest, query, body, wb, project)
     if rest == "" and method == "GET":
