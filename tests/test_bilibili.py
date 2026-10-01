@@ -172,6 +172,16 @@ def test_search_fails_closed_when_bilibili_returns_access_control_code():
         )
 
 
+def test_search_reports_challenge_voucher_as_access_failure():
+    session = FakeSession([FakeResponse({"code": 0, "message": "OK", "data": {"v_voucher": "challenge"}})])
+    with pytest.raises(BilibiliAccessError, match="access control challenge"):
+        collect_bilibili_public(
+            search_terms=["education"],
+            initialize_session=False,
+            session=session,
+        )
+
+
 def test_search_date_filter_uses_inclusive_dates():
     result = {
         "code": 0,

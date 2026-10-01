@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from .analyst_capture import capture_saved_page
-from .llm import ARC_BASE_URL, LLMConfig, create_client
+from .llm import ARC_BASE_URL, LLMConfig, create_client, default_model
 from .media_artifacts import attach_media_citation, build_media_citation, ingest_media
 from .workspace_hub import run_workspace_hub as run_research_workspace_hub
 from .observation_storage import load_observations
@@ -222,7 +222,7 @@ def _output_directory(
 def _llm_config(config: dict[str, Any], secrets: dict[str, str]) -> LLMConfig:
     raw = config.get("llm") or {}
     provider = str(raw.get("provider") or "openai").strip().casefold()
-    model = str(raw.get("model") or "gpt-5.6-luna").strip()
+    model = str(raw.get("model") or default_model(provider)).strip()
     base_url = str(raw.get("base_url") or "").strip()
     api_key = str(secrets.get("llm_api_key") or "").strip()
     if not api_key:

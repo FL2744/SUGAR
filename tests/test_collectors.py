@@ -1,3 +1,6 @@
+import pytest
+import requests
+
 from sugar_core.collectors import collect_bluesky, collect_mastodon, collect_x, create_session
 
 
@@ -13,7 +16,7 @@ class FakeResponse:
         self._payload = payload; self.url = url; self.status_code = status_code; self.text = ""
     def json(self): return self._payload
     def raise_for_status(self):
-        if self.status_code >= 400: raise RuntimeError(self.status_code)
+        if self.status_code >= 400: raise requests.HTTPError(str(self.status_code), response=self)
 
 
 class FakeSession:
@@ -78,6 +81,34 @@ def test_bluesky_reply_preserves_root_and_parent():
     assert rows[0].conversation_id == root_uri
 
 
+def test_bluesky_retries_public_search_on_the_appview_host():
+    payload = {"posts": [{
+        "uri": "at://did:plc:author/app.bsky.feed.post/one",
+        "author": {"handle": "person.test"},
+        "record": {"text": "education", "createdAt": "2026-09-10T10:00:00Z"},
+    }]}
+    session = FakeSession([FakeResponse({}, status_code=403), FakeResponse(payload, url="https://api.bsky.app/search")])
+    rows = collect_bluesky(search_terms=["education"], max_posts_per_query=1, session=session)
+    assert len(rows) == 1
+    assert session.calls[0][0].startswith("https://public.api.bsky.app/")
+    assert session.calls[1][0].startswith("https://api.bsky.app/")
+    assert rows[0].source_host == "api.bsky.app"
+
+
+def test_bluesky_preserves_first_page_when_later_page_is_denied():
+    payload = {"posts": [{
+        "uri": "at://did:plc:author/app.bsky.feed.post/one",
+        "author": {"handle": "person.test"},
+        "record": {"text": "education", "createdAt": "2026-09-10T10:00:00Z"},
+    }], "cursor": "next"}
+    session = FakeSession([
+        FakeResponse(payload), FakeResponse({}, status_code=403), FakeResponse({}, status_code=403),
+    ])
+    with pytest.raises(requests.HTTPError) as error:
+        collect_bluesky(search_terms=["education"], max_posts_per_query=2, max_pages_per_query=2, session=session)
+    assert len(error.value.partial_records) == 1
+
+
 def test_mastodon_until_date_inclusive_and_metrics():
     payload = {"statuses":[{
         "id":"9", "created_at":"2026-09-10T20:00:00Z", "url":"https://m.example/@a/9", "content":"<p>hello</p>",
@@ -101,6 +132,23 @@ def test_mastodon_status_search_requires_authorized_token_before_request():
     else:
         raise AssertionError("unauthenticated Mastodon status search should fail closed")
     assert session.calls == []
+
+
+def test_mastodon_public_hashtag_timeline_without_token():
+    payload = [{
+        "id": "9", "created_at": "2026-09-10T20:00:00Z",
+        "url": "https://m.example/@a/9", "content": "<p>#education event</p>",
+        "account": {"acct": "a", "display_name": "A"},
+    }]
+    session = FakeSession([FakeResponse(payload)])
+    rows = collect_mastodon(
+        instance_url="https://m.example", search_terms=["#education"],
+        max_posts_per_query=1, session=session,
+    )
+    assert len(rows) == 1
+    assert rows[0].source_mode == "mastodon_public_hashtag"
+    assert rows[0].original_text == "#education event"
+    assert session.calls[0][0] == "https://m.example/api/v1/timelines/tag/education"
 
 
 def test_mastodon_reply_preserves_parent_without_inventing_root():

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-28T21:45:48Z",
-  "records": 6,
+  "generated_at": "2026-09-30T17:08:04Z",
+  "records": 5,
   "csv": "ghana-demo-source-records.csv",
   "xlsx": "ghana-demo-source-records.xlsx",
   "capture_method": "curated_manual_import",
@@ -11,7 +11,7 @@
     "www.ug.edu.gh"
   ],
   "terms": [
-    "Ghana EducationUSA American Spaces Confucius Institute University of Ghana"
+    "Ghana EducationUSA American Spaces University of Ghana"
   ],
-  "source_coverage_note": "Six manually curated official webpages/documents; no platform collection was performed."
+  "source_coverage_note": "Five manually curated official webpages/documents; no platform collection was performed."
 }

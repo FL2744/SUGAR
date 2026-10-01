@@ -22,6 +22,14 @@ Ordinary bridge-run workflows are recorded with actor, start/end time, command, 
 
 History supports reproducibility and review; reruns create new records and outputs. It does not rewrite prior runs. Rerunning a saved search uses its stored safe configuration and a new output directory.
 
+## Project collaboration
+
+The Research project page saves project notes and a member roster, and supports reusable requirement templates. Three starter templates are included; analysts can save project-local templates for their own recurring questions. Project comments are append-only and recorded with actor and timestamp in the project history.
+
+When the browser connects to `sugar_api.py`, the API operator token remains the administrator credential. An owner can issue a project-scoped token to a rostered email address; the token is shown once, stored as a SHA-256 hash by the API, and can be revoked or rotated. Roles are checked against the current roster on every operation: viewers read project data, reviewers can perform review and export actions, analysts can run research operations, and owners can change project profile and membership. Remote API setup and its HTTPS/origin requirements are described in the README. These tokens are application access controls, not institutional single sign-on.
+
+Comments, templates, member roles, and workflow runs are project-local. Project bundles remain asynchronous handoffs: they do not provide simultaneous editing, conflict resolution, or comment threads/replies.
+
 ## Institution and service registry
 
 The registry is generic. Its entity types include networks, organizations, institutions, sites, programs, accounts, events, and services. A record can include:
@@ -67,13 +75,15 @@ The **Data** tab accepts dropped or selected CSV, TSV, XLSX, XLS, JSON, GeoJSON,
 
 The **Maps** tab builds an interactive HTML map from an optional activity/service dataset, the canonical registry, and any number of CSV/XLSX/JSON/GeoJSON reference layers. Registry popups include available lifecycle state, location precision, program and audience fields, relationships, and evidence links. Closed and uncertain records use distinct marker styling and retain source-backed closure details. An as-of date filters by documented activity and lifecycle dates; it does not reconstruct former coordinates or fill missing dates. A map is a view of supplied records, not a census of all network locations.
 
+The desktop institution map can toggle status layers and let an analyst drag a marker to propose a coordinate update. The new coordinate is saved with analyst-review state so it can be verified against a source before use. In the Data view, an analyst can add a country/region/city assignment to a row without altering its original source fields; the assignment records its author and note. These annotations are tied to a fingerprint of the source file and stop applying if that file changes. Region comparison reports side-by-side counts and shares, with the share difference shown descriptively; it does not estimate causal effects.
+
 Map density means record density. Distance means distance. Neither is a measure of influence, competition, popularity, effectiveness, or causal impact. Inspect the underlying rows and coverage metadata before drawing a service-gap conclusion.
 
 ## Listening posts
 
 A listening post stores its name, terms and target entities/accounts, supported source platforms, geography and date filters, collection limits, cadence, status, revision, and run history. Runs use configured public or authorized collectors and follow their existing access and rate-limit behavior. No model enrichment is requested by default. Each run writes ordinary collection output, coverage information, run history, and a deduplicated feed of new, changed, and unchanged records. New or changed items return to `unreviewed`; analysts can mark them human verified, needs follow-up, rejected, or unreviewed and add a note. These decisions are timestamped with analyst identity.
 
-In the desktop, periodic due checks are disabled by default. An analyst may opt in to run due monitors while SUGAR is open. For unattended scheduling, configure each analyst's authorized credentials in their execution environment and invoke the one-shot command from an approved operating-system scheduler:
+The Research project page can edit a saved listening post, pause or resume it, and run currently due checks. The app does not start a hidden background scheduler. For unattended scheduling, configure each analyst's authorized credentials in their execution environment and invoke the one-shot command from an approved operating-system scheduler:
 
 ```powershell
 sugar-project monitor-run-due .\sugar-projects\project-564 --max-monitors 10

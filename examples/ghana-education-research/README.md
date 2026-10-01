@@ -16,8 +16,8 @@ The prepared project includes:
 
 - three EducationUSA centers in Accra and Kumasi;
 - historical American Spaces references in Accra, with current status left unknown;
-- the University of Ghana campus, its Confucius Institute, and the source-backed CIUG–Zhejiang University of Technology relationship;
-- source-specific claims and eight registry relationships;
+- the University of Ghana campus as a separately sourced map reference;
+- source-specific claims and six registry relationships;
 - city/campus-level map points with OpenStreetMap provenance;
 - a research requirement, initial search plan, and project event history;
 - canonical source records, research observations, an evidence-gaps note, and an exported ZIP handoff.
@@ -46,7 +46,7 @@ python -c "from sugar_core.workspace_cli import main; main()" registry-preview e
 
 1. Open the prepared project and show its dashboard and `project-history`.
 2. Open `research-requirement.json` and `search-plan.json` to show the requirement translated into bounded, editable query branches.
-3. Inspect the registry and its evidence-backed `member_of`, `hosted_by`, and `partner_of` relationships.
+3. Inspect the registry and its evidence-backed `member_of` and `hosted_by` relationships.
 4. Open the map, select the Accra cluster, and point out that its location precision is city-level. Compare with the University of Ghana campus-level points.
 5. Open `evidence-gaps.md` and the exported handoff ZIP to show which details remain unresolved and what another analyst receives.
 

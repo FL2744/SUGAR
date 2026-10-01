@@ -1,3 +1,5 @@
+import requests
+
 from sugar_core.collection_coverage import SourceCoverage, classify_collection_error, coverage_payload
 
 
@@ -10,6 +12,9 @@ def test_error_classification_distinguishes_access_partial_and_failure():
     assert classify_collection_error(ValueError("X requires credential(s): x_bearer_token")) == "unavailable"
     assert classify_collection_error(PartialError("connection dropped")) == "partial"
     assert classify_collection_error(RuntimeError("unexpected parser failure")) == "failed"
+    forbidden = requests.Response()
+    forbidden.status_code = 403
+    assert classify_collection_error(requests.HTTPError("403 Client Error", response=forbidden)) == "unavailable"
 
 
 def test_coverage_payload_separates_zero_result_from_failure():

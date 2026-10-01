@@ -8,11 +8,19 @@ from sugar_core.llm import (
     _chat,
     cached_chat,
     create_client,
+    default_model,
     parse_json_object,
     translate_search_term,
     translate_text,
 )
 from sugar_core.utils import JsonCache
+
+
+def test_default_model_matches_the_selected_provider():
+    assert default_model("openai") == "gpt-4o-mini"
+    assert default_model("arc") == "gpt-5.6-luna"
+    assert LLMConfig().model == "gpt-4o-mini"
+    assert LLMConfig(provider="arc").model == "gpt-5.6-luna"
 
 
 class _FakeCompletions:
@@ -117,6 +125,28 @@ def test_cached_chat_retries_then_caches_success(monkeypatch, tmp_path):
     assert len(completions.calls) == 2
     assert sleeps == [1]
     assert "ok" in cache.data.values()
+
+
+def test_cached_chat_sends_strict_json_schema_and_separates_cache_key():
+    client, completions = _client('{"ok":true}')
+    schema = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "test_result",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {"ok": {"type": "boolean"}},
+                "required": ["ok"],
+                "additionalProperties": False,
+            },
+        },
+    }
+
+    assert cached_chat(
+        client, LLMConfig(), None, "strict-task", "sys", "user", response_format=schema,
+    ) == '{"ok":true}'
+    assert completions.calls[0]["response_format"] == schema
 
 
 def test_cached_chat_fails_closed_after_retry_budget(monkeypatch):

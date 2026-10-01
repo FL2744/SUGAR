@@ -22,6 +22,80 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 - Credentials are no longer entered as session-only fields; bridge operations resolve them from the environment and then from saved Settings.
 - Project authors now include William Taggart.
 
+## 1.6.1 — 2026-10-01
+
+### Collection and workflow
+
+- retry anonymous Bluesky searches against Bluesky's public AppView when its cached public hostname returns 403; preserve collected first-page records when a later page fails;
+- support explicit public Mastodon `#hashtag` timelines without a search token, with separate provenance from authorized keyword search;
+- restore live collection outputs in the desktop evidence panel, and allow known public Bilibili videos, Weibo posts, and WeChat articles to enter the evidence workflow by URL;
+- expose location inference and evidence-map generation in the desktop research workflow;
+- classify Bilibili challenge responses and public API 401/403 responses as unavailable coverage instead of empty results.
+
+### Live verification
+
+- collected and saved real Bluesky and Mastodon posts, completed a research plan using both, and triaged live posts into insight artifacts;
+- ingested and triaged real Bilibili video and Weibo post URLs; generated analysis and maps from live, location-enriched X and Mastodon records;
+- Weibo and Bilibili keyword search still face provider login/access challenges in this environment. WeChat article retrieval encountered a TLS hostname mismatch and remains unavailable here; SUGAR does not disable certificate verification.
+
+## 1.6.0 — 2026-10-01
+
+### Added
+
+- added API-enforced project roles with one-time project-scoped member tokens, owner-managed issuance/revocation, append-only project comments, and reusable research requirement templates;
+- added analyst-attributed dataset geography assignments, change detection for stale annotations, side-by-side region comparisons, and map layer toggles with draggable coordinate review;
+- connected saved listening posts to the desktop/browser workspace, including schedule editing, pause/resume, and run-due checks; added bounded per-platform collection tuning;
+- expanded deterministic question, activity, and place extraction across Portuguese, German, Italian, Russian, Arabic, and Chinese while retaining exact source spans for explicit concepts;
+- added browser accessibility/readability coverage to CI and raised the package release version.
+
+### Quality
+
+- verified the packaged frontend build, all six headless Chromium workflows, WCAG 2.2 A/AA checks, and focused backend/API/workspace tests;
+- verified the full Python suite, Ruff, a Windows MSI and bundled sidecar, and packaged sidecar access to the OS credential vault;
+- used the vault-saved credentials for OpenAI model discovery, strict structured interpretation with exact source spans, query/text translation, and an X search that returned one record;
+- exercised Bluesky, Bilibili, Mastodon, and Weibo through the real collection pipeline; Bilibili completed with zero results while the other three reported unavailable access for this environment.
+
+## 1.5.0 — 2026-09-30
+
+### Added
+
+- added live collection controls for queries, sources, exclusions, languages, date windows, source retries, and cooperative stop requests;
+- added cross-provider request pacing, parallel source collection, bounded collection requests, an estimated memory budget, and parallel order-preserving observation extraction;
+- added OpenAI strict structured output for multilingual requirement interpretation, with analyst approval before a compiled strategy drives search;
+- added optional translation of collected posts, project-level notes and a member roster, analyst-reviewed coded findings, export format selection, and geographic grouping summaries;
+- added Windows Credential Manager, macOS Keychain, and supported Linux vault integration with no plaintext credential fallback;
+- increased the desktop text-size floor to 16px and expanded responsive, dark-mode, and accessibility coverage;
+
+### Fixed
+
+- project file references are constrained to their owning workspace, GeoJSON exports retain valid coordinate ordering, and JSON exports are emitted as JSON arrays;
+- Windows and macOS sidecar build scripts now include the credential-vault runtime;
+- frozen desktop workspaces now report the packaged SUGAR version when Python distribution metadata is absent.
+
+### Quality
+
+- added API and browser tests for live collection controls, project profiles, dataset formats, geography summaries, memory limits, and strict structured output;
+- verified the Windows Credential Manager integration, OpenAI model access, structured interpretation, Spanish translation, X search, and anonymous Bilibili pipeline against live services;
+- added the expanded Playwright suite to the existing CI UI job and retained the repository OPSEC check.
+
+## 1.4.0 — 2026-09-30
+
+### Added
+
+- added research requirement controls for date range, language codes, excluded topics, and collection sources; plan collection now carries the configured date, source, and language filters;
+- OpenAI triage now requests strict JSON Schema output, with the parsed evidence spans still checked against source text;
+
+### Fixed
+
+- removed target-specific institute and partner references from the Ghana education research demo so it passes the public repository OPSEC check; regenerated the example workspace and its portable handoff from the corrected source inventory;
+- increased muted-text contrast across the shared desktop workspace, labeled hidden file inputs, and added light/dark appearance selection with a remembered theme;
+- aligned the Python package and core version with the existing 1.4.0 desktop application.
+
+### Quality
+
+- added Chromium Playwright coverage for browser project creation, research-requirement submission, session-only credentials, and WCAG 2.2 A/AA checks across the primary workspace views;
+- added the browser suite to CI and verified the Windows MSI and bundled sidecar with the packaged no-credential workflow.
+
 ## 1.3.0 — 2026-09-24
 
 ### Added

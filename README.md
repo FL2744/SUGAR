@@ -6,7 +6,7 @@
 
 SUGAR is a cross-platform public-source research system for collecting social-media material, preserving provenance, organizing evidence, conducting spatial and structured analysis, and producing reviewable research products. The public engine is target-neutral; project-specific targets, query plans, and case data belong in non-public project configuration.
 
-Current package version: **1.3.0**.
+Current package version: **1.6.0**.
 
 License: **Apache License 2.0**. Copyright 2026 Alejandro Grenier and contributors.
 
@@ -65,7 +65,7 @@ The browser is the canonical UI. The optional Tauri packages run that same front
 
 Start the Python API from the repository root with `python -m pip install -e .` followed by `python sugar_api.py`. In another terminal, run `cd SUGAR-Desktop`, `npm install`, and `npm run dev`. The browser opens the shared UI and connects to `http://127.0.0.1:8765` by default. Projects created through the API are stored under `~/.sugar/workspaces`; set `SUGAR_API_WORKSPACE_ROOT` to select another location.
 
-`sugar_api.py` can serve the same UI against a local or hosted Python backend. A remote deployment requires HTTPS, an API token, an explicit allowed browser origin, and approved identity/access controls. The current API is a single-operator service; it does not provide tenant isolation or institutional identity.
+`sugar_api.py` serves the same UI against a local or hosted Python backend. A remote deployment requires HTTPS, `SUGAR_API_TOKEN`, and an explicit allowed browser origin (`SUGAR_API_ALLOWED_ORIGINS`). The operator token is an administrator credential. An administrator can issue a one-time, project-scoped access token to a person listed in that project's roster and revoke or rotate it later. Each request checks the member's current project role; viewers can read, reviewers can perform review/export actions, analysts can run research operations, and owners can change the project profile and membership. Only token hashes are kept in `.sugar-member-access.json` under the configured API workspace root. Member tokens do not provide institutional sign-in or simultaneous conflict-resolved editing; portable project bundles remain asynchronous handoffs.
 
 For optional desktop installs, `SUGAR-Desktop/scripts/build-windows.ps1` builds the Windows MSI, and `SUGAR-Desktop/scripts/build-macos.sh` builds the macOS app/DMG on a Mac with Xcode command line tools and Python 3.12. Compatibility wrapper commands are available at [`SUGAR-Windows/scripts/build.ps1`](SUGAR-Windows/scripts/build.ps1) and [`SUGAR-macOS/scripts/build_app.sh`](SUGAR-macOS/scripts/build_app.sh).
 
@@ -113,7 +113,7 @@ See [`docs/project-workspaces.md`](docs/project-workspaces.md) for the workspace
 
 ## Persistent research workspace
 
-The project-workspace layer supports multi-project navigation, subprojects, run and plan-change history, evidence-backed institution/service registries, inspectable data tables, reusable map layers, conversation context, and persistent listening posts. The shared `sugar-project` CLI supports project dashboards/history, reference-data import/export, monitor scheduling/review, conversation reconstruction, and integrity-checked project bundles. The unified browser interface currently focuses on research requirements, imports, evidence inspection, institution maps, project history, and handoffs; the remaining workspace operations continue to be available through the Python CLI and core APIs as they are brought into the shared UI. Monitoring can be run manually or by an approved operating-system scheduler; in-app polling is opt-in.
+The project-workspace layer supports multi-project navigation, subprojects, run and plan-change history, evidence-backed institution/service registries, inspectable data tables, reusable map layers, conversation context, and persistent listening posts. The shared `sugar-project` CLI supports project dashboards/history, reference-data import/export, monitor scheduling/review, conversation reconstruction, and integrity-checked project bundles. The unified browser interface provides project profiles, notes, role-managed member access, append-only comments, reusable requirement templates, dataset inspection/export, institution maps, analyst geography assignments and comparisons, coded findings, translation controls, project history, handoffs, and live collection controls. Monitoring can be run on demand or by an approved operating-system scheduler.
 
 SUGAR includes blank registry schemas for American Spaces, EducationUSA, language education centers, technical training workshops, and custom networks. It does not present those schemas as an authoritative current inventory; analysts supply source-backed datasets and record their scope and coverage limits. The tool keeps American Spaces and EducationUSA distinct, reports comparison dimensions separately, and preserves evidence and uncertainty without scoring popularity, effectiveness, or causal influence.
 
@@ -125,7 +125,7 @@ See [`docs/research-workspace.md`](docs/research-workspace.md) for the supported
 | --- | --- |
 | X | API v2 recent/full-archive search, subject to caller access/billing |
 | Bluesky | Public AppView search; optional authenticated PDS proxy path |
-| Mastodon | Instance-scoped status search with an authorized user token (`read:search`) |
+| Mastodon | Instance-scoped keyword status search with an authorized user token (`read:search`), or explicit public `#hashtag` timelines without one |
 | Bilibili | Public video search, known-video metadata, and public comments |
 | Weibo | Public/authorized search where available, known-public-post retrieval, comments, seed expansion, qualification workflows |
 | WeChat Official Accounts | Known public `mp.weixin.qq.com` article ingestion; no keyword search or private/account-only surfaces |

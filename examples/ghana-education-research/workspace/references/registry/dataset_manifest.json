@@ -3,7 +3,7 @@
   "datasets": [
     {
       "actor": "demo builder",
-      "dataset_id": "ds_2bc95d579e961694b006",
+      "dataset_id": "ds_f8e79fa562601419a035",
       "field_mapping": {
         "address": "address",
         "aliases": "aliases",
@@ -23,8 +23,8 @@
         "status": "status"
       },
       "format": "csv",
-      "geographic_scope": "Selected sites in Accra and Kumasi, the University of Ghana campus, and one named external partner institution.",
-      "imported_at": "2026-09-28T21:45:48Z",
+      "geographic_scope": "Selected sites in Accra and Kumasi and a University of Ghana campus reference point.",
+      "imported_at": "2026-09-30T17:08:04Z",
       "invalid_rows": 0,
       "known_coverage_limits": "Non-exhaustive public-source sample; see evidence-gaps.md.",
       "license_notes": "Facts paraphrased from linked public official sources; source URLs are retained. Map location claims separately cite OpenStreetMap under ODbL.",
@@ -34,15 +34,15 @@
         "method": "exact curated label mapping from explicitly supplied program/audience/delivery fields; source wording is retained",
         "version": "1.0"
       },
-      "row_count": 11,
-      "sha256": "2bc95d579e961694b006417e8485266ef99b28739ca8e1ed6c4e6b0236243847",
+      "row_count": 9,
+      "sha256": "f8e79fa562601419a03593fe934dcadecba67fdc0052053974e37dcd717f5caf",
       "source_license_values": [],
-      "source_path": "references/registry/sources/2bc95d579e96_ghana-demo-source-inventory.csv",
-      "updated_at": "2026-09-28T21:45:48Z",
-      "valid_rows": 11
+      "source_path": "references/registry/sources/f8e79fa56260_ghana-demo-source-inventory.csv",
+      "updated_at": "2026-09-30T17:08:04Z",
+      "valid_rows": 9
     }
   ],
   "excluded_rows": [],
-  "generated_at": "2026-09-28T21:45:48Z",
+  "generated_at": "2026-09-30T17:08:04Z",
   "schema_version": "1.0"
 }

@@ -84,6 +84,10 @@ jobs:
         working-directory: SUGAR-Desktop
       - run: npm run build
         working-directory: SUGAR-Desktop
+      - run: npx playwright install --with-deps chromium
+        working-directory: SUGAR-Desktop
+      - run: npm run test:e2e
+        working-directory: SUGAR-Desktop
 
   macos-app:
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
@@ -113,7 +117,8 @@ jobs:
           test -n "$bridge"
           echo "SUGAR_BRIDGE_PATH=$bridge" >> "$GITHUB_ENV"
       - name: Backend diagnostics smoke test
-        run: "$SUGAR_BRIDGE_PATH" diagnostics
+        run: |
+          "$SUGAR_BRIDGE_PATH" diagnostics
       - name: Packaged analysis smoke test
         run: |
           cat > /tmp/sugar-smoke.csv <<'CSV'
@@ -133,7 +138,7 @@ jobs:
           test -s "$app/Contents/Resources/licenses/LICENSE"
           test -s "$app/Contents/Resources/licenses/NOTICE"
           test -s "$app/Contents/Resources/licenses/THIRD_PARTY_NOTICES.md"
-          test -s "$app/Contents/Resources/licenses/npm/manifest.json"
+          test -s "$app/Contents/Resources/licenses/npm/_inventory/LICENSES.txt"
       - name: Archive validated macOS bundle
         run: |
           ditto -c -k --sequesterRsrc --keepParent SUGAR-Desktop/src-tauri/target/release/bundle/macos/SUGAR.app SUGAR-macOS.zip

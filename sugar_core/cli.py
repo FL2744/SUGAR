@@ -17,7 +17,7 @@ from .lineage import (
     save_lineage_index,
     validate_lineage_index,
 )
-from .llm import ARC_BASE_URL, LLMConfig
+from .llm import ARC_BASE_URL, LLMConfig, default_model
 from .plan_execution import execute_search_plan
 from .plan_feedback import apply_triage_feedback, evidence_excerpts_for_branch
 from .observation_storage import load_observations
@@ -72,7 +72,7 @@ def _lines_from_files(paths: list[str]) -> list[str]:
             raise FileNotFoundError(path)
         for line in path.read_text(encoding="utf-8-sig").splitlines():
             value = line.strip()
-            if not value or value.startswith("#"):
+            if not value or value == "#" or value.startswith(("# ", "##")):
                 continue
             key = value.casefold()
             if key not in seen:
@@ -157,7 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--pages", type=int, default=1)
     search.add_argument("--output")
     search.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
-    search.add_argument("--model", default="gpt-5.6-luna")
+    search.add_argument("--model")
     search.add_argument("--base-url", default="")
     search.add_argument("--no-translate", action="store_true")
     search.add_argument("--no-location", action="store_true")
@@ -220,7 +220,7 @@ def build_parser() -> argparse.ArgumentParser:
     strategy_compile.add_argument("--output")
     strategy_compile.add_argument("--ai-expand", action="store_true")
     strategy_compile.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
-    strategy_compile.add_argument("--model", default="gpt-5.6-luna")
+    strategy_compile.add_argument("--model")
     strategy_compile.add_argument("--base-url", default="")
     _workspace_arg(strategy_compile)
     strategy_show = strategy_sub.add_parser("show")
@@ -251,7 +251,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--output")
     plan.add_argument("--ai-expand", action="store_true", help="Ask the configured LLM for additional bounded query branches.")
     plan.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
-    plan.add_argument("--model", default="gpt-5.6-luna")
+    plan.add_argument("--model")
     plan.add_argument("--base-url", default="")
     plan.add_argument("--max-ai-queries", type=int, default=24)
     _workspace_arg(plan)
@@ -287,7 +287,7 @@ def build_parser() -> argparse.ArgumentParser:
     expand_plan.add_argument("observations_file")
     expand_plan.add_argument("--branch", required=True, dest="branch_id")
     expand_plan.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
-    expand_plan.add_argument("--model", default="gpt-5.6-luna")
+    expand_plan.add_argument("--model")
     expand_plan.add_argument("--base-url", default="")
     expand_plan.add_argument("--max-ai-queries", type=int, default=8)
     expand_plan.add_argument("--max-evidence", type=int, default=24)
@@ -441,7 +441,7 @@ def build_parser() -> argparse.ArgumentParser:
     triage.add_argument("source_file")
     triage.add_argument("--output")
     triage.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
-    triage.add_argument("--model", default="gpt-5.6-luna")
+    triage.add_argument("--model")
     triage.add_argument("--base-url", default="")
     triage.add_argument("--project-context-file")
     triage.add_argument("--fail-fast", action="store_true")
@@ -481,13 +481,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _llm_from_cli(provider: str, model: str, base_url: str, api_key: str) -> LLMConfig:
+def _llm_from_cli(provider: str, model: str | None, base_url: str, api_key: str) -> LLMConfig:
     base = base_url.strip()
     if provider == "arc" and not base:
         base = ARC_BASE_URL
     if provider == "custom" and not base:
         raise ValueError("--base-url is required when --provider custom is used.")
-    return LLMConfig(provider=provider, model=model, api_key=api_key, base_url=base)
+    return LLMConfig(provider=provider, model=model or default_model(provider), api_key=api_key, base_url=base)
 
 
 def main(argv=None) -> int:

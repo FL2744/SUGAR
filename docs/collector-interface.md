@@ -25,7 +25,7 @@ Current registry examples:
 | --- | --- | --- | --- | --- |
 | X | yes | no | no | no |
 | Bluesky | yes | no | no | yes |
-| Mastodon | yes (user token with `read:search`) | no | no | no |
+| Mastodon | yes (user token with `read:search`); public `#hashtag` timelines without one | no | no | yes, hashtag only |
 | Bilibili | yes/public-session-dependent | yes | yes/public-response-dependent | yes/fail-closed |
 | Weibo | yes/access-dependent | yes | yes/public-response-dependent | yes/access-dependent |
 | WeChat Official Accounts | no | yes/public article URL | no | no |

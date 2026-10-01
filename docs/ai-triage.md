@@ -9,7 +9,7 @@ After collecting posts with SUGAR:
 ```bash
 sugar triage social_search_posts_20260910_120000.csv \
   --provider openai \
-  --model gpt-5.6-luna
+  --model gpt-4o-mini
 ```
 
 For Virginia Tech ARC's OpenAI-compatible endpoint:
@@ -29,6 +29,7 @@ The command writes:
 The input can be a current SUGAR CSV/XLSX export or a compatible legacy SUGAR export containing the older alias columns.
 
 The LLM key is read from `SUGAR_LLM_API_KEY` when set; otherwise the CLI prompts for it without echoing the value.
+When `--model` is omitted, SUGAR uses `gpt-4o-mini` for OpenAI and its ARC-compatible default for ARC.
 
 ## Project scope
 

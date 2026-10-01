@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from typing import Iterable
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -12,6 +12,7 @@ from .utils import in_inclusive_date_range, normalize_whitespace
 
 X_API_BASE_URL = "https://api.x.com/2"
 BLUESKY_API_BASE_URL = "https://public.api.bsky.app"
+BLUESKY_APPVIEW_URL = "https://api.bsky.app"
 BLUESKY_PDS_URL = "https://bsky.social"
 BLUESKY_SERVICE_PROXY = "did:web:api.bsky.app#bsky_appview"
 
@@ -209,8 +210,18 @@ def collect_bluesky(*, search_terms: Iterable[str], since: str | None = None, un
             if since: params["since"] = since
             if until: params["until"] = until
             if cursor: params["cursor"] = cursor
-            response = session.get(endpoint, params=params, headers=headers, timeout=60)
-            response.raise_for_status()
+            try:
+                response = session.get(endpoint, params=params, headers=headers, timeout=60)
+                if not access_jwt and response.status_code == 403 and endpoint.startswith(BLUESKY_API_BASE_URL):
+                    # The cached public hostname can reject a request while the
+                    # same Bluesky operated public AppView remains available.
+                    endpoint = f"{BLUESKY_APPVIEW_URL}/xrpc/app.bsky.feed.searchPosts"
+                    response = session.get(endpoint, params=params, headers=headers, timeout=60)
+                response.raise_for_status()
+            except requests.RequestException as exc:
+                if records:
+                    exc.partial_records = list(records.values())
+                raise
             payload = response.json()
             for item in payload.get("posts", []) or []:
                 author, record = item.get("author") or {}, item.get("record") or {}
@@ -255,20 +266,31 @@ def collect_mastodon(*, instance_url: str, search_terms: Iterable[str], access_t
                      since: str | None = None, until: str | None = None, include_reposts: bool = False,
                      max_posts_per_query: int = 40, max_pages_per_query: int = 1,
                      session: requests.Session | None = None) -> list[PostRecord]:
-    if not access_token.strip():
-        raise ValueError("Mastodon status search requires an authorized user token with the read:search scope.")
+    search_terms = list(search_terms)
+    public_hashtags = not access_token.strip()
+    if public_hashtags and any(not (str(term).startswith("#") and len(str(term)) > 1 and not any(char.isspace() for char in str(term))) for term in search_terms):
+        raise ValueError("Mastodon keyword status search requires an authorized user token with the read:search scope. Without a token, use a single #hashtag per query for the public hashtag timeline.")
     session = session or create_session(); instance_url = instance_url.rstrip("/")
     records: OrderedDict[tuple[str, str], PostRecord] = OrderedDict()
-    endpoint = f"{instance_url}/api/v2/search"; headers = {"Authorization": f"Bearer {access_token}"} if access_token else {}
+    headers = {"Authorization": f"Bearer {access_token}"} if access_token else {}
     for query in search_terms:
-        offset = 0; collected = 0
+        endpoint = (
+            f"{instance_url}/api/v1/timelines/tag/{quote(str(query)[1:], safe='')}"
+            if public_hashtags else f"{instance_url}/api/v2/search"
+        )
+        offset = 0; collected = 0; max_id = ""
         for _ in range(max_pages_per_query):
-            limit = max(1, min(40, max_posts_per_query - collected))
-            if limit <= 0: break
-            params = {"q": query, "type": "statuses", "limit": limit}
-            if access_token and offset: params["offset"] = offset
+            remaining = max_posts_per_query - collected
+            if remaining <= 0: break
+            limit = min(40, remaining)
+            params = {"limit": limit} if public_hashtags else {"q": query, "type": "statuses", "limit": limit}
+            if public_hashtags and max_id: params["max_id"] = max_id
+            if not public_hashtags and offset: params["offset"] = offset
             response = session.get(endpoint, params=params, headers=headers, timeout=60); response.raise_for_status()
-            statuses = response.json().get("statuses", []) or []
+            payload = response.json()
+            statuses = (payload if public_hashtags else payload.get("statuses", [])) or []
+            if not isinstance(statuses, list):
+                raise RuntimeError("Mastodon returned an unexpected status list.")
             for status in statuses:
                 repost = bool(status.get("reblog")); content = status.get("reblog") or status
                 if repost and not include_reposts: continue
@@ -288,6 +310,7 @@ def collect_mastodon(*, instance_url: str, search_terms: Iterable[str], access_t
                     parent_record_key=_platform_key("mastodon", parent_id),
                     thread_root_key=root_key,
                     conversation_id=conversation_id,
+                    source_mode="mastodon_public_hashtag" if public_hashtags else "mastodon_search",
                     source_host=urlparse(instance_url).netloc,
                     source_url=response.url, published_at=published,
                     author_handle=str(account.get("acct", account.get("username", ""))),
@@ -297,6 +320,10 @@ def collect_mastodon(*, instance_url: str, search_terms: Iterable[str], access_t
                 ))
                 collected += 1
                 if collected >= max_posts_per_query: break
-            if not access_token or len(statuses) < limit or collected >= max_posts_per_query: break
-            offset += len(statuses)
+            if len(statuses) < limit or collected >= max_posts_per_query: break
+            if public_hashtags:
+                max_id = str(statuses[-1].get("id", ""))
+                if not max_id: break
+            else:
+                offset += len(statuses)
     return list(records.values())

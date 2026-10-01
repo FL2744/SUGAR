@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import tempfile
+import threading
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -55,20 +58,33 @@ def stable_hash(*parts: Any) -> str:
 class JsonCache:
     def __init__(self, path: str | Path):
         self.path = Path(path)
+        self._lock = threading.RLock()
         try:
             self.data = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
         except Exception:
             self.data = {}
 
     def get(self, key: str):
-        return self.data.get(key)
+        with self._lock:
+            return self.data.get(key)
 
     def set(self, key: str, value: Any) -> None:
-        self.data[key] = value
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        temp = self.path.with_suffix(self.path.suffix + ".tmp")
-        temp.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
-        temp.replace(self.path)
+        with self._lock:
+            self.data[key] = value
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            descriptor, temporary_name = tempfile.mkstemp(
+                prefix=f".{self.path.name}-", suffix=".tmp", dir=self.path.parent,
+            )
+            try:
+                with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+                    json.dump(self.data, stream, ensure_ascii=False, indent=2)
+                    stream.write("\n")
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary_name, self.path)
+            except Exception:
+                Path(temporary_name).unlink(missing_ok=True)
+                raise
 
 
 def utc_iso(dt: datetime | None = None) -> str:

@@ -65,3 +65,28 @@ jobs:
           "$RUNNER_TEMP/sugar-wheel/bin/sugar-state" --version
           "$RUNNER_TEMP/sugar-wheel/bin/sugar-intel" --version
           "$RUNNER_TEMP/sugar-wheel/bin/python" -c "import sugar_core; print(sugar_core.__version__)"
+
+  desktop-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: SUGAR-Desktop/package-lock.json
+      - name: Install desktop UI dependencies
+        working-directory: SUGAR-Desktop
+        run: npm ci
+      - name: Audit desktop UI dependencies
+        working-directory: SUGAR-Desktop
+        run: npm audit --audit-level=high
+      - name: Build desktop UI
+        working-directory: SUGAR-Desktop
+        run: npm run build
+      - name: Install headless Chromium
+        working-directory: SUGAR-Desktop
+        run: npx playwright install --with-deps chromium
+      - name: Run browser integration and accessibility checks
+        working-directory: SUGAR-Desktop
+        run: npm run test:e2e -- --reporter=line

@@ -63,6 +63,10 @@ def classify_collection_error(exc: Exception, *, records: int = 0) -> str:
     if partial_records is not None or records > 0:
         return "partial"
 
+    response = getattr(exc, "response", None)
+    if getattr(response, "status_code", None) in {401, 403}:
+        return "unavailable"
+
     message = _clean(exc).casefold()
     unavailable_markers = (
         "requires credential",

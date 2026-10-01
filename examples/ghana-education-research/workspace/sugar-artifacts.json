@@ -7,11 +7,11 @@
       "metadata": {
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research.zip",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -21,11 +21,11 @@
         "handoff_role": "provenance",
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research/provenance/ghana-demo-source-records.metadata.json",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -35,11 +35,11 @@
         "handoff_role": "provenance",
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research/provenance/ghana-demo-source-inventory.csv",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -49,11 +49,11 @@
         "handoff_role": "provenance",
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research/provenance/ghana-demo-institution-registry.csv",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -63,11 +63,11 @@
         "handoff_role": "provenance",
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research/provenance/evidence-gaps.md",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -77,11 +77,11 @@
         "handoff_role": "analytic_output",
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research/outputs/ghana-education-research.html",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -91,11 +91,11 @@
         "handoff_role": "coverage_and_limitations",
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research/limitations.json",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -105,11 +105,11 @@
         "handoff_role": "normalized_records",
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research/evidence/records.jsonl",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -119,11 +119,11 @@
         "handoff_role": "research_observations",
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research/evidence/observations.jsonl",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -133,11 +133,11 @@
         "handoff_role": "evidence_lineage",
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research/evidence/lineage.json",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -147,11 +147,11 @@
         "handoff_role": "search_plan",
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research/context/search-plan.json",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -161,11 +161,11 @@
         "handoff_role": "research_requirement",
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research/context/research-requirement.json",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -174,11 +174,11 @@
       "metadata": {
         "handoff_schema_version": "1.0",
         "operation": "handoff",
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "outputs/exports/handoff/ghana-education-research/manifest.json",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -189,8 +189,8 @@
         "reference_layers": []
       },
       "path": "outputs/maps/ghana-education-research.html",
-      "registered_at": "2026-09-28T21:45:49Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:05Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -198,8 +198,8 @@
       "label": "Registry export (csv)",
       "metadata": {},
       "path": "outputs/exports/ghana-demo-institution-registry.csv",
-      "registered_at": "2026-09-28T21:45:48Z",
-      "updated_at": "2026-09-28T21:45:48Z"
+      "registered_at": "2026-09-30T17:08:04Z",
+      "updated_at": "2026-09-30T17:08:04Z"
     },
     {
       "external": false,
@@ -207,8 +207,8 @@
       "label": "Evidence gaps and interpretation limits",
       "metadata": {},
       "path": "evidence-gaps.md",
-      "registered_at": "2026-09-28T21:45:48Z",
-      "updated_at": "2026-09-28T21:45:48Z"
+      "registered_at": "2026-09-30T17:08:04Z",
+      "updated_at": "2026-09-30T17:08:04Z"
     },
     {
       "external": false,
@@ -216,8 +216,8 @@
       "label": "Unreviewed public-source observations",
       "metadata": {},
       "path": "data/observations/ghana-demo-observations.csv",
-      "registered_at": "2026-09-28T21:45:48Z",
-      "updated_at": "2026-09-28T21:45:48Z"
+      "registered_at": "2026-09-30T17:08:04Z",
+      "updated_at": "2026-09-30T17:08:04Z"
     },
     {
       "external": false,
@@ -225,19 +225,19 @@
       "label": "Curated official source records",
       "metadata": {},
       "path": "data/raw/ghana-demo-source-records.csv",
-      "registered_at": "2026-09-28T21:45:48Z",
-      "updated_at": "2026-09-28T21:45:48Z"
+      "registered_at": "2026-09-30T17:08:04Z",
+      "updated_at": "2026-09-30T17:08:04Z"
     },
     {
       "external": false,
       "kind": "search_plan",
       "label": "Initial Ghana demo search plan",
       "metadata": {
-        "requirement_id": "rq_38f8f64728f91924"
+        "requirement_id": "rq_a6bad792b3461c97"
       },
       "path": "state/search-plan.json",
-      "registered_at": "2026-09-28T21:45:48Z",
-      "updated_at": "2026-09-28T21:45:48Z"
+      "registered_at": "2026-09-30T17:08:04Z",
+      "updated_at": "2026-09-30T17:08:04Z"
     },
     {
       "external": false,
@@ -245,8 +245,8 @@
       "label": "Ghana sponsor-demo research requirement",
       "metadata": {},
       "path": "state/research-requirement.json",
-      "registered_at": "2026-09-28T21:45:48Z",
-      "updated_at": "2026-09-28T21:45:48Z"
+      "registered_at": "2026-09-30T17:08:04Z",
+      "updated_at": "2026-09-30T17:08:04Z"
     },
     {
       "external": false,
@@ -254,8 +254,8 @@
       "label": "Project activity and search history",
       "metadata": {},
       "path": ".sugar/project-history.jsonl",
-      "registered_at": "2026-09-28T21:45:48Z",
-      "updated_at": "2026-09-28T21:45:49Z"
+      "registered_at": "2026-09-30T17:08:04Z",
+      "updated_at": "2026-09-30T17:08:05Z"
     },
     {
       "external": false,
@@ -263,11 +263,11 @@
       "label": "Ghana sponsor-demo seed inventory",
       "metadata": {
         "license_notes": "Facts paraphrased from linked public official sources; source URLs are retained. Map location claims separately cite OpenStreetMap under ODbL.",
-        "sha256": "2bc95d579e961694b006417e8485266ef99b28739ca8e1ed6c4e6b0236243847"
+        "sha256": "f8e79fa562601419a03593fe934dcadecba67fdc0052053974e37dcd717f5caf"
       },
-      "path": "references/registry/sources/2bc95d579e96_ghana-demo-source-inventory.csv",
-      "registered_at": "2026-09-28T21:45:48Z",
-      "updated_at": "2026-09-28T21:45:48Z"
+      "path": "references/registry/sources/f8e79fa56260_ghana-demo-source-inventory.csv",
+      "registered_at": "2026-09-30T17:08:04Z",
+      "updated_at": "2026-09-30T17:08:04Z"
     },
     {
       "external": false,
@@ -275,8 +275,8 @@
       "label": "Reference dataset scope and provenance",
       "metadata": {},
       "path": "references/registry/dataset_manifest.json",
-      "registered_at": "2026-09-28T21:45:48Z",
-      "updated_at": "2026-09-28T21:45:48Z"
+      "registered_at": "2026-09-30T17:08:04Z",
+      "updated_at": "2026-09-30T17:08:04Z"
     },
     {
       "external": false,
@@ -284,8 +284,8 @@
       "label": "Evidence-backed entity relationships",
       "metadata": {},
       "path": "references/registry/relationships.jsonl",
-      "registered_at": "2026-09-28T21:45:48Z",
-      "updated_at": "2026-09-28T21:45:48Z"
+      "registered_at": "2026-09-30T17:08:04Z",
+      "updated_at": "2026-09-30T17:08:04Z"
     },
     {
       "external": false,
@@ -293,8 +293,8 @@
       "label": "Evidence-backed entity lifecycle events",
       "metadata": {},
       "path": "references/registry/lifecycle.jsonl",
-      "registered_at": "2026-09-28T21:45:48Z",
-      "updated_at": "2026-09-28T21:45:48Z"
+      "registered_at": "2026-09-30T17:08:04Z",
+      "updated_at": "2026-09-30T17:08:04Z"
     },
     {
       "external": false,
@@ -302,12 +302,12 @@
       "label": "Evidence-backed entity registry",
       "metadata": {},
       "path": "references/registry/entities.jsonl",
-      "registered_at": "2026-09-28T21:45:48Z",
-      "updated_at": "2026-09-28T21:45:48Z"
+      "registered_at": "2026-09-30T17:08:04Z",
+      "updated_at": "2026-09-30T17:08:04Z"
     }
   ],
   "database_schema_version": 1,
-  "generated_at": "2026-09-28T21:45:49Z",
+  "generated_at": "2026-09-30T17:08:05Z",
   "project_id": "df32c261-308c-5ace-bd33-0d6c5990b477",
   "schema_version": "1.0",
   "software": {

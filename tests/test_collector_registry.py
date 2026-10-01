@@ -80,15 +80,15 @@ def test_required_credentials_are_validated_before_collection():
     with pytest.raises(ValueError, match="x bearer token"):
         collect_registered_source("x", request)
 
-    with pytest.raises(ValueError, match="mastodon token"):
+    with pytest.raises(ValueError, match="read:search"):
         collect_registered_source("mastodon", request)
 
 
-def test_mastodon_status_search_is_not_advertised_as_anonymous():
+def test_mastodon_public_hashtag_search_is_advertised():
     caps = collector_capabilities()["mastodon"]
     assert caps["keyword_search"] is True
     assert caps["authenticated_search"] is True
-    assert caps["anonymous_search"] is False
+    assert caps["anonymous_search"] is True
 
 
 def test_bilibili_search_records_get_thread_roots(monkeypatch):

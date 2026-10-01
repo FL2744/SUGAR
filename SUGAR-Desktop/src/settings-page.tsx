@@ -256,6 +256,8 @@ export function SettingsPage({ prefs, onSavePrefs, onDirtyChange, engineState, a
                   <input type="range" min={85} max={150} step={5} value={Math.round(draftPrefs.textScale * 100)} onChange={(event) => setDraftPrefs({ ...draftPrefs, textScale: Number(event.target.value) / 100 })} aria-label="Text size" />
                   <small>This adjusts SUGAR's text on top of your operating system's display scaling. Everything, including buttons and spacing, scales with it.</small>
                   <p className="text-sample">The quick brown fox — تجربة النص — 文本示例</p></div>
+                <div className="field-block"><span>Color theme</span>
+                  <Segmented label="Color theme" value={draftPrefs.theme} onChange={(theme) => setDraftPrefs({ ...draftPrefs, theme })} options={[{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} /></div>
                 <div className="field-block"><span>Density</span>
                   <Segmented label="Density" value={draftPrefs.density} onChange={(density) => setDraftPrefs({ ...draftPrefs, density })} options={[{ value: "comfortable", label: "Comfortable" }, { value: "compact", label: "Compact" }]} /></div>
                 <div className="field-block"><span>Request interpretation</span>

@@ -6,16 +6,18 @@ export type Prefs = {
   density: "comfortable" | "compact";
   textScale: number;          // 0.85 – 1.5, multiplies the base font size (OS scaling still applies on top)
   interpreter: "auto" | "deterministic";
+  theme: "light" | "dark";
 };
 
-export const DEFAULT_PREFS: Prefs = { mode: "basic", debug: false, density: "comfortable", textScale: 1, interpreter: "auto" };
+export const DEFAULT_PREFS: Prefs = { mode: "basic", debug: false, density: "comfortable", textScale: 1, interpreter: "auto", theme: "light" };
 const KEY = "sugar.prefs.v1";
 
 export function loadPrefs(): Prefs {
   try {
     const raw = window.localStorage.getItem(KEY);
-    if (!raw) return DEFAULT_PREFS;
-    return normalizePrefs({ ...DEFAULT_PREFS, ...(JSON.parse(raw) as Partial<Prefs>) });
+    const legacyTheme = window.localStorage.getItem("sugar.theme") === "dark" ? "dark" : "light";
+    if (!raw) return { ...DEFAULT_PREFS, theme: legacyTheme };
+    return normalizePrefs({ ...DEFAULT_PREFS, theme: legacyTheme, ...(JSON.parse(raw) as Partial<Prefs>) });
   } catch {
     return DEFAULT_PREFS;
   }
@@ -28,6 +30,7 @@ export function normalizePrefs(prefs: Prefs): Prefs {
     density: prefs.density === "compact" ? "compact" : "comfortable",
     textScale: Math.min(1.5, Math.max(0.85, Number(prefs.textScale) || 1)),
     interpreter: prefs.interpreter === "deterministic" ? "deterministic" : "auto",
+    theme: prefs.theme === "dark" ? "dark" : "light",
   };
 }
 
@@ -46,6 +49,8 @@ export function applyPrefs(prefs: Prefs): void {
   root.style.fontSize = `${Math.round(16 * prefs.textScale * 100) / 100}px`;
   root.dataset.density = prefs.density;
   root.dataset.mode = prefs.mode;
+  root.dataset.theme = prefs.theme;
+  try { window.localStorage.setItem("sugar.theme", prefs.theme); } catch { /* storage may be unavailable */ }
 }
 
 export function usePrefs(): [Prefs, (next: Prefs) => boolean] {

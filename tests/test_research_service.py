@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 import pandas as pd
@@ -19,10 +20,20 @@ from sugar_core.state_workflow import load_state_assessments
 from sugar_core.triage_io import load_post_records
 from sugar_core.workspace import SugarWorkspace
 from sugar_core.workspace_runtime import latest_workspace_artifact_path
+from sugar_core.desktop_ops import _llm_config as desktop_llm_config
+from sugar_core.service import _llm_config as collection_llm_config
 
 
 def _workspace(tmp_path: Path) -> SugarWorkspace:
     return SugarWorkspace.create(tmp_path / "project", name="North Star")
+
+
+def test_app_llm_paths_use_working_openai_default_and_preserve_arc_default() -> None:
+    for provider, expected in (("openai", "gpt-4o-mini"), ("arc", "gpt-5.6-luna")):
+        config = {"llm": {"provider": provider}}
+        assert research_service._llm_config(config, {}).model == expected
+        assert collection_llm_config(config, {}).model == expected
+        assert desktop_llm_config(config, {"llm_api_key": "test-key"}).model == expected
 
 
 def test_requirement_and_plan_use_workspace_defaults(tmp_path: Path) -> None:
@@ -352,6 +363,33 @@ def test_manual_review_preparation_from_import_is_unreviewed_and_preserves_sourc
         research_service.prepare_manual_review({"workspace": str(workspace.root)})
 
 
+def test_manual_review_extraction_uses_bounded_workers_and_preserves_record_order(monkeypatch, tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    records_path = workspace.path_for("raw") / "parallel-records.csv"
+    records = [
+        PostRecord("fixture", "1", "https://example.org/1", "query", original_text="First source row"),
+        PostRecord("fixture", "2", "https://example.org/2", "query", original_text="Second source row"),
+    ]
+    save_records(records, records_path)
+    workspace.register_artifact("raw_collection", records_path, label="Parallel extraction fixture")
+    rendezvous = threading.Barrier(2)
+    original_extract = research_service.observation_from_post
+    worker_threads: set[int] = set()
+
+    def parallel_extract(record):
+        worker_threads.add(threading.get_ident())
+        rendezvous.wait(timeout=3)
+        return original_extract(record)
+
+    monkeypatch.setattr(research_service, "observation_from_post", parallel_extract)
+    outputs = research_service.prepare_manual_review(
+        {"workspace": str(workspace.root), "extraction_workers": 2}
+    )
+    observations = load_observations(outputs[0])
+    assert len(worker_threads) == 2
+    assert [observation.summary for observation in observations] == ["First source row", "Second source row"]
+
+
 def test_feedback_and_handoff_can_resolve_workspace_artifacts(tmp_path: Path) -> None:
     workspace = _workspace(tmp_path)
     research_service.create_research_requirement(
@@ -430,6 +468,10 @@ def test_collect_plan_reuses_existing_collection_engine(tmp_path: Path, monkeypa
             "question": "What activity is documented?",
             "known_entities": ["Example Center"],
             "preferred_sources": ["bilibili"],
+            "since": "2026-01-01",
+            "until": "2026-03-01",
+            "languages": ["en"],
+            "excluded_topics": ["private data"],
         }
     )[0]
     plan_path = research_service.create_research_plan({"workspace": str(workspace.root)})[0]
@@ -453,9 +495,17 @@ def test_collect_plan_reuses_existing_collection_engine(tmp_path: Path, monkeypa
             "requirement_file": requirement_path,
             "plan_file": plan_path,
             "sources": ["bilibili"],
+            "since": "2026-02-01",
+            "until": "2026-02-10",
+            "post_languages": ["zh", "en"],
+            "excluded_topics": ["political activity"],
         }
     )
     assert seen["config"]["sources"] == ["bilibili"]
+    assert seen["config"]["since"] == "2026-02-01"
+    assert seen["config"]["until"] == "2026-02-10"
+    assert seen["config"]["post_languages"] == ["zh", "en"]
+    assert seen["config"]["excluded_topics"] == ["political activity"]
     assert outputs[-1].endswith("search-plan.json")
 
 

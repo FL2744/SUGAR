@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 import shutil
 import sqlite3
+from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 
 import pytest
 
+import sugar_core
+import sugar_core.workspace as workspace_module
 from sugar_core.workspace import (
     CATALOG_FILENAME,
     CATALOG_SCHEMA_VERSION,
@@ -14,6 +17,18 @@ from sugar_core.workspace import (
     MANIFEST_FILENAME,
     SugarWorkspace,
 )
+
+
+def test_frozen_workspace_uses_core_version_without_distribution_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def package_metadata_missing(_name: str) -> str:
+        raise PackageNotFoundError("sugar-osint")
+
+    monkeypatch.setattr(workspace_module, "package_version", package_metadata_missing)
+    workspace = SugarWorkspace.create(tmp_path / "packaged", name="Packaged")
+
+    assert workspace.status()["software_version"] == sugar_core.__version__
 
 
 def test_workspace_create_builds_manifest_layout_and_database(tmp_path: Path) -> None:

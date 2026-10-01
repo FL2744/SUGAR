@@ -9,7 +9,7 @@ from . import __version__
 from .analyst_capture import capture_saved_page
 from .calibration import run_calibration_suite
 from .columnar import build_parquet_dataset, query_parquet_dataset, save_query_result
-from .llm import ARC_BASE_URL, LLMConfig, create_client
+from .llm import ARC_BASE_URL, LLMConfig, create_client, default_model
 from .media_artifacts import attach_media_citation, build_media_citation, ingest_media
 from .observation_storage import load_observations
 from .reference_registry import list_entities, list_lifecycle, list_relationships
@@ -72,7 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
     synthesize.add_argument("--observation-id", default="")
     synthesize.add_argument("--depth", choices=["quick", "standard", "deep"], default="standard")
     synthesize.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
-    synthesize.add_argument("--model", default="gpt-5.6-luna")
+    synthesize.add_argument("--model")
     synthesize.add_argument("--base-url", default="")
     synthesize.add_argument("--cache-dir", default=".sugar-cache")
     synthesize.add_argument("--workers", type=int, default=4)
@@ -227,7 +227,7 @@ def _llm(args) -> LLMConfig:
         base_url = ARC_BASE_URL
     if args.provider == "custom" and not base_url:
         raise ValueError("--base-url is required for provider=custom")
-    return LLMConfig(provider=args.provider, model=args.model, api_key=api_key, base_url=base_url)
+    return LLMConfig(provider=args.provider, model=args.model or default_model(args.provider), api_key=api_key, base_url=base_url)
 
 
 def _embedding_client(args):

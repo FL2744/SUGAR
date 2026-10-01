@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
+from .collection_control import (
+    finish_collection_control,
+    read_collection_control,
+    start_collection_control,
+    update_collection_control,
+)
 from .handoff import build_handoff_bundle, verify_handoff_bundle
 from .importers import import_external_dataset
-from .llm import ARC_BASE_URL, LLMConfig
+from .llm import ARC_BASE_URL, LLMConfig, default_model
 from .observation_storage import load_observations, save_observations
 from .observations import observation_from_post
 from .plan_execution import execute_search_plan
@@ -171,7 +178,7 @@ def _llm_config(config: dict[str, Any], secrets: dict[str, str]) -> LLMConfig:
         raise ValueError("A base URL is required for a custom LLM endpoint.")
     return LLMConfig(
         provider=provider,
-        model=str(raw.get("model") or "gpt-5.6-luna").strip(),
+        model=str(raw.get("model") or default_model(provider)).strip(),
         api_key=str(secrets.get("llm_api_key") or "").strip(),
         base_url=base_url,
     )
@@ -622,8 +629,22 @@ def prepare_manual_review(
     records = load_post_records(records_path)
     if not records:
         raise ValueError("The selected dataset has no records to prepare for manual review.")
-    observations = [observation_from_post(record) for record in records]
-    _notify(progress, "manual-review-preparing", records=len(records), source_file=str(records_path))
+    extraction_workers = min(8, max(1, int(config.get("extraction_workers", 4))))
+    _notify(
+        progress,
+        "manual-review-preparing",
+        records=len(records),
+        workers=min(extraction_workers, len(records)),
+        source_file=str(records_path),
+    )
+    if len(records) < 2 or extraction_workers == 1:
+        observations = [observation_from_post(record) for record in records]
+    else:
+        with ThreadPoolExecutor(
+            max_workers=min(extraction_workers, len(records)),
+            thread_name_prefix="sugar-observation-extract",
+        ) as pool:
+            observations = list(pool.map(observation_from_post, records))
     save_observations(observations, observations_path)
     assessment_output = save_state_assessments(
         [StateAssessment(observation_id=observation.observation_id) for observation in observations],
@@ -656,26 +677,64 @@ def collect_research_plan(
     sources = _values(config.get("sources")) or requirement.preferred_sources
     if not sources:
         raise ValueError("Choose at least one collection source or set preferred sources in the research requirement.")
+    run_id = str(config.get("collection_run_id") or "").strip()
+    control_reader = None
+    if run_id:
+        if workspace is None:
+            raise ValueError("Live collection controls require a SUGAR project workspace.")
+        existing_control = read_collection_control(workspace, run_id)
+        if existing_control is None:
+            start_collection_control(
+                workspace,
+                run_id,
+                sources=sources,
+                since=config.get("since") or requirement.timeframe.start,
+                until=config.get("until") or requirement.timeframe.end,
+                post_languages=_values(config.get("post_languages")) or requirement.languages,
+                terms=[branch.query for branch in plan.branches if branch.status in {"planned", "approved", "active"}],
+                excluded_topics=_values(config.get("excluded_topics")) or requirement.excluded_topics,
+            )
+        elif existing_control.get("status") != "running":
+            raise ValueError("This collection run is no longer active.")
+        control_reader = lambda: read_collection_control(workspace, run_id)
     _notify(progress, "plan-collection-started", branches=sum(branch.status in {"planned", "approved"} for branch in plan.branches), sources=sources)
-    result = execute_search_plan(
-        requirement,
-        plan,
-        config={
-            "sources": sources,
-            "max_posts_per_query": max(1, int(config.get("max_posts_per_query") or 20)),
-            "max_pages_per_query": max(1, int(config.get("max_pages_per_query") or 1)),
-            "output_directory": config.get("output_directory"),
-            "workspace": config.get("workspace"),
-            "translate_posts": bool(config.get("translate_posts", False)),
-            "infer_locations": bool(config.get("infer_locations", False)),
-            "include_retweets": bool(config.get("include_retweets", False)),
-            "x_search_mode": str(config.get("x_search_mode") or "recent"),
-            "mastodon_url": str(config.get("mastodon_url") or "https://mastodon.social"),
-            "continue_on_source_error": bool(config.get("continue_on_source_error", True)),
-        },
-        secrets=secrets,
-        progress=progress,
-    )
+    try:
+        execution_options = {
+            "secrets": secrets,
+            "progress": progress,
+        }
+        if control_reader is not None:
+            execution_options["control_reader"] = control_reader
+        result = execute_search_plan(
+            requirement,
+            plan,
+            config={
+                "sources": sources,
+                "max_posts_per_query": max(1, int(config.get("max_posts_per_query") or 20)),
+                "max_pages_per_query": max(1, int(config.get("max_pages_per_query") or 1)),
+                "platform_tuning": config.get("platform_tuning") or {},
+                "output_directory": config.get("output_directory"),
+                "workspace": config.get("workspace"),
+                "since": str(config.get("since") or requirement.timeframe.start or ""),
+                "until": str(config.get("until") or requirement.timeframe.end or ""),
+                "post_languages": _values(config.get("post_languages")) or requirement.languages,
+                "excluded_topics": _values(config.get("excluded_topics")) or requirement.excluded_topics,
+                "translate_posts": bool(config.get("translate_posts", False)),
+                "infer_locations": bool(config.get("infer_locations", False)),
+                "include_retweets": bool(config.get("include_retweets", False)),
+                "x_search_mode": str(config.get("x_search_mode") or "recent"),
+                "mastodon_url": str(config.get("mastodon_url") or "https://mastodon.social"),
+                "continue_on_source_error": bool(config.get("continue_on_source_error", True)),
+            },
+            **execution_options,
+        )
+    except Exception:
+        if run_id and workspace is not None:
+            finish_collection_control(workspace, run_id, status="failed")
+        raise
+    if run_id and workspace is not None:
+        latest_control = read_collection_control(workspace, run_id) or {}
+        finish_collection_control(workspace, run_id, status="cancelled" if latest_control.get("cancel_requested") else "completed")
     saved_plan = save_search_plan(plan, plan_path)
     if workspace is not None:
         workspace.register_artifact(
@@ -693,6 +752,54 @@ def collect_research_plan(
     _notify_plan_review(progress, plan, saved_plan)
     _notify(progress, "plan-collection-complete", records=result.records, coverage_status=result.coverage_status, outputs=outputs)
     return outputs
+
+
+def update_research_collection_control(
+    config: dict[str, Any],
+    *,
+    progress: ProgressCallback | None = None,
+) -> list[str]:
+    workspace = optional_workspace(config.get("workspace"))
+    if workspace is None:
+        raise ValueError("Choose the active project workspace first.")
+    run_id = str(config.get("collection_run_id") or "").strip()
+    if not run_id:
+        raise ValueError("Choose an active collection run.")
+    if config.get("start"):
+        started = start_collection_control(
+            workspace,
+            run_id,
+            sources=config.get("sources"),
+            since=config.get("since"),
+            until=config.get("until"),
+            post_languages=config.get("post_languages"),
+            terms=config.get("terms"),
+            excluded_topics=config.get("excluded_topics"),
+        )
+        _notify(
+            progress,
+            "collection-control-started",
+            run_id=run_id,
+            revision=started["revision"],
+            status=started["status"],
+        )
+        return [str(workspace.root / ".sugar" / "collection-runs" / f"{run_id}.json")]
+    changes = {
+        key: config[key]
+        for key in ("sources", "since", "until", "post_languages", "terms", "excluded_topics", "retry_source", "cancel")
+        if key in config
+    }
+    updated = update_collection_control(workspace, run_id, **changes)
+    _notify(
+        progress,
+        "collection-control-updated",
+        run_id=run_id,
+        revision=updated["revision"],
+        status=updated["status"],
+        queued_retries=len(updated.get("retry_requests", [])),
+        cancel_requested=updated.get("cancel_requested", False),
+    )
+    return [str(workspace.root / ".sugar" / "collection-runs" / f"{run_id}.json")]
 
 
 def triage_research_records(

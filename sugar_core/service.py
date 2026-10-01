@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -8,10 +9,11 @@ from typing import Any, Callable
 from .collection_coverage import SourceCoverage, classify_collection_error, coverage_payload
 from .collector_registry import CollectorRequest, COLLECTORS, collect_registered_source, fetch_registered_item
 from .enrichment import enrich_records
-from .harvest import run_harvest as _run_harvest
-from .llm import ARC_BASE_URL, LLMConfig, create_client, translate_search_term
+from .harvest import rate_limit_wait_seconds, run_harvest as _run_harvest
+from .llm import ARC_BASE_URL, LLMConfig, create_client, default_model, translate_search_term
 from .mapping import MapOptions, ReferenceLayer, create_map, load_map_frame
 from .observation_storage import load_observations, observations_to_frame, save_observations
+from .provider_pacing import SHARED_REQUEST_PACER
 from .reporting import create_analysis_report
 from .spatial import (
     SpatialOverlapConfig,
@@ -35,6 +37,16 @@ def _notify(progress: ProgressCallback | None, event: str, **values: Any) -> Non
         progress(event, values)
 
 
+def _estimated_record_memory(record: Any) -> int:
+    try:
+        payload = record.export_dict()
+    except Exception:
+        payload = vars(record)
+    serialized = json.dumps(payload, ensure_ascii=False, default=str, separators=(",", ":")).encode("utf-8")
+    # Reserve room for Python object overhead, enrichment fields, and table serialization.
+    return max(2_048, len(serialized) * 4)
+
+
 def _write_coverage(path: Path, entries: list[SourceCoverage], *, terms: list[str], since: str | None, until: str | None) -> dict[str, Any]:
     payload = coverage_payload(entries, terms=terms, since=since, until=until)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -52,15 +64,47 @@ def _llm_config(config: dict[str, Any], secrets: dict[str, str]) -> LLMConfig:
         raise ValueError("A base URL is required for a custom LLM endpoint.")
     return LLMConfig(
         provider=provider,
-        model=str(raw.get("model", "gpt-5.6-luna")),
+        model=str(raw.get("model") or default_model(provider)),
         api_key=secrets.get("llm_api_key", ""),
         base_url=base,
     )
 
 
+def _platform_tuning(config: dict[str, Any]) -> dict[str, dict[str, int]]:
+    raw = config.get("platform_tuning", {})
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError("platform_tuning must be an object keyed by source name.")
+    supported = {"max_posts_per_query": 1000, "max_pages_per_query": 100}
+    result: dict[str, dict[str, int]] = {}
+    for source_value, options in raw.items():
+        source = str(source_value).strip().casefold()
+        if source not in COLLECTORS:
+            raise ValueError(f"Unsupported platform_tuning source: {source or '(empty)'}.")
+        if not isinstance(options, dict):
+            raise ValueError(f"platform_tuning for {source} must be an object.")
+        unknown = sorted(set(options) - set(supported))
+        if unknown:
+            raise ValueError(f"Unsupported platform_tuning field(s) for {source}: {', '.join(unknown)}.")
+        normalized: dict[str, int] = {}
+        for key, maximum in supported.items():
+            if key not in options or options[key] in (None, ""):
+                continue
+            try:
+                value = int(str(options[key]).strip())
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{source} {key} must be a positive integer.") from exc
+            if value < 1:
+                raise ValueError(f"{source} {key} must be a positive integer.")
+            normalized[key] = min(maximum, value)
+        result[source] = normalized
+    return result
+
+
 def _translated_terms(
     terms: list[str], languages: list[str], llm: LLMConfig, cache_dir: Path,
-    progress: ProgressCallback | None = None,
+    progress: ProgressCallback | None = None, *, max_workers: int = 8,
 ) -> list[str]:
     terms = [str(x).strip() for x in terms if str(x).strip()]
     if not languages:
@@ -70,22 +114,31 @@ def _translated_terms(
     cache = JsonCache(cache_dir / "llm.json")
     result = list(terms)
     seen = {x.casefold() for x in result}
-    total = len(terms) * len(languages)
+    jobs = [(term, language) for term in terms for language in languages]
+    total = len(jobs)
     completed = 0
-    for term in terms:
-        for language in languages:
-            value = translate_search_term(client, llm, cache, term, language)
+    translations = [""] * total
+    with ThreadPoolExecutor(max_workers=min(max(1, int(max_workers)), max(1, total)), thread_name_prefix="sugar-translate") as pool:
+        pending = {
+            pool.submit(translate_search_term, client, llm, cache, term, language): index
+            for index, (term, language) in enumerate(jobs)
+        }
+        for future in as_completed(pending):
+            translations[pending[future]] = future.result()
             completed += 1
-            if value and value.casefold() not in seen:
-                result.append(value)
-                seen.add(value.casefold())
             _notify(progress, "search_term_progress", current=completed, total=total)
+    for value in translations:
+        if value and value.casefold() not in seen:
+            result.append(value)
+            seen.add(value.casefold())
     return result
 
 
 def run_search(
     config: dict[str, Any], secrets: dict[str, str] | None = None,
     progress: ProgressCallback | None = None,
+    *,
+    control_reader: Callable[[], dict[str, Any] | None] | None = None,
 ) -> list[str]:
     secrets = secrets or {}
     workspace = workspace_from_config(config)
@@ -102,82 +155,310 @@ def run_search(
         raise ValueError("AI enrichment is enabled, but no LLM API key was provided.")
 
     out_dir = choose_output_directory(config.get("output_directory"), workspace, "raw", fallback=Path.cwd())
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     csv_path = out_dir / f"social_search_posts_{stamp}.csv"
     coverage_path = csv_path.with_suffix(".coverage.json")
     cache_dir = workspace.path_for("cache") if workspace is not None else out_dir / ".sugar-cache"
     llm = _llm_config(config, secrets)
 
     _notify(progress, "starting", operation="search", sources=sources)
-    terms = _translated_terms(config.get("terms") or [], translated_languages, llm, cache_dir, progress=progress)
+    terms = _translated_terms(
+        config.get("terms") or [], translated_languages, llm, cache_dir, progress=progress,
+        max_workers=int(config.get("translation_workers", 8)),
+    )
     if not terms:
         raise ValueError("Enter at least one search term.")
 
-    request = CollectorRequest(
-        search_terms=terms,
-        since=config.get("since") or None,
-        until=config.get("until") or None,
-        max_posts_per_query=int(config.get("max_posts_per_query", 10)),
-        max_pages_per_query=int(config.get("max_pages_per_query", 1)),
-        config=config,
-        secrets=secrets,
-    )
-
+    max_posts = min(1000, max(1, int(config.get("max_posts_per_query", 10))))
+    max_pages = min(100, max(1, int(config.get("max_pages_per_query", 1))))
+    platform_tuning = _platform_tuning(config)
+    max_records = min(20_000, max(1, int(config.get("max_records", 20_000))))
+    max_collection_calls = min(10_000, max(1, int(config.get("max_collection_calls", 10_000))))
+    max_memory_bytes = min(512 * 1024 * 1024, max(1024 * 1024, int(config.get("max_memory_bytes", 64 * 1024 * 1024))))
+    memory_worker_limit = max(1, max_memory_bytes // (2 * 1024 * 1024))
+    max_parallel_sources = min(5, memory_worker_limit, max(1, int(config.get("max_parallel_sources", 5))))
+    shared_request_interval = min(60.0, max(0.0, float(config.get("shared_request_interval_seconds", 0.2))))
+    base_scope = {
+        "sources": sources,
+        "terms": terms,
+        "since": config.get("since") or None,
+        "until": config.get("until") or None,
+        "post_languages": [str(value).strip().casefold() for value in config.get("post_languages") or [] if str(value).strip()],
+        "excluded_topics": [str(value).strip() for value in config.get("excluded_topics") or [] if str(value).strip()],
+    }
     records = []
-    coverage: list[SourceCoverage] = []
+    source_stats: dict[str, dict[str, Any]] = {}
+    used_sources: list[str] = []
+    used_terms: list[str] = []
+    attempted: set[tuple[str, str]] = set()
+    retried: set[tuple[str, str, str]] = set()
+    processed_retries: set[str] = set()
+    collection_calls = 0
+    estimated_memory_bytes = 0
+    cancelled = False
+    limit_reached = False
+    memory_limit_reached = False
     continue_on_source_error = bool(config.get("continue_on_source_error", False))
     access_modes = _harvest_access_modes(config, secrets)
-    for source in sources:
-        started_at = utc_iso()
-        _notify(progress, "collecting", source=source)
+
+    def current_scope() -> dict[str, Any]:
+        current = dict(base_scope)
+        if control_reader is not None:
+            live = control_reader()
+            if isinstance(live, dict):
+                if live.get("status") != "running":
+                    current["cancel_requested"] = True
+                else:
+                    for key in ("sources", "terms", "since", "until", "post_languages", "excluded_topics"):
+                        if key in live:
+                            current[key] = live[key]
+                    current["retry_requests"] = live.get("retry_requests", [])
+                    current["revision"] = live.get("revision", 0)
+                    current["cancel_requested"] = bool(live.get("cancel_requested", False))
+        current["sources"] = list(dict.fromkeys(str(value).strip().casefold() for value in current.get("sources", []) if str(value).strip()))
+        current["terms"] = list(dict.fromkeys(str(value).strip() for value in current.get("terms", []) if str(value).strip()))
+        current["post_languages"] = [str(value).strip().casefold() for value in current.get("post_languages", []) if str(value).strip()]
+        current["excluded_topics"] = [str(value).strip() for value in current.get("excluded_topics", []) if str(value).strip()]
+        return current
+
+    def cancelled_while_waiting() -> bool:
+        return bool(current_scope().get("cancel_requested"))
+
+    def retain_records(rows: list[Any], count_limit: int) -> list[Any]:
+        nonlocal estimated_memory_bytes, memory_limit_reached, limit_reached
+        accepted = []
+        for record in rows[:max(0, count_limit)]:
+            estimated_size = _estimated_record_memory(record)
+            if estimated_memory_bytes + estimated_size > max_memory_bytes:
+                memory_limit_reached = True
+                limit_reached = True
+                _notify(
+                    progress,
+                    "warning",
+                    message=f"Collection reached its {max_memory_bytes:,}-byte estimated memory budget; results are being saved as a bounded partial run.",
+                )
+                break
+            accepted.append(record)
+            estimated_memory_bytes += estimated_size
+        return accepted
+
+    def collect_one(source: str, request: CollectorRequest):
+        if not SHARED_REQUEST_PACER.acquire(
+            interval_seconds=shared_request_interval,
+            cancelled=cancelled_while_waiting,
+        ):
+            return [], None, True
         try:
-            rows = collect_registered_source(source, request)
+            return collect_registered_source(source, request), None, False
         except Exception as exc:
-            partial_rows = list(getattr(exc, "partial_records", ()) or ())
-            if partial_rows:
-                records.extend(partial_rows)
-            status = classify_collection_error(exc, records=len(partial_rows))
-            entry = SourceCoverage(
-                source=source,
-                status=status,
-                records=len(partial_rows),
-                access_mode=access_modes.get(source, "collector_default"),
-                reason=str(exc),
-                error_type=type(exc).__name__,
-                started_at=started_at,
-                completed_at=utc_iso(),
-            )
-            coverage.append(entry)
-            _write_coverage(
-                coverage_path,
-                coverage,
-                terms=terms,
-                since=config.get("since") or None,
-                until=config.get("until") or None,
-            )
-            _notify(progress, "collection_failed", source=source, status=status, error_type=entry.error_type)
-            if not continue_on_source_error:
-                raise
-            continue
-        records.extend(rows)
-        status = "success" if rows else "zero_result"
+            wait = rate_limit_wait_seconds(exc, source)
+            if wait is not None:
+                SHARED_REQUEST_PACER.defer(wait)
+            return list(getattr(exc, "partial_records", ()) or ()), exc, False
+
+    fatal_error: Exception | None = None
+    with ThreadPoolExecutor(max_workers=max_parallel_sources, thread_name_prefix="sugar-collect") as pool:
+        while collection_calls < max_collection_calls:
+            scope = current_scope()
+            if scope.get("cancel_requested"):
+                cancelled = True
+                _notify(progress, "collection_stopped", reason="cancelled_between_requests", completed_requests=collection_calls)
+                break
+            active_sources = scope["sources"]
+            active_terms = scope["terms"]
+            if not active_terms:
+                break
+            remaining_budget = max_records - len(records)
+            if remaining_budget <= 0:
+                limit_reached = True
+                break
+
+            work: list[tuple[str, str, str | None]] = []
+            selected_sources: set[str] = set()
+            for retry in scope.get("retry_requests", []):
+                if len(work) >= max_parallel_sources or not isinstance(retry, dict):
+                    continue
+                retry_id = str(retry.get("id") or "").strip()
+                retry_source = str(retry.get("source") or "").strip().casefold()
+                if not retry_id or not retry_source or retry_id in processed_retries:
+                    continue
+                if retry_source not in COLLECTORS:
+                    processed_retries.add(retry_id)
+                    _notify(progress, "collection_retry_rejected", source=retry_source, reason="unsupported_source")
+                    continue
+                if retry_source in selected_sources:
+                    continue
+                pending_term = next((term for term in active_terms if (retry_id, retry_source, term) not in retried), None)
+                if pending_term is None:
+                    processed_retries.add(retry_id)
+                    continue
+                work.append((retry_source, pending_term, retry_id))
+                selected_sources.add(retry_source)
+
+            for source in active_sources:
+                if len(work) >= max_parallel_sources:
+                    break
+                if source in selected_sources:
+                    continue
+                pending_term = next((term for term in active_terms if (source, term) not in attempted), None)
+                if pending_term is not None:
+                    work.append((source, pending_term, None))
+                    selected_sources.add(source)
+            if not work:
+                break
+            if collection_calls + len(work) > max_collection_calls:
+                work = work[:max_collection_calls - collection_calls]
+            if len(work) > remaining_budget:
+                work = work[:remaining_budget]
+            memory_request_limit = max(1, max_memory_bytes // max(1, len(work) * 128 * 1024))
+            per_request_budget = min(max(1, remaining_budget // len(work)), memory_request_limit)
+
+            futures = {}
+            for source, term, retry_id in work:
+                if source not in COLLECTORS:
+                    raise ValueError(f"Unsupported source in live collection scope: {source}")
+                if retry_id is None:
+                    attempted.add((source, term))
+                else:
+                    retried.add((retry_id, source, term))
+                if source not in source_stats:
+                    source_stats[source] = {
+                        "started_at": utc_iso(),
+                        "records": 0,
+                        "attempts": 0,
+                        "errors": [],
+                        "had_result": False,
+                    }
+                source_stats[source]["attempts"] += 1
+                if source not in used_sources:
+                    used_sources.append(source)
+                if term not in used_terms:
+                    used_terms.append(term)
+                request_config = dict(config)
+                source_options = platform_tuning.get(source, {})
+                source_max_posts = source_options.get("max_posts_per_query", max_posts)
+                source_max_pages = source_options.get("max_pages_per_query", max_pages)
+                request_config.update({
+                    "sources": [source],
+                    "post_languages": scope["post_languages"],
+                    "excluded_topics": scope["excluded_topics"],
+                    "max_posts_per_query": min(source_max_posts, per_request_budget),
+                    "max_pages_per_query": source_max_pages,
+                })
+                request = CollectorRequest(
+                    search_terms=[term],
+                    since=scope.get("since") or None,
+                    until=scope.get("until") or None,
+                    max_posts_per_query=min(source_max_posts, per_request_budget),
+                    max_pages_per_query=source_max_pages,
+                    config=request_config,
+                    secrets=secrets,
+                )
+                if source not in access_modes:
+                    access_modes.update(_harvest_access_modes({"sources": [source]}, secrets))
+                if source == "mastodon" and not secrets.get("mastodon_token", "").strip():
+                    access_modes[source] = "public_hashtag" if term.startswith("#") else "missing_credential"
+                _notify(progress, "collecting", source=source, query=term, retry=retry_id is not None, scope_revision=scope.get("revision", 0))
+                futures[(source, term, retry_id)] = pool.submit(collect_one, source, request)
+
+            collection_calls += len(futures)
+            outcomes = {item: future.result() for item, future in futures.items()}
+            for source, term, retry_id in work:
+                rows, error, skipped = outcomes[(source, term, retry_id)]
+                stats = source_stats[source]
+                if skipped:
+                    _notify(progress, "collection_request_skipped", source=source, reason="cancelled_before_request")
+                    continue
+                if error is not None:
+                    status = classify_collection_error(error, records=len(rows))
+                    stats["errors"].append((status, str(error), type(error).__name__))
+                    accepted = retain_records(rows, max_records - len(records))
+                    records.extend(accepted)
+                    stats["records"] += len(accepted)
+                    _notify(progress, "collection_failed", source=source, query=term, status=status, error_type=type(error).__name__)
+                    if not continue_on_source_error and fatal_error is None:
+                        fatal_error = error
+                    if memory_limit_reached:
+                        break
+                    continue
+                excluded = [topic.casefold() for topic in scope["excluded_topics"]]
+                included_rows = [
+                    row for row in rows
+                    if not any(
+                        topic in " ".join(
+                            str(getattr(row, field, "") or "")
+                            for field in ("original_text", "translated_text")
+                        ).casefold()
+                        for topic in excluded
+                    )
+                ]
+                accepted = retain_records(included_rows, max_records - len(records))
+                records.extend(accepted)
+                stats["records"] += len(accepted)
+                stats["had_result"] = stats["had_result"] or bool(accepted)
+                _notify(progress, "collected", source=source, query=term, records=len(accepted), excluded=len(rows) - len(included_rows))
+                if memory_limit_reached or len(accepted) < len(included_rows) or len(records) >= max_records:
+                    limit_reached = True
+                    if not memory_limit_reached:
+                        _notify(progress, "warning", message=f"Collection reached its {max_records:,}-record limit; results are being saved as a bounded partial run.")
+                    break
+            if fatal_error is not None:
+                break
+            if limit_reached:
+                break
+
+    pending_scope = current_scope()
+    unattempted_work = any(
+        (source, term) not in attempted
+        for source in pending_scope["sources"]
+        for term in pending_scope["terms"]
+    )
+    if collection_calls >= max_collection_calls and unattempted_work and not cancelled:
+        limit_reached = True
+        _notify(progress, "warning", message=f"Collection reached its {max_collection_calls:,}-request safety limit; results are being saved as a bounded partial run.")
+
+    coverage: list[SourceCoverage] = []
+    for source, stats in source_stats.items():
+        errors = stats["errors"]
+        if errors:
+            if stats["records"]:
+                status, reason, error_type = "partial", errors[-1][1], errors[-1][2]
+            else:
+                status, reason, error_type = errors[-1]
+        elif memory_limit_reached:
+            status, reason, error_type = "partial", "The estimated collection memory budget was reached before every returned record could be retained.", "MemoryBudgetExceeded"
+        elif stats["had_result"]:
+            status, reason, error_type = "success", "", ""
+        else:
+            status, reason, error_type = "zero_result", "", ""
+        if cancelled and status in {"success", "zero_result"}:
+            status, reason = "partial", "The analyst stopped the run between requests."
+        elif limit_reached and status == "success":
+            status, reason = "partial", "The bounded collection safety limit was reached."
         coverage.append(SourceCoverage(
             source=source,
             status=status,
-            records=len(rows),
+            records=stats["records"],
             access_mode=access_modes.get(source, "collector_default"),
-            started_at=started_at,
+            reason=reason,
+            error_type=error_type,
+            started_at=stats["started_at"],
             completed_at=utc_iso(),
         ))
-        _notify(progress, "collected", source=source, records=len(rows))
+    terms = used_terms or terms
+    sources = used_sources or sources
+    final_scope = current_scope()
 
     coverage_payload_data = _write_coverage(
         coverage_path,
         coverage,
         terms=terms,
-        since=config.get("since") or None,
-        until=config.get("until") or None,
+        since=final_scope.get("since") or None,
+        until=final_scope.get("until") or None,
     )
+
+    if fatal_error is not None:
+        raise fatal_error
 
     _notify(progress, "enriching", records=len(records), translate=translate, infer_locations=infer)
     records = enrich_records(
@@ -193,10 +474,20 @@ def run_search(
     metadata = {
         "sources": sources,
         "terms": terms,
-        "since": config.get("since") or None,
-        "until": config.get("until") or None,
+        "since": final_scope.get("since") or None,
+        "until": final_scope.get("until") or None,
         "collector_capabilities": {source: COLLECTORS[source].capabilities.as_dict() for source in sources},
         "source_coverage": coverage_payload_data,
+        "collection_cancelled": cancelled,
+        "collection_limit_reached": limit_reached,
+        "collection_requests": collection_calls,
+        "max_records": max_records,
+        "max_memory_bytes": max_memory_bytes,
+        "estimated_record_memory_bytes": estimated_memory_bytes,
+        "collection_memory_limit_reached": memory_limit_reached,
+        "max_parallel_sources": max_parallel_sources,
+        "shared_request_interval_seconds": shared_request_interval,
+        "platform_tuning": platform_tuning,
         "llm_provider": llm.provider if (translate or infer) else None,
         "llm_model": llm.model if (translate or infer) else None,
         "workspace_project_id": workspace.manifest.project_id if workspace is not None else None,
@@ -234,7 +525,7 @@ def run_ingest(
         raise ValueError("Enter a public URL or native item identifier.")
 
     out_dir = choose_output_directory(config.get("output_directory"), workspace, "raw", fallback=Path.cwd())
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     csv_path = out_dir / f"public_item_{source}_{stamp}.csv"
     request = CollectorRequest(
         search_terms=[query] if query else [],

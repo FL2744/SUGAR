@@ -4,7 +4,7 @@ import pytest
 
 from sugar_core.llm import LLMConfig
 from sugar_core.models import PostRecord
-from sugar_core.triage import TriageResult, observation_from_triage, parse_triage_result, triage_posts
+from sugar_core.triage import TriageResult, observation_from_triage, parse_triage_result, triage_post, triage_posts
 from sugar_core.triage_io import post_record_from_mapping
 
 
@@ -19,6 +19,31 @@ def _post(text: str = "The language-and-culture centers will host a student tech
         published_at="2026-09-10T12:00:00Z",
         author_name="Example Center",
     )
+
+
+def test_openai_triage_requests_strict_structured_output(monkeypatch):
+    captured = {}
+    payload = {
+        "relevance": "relevant", "relevance_confidence": 0.9, "labels": ["program_activity"],
+        "summary": "A public program was announced.", "institution_name": "Example Center",
+        "program_name": "Student technology workshop", "actors": [], "audiences": ["students"],
+        "themes": ["technology"], "us_overlap": [], "location_label": "Bishkek",
+        "reason": "The post directly describes a public program.",
+        "evidence": [{"label": "relevance", "span": "student technology workshop in Bishkek"}],
+    }
+
+    def fake_chat(_client, _config, _cache, _task, _system, _user, **options):
+        captured.update(options)
+        import json
+        return json.dumps(payload)
+
+    monkeypatch.setattr("sugar_core.triage.cached_chat", fake_chat)
+    result = triage_post(_post(), client=object(), llm=LLMConfig(provider="openai", model="test-model"))
+
+    schema = captured["response_format"]["json_schema"]
+    assert schema["strict"] is True
+    assert schema["schema"]["additionalProperties"] is False
+    assert result.relevance == "relevant"
 
 
 def test_grounded_sensitive_label_is_kept_and_fake_span_is_dropped():
