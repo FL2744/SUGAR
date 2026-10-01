@@ -629,7 +629,7 @@ class ResearchPipeline:
                     self.counts["queries_failed"] += 1
                 handle.error = {"classification": info["classification"], "kind": info["kind"], "message": info["message"], "status": info.get("status"),
                                 "retries_exhausted": info["classification"] == "retryable"}
-                remedy = self._remedy(handle.name, info)
+                remedy = self._remedy(handle.name, info, handle.spec.capabilities.authenticated_search)
                 self._record_error(stage="search", subsystem=f"{handle.name}-collector", classification=info["classification"],
                                    message=info["message"] + (f" {remedy}" if remedy else ""), source=handle.name, exc=exc, query_id=query.id,
                                    status=info.get("status"))
@@ -650,9 +650,12 @@ class ResearchPipeline:
         return False
 
     @staticmethod
-    def _remedy(source: str, info: dict[str, Any]) -> str:
+    def _remedy(source: str, info: dict[str, Any], accepts_credentials: bool = False) -> str:
         if info["kind"] == "access":
-            return f"Check the {source.capitalize()} credential in Settings → Platform credentials."
+            if accepts_credentials:
+                return f"If you have legitimate access, add or refresh the {source.capitalize()} credential in Settings → Platform credentials."
+            return (f"This is an access gate on {source.capitalize()}'s anonymous search, not a SUGAR setting. "
+                    "Known public items can still be added by URL from Evidence & handoff.")
         if info["kind"] == "billing":
             return "Check the account's plan or credits."
         return ""

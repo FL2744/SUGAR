@@ -166,7 +166,7 @@ def test_one_failed_platform_does_not_end_the_run_and_is_reported_explicitly(tmp
     assert p.sources["bluesky"].status == "success" and p.sources["x"].status == "failed"
     failed = [e for e in p.events.since(0) if e.type == "source.failed"]
     assert failed and failed[0].data["classification"] == "source_specific" and failed[0].source == "x"
-    assert "Check the X credential in Settings" in failed[0].message and "Other platforms continue" in failed[0].message
+    assert "credential in Settings" in failed[0].message or "access gate" in failed[0].message and "Other platforms continue" in failed[0].message
     assert not p.run.completeness["complete"] and p.run.completeness["incomplete_sources"] == ["x"]
     assert "INCOMPLETE" in p.run.completeness["summary"]
     err = p.run.errors[0]
@@ -301,6 +301,8 @@ def test_language_detection_and_paragraphs():
     assert detect_language("民主是重要的")[0] == "zh"
     assert detect_language("the democracy and the people are in this for the long term")[0] == "en"
     assert detect_language("anything", "AR-EG") == ("ar", "platform", 0.95)
+    assert detect_language("Two threats to our democracy are still here", "en,it")[:2] == ("en", "platform")      # Bluesky lists several
+    assert detect_language(ARABIC, "en")[0] == "ar"                                                              # wrong user setting, clear script
     parts = split_paragraphs("First paragraph.\n\nSecond one\nstill second.")
     assert [p[2] for p in parts] == ["First paragraph.", "Second one\nstill second."]
     long = " ".join(f"Sentence number {i} is here." for i in range(60))
@@ -521,3 +523,15 @@ def test_rate_limit_cooldown_is_shared_across_platforms(tmp_path):
                          secrets={"x_bearer_token": "x" * 12}, sleeper=lambda s: None, pacer=pacer)
     p.execute()
     assert any(e.type == "provider.rate_limited" for e in p.events.since(0))
+
+
+def test_anonymous_access_gates_are_not_blamed_on_missing_credentials(tmp_path):
+    project = make_project(tmp_path)
+
+    def gated(request):
+        raise RuntimeError("Bilibili public video search returned an access control challenge for this anonymous session.")
+
+    gate = CollectorSpec(name="bilibili", search=gated, capabilities=CollectorCapabilities(keyword_search=True, anonymous_search=True))
+    p = run_pipeline(project, make_plan("democracy on bilibili"), {"bilibili": gate})
+    msg = next(e.message for e in p.events.since(0) if e.type == "source.failed")
+    assert "access gate" in msg and "not a SUGAR setting" in msg and "Settings → Platform credentials" not in msg

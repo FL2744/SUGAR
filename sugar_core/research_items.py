@@ -140,12 +140,35 @@ class DedupIndex:
 _ENGLISH_HINT = re.compile(r"\b(the|and|of|to|in|is|that|for|with|are|this|not|have|was|on)\b", re.I)
 
 
+_LATIN_LANGS = {"en", "fr", "es", "pt", "de", "it", "nl", "sv", "fi", "pl", "tr", "id", "ms", "vi", "ro", "cs", "hu", "da", "no", "ca"}
+
+
+def _script_language(sample: str) -> tuple[str, float] | None:
+    """Language implied by a clearly non-Latin script, else None."""
+    if len(sample) < 3:
+        return None
+    letters = [c for c in sample if c.isalpha()]
+    if len(letters) < 3:
+        return None
+    nonlatin = sum(1 for c in letters if ord(c) > 0x024F)
+    if nonlatin / len(letters) < 0.6:
+        return None
+    code, method, confidence = detect_language(sample, "")
+    return (code, confidence) if code != "und" and method == "script" else None
+
+
 def detect_language(text: str, platform_language: str = "") -> tuple[str, str, float]:
     """Return (iso_code or 'und', method, confidence). Platform-supplied language wins when present."""
-    platform_language = (platform_language or "").strip().casefold().split("-")[0]
+    # Platforms may report several languages ("en,it") or region codes ("ar-EG"); use the first well-formed code.
+    declared = next((c for c in re.split(r"[\s,;]+", (platform_language or "").strip().casefold())
+                     if re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]+)?", c)), "").split("-")[0]
     sample = _URL.sub(" ", _MENTION.sub(" ", str(text or ""))).strip()
-    if platform_language and platform_language not in {"und", "unknown", "auto"}:
-        return platform_language, "platform", 0.95
+    if declared and declared not in {"und", "unknown", "auto", "zxx"}:
+        scripted = _script_language(sample)
+        # A declared Latin-script language on clearly non-Latin text is a user-setting mistake; trust the text.
+        if scripted and scripted[0] != declared and declared in _LATIN_LANGS:
+            return scripted[0], "script", scripted[1]
+        return declared, "platform", 0.95
     if len(sample) < 3:
         return "und", "none", 0.0
     counts = {"ar": 0, "he": 0, "cyr": 0, "cjk": 0, "kana": 0, "hangul": 0, "deva": 0, "thai": 0, "greek": 0, "latin": 0}
