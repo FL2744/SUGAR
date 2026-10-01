@@ -439,3 +439,20 @@ kbd { padding: 0 .4rem; border: 1px solid var(--wb-line2); border-radius: .3rem;
 :root[data-theme="dark"] .field-block small, :root[data-theme="dark"] .footnote { color: var(--wb-muted); }
 :root[data-theme="dark"] .inspector-identity h2, :root[data-theme="dark"] .item-inspector h2 { color: var(--wb-ink); }
 .verdict-row .on, .triage-btn.on, .stepper li.now { background: #2f6bcb; border-color: #2f6bcb; color: #fff; }
+
+/* Institutions */
+.claim-list, .claim-evidence, .reason-list, .candidate-list { list-style: none; margin: .3rem 0; padding: 0; display: grid; gap: .5rem; }
+.claim-row { padding: .6rem .7rem; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); }
+.claim-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.claim-evidence li { display: grid; gap: .15rem; padding-left: .6rem; border-left: 3px solid var(--wb-line2); }
+.claim-evidence q, .candidate-list q { display: block; color: var(--wb-ink2); font-style: italic; overflow-wrap: anywhere; }
+.claim-actions { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
+.reason-list { list-style: disc; padding-left: 1.2rem; }
+.candidate-list li { display: flex; justify-content: space-between; gap: 1rem; padding: .6rem .7rem; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); }
+.candidate-list li > div { display: grid; gap: .2rem; min-width: 0; }
+.candidates-panel { width: min(46rem, calc(100vw - 2rem)); max-height: 90dvh; display: flex; flex-direction: column; }
+.candidates-panel .modal-body { overflow: auto; }
+.institution-drawer .note-add { flex-wrap: wrap; }
+.institution-drawer .note-add input, .institution-drawer .note-add select { flex: 1 1 12rem; }
+.institutions-page-new .project-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1.6fr) minmax(0, 1fr); }
+@container page (max-width: 52rem) { .institutions-page-new .project-row { grid-template-columns: 1fr; } .institutions-page-new .project-head { display: none; } }

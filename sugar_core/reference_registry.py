@@ -401,6 +401,8 @@ def _refresh_entity(entity: dict[str, Any]) -> dict[str, Any]:
 def list_entities(workspace: SugarWorkspace, *, filters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     filters = filters or {}
     entities = [_refresh_entity(dict(row)) for row in _jsonl(registry_paths(workspace)["entities"])]
+    if not filters.get("include_merged"):
+        entities = [row for row in entities if not row.get("merged_into")]
     query = _clean(filters.get("query")).casefold()
     for field in ("network", "entity_type", "status", "country", "city"):
         expected = _clean(filters.get(field)).casefold()
@@ -557,6 +559,68 @@ def upsert_entity(
         workspace, values, evidence_refs=evidence_refs, actor=actor, reason=reason,
         review_state=review_state, observed_at=observed_at,
     )
+
+
+def review_claim(workspace: SugarWorkspace, entity_id: str, claim_id: str, review_state: str, *, actor: str = "analyst", note: str = "") -> dict[str, Any]:
+    """Record a human decision on one claim (verify it, reject it, or flag it for follow-up). Never edits the value."""
+    if review_state not in {"unreviewed", "human_verified", "needs_followup", "rejected"}:
+        raise ValueError("Unsupported registry review state.")
+    paths = registry_paths(workspace)
+    entities = _jsonl(paths["entities"])
+    index = next((i for i, row in enumerate(entities) if row.get("entity_id") == entity_id), None)
+    if index is None:
+        raise KeyError(f"No registry entity with ID {entity_id!r}.")
+    claim = next((c for c in entities[index].get("claims", []) if c.get("claim_id") == claim_id), None)
+    if claim is None:
+        raise KeyError(f"No claim {claim_id!r} on that entity.")
+    claim.update({"review_state": review_state, "reviewer": _clean(actor), "review_note": _clean(note), "verified_at": _now() if review_state == "human_verified" else ""})
+    entities[index]["updated_at"] = _now()
+    entities[index] = _refresh_entity(entities[index])
+    _write_jsonl(paths["entities"], entities)
+    _append_jsonl(paths["history"], {
+        "event_id": str(uuid.uuid4()), "event_type": "claim_reviewed", "entity_id": entity_id, "claim_id": claim_id,
+        "field": claim.get("field"), "review_state": review_state, "actor": _clean(actor), "reason": _clean(note), "observed_at": _now(),
+    })
+    return entities[index]
+
+
+def merge_entities(workspace: SugarWorkspace, keep_id: str, drop_id: str, *, actor: str = "analyst", reason: str = "") -> dict[str, Any]:
+    """Fold a duplicate into the record to keep: its claims and evidence move over, its name becomes an alias,
+    and the duplicate stays in the file as a tombstone pointing at the survivor (nothing is deleted)."""
+    if keep_id == drop_id:
+        raise ValueError("Choose two different institutions to merge.")
+    paths = registry_paths(workspace)
+    entities = _jsonl(paths["entities"])
+    keep = next((row for row in entities if row.get("entity_id") == keep_id), None)
+    drop = next((row for row in entities if row.get("entity_id") == drop_id), None)
+    if keep is None or drop is None:
+        raise KeyError("Both institutions must exist to merge them.")
+    if drop.get("merged_into") or keep.get("merged_into"):
+        raise ValueError("One of these records was already merged.")
+    drop_name = _clean(_refresh_entity(dict(drop)).get("name"))
+    moved = 0
+    for claim in drop.get("claims", []):
+        twin = next((c for c in keep["claims"] if c.get("field") == claim.get("field") and c.get("value") == claim.get("value")), None)
+        if twin is not None:
+            for ref in claim.get("evidence_refs", []):
+                if ref not in twin.setdefault("evidence_refs", []):
+                    twin["evidence_refs"].append(ref)
+        else:
+            keep["claims"].append({**claim, "claim_id": str(uuid.uuid4()), "merged_from": drop_id})
+            moved += 1
+    refs = [ref for claim in drop.get("claims", []) for ref in claim.get("evidence_refs", [])][:1]
+    if refs and drop_name and drop_name.casefold() != _clean(_refresh_entity(dict(keep)).get("name")).casefold():
+        keep["claims"].append({"claim_id": str(uuid.uuid4()), "field": "aliases", "value": [drop_name], "evidence_refs": refs, "observed_at": _now(),
+                               "valid_from": "", "valid_to": "", "review_state": "unreviewed", "reviewer": "", "review_note": f"Merged from {drop_id}", "created_at": _now()})
+    keep["updated_at"] = _now()
+    drop["merged_into"], drop["merged_at"], drop["updated_at"] = keep_id, _now(), _now()
+    for i, row in enumerate(entities):
+        if row.get("entity_id") == keep_id:
+            entities[i] = _refresh_entity(keep)
+    _write_jsonl(paths["entities"], entities)
+    _append_jsonl(paths["history"], {"event_id": str(uuid.uuid4()), "event_type": "entities_merged", "entity_id": keep_id, "merged_entity_id": drop_id,
+                                     "claims_moved": moved, "actor": _clean(actor), "reason": _clean(reason), "observed_at": _now()})
+    return _refresh_entity(keep)
 
 
 def add_relationship(

@@ -485,8 +485,8 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             return "viewer"
         if area == "research" and rest == "settings":
             return "owner"
-        if area == "research" and rest == "review":
-            return "reviewer"          # reviewers may judge, tag and comment; viewers can only read
+        if area == "research" and (rest == "review" or (rest.startswith("institutions/") and rest.endswith("/review"))):
+            return "reviewer"          # reviewers may judge, tag, comment and verify claims; viewers can only read
         return "analyst"
 
     def _authorize_research(self, method: str, path: str, body: dict[str, Any] | None) -> bool:

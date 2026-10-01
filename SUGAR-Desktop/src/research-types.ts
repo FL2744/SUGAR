@@ -108,3 +108,21 @@ export type ProjectOverview = {
   settings: { enabled_sources?: string[]; provider_profile_id?: string; debug?: boolean; rss_feeds?: string[] };
   members: Array<{ name: string; role: string }>; runs: RunSummary[]; notes: Array<Record<string, any>>;
 };
+
+export type Confidence = { level: "high" | "medium" | "low"; reasons: string[]; sources: number; verified_fields: string[]; conflicts: string[] };
+export type Institution = {
+  entity_id: string; name: string; network: string; entity_type: string; status: string; status_date: string; country: string; region: string; city: string;
+  latitude: number | null; longitude: number | null; placed: boolean; location_precision: string; aliases: string[]; programs: string[]; audiences: string[];
+  delivery_modes: string[]; hosts: string[]; source_count: number; confidence: Confidence; conflicts: string[]; last_verified: string; last_evidence: string;
+  activity: { items: number; recent_items: number }; updated_at: string;
+};
+export type ClaimView = { claim_id: string; value: unknown; review_state: string; reviewer: string; verified_at: string; note: string; observed_at: string; evidence: Array<Record<string, any>> };
+export type InstitutionDetail = Institution & {
+  fields: Record<string, { value: unknown; state: string; claims: ClaimView[] }>; links: Array<Record<string, any>>; lifecycle: Array<Record<string, any>>;
+  relationships: Array<Record<string, any>>; evidence: Array<Record<string, any>>; description: string;
+};
+export type InstitutionList = { institutions: Institution[]; total: number; unplaced: number; facets: Record<string, Array<{ key: string; count: number }>> };
+export type InstitutionCandidate = {
+  name: string; mentions: number; item_ids: string[]; evidence: Array<{ item_id: string; quote: string; url: string }>; method: string; country: string; city?: string;
+  status_hint: string; already_recorded: boolean; entity_type_hint?: string;
+};

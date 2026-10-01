@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { research } from "./research-api";
-import type { ResultItem, ReviewState, Verdict } from "./research-types";
+import type { Institution, ResultItem, ReviewState, Verdict } from "./research-types";
 import { Pill, Spinner, VERDICTS, formatTime, languageName, platformLabel, titleCase } from "./ui";
 
 const CHAIN_LABELS: Record<string, string> = {
@@ -16,6 +16,11 @@ export function ItemInspector({ projectId, runId, itemId, author, onClose }: { p
   const [comment, setComment] = useState("");
   const [tag, setTag] = useState("");
   const [reviewError, setReviewError] = useState("");
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
+  const [linkTo, setLinkTo] = useState("");
+  const [newName, setNewName] = useState("");
+  const [quote, setQuote] = useState("");
+  const [linkMsg, setLinkMsg] = useState("");
   useEffect(() => {
     let active = true;
     setItem(null); setError(""); setReview(null); setReviewError("");
@@ -23,6 +28,17 @@ export function ItemInspector({ projectId, runId, itemId, author, onClose }: { p
     return () => { active = false; };
   }, [projectId, runId, itemId]);
 
+  useEffect(() => { void research.institutions(projectId).then((r) => setInstitutions(r.institutions)).catch(() => undefined); }, [projectId]);
+  const link = async () => {
+    setLinkMsg("");
+    try {
+      const existing = institutions.find((i) => i.entity_id === linkTo);
+      const saved = await research.recordInstitution(projectId, { values: { name: existing ? existing.name : newName.trim() }, entity_id: existing?.entity_id,
+        evidence: [{ run_id: runId, item_id: itemId, quote: quote.trim() }], author });
+      setLinkMsg(`Linked to ${saved.name}.`); setQuote(""); setNewName("");
+      setInstitutions((await research.institutions(projectId)).institutions);
+    } catch (issue) { setLinkMsg(issue instanceof Error ? issue.message : String(issue)); }
+  };
   const act = async (action: Record<string, unknown>) => {
     setReviewError("");
     try { setReview((await research.postReview(projectId, itemId, action, author)).review); }
@@ -71,6 +87,15 @@ export function ItemInspector({ projectId, runId, itemId, author, onClose }: { p
                 <button className="button button-secondary button-small" disabled={!comment.trim()} onClick={() => { void act({ kind: "comment", text: comment }); setComment(""); }}>Comment</button></div>
               {reviewError && <div className="inline-error" role="alert">{reviewError}</div>}
             </div>
+            <div className="inspector-section"><span className="eyebrow">USE AS EVIDENCE FOR AN INSTITUTION</span>
+              <div className="note-add">
+                <select value={linkTo} onChange={(e) => setLinkTo(e.target.value)} aria-label="Institution">
+                  <option value="">New institution…</option>{institutions.map((i) => <option key={i.entity_id} value={i.entity_id}>{i.name}{i.city ? ` · ${i.city}` : ""}</option>)}</select>
+                {!linkTo && <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Institution name" aria-label="New institution name" />}
+                <input value={quote} onChange={(e) => setQuote(e.target.value)} placeholder="Exact words from this item (optional)" aria-label="Quote from the item" />
+                <button className="button button-secondary button-small" disabled={!linkTo && !newName.trim()} onClick={() => void link()}>Link</button></div>
+              {linkMsg && <small className="muted" role="status">{linkMsg}</small>}
+              <small className="muted">The quote must appear in this item. Verify the claims on the Institutions page.</small></div>
             <div className="inspector-section"><span className="eyebrow">ORIGINAL</span><p className="item-text" dir="auto">{item.original_text}</p>
               {item.url && <a className="source-link" href={item.url} target="_blank" rel="noreferrer"><span className="source-icon">↗</span><span><strong>Open the original</strong><small>{item.url}</small></span></a>}</div>
             {item.translated_text && <div className="inspector-section"><span className="eyebrow">TRANSLATION</span><p className="item-text" dir="auto">{item.translated_text}</p>

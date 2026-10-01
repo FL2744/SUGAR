@@ -1,7 +1,7 @@
 import { api, apiPost, openEventStream } from "./bridge";
 import type {
   ActivityEvent, ConnectionReport, Interpretation, PlanSpec, PlatformRow, ProjectOverview, ProviderProfileRow, ProviderType,
-  ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
+  InstitutionCandidate, InstitutionDetail, InstitutionList, ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
 } from "./research-types";
 
 const ws = (id: string) => `/api/workspaces/${encodeURIComponent(id)}`;
@@ -47,6 +47,17 @@ export const research = {
   review: (id: string, itemId: string) => api<{ item_id: string; review: ReviewState }>(`${ws(id)}/research/review${query({ item_id: itemId })}`),
   postReview: (id: string, itemId: string, action: Record<string, unknown>, author = "") =>
     apiPost<{ item_id: string; review: ReviewState; summary: ReviewSummary }>(`${ws(id)}/research/review`, { item_id: itemId, author, ...action }),
+  institutions: (id: string, params: Record<string, string | number | boolean | undefined> = {}) => api<InstitutionList>(`${ws(id)}/research/institutions${query(params)}`),
+  institution: (id: string, entityId: string) => api<{ institution: InstitutionDetail }>(`${ws(id)}/research/institutions/${encodeURIComponent(entityId)}`).then((r) => r.institution),
+  recordInstitution: (id: string, body: { values: Record<string, unknown>; evidence: Array<Record<string, unknown>>; entity_id?: string; author?: string }) =>
+    apiPost<{ institution: InstitutionDetail }>(`${ws(id)}/research/institutions`, body).then((r) => r.institution),
+  reviewClaim: (id: string, entityId: string, claimId: string, state: string, note = "", author = "") =>
+    apiPost<{ institution: InstitutionDetail }>(`${ws(id)}/research/institutions/${encodeURIComponent(entityId)}/review`, { claim_id: claimId, state, note, author }).then((r) => r.institution),
+  mergeInstitutions: (id: string, keepId: string, dropId: string, reason = "", author = "") =>
+    apiPost<{ institution: InstitutionDetail }>(`${ws(id)}/research/institutions/${encodeURIComponent(keepId)}/merge`, { drop_id: dropId, reason, author }).then((r) => r.institution),
+  institutionCandidates: (id: string, runId: string, mode: "auto" | "deterministic") =>
+    apiPost<{ candidates: InstitutionCandidate[]; warnings: string[]; scanned: number; model_used: boolean }>(`${ws(id)}/research/institutions/candidates`, { run_id: runId, mode }),
+  geocodeInstitutions: (id: string) => apiPost<{ placed: string[]; failed: Array<{ entity_id: string; reason: string }> }>(`${ws(id)}/research/institutions/geocode`, {}),
   results: (id: string, runId: string, params: Record<string, string | number | boolean | undefined> = {}) => api<ResultsPayload>(`${ws(id)}/runs/${runId}/results${query(params)}`),
   item: (id: string, runId: string, itemId: string) => api<{ item: ResultItem }>(`${ws(id)}/runs/${runId}/items/${itemId}`).then((r) => r.item),
   exportRun: (id: string, runId: string) => apiPost<{ archive: string; directory: string; files: string[] }>(`${ws(id)}/runs/${runId}/export`),

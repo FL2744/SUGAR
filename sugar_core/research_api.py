@@ -176,7 +176,59 @@ def _route(method, path, query, body, wb, resolve_project, list_projects):  # no
     return _run_routes(method, rest, query, body, wb, project)
 
 
+def _institution_routes(method, rest, query, body, wb, project):
+    from . import institutions as inst
+    actor = str(body.get("_author") or "Researcher")
+    try:
+        if rest == "institutions" and method == "GET":
+            return 200, inst.list_institutions(project, network=query.get("network", ""), status=query.get("status", ""), country=query.get("country", ""),
+                                               query=query.get("q", ""), since=query.get("since", ""), confidence_level=query.get("confidence", ""),
+                                               placed=query.get("placed", ""), program=query.get("program", ""), audience=query.get("audience", ""))
+        if rest == "institutions" and method == "POST":
+            evidence, urls = [], []
+            cache: dict[str, dict[str, object]] = {}
+            for row in body.get("evidence") or []:
+                if row.get("url") and not row.get("item_id"):
+                    urls.append({"url": row.get("url"), "note": row.get("note") or ""})
+                    continue
+                run_id, item_id = str(row.get("run_id") or ""), str(row.get("item_id") or "")
+                if run_id not in cache:
+                    cache[run_id] = {i.item_id: i for i in wb.items(project, run_id)}
+                item = cache[run_id].get(item_id)
+                if item is None:
+                    raise WorkbenchError(f"Item {item_id} was not found in run {run_id}.", 404)
+                evidence.append((item, str(row.get("quote") or "")))
+            return 200, {"institution": inst.promote(project, dict(body.get("values") or {}), evidence, actor=actor,
+                                                     entity_id=str(body.get("entity_id") or ""), source_urls=urls)}
+        if rest == "institutions/candidates" and method == "POST":
+            run_id = str(body.get("run_id") or "")
+            items = wb.items(project, run_id)
+            provider, budget = None, None
+            if str(body.get("mode") or "auto") != "deterministic":
+                provider = wb.resolve_provider(project=project, profile_id=str(body.get("provider_id") or ""))
+                budget = inst.LLMBudget(int(body.get("max_calls") or 40))
+            return 200, inst.candidates(project, items, provider=provider, budget=budget)
+        if rest == "institutions/geocode" and method == "POST":
+            return 200, inst.geocode_missing(project, actor=actor, limit=_int(str(body.get("limit") or "25"), 25, 1, 100))
+        match = re.fullmatch(r"institutions/([A-Za-z0-9\-]+)", rest)
+        if match and method == "GET":
+            return 200, {"institution": inst.institution_detail(project, match.group(1))}
+        match = re.fullmatch(r"institutions/([A-Za-z0-9\-]+)/(review|merge)", rest)
+        if match and method == "POST":
+            if match.group(2) == "review":
+                return 200, {"institution": inst.verify(project, match.group(1), str(body.get("claim_id") or ""), str(body.get("state") or ""),
+                                                        actor=actor, note=str(body.get("note") or ""))}
+            return 200, {"institution": inst.merge(project, match.group(1), str(body.get("drop_id") or ""), actor=actor, reason=str(body.get("reason") or ""))}
+    except KeyError as exc:
+        raise WorkbenchError(str(exc.args[0]) if exc.args else "Not found.", 404) from exc
+    except ValueError as exc:
+        raise WorkbenchError(str(exc)) from exc
+    return None
+
+
 def _research_routes(method, rest, query, body, wb, project):
+    if rest == "institutions" or rest.startswith("institutions/"):
+        return _institution_routes(method, rest, query, body, wb, project)
     if rest == "" and method == "GET":
         return 200, wb.project_overview(project)
     if rest == "plan" and method == "POST":
