@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import copy
 import threading
+import time
 from datetime import date
 from typing import Any, Callable
 
@@ -295,6 +296,10 @@ class ResearchWorkbench:
                limit: int = 1000) -> dict[str, Any]:
         live = self.pipeline(project, run_id)
         if live is not None:
+            if not live.active:                  # the status turns terminal a moment before the log closes; let it finish
+                deadline = time.monotonic() + 2.0
+                while not live.events.closed and time.monotonic() < deadline:
+                    time.sleep(0.02)
             rows = [e.as_dict() for e in live.events.since(after, stage=stage, source=source, severity=severity, limit=limit)]
             return {"events": rows, "last_seq": live.events.last_seq, "finished": not live.active and live.events.closed, "live": True}
         rows = read_events_file(project.events_path(run_id), after, stage=stage, source=source, severity=severity, limit=limit)
