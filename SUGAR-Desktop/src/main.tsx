@@ -10,6 +10,7 @@ import { createRoot } from "react-dom/client";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import "./workbench.css";
+import "./polish.css";
 import { App } from "./shell";
 
 createRoot(document.getElementById("root")!).render(

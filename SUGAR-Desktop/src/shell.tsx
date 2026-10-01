@@ -1130,7 +1130,13 @@ export function App() {
   };
 
   const title = PAGE_TITLES[page];
-  const navItems = prefs.mode === "advanced" ? [...NAV_BASIC, ...NAV_ADVANCED] : NAV_BASIC;
+  const pick = (ids: Page[], from: Array<{ id: Page; label: string; icon: string }>) => from.filter((item) => ids.includes(item.id));
+  const navGroups = [
+    { label: "Ask", items: pick(["research", "activity", "results"], NAV_BASIC) },
+    { label: "Places", items: pick(["network", "map", "monitoring"], NAV_BASIC) },
+    { label: "Project", items: pick(["projects"], NAV_BASIC) },
+    ...(prefs.mode === "advanced" ? [{ label: "Audit", items: NAV_ADVANCED }] : []),
+  ];
   const activeRunSummary = overview?.runs.find((r) => ["running", "paused", "queued", "cancelling"].includes(r.status));
   const author = prefs.name.trim() || "Researcher";
 
@@ -1175,11 +1181,14 @@ export function App() {
       <input ref={datasetInputRef} className="sr-only" aria-label="Choose reference dataset file" type="file" accept=".csv,.tsv,.xlsx,.xls,.json,.jsonl" onChange={(event) => { const file = event.currentTarget.files?.[0]; void uploadRegistryFile(file); event.currentTarget.value = ""; }} />
       <aside className="sidebar">
         <div className="brand-row"><div className="brand-mark">S</div><div><div className="brand-name">SUGAR</div><div className="brand-subtitle">Research workspace</div></div></div>
-        <div className="side-caption">RESEARCH</div>
         <nav className="nav-list" aria-label="Main navigation">
-          {navItems.map((item) => <button key={item.id} className={`nav-item ${page === item.id ? "active" : ""}`} aria-current={page === item.id ? "page" : undefined} onClick={() => changePage(item.id)}><span className="nav-icon" aria-hidden="true">{item.icon}</span><span className="nav-label">{item.label}</span>{item.id === "activity" && activeRunSummary && <span className="nav-live" title="A run is in progress" />}</button>)}
+          {navGroups.map((group) => (
+            <div className="nav-group" key={group.label} role="group" aria-label={group.label}>
+              <div className="side-caption">{group.label}</div>
+              {group.items.map((item) => <button key={item.id} className={`nav-item ${page === item.id ? "active" : ""}`} aria-current={page === item.id ? "page" : undefined} onClick={() => changePage(item.id)}><span className="nav-icon" aria-hidden="true">{item.icon}</span><span className="nav-label">{item.label}</span>{item.id === "activity" && activeRunSummary && <span className="nav-live" title="A run is in progress" />}</button>)}
+            </div>))}
         </nav>
-        <div className="side-caption secondary-caption">PROJECT</div>
+        <div className="side-caption secondary-caption">Current project</div>
         <button className="side-new-project" onClick={openNewProject}><span aria-hidden="true">＋</span> New project</button>
         <button className="project-chip" onClick={() => changePage("projects")} title="Switch project"><span className={`project-indicator ${projectId ? "connected" : ""}`} /><span className="project-chip-copy"><strong>{projectId ? projectName : "No project open"}</strong><small>{projectId ? (overview?.summary.status ? titleCase(overview.summary.status) : "Open") : "Create or choose one"}</small></span><span className="chevron" aria-hidden="true">›</span></button>
         <div className="sidebar-spacer" />

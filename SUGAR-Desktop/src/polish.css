@@ -1,0 +1,72 @@
+/* Final layer: one set of roles, layouts that explain themselves. Loaded after styles.css and workbench.css.
+   Color roles: blue = the thing to do next, green = good/verified, amber = needs a look, red = problem, yellow = posts on the map. */
+
+/* ---------- navigation: grouped by what you are doing ---------- */
+.nav-list { display: grid; gap: .1rem; }
+.nav-group { display: grid; gap: .05rem; margin-bottom: .1rem; }
+.sidebar .nav-item { min-height: 2.15rem; }
+.nav-group .side-caption { margin: .4rem .7rem .1rem; font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; color: #9db0c6; }
+.nav-item.active { box-shadow: inset 3px 0 0 #63cc9f; }
+.secondary-caption { text-transform: uppercase; letter-spacing: .08em; font-size: .85rem; }
+
+/* ---------- inputs and search read correctly in dark ---------- */
+.search-field { background: var(--wb-card); border-color: var(--wb-line2); color: var(--wb-muted); }
+.search-field input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--wb-ink); outline-offset: 2px; }
+.search-field input::placeholder { color: var(--wb-faint); }
+:root[data-theme="dark"] .search-field { background: #162131; }
+:root[data-theme="dark"] .map-frame { background: #0d1117; border-color: var(--wb-line); }
+:root[data-theme="dark"] .map-fallback { background: #2a2314; color: #f0d9a6; border-color: #5b4720; }
+select, input, textarea { color-scheme: inherit; }
+
+/* ---------- forms: labels sit above fields with room to breathe ---------- */
+.field-block { display: grid; gap: .4rem; min-width: 0; }
+.field-block > span { display: flex; align-items: baseline; flex-wrap: wrap; gap: .5rem; color: var(--wb-ink2); font-weight: 600; }
+.field-block em { color: var(--wb-amber); font-style: normal; font-weight: 500; font-size: .9rem; }
+.field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .9rem; }
+.monitor-form, .panel .field-grid + .field-block { display: grid; gap: .9rem; }
+.monitor-form { padding: 1rem 1.1rem; }
+.preview-actions { display: flex; gap: .6rem; justify-content: flex-end; }
+.button { white-space: nowrap; }
+.heading-actions, .run-controls { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; justify-content: flex-end; }
+
+/* ---------- the research box: type, pick a model, go ---------- */
+.request-card { display: grid; gap: .8rem; }
+.request-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "model go" "examples examples"; gap: .8rem 1rem; align-items: end; }
+.request-actions > .example-row { grid-area: examples; min-width: 0; flex-wrap: wrap; padding-top: .2rem; border-top: 1px dashed var(--wb-line); }
+.request-actions > :nth-child(2) { grid-area: model; min-width: 0; }
+.request-actions > .button-primary { grid-area: go; min-height: 2.8rem; padding: 0 1.4rem; font-size: 1.05rem; }
+.example-chip { border-radius: .5rem; }
+@media (max-width: 52rem) { .request-actions { grid-template-columns: 1fr; grid-template-areas: "model" "go" "examples"; } }
+
+/* ---------- segmented controls never break onto two lines ---------- */
+.segmented { flex-wrap: nowrap; white-space: nowrap; }
+.segmented button { padding: 0 .75rem; }
+
+/* ---------- toggle chips: on/off with a mark, not just a color ---------- */
+.chip-group { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.chip-toggle { display: inline-flex; align-items: center; gap: .4rem; min-height: 2.2rem; padding: 0 .8rem; border: 1px solid var(--wb-line2); border-radius: 999px; background: var(--wb-card); color: var(--wb-muted); font: inherit; font-weight: 600; cursor: pointer; }
+.chip-toggle small { color: inherit; opacity: .8; font-size: .9rem; }
+.chip-toggle:hover { border-color: var(--wb-blue); color: var(--wb-ink); }
+.chip-toggle[aria-pressed="true"] { border-color: var(--wb-blue); background: var(--wb-blue-soft); color: var(--wb-ink); }
+.chip-toggle[aria-pressed="true"]::before { content: "✓"; color: var(--wb-green); font-weight: 700; }
+.chip-sub { border-style: dashed; }
+.chip-toggle:focus-visible, .nav-item:focus-visible, .button:focus-visible { outline: 3px solid #4da3ff; outline-offset: 2px; }
+
+/* ---------- map page: the map is the page ---------- */
+.map-layout, .map-layout:has(.map-detail) { grid-template-columns: minmax(0, 1fr); }
+@container page (min-width: 60rem) { .map-layout:has(.map-detail) { grid-template-columns: minmax(0, 1fr) 21rem; } }
+.map-main { display: grid; gap: .6rem; min-width: 0; }
+.map-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1rem; }
+.map-toolbar-end { display: flex; gap: .6rem; align-items: center; }
+.map-main .map-frame { height: clamp(26rem, calc(100dvh - 19rem), 56rem); }
+.filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: .8rem 1rem; }
+.top-strip { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .5rem; }
+.map-detail { align-self: start; position: sticky; top: .5rem; max-height: calc(100dvh - 7rem); overflow: auto; }
+.map-stats { color: var(--wb-muted); }
+
+/* ---------- banners and notices share one shape ---------- */
+.update-banner, .notice, .error-banner { border-radius: .6rem; }
+.notice-info { border-color: var(--wb-blue); }
+
+/* ---------- empty pages say what to do next ---------- */
+.empty-state, .empty { padding: 2.2rem 1rem; }

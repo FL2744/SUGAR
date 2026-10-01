@@ -4,6 +4,13 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ## Unreleased
 
+### Interface pass
+
+- Navigation grouped by what you are doing (Ask, Places, Project, Audit) instead of one long list.
+- Map: layers are on/off chips with a check mark (not color alone), basemap switch and filters sit above a much larger map; top targets are a strip of chips.
+- Research box: pick a model and press Interpret on one row, examples below. Forms (Monitoring and others) get proper spacing; segmented controls no longer wrap; the Institutions search and map frame read correctly in dark theme.
+- New `polish.css` states the color roles once (blue = next step, green = verified, amber = needs a look, red = problem, yellow = posts). Both themes pass the automated accessibility scans.
+
 ### Map: quick response and precision
 
 - **Target panel:** click a ringed country (or "Top targets") for posts about it: counts, how many in the last 24 hours, verified count, platforms, languages, cities named, each post one click away, and a CSV download. A "Posted in" filter limits posts to the last 24 hours, 7 days or 30 days.

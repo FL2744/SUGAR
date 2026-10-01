@@ -107,38 +107,40 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
 
       <div className="map-layout">
-        <aside className="map-filters" aria-label="Map filters">
-          <div className="field-block"><span>Layers</span>
-            <label className="check-row"><input type="checkbox" checked={layers.posts} onChange={(e) => setLayers({ ...layers, posts: e.target.checked })} /><span><span className="swatch post" aria-hidden="true" /> Posts <small className="muted">{posts?.pins.length ?? 0}</small></span></label>
-            <label className="check-row"><input type="checkbox" checked={layers.targets} onChange={(e) => setLayers({ ...layers, targets: e.target.checked })} /><span><span className="swatch target" aria-hidden="true" /> Targets: where posts are about <small className="muted">{posts?.targets.length ?? 0}</small></span></label>
-            <label className="check-row"><input type="checkbox" checked={layers.flows} onChange={(e) => setLayers({ ...layers, flows: e.target.checked })} /><span>Origin → target lines</span></label>
-            <label className="check-row"><input type="checkbox" checked={layers.institutions} onChange={(e) => setLayers({ ...layers, institutions: e.target.checked })} /><span>Institutions</span></label>
-            <label className="field-block"><span>Posts</span><select value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)}><option value="">All posts</option><option value="relevant">Verified only</option><option value="none">Not yet checked</option></select></label>
-            <label className="field-block"><span>Posted in</span><select value={days} onChange={(e) => setDays(e.target.value)}><option value="">Any time</option><option value="1">Last 24 hours</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
-            {(posts?.targets.length ?? 0) > 0 && <div className="field-block"><span>Top targets</span>
-              <ul className="top-targets">{posts!.targets.slice(0, 6).map((t) => <li key={t.name}><button className={`button button-quiet button-small ${selectedTarget === t.name ? "on" : ""}`} onClick={() => { setSelected(""); setSelectedPost(""); setSelectedTarget(t.name); }}>{t.name} <strong>{t.posts}</strong>{t.last_24h > 0 && <small className="muted"> · {t.last_24h} today</small>}</button></li>)}</ul></div>}</div>
-          <div className="field-block"><span>Basemap</span>
-            <div className="segmented" role="radiogroup" aria-label="Basemap">{(["dark", "streets", "terrain"] as const).map((v) => <button key={v} role="radio" aria-checked={basemap === v} className={basemap === v ? "on" : ""} onClick={() => setBasemap(v)}>{titleCase(v)}</button>)}</div></div>
-          <div className="field-block"><span>Networks</span>
-            {networks.length === 0 && <small className="muted">No networks yet. Import a directory on the Institutions page.</small>}
-            {networks.map((n) => <label key={n.name || "none"} className="check-row"><input type="checkbox" checked={!hidden[n.name]} onChange={(e) => setHidden({ ...hidden, [n.name]: !e.target.checked })} />
-              <span><span className={`swatch ${n.role}`} aria-hidden="true" /> {n.label} <small className="muted">{n.institutions}</small></span></label>)}</div>
-          <Collapsible title="Filters" hint="Time, status, place, program, audience" badge={[windowKey, status, level, country, program, audience].filter(Boolean).length || undefined}>
-          <label className="field-block"><span>Evidence from</span><select value={windowKey} onChange={(e) => setWindowKey(e.target.value)}>{WINDOWS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
-          <label className="field-block"><span>Status</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Any</option>{["active", "closed", "renamed", "relocated", "unknown"].map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}</select></label>
-          <label className="field-block"><span>Confidence</span><select value={level} onChange={(e) => setLevel(e.target.value)}><option value="">Any</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
-          <label className="field-block"><span>Country</span><select value={country} onChange={(e) => setCountry(e.target.value)}><option value="">All</option>{data?.facets.countries.map((f) => <option key={f.key} value={f.key === "unknown" ? "" : f.key}>{f.key} ({f.count})</option>)}</select></label>
-          <label className="field-block"><span>Program</span><select value={program} onChange={(e) => setProgram(e.target.value)}><option value="">Any</option>{data?.facets.programs.map((f) => <option key={f.key} value={f.key}>{titleCase(f.key)} ({f.count})</option>)}</select></label>
-          <label className="field-block"><span>Audience</span><select value={audience} onChange={(e) => setAudience(e.target.value)}><option value="">Any</option>{data?.facets.audiences.map((f) => <option key={f.key} value={f.key}>{titleCase(f.key)} ({f.count})</option>)}</select></label>
-          </Collapsible>
-          <div className="field-block"><span>Map style</span>
-            <div className="segmented" role="radiogroup" aria-label="Map style">{([["points", "Points"], ["heat", "Activity heat"]] as const).map(([v, l]) => <button key={v} role="radio" aria-checked={mode === v} className={mode === v ? "on" : ""} onClick={() => setMode(v)}>{l}</button>)}</div>
-            <small className="muted">Heat reflects recent linked items and recorded programs for the subject network, not a measure of influence.</small></div>
-          {references.length > 0 && subjects.length > 0 && <div className="field-block"><label className="check-row"><input type="checkbox" checked={showLines} onChange={(e) => setShowLines(e.target.checked)} /><span>Link each subject to its nearest reference within</span></label>
-            <select value={nearKm} onChange={(e) => setNearKm(Number(e.target.value))} aria-label="Distance"><option value={5}>5 km</option><option value={25}>25 km</option><option value={100}>100 km</option><option value={250}>250 km</option></select></div>}
-        </aside>
-
         <div className="map-main">
+          <div className="map-toolbar" role="toolbar" aria-label="Map layers">
+            <div className="chip-group" role="group" aria-label="Layers">
+              <button className="chip-toggle" aria-pressed={layers.posts} onClick={() => setLayers({ ...layers, posts: !layers.posts })}><span className="swatch post" aria-hidden="true" /> Posts <small>{posts?.pins.length ?? 0}</small></button>
+              <button className="chip-toggle" aria-pressed={layers.targets} onClick={() => setLayers({ ...layers, targets: !layers.targets })}><span className="swatch target" aria-hidden="true" /> Targets <small>{posts?.targets.length ?? 0}</small></button>
+              <button className="chip-toggle" aria-pressed={layers.flows} onClick={() => setLayers({ ...layers, flows: !layers.flows })}>Origin → target</button>
+              <button className="chip-toggle" aria-pressed={layers.institutions} onClick={() => setLayers({ ...layers, institutions: !layers.institutions })}>Institutions</button>
+              {networks.map((n) => <button key={n.name || "none"} className="chip-toggle chip-sub" aria-pressed={!hidden[n.name]} title={`Show or hide ${n.label}`} onClick={() => setHidden({ ...hidden, [n.name]: !hidden[n.name] })}><span className={`swatch ${n.role}`} aria-hidden="true" /> {n.label} <small>{n.institutions}</small></button>)}
+            </div>
+            <div className="map-toolbar-end">
+              <div className="segmented" role="radiogroup" aria-label="Basemap">{(["dark", "streets", "terrain"] as const).map((v) => <button key={v} role="radio" aria-checked={basemap === v} className={basemap === v ? "on" : ""} onClick={() => setBasemap(v)}>{titleCase(v)}</button>)}</div>
+            </div>
+          </div>
+          <Collapsible title="Filters and options" hint="Time, verification, status, place, program, audience, style"
+            badge={[days, verdictFilter, windowKey, status, level, country, program, audience].filter(Boolean).length ? <Pill tone="info">{[days, verdictFilter, windowKey, status, level, country, program, audience].filter(Boolean).length} on</Pill> : undefined}>
+            <div className="filter-grid">
+              <label className="field-block"><span>Posts shown</span><select value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)}><option value="">All posts</option><option value="relevant">Verified only</option><option value="none">Not yet checked</option></select></label>
+              <label className="field-block"><span>Posted in</span><select value={days} onChange={(e) => setDays(e.target.value)}><option value="">Any time</option><option value="1">Last 24 hours</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
+              <label className="field-block"><span>Institution evidence from</span><select value={windowKey} onChange={(e) => setWindowKey(e.target.value)}>{WINDOWS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+              <label className="field-block"><span>Status</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Any</option>{["active", "closed", "renamed", "relocated", "unknown"].map((x) => <option key={x} value={x}>{titleCase(x)}</option>)}</select></label>
+              <label className="field-block"><span>Confidence</span><select value={level} onChange={(e) => setLevel(e.target.value)}><option value="">Any</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+              <label className="field-block"><span>Country</span><select value={country} onChange={(e) => setCountry(e.target.value)}><option value="">All</option>{data?.facets.countries.map((f) => <option key={f.key} value={f.key === "unknown" ? "" : f.key}>{f.key} ({f.count})</option>)}</select></label>
+              <label className="field-block"><span>Program</span><select value={program} onChange={(e) => setProgram(e.target.value)}><option value="">Any</option>{data?.facets.programs.map((f) => <option key={f.key} value={f.key}>{titleCase(f.key)} ({f.count})</option>)}</select></label>
+              <label className="field-block"><span>Audience</span><select value={audience} onChange={(e) => setAudience(e.target.value)}><option value="">Any</option>{data?.facets.audiences.map((f) => <option key={f.key} value={f.key}>{titleCase(f.key)} ({f.count})</option>)}</select></label>
+              <div className="field-block"><span>Institution style</span>
+                <div className="segmented" role="radiogroup" aria-label="Map style">{([["points", "Points"], ["heat", "Activity heat"]] as const).map(([v, l]) => <button key={v} role="radio" aria-checked={mode === v} className={mode === v ? "on" : ""} onClick={() => setMode(v)}>{l}</button>)}</div>
+                <small className="muted">Heat reflects recent linked items and recorded programs, not influence.</small></div>
+              {references.length > 0 && subjects.length > 0 && <div className="field-block"><label className="check-row"><input type="checkbox" checked={showLines} onChange={(e) => setShowLines(e.target.checked)} /><span>Link each subject to its nearest reference within</span></label>
+                <select value={nearKm} onChange={(e) => setNearKm(Number(e.target.value))} aria-label="Distance"><option value={5}>5 km</option><option value={25}>25 km</option><option value={100}>100 km</option><option value={250}>250 km</option></select></div>}
+            </div>
+          </Collapsible>
+          {(posts?.targets.length ?? 0) > 0 && <div className="top-strip" role="group" aria-label="Top targets"><span className="muted">Where posts are about:</span>
+            {posts!.targets.slice(0, 8).map((t) => <button key={t.name} className={`chip-toggle ${selectedTarget === t.name ? "on" : ""}`} aria-pressed={selectedTarget === t.name} onClick={() => { setSelected(""); setSelectedPost(""); setSelectedTarget(t.name); }}>{t.name} <strong>{t.posts}</strong>{t.last_24h > 0 && <small> · {t.last_24h} today</small>}</button>)}</div>}
+
           <div className="map-stats" role="status">
             {loading && <Spinner />}<strong>{visible.filter((r) => r.placed).length}</strong> on the map · <strong>{data?.unplaced ?? 0}</strong> not placed · <strong>{posts?.pins.length ?? 0}</strong> posts
             {overlap && <> · <strong>{near}</strong> subject institutions have a reference institution within {nearKm} km</>}
