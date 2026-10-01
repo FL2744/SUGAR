@@ -6,6 +6,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Collection and workflow
 
+- add one-click/CLI official-baseline sync for the public ECA American Spaces locator and a public global language-center directory, with raw snapshots, normalized registry records, stable IDs, source provenance, and bulk registry import for global-scale datasets;
 - retry anonymous Bluesky searches against Bluesky's public AppView when its cached public hostname returns 403; preserve collected first-page records when a later page fails;
 - support explicit public Mastodon `#hashtag` timelines without a search token, with separate provenance from authorized keyword search;
 - restore live collection outputs in the desktop evidence panel, and allow known public Bilibili videos, Weibo posts, and WeChat articles to enter the evidence workflow by URL;
@@ -14,6 +15,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Live verification
 
+- fetched and imported the live official directories into a clean workspace: 559 American Spaces records and 589 language-center directory records after excluding a non-institution CMS root row, producing 1,148 source-backed registry entities; all 559 American Spaces retained provider coordinates;
 - collected and saved real Bluesky and Mastodon posts, completed a research plan using both, and triaged live posts into insight artifacts;
 - ingested and triaged real Bilibili video and Weibo post URLs; generated analysis and maps from live, location-enriched X and Mastodon records;
 - Weibo and Bilibili keyword search still face provider login/access challenges in this environment. WeChat article retrieval encountered a TLS hostname mismatch and remains unavailable here; SUGAR does not disable certificate verification.

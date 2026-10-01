@@ -22,6 +22,7 @@ from .listening_posts import (
     set_monitor_status,
 )
 from .mapping import MapOptions, ReferenceLayer, create_map, load_map_frame
+from .official_baselines import sync_official_baselines
 from .project_bundle import export_project_bundle, import_project_bundle
 from .reference_registry import (
     add_relationship,
@@ -746,6 +747,18 @@ def run_workspace_hub(
             license_notes=str(config.get("license_notes") or ""), actor=str(config.get("actor") or "analyst"),
             review_state=str(config.get("review_state") or "unreviewed"),
             accept_partial=bool(config.get("accept_partial", False)),
+        )
+        return _event_result(progress, action, result)
+
+    if action == "registry-sync-official-baselines":
+        requested = config.get("sources") or ["american_spaces", "language_centers"]
+        if isinstance(requested, str):
+            requested = [item.strip() for item in requested.split(",") if item.strip()]
+        result = sync_official_baselines(
+            workspace,
+            sources=requested,
+            timeout=float(config.get("timeout") or 30.0),
+            actor=str(config.get("actor") or "official-baseline-sync"),
         )
         return _event_result(progress, action, result)
 
