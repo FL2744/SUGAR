@@ -2,7 +2,7 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
-## Unreleased
+## 1.8.0 - 2026-10-01
 
 ### Update hardening
 
