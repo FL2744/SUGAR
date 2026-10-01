@@ -481,9 +481,9 @@ export function App() {
     if (!data) return;
     const sources = data.sources && typeof data.sources === "object" ? data.sources as Record<string, Record<string, unknown>> : {};
     const american = Number(sources.american_spaces?.normalized_rows || 0);
-    const languageCenters = Number(sources.language_centers?.normalized_rows || 0);
+    const confuciusInstitutes = Number(sources.confucius_institutes?.normalized_rows || 0);
     await refreshRegistry();
-    addActivity("Official institution baselines synced", `${american} American Spaces · ${languageCenters} language-center directory records`, "ok");
+    addActivity("Official institution baselines synced", `${american} American Spaces · ${confuciusInstitutes} Confucius Institute directory records`, "ok");
   };
 
   const moveInstitution = async (id: string, latitude: number, longitude: number) => {

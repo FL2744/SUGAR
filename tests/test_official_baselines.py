@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 
-from sugar_core.official_baselines import normalize_american_spaces, normalize_language_centers
+from sugar_core.official_baselines import normalize_american_spaces, normalize_confucius_institutes, sync_official_baselines
+from sugar_core.reference_registry import list_entities
+from sugar_core.workspace import SugarWorkspace
 
 
 def test_normalize_american_spaces_preserves_source_status_without_overstating_temporary_closure():
@@ -31,11 +33,11 @@ def test_normalize_american_spaces_preserves_source_status_without_overstating_t
     assert "Official locator status: Temporarily Closed" in row["description"]
 
 
-def test_normalize_language_centers_excludes_cms_root_and_preserves_partners():
+def test_normalize_confucius_institutes_excludes_cms_root_and_preserves_partners():
     source = {
         "siteId": "abc",
         "siteKey": "2011001000",
-        "name": "Language Center at Example University",
+        "name": "Confucius Institute at Example University",
         "countryName": "Exampleland",
         "continentName": "Asia",
         "cooperationName": "Chinese Partner University",
@@ -49,15 +51,40 @@ def test_normalize_language_centers_excludes_cms_root_and_preserves_partners():
             "local_cooperative_1": "Example University",
         }),
     }
-    rows = normalize_language_centers([
+    rows = normalize_confucius_institutes([
         {"siteKey": "www", "name": "1", "countryName": None},
         source,
     ])
     assert len(rows) == 1
     row = rows[0]
-    assert row["entity_id"] == "language-center:2011001000"
-    assert row["network"] == "Language Education Centers"
+    assert row["entity_id"] == "confucius-institute:2011001000"
+    assert row["network"] == "Confucius Institutes"
     assert row["status"] == "unknown"
     assert row["opened_date"] == "2025-04-25"
     assert row["host_entities"] == "Example University"
     assert row["partner_entities"] == "Chinese Partner University"
+
+
+def test_official_baseline_sync_is_idempotent_by_provider_ids(tmp_path, monkeypatch):
+    american = [{
+        "id": 1, "name": "American Center Example", "uri": "example", "type_of_space": "CTR",
+        "country_name": "Exampleland", "region": "TEST", "city": "Example City", "address": "1 Main St",
+        "latitude": "1.5", "longitude": "2.5", "status": "In Operation",
+        "locator_use_generic_coordinates": None,
+    }]
+    confucius = [{
+        "siteId": "ci-1", "siteKey": "1001", "name": "Confucius Institute at Example University",
+        "countryName": "Exampleland", "continentName": "Asia", "cooperationName": "Partner University",
+        "enable": "1", "visible": "1", "deleted": "0",
+        "jsonData": json.dumps({"establish": "2020-01-01", "local_cooperative_1": "Example University"}),
+    }]
+    monkeypatch.setattr("sugar_core.official_baselines.fetch_american_spaces", lambda **_: american)
+    monkeypatch.setattr("sugar_core.official_baselines.fetch_confucius_institutes", lambda **_: confucius)
+    workspace = SugarWorkspace.create(tmp_path / "project", name="Official baselines")
+
+    sync_official_baselines(workspace)
+    sync_official_baselines(workspace)
+
+    entities = list_entities(workspace)
+    assert len(entities) == 2
+    assert {row["entity_id"] for row in entities} == {"american-space:1", "confucius-institute:1001"}

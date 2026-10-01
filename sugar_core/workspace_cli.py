@@ -124,9 +124,9 @@ def build_parser() -> argparse.ArgumentParser:
     registry_export.add_argument("output")
     registry_export.add_argument("--format", default="")
 
-    official_sync = sub.add_parser("sync-official-baselines", help="Fetch and import the public American Spaces and language-center directories.")
+    official_sync = sub.add_parser("sync-official-baselines", help="Fetch and import the public American Spaces and Confucius Institute directories.")
     official_sync.add_argument("workspace")
-    official_sync.add_argument("--source", action="append", choices=("american_spaces", "language_centers"), default=[])
+    official_sync.add_argument("--source", action="append", choices=("american_spaces", "confucius_institutes"), default=[])
     official_sync.add_argument("--timeout", type=float, default=30.0)
 
     template = sub.add_parser("reference-template", help="Create a blank source-backed institution/service registry schema.")
@@ -326,7 +326,7 @@ def main(argv=None) -> int:
         from .official_baselines import sync_official_baselines
         payload = sync_official_baselines(
             SugarWorkspace.open(args.workspace),
-            sources=args.source or ("american_spaces", "language_centers"),
+            sources=args.source or ("american_spaces", "confucius_institutes"),
             timeout=args.timeout,
         )
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))

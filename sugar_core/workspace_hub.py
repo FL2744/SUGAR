@@ -751,7 +751,7 @@ def run_workspace_hub(
         return _event_result(progress, action, result)
 
     if action == "registry-sync-official-baselines":
-        requested = config.get("sources") or ["american_spaces", "language_centers"]
+        requested = config.get("sources") or ["american_spaces", "confucius_institutes"]
         if isinstance(requested, str):
             requested = [item.strip() for item in requested.split(",") if item.strip()]
         result = sync_official_baselines(

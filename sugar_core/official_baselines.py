@@ -13,8 +13,8 @@ from .workspace import SugarWorkspace
 
 
 AMERICAN_SPACES_ENDPOINT = "https://americanspaces.info/locator/map/spaces-with-ids.json"
-LANGUAGE_CENTER_DIRECTORY_PAGE = "https://www.ci.cn/en/qqwl"
-LANGUAGE_CENTER_ENDPOINT = "https://www.ci.cn/open/site-tab/sitesBySiteName"
+CONFUCIUS_DIRECTORY_PAGE = "https://www.ci.cn/en/qqwl"
+CONFUCIUS_ENDPOINT = "https://www.ci.cn/open/site-tab/sitesBySiteName"
 
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -62,14 +62,14 @@ def fetch_american_spaces(*, session: requests.Session | None = None, timeout: f
     return [dict(row) for row in payload if isinstance(row, dict)]
 
 
-def fetch_language_centers(*, session: requests.Session | None = None, timeout: float = 30.0) -> list[dict[str, Any]]:
+def fetch_confucius_institutes(*, session: requests.Session | None = None, timeout: float = 30.0) -> list[dict[str, Any]]:
     target = _session(session)
     # The directory API rejects some non-browser clients unless the public directory has first been visited.
-    target.headers["Referer"] = LANGUAGE_CENTER_DIRECTORY_PAGE
-    landing = target.get(LANGUAGE_CENTER_DIRECTORY_PAGE, timeout=timeout)
+    target.headers["Referer"] = CONFUCIUS_DIRECTORY_PAGE
+    landing = target.get(CONFUCIUS_DIRECTORY_PAGE, timeout=timeout)
     landing.raise_for_status()
     response = target.get(
-        LANGUAGE_CENTER_ENDPOINT,
+        CONFUCIUS_ENDPOINT,
         params={"labelId": "", "siteName": "", "pageSize": 10000, "language": "EN"},
         timeout=timeout,
     )
@@ -77,7 +77,7 @@ def fetch_language_centers(*, session: requests.Session | None = None, timeout: 
     payload = response.json()
     rows = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
-        raise ValueError("Language-center directory returned an unexpected payload shape.")
+        raise ValueError("Confucius Institute directory returned an unexpected payload shape.")
     return [dict(row) for row in rows if isinstance(row, dict)]
 
 
@@ -154,7 +154,7 @@ def _directory_json_data(source: dict[str, Any]) -> dict[str, Any]:
     return dict(parsed) if isinstance(parsed, dict) else {}
 
 
-def normalize_language_centers(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+def normalize_confucius_institutes(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
     for source in rows:
         name = _clean(source.get("name"))
@@ -174,7 +174,7 @@ def normalize_language_centers(rows: Iterable[dict[str, Any]]) -> list[dict[str,
             opened = ""
         detail_url = f"https://www.ci.cn/en/site/{site_key}/"
         description_bits = [
-            "Listed in the official public global language-center directory",
+            "Listed in the official Confucius Institute global network directory",
             f"Portal site key: {site_key}",
             f"Portal enable flag: {_clean(source.get('enable')) or 'unspecified'}",
             f"Portal visible flag: {_clean(source.get('visible')) or 'unspecified'}",
@@ -184,10 +184,10 @@ def normalize_language_centers(rows: Iterable[dict[str, Any]]) -> list[dict[str,
         if updated:
             description_bits.append(f"Directory record updated: {updated}")
         output.append({
-            "entity_id": f"language-center:{site_key}",
+            "entity_id": f"confucius-institute:{site_key}",
             "name": name,
             "entity_type": "institution",
-            "network": "Language Education Centers",
+            "network": "Confucius Institutes",
             # Directory presence is evidence of listing, not sufficient evidence of current operating status.
             "status": "unknown",
             "country": country,
@@ -205,7 +205,7 @@ def normalize_language_centers(rows: Iterable[dict[str, Any]]) -> list[dict[str,
             "source_url": detail_url,
             "description": "; ".join(description_bits),
             "source_native_status": "listed",
-            "source_native_type": "official_language_center_directory_entry",
+            "source_native_type": "Confucius Institute",
             "source_record_id": _clean(source.get("siteId")) or site_key,
         })
     return output
@@ -232,13 +232,15 @@ def _mapping() -> dict[str, str]:
 def sync_official_baselines(
     workspace: SugarWorkspace,
     *,
-    sources: Iterable[str] = ("american_spaces", "language_centers"),
+    sources: Iterable[str] = ("american_spaces", "confucius_institutes"),
     session: requests.Session | None = None,
     timeout: float = 30.0,
     actor: str = "official-baseline-sync",
 ) -> dict[str, Any]:
     selected = {str(value).strip().casefold().replace("-", "_") for value in sources if str(value).strip()}
-    supported = {"american_spaces", "language_centers"}
+    aliases = {"language_centers": "confucius_institutes"}
+    selected = {aliases.get(value, value) for value in selected}
+    supported = {"american_spaces", "confucius_institutes"}
     unknown = sorted(selected - supported)
     if unknown:
         raise ValueError("Unsupported official baseline source(s): " + ", ".join(unknown))
@@ -257,11 +259,11 @@ def sync_official_baselines(
             "american_spaces", "American Spaces", AMERICAN_SPACES_ENDPOINT, raw, normalized,
             "Public ECA American Spaces locator. Public locator coverage may differ from internal Department inventories; source-native operational wording is preserved in each row and temporary closure is not treated as permanent closure.",
         ))
-    if "language_centers" in selected:
-        raw = fetch_language_centers(session=target_session, timeout=timeout)
-        normalized = normalize_language_centers(raw)
+    if "confucius_institutes" in selected:
+        raw = fetch_confucius_institutes(session=target_session, timeout=timeout)
+        normalized = normalize_confucius_institutes(raw)
         jobs.append((
-            "language_centers", "Language Education Centers", LANGUAGE_CENTER_ENDPOINT, raw, normalized,
+            "confucius_institutes", "Confucius Institutes", CONFUCIUS_ENDPOINT, raw, normalized,
             "Public CIEF global-network directory. Directory presence establishes listing, not current operating status; the non-institute CMS root record is excluded and city/coordinates are not inferred.",
         ))
 
