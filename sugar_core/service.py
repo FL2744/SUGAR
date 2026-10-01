@@ -155,7 +155,7 @@ def run_search(
         raise ValueError("AI enrichment is enabled, but no LLM API key was provided.")
 
     out_dir = choose_output_directory(config.get("output_directory"), workspace, "raw", fallback=Path.cwd())
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     csv_path = out_dir / f"social_search_posts_{stamp}.csv"
     coverage_path = csv_path.with_suffix(".coverage.json")
     cache_dir = workspace.path_for("cache") if workspace is not None else out_dir / ".sugar-cache"
@@ -356,6 +356,8 @@ def run_search(
                 )
                 if source not in access_modes:
                     access_modes.update(_harvest_access_modes({"sources": [source]}, secrets))
+                if source == "mastodon" and not secrets.get("mastodon_token", "").strip():
+                    access_modes[source] = "public_hashtag" if term.startswith("#") else "missing_credential"
                 _notify(progress, "collecting", source=source, query=term, retry=retry_id is not None, scope_revision=scope.get("revision", 0))
                 futures[(source, term, retry_id)] = pool.submit(collect_one, source, request)
 
@@ -405,7 +407,13 @@ def run_search(
             if limit_reached:
                 break
 
-    if collection_calls >= max_collection_calls and not cancelled:
+    pending_scope = current_scope()
+    unattempted_work = any(
+        (source, term) not in attempted
+        for source in pending_scope["sources"]
+        for term in pending_scope["terms"]
+    )
+    if collection_calls >= max_collection_calls and unattempted_work and not cancelled:
         limit_reached = True
         _notify(progress, "warning", message=f"Collection reached its {max_collection_calls:,}-request safety limit; results are being saved as a bounded partial run.")
 
@@ -517,7 +525,7 @@ def run_ingest(
         raise ValueError("Enter a public URL or native item identifier.")
 
     out_dir = choose_output_directory(config.get("output_directory"), workspace, "raw", fallback=Path.cwd())
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     csv_path = out_dir / f"public_item_{source}_{stamp}.csv"
     request = CollectorRequest(
         search_terms=[query] if query else [],

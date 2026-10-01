@@ -50,11 +50,11 @@ These adapters reuse the existing fail-closed public collectors. Page sharding d
 
 ### Mastodon
 
-Mastodon remains instance-scoped. Status search requires an authorized user token with `read:search`; the collector fails before sending a request when no token is provided. The current search adapter is not date-sharded by default because its date bounds are filtered locally rather than defining independent server-side result partitions. A future bulk adapter should use instance-supported pagination semantics directly rather than repeatedly rescanning the same search result pages.
+Mastodon remains instance-scoped. Keyword status search requires an authorized user token with `read:search`; without one, an explicit single `#hashtag` query uses the instance's public hashtag timeline when public preview is enabled. This narrower path is labeled `mastodon_public_hashtag` in source provenance. The current search adapter is not date-sharded by default because its date bounds are filtered locally rather than defining independent server-side result partitions.
 
 ## Query-plan files
 
-For systematic research, put one search expression per line in a UTF-8 text file. Blank lines and lines beginning with `#` are ignored.
+For systematic research, put one search expression per line in a UTF-8 text file. Blank lines and comment lines beginning with `# ` or `##` are ignored; `#hashtag` lines are retained for public Mastodon timelines.
 
 Example `csm_terms_zh.txt`:
 

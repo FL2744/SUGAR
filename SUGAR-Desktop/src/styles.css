@@ -597,3 +597,7 @@ html[data-theme="dark"] .strategy-review-card li, html[data-theme="dark"] .geogr
   .monitor-query-field { grid-column: auto; }
   .monitor-row { align-items: flex-start; flex-direction: column; }
 }
+
+.evidence-map-result { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; padding: 12px; border: 1px solid #dce8e1; border-radius: 8px; background: #f7fbf8; color: #385d4a; }
+.evidence-map-result span { min-width: 0; flex: 1 1 260px; overflow-wrap: anywhere; }
+:root[data-theme="dark"] .evidence-map-result { border-color: #375345; background: #1c3026; color: #d2e9d9; }

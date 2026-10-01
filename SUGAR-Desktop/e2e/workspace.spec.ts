@@ -57,8 +57,11 @@ async function mockApi(page: Page, calls: ApiCall[], collectionGate?: Promise<vo
         ? {
           name: "Browser Test Project", artifact_count: 0, missing_artifacts: 0,
           artifacts: [
-            ...(savedRequirement ? [{ kind: "research_requirement" }] : []),
+            ...(calls.some((call) => call.operation === "search") ? [{ kind: "raw_collection", path: "data/raw/hashtag.csv", external: false }] : []),
+            ...(calls.some((call) => call.operation === "research-collect") ? [{ kind: "raw_collection", path: "data/raw/live_collection.csv", external: false }] : []),
+            ...(calls.some((call) => call.operation === "ingest") ? [{ kind: "raw_collection", path: "data/raw/public_item_weibo.csv", external: false }] : []),
             ...(seedEvidence ? [{ kind: "import", path: "data/raw/seed.jsonl", external: false }] : []),
+            ...(savedRequirement ? [{ kind: "research_requirement" }] : []),
           ],
           research_requirement: savedRequirement ? {
             question: savedRequirement.question, geographies: [], known_entities: [], target_audiences: [],
@@ -114,6 +117,14 @@ async function mockApi(page: Page, calls: ApiCall[], collectionGate?: Promise<vo
       event = { event: "triage-complete", outputs: ["sugar-workspace://project-1/data/observations/triaged.csv"] };
     } else if (body.operation === "research-plan") {
       event = { event: "plan-review", requirement_id: "rq_browser_test", branches: [{ branch_id: "branch-1", query: "public programs" }] };
+    } else if (body.operation === "ingest") {
+      event = { event: "complete", outputs: ["sugar-workspace://project-1/data/raw/public_item_weibo.csv"] };
+    } else if (body.operation === "research-collect") {
+      event = { event: "complete", outputs: ["sugar-workspace://project-1/data/raw/live_collection.csv"] };
+    } else if (body.operation === "map") {
+      event = { event: "complete", outputs: ["sugar-workspace://project-1/outputs/maps/live_map.html"] };
+    } else if (body.operation === "search") {
+      event = { event: "complete", outputs: ["sugar-workspace://project-1/data/raw/hashtag.csv"] };
     } else {
       event = { event: "complete", outputs: [] };
     }
@@ -200,6 +211,38 @@ test("browser creates a project and saves its research requirement", async ({ pa
     until: "2025-12-31",
     post_languages: ["es", "zh"],
   });
+  await expect(page.getByText("1 source records")).toBeVisible();
+  await expect(page.getByText("sugar-workspace://project-1/data/raw/live_collection.csv")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Generate coded findings" })).toBeVisible();
+});
+
+test("known public items become inspectable evidence", async ({ page }) => {
+  const calls: ApiCall[] = [];
+  await mockApi(page, calls);
+  await page.goto("/");
+  await page.getByRole("button", { name: /Create or open project/ }).click();
+  const picker = page.getByRole("dialog", { name: "Choose a research project" });
+  await picker.getByLabel("New project name").fill("Browser Test Project");
+  await picker.getByRole("button", { name: /Create project/ }).click();
+  await page.getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Research project" }).click();
+  await page.getByLabel("Public item source").selectOption("weibo");
+  await page.getByLabel("Public item URL").fill("https://weibo.com/2/detail/5341549823267451");
+  await page.getByRole("button", { name: "Collect public item" }).click();
+  await expect.poll(() => calls.some((call) => call.operation === "ingest")).toBe(true);
+  expect(calls.find((call) => call.operation === "ingest")?.config).toMatchObject({
+    source: "weibo", identifier: "https://weibo.com/2/detail/5341549823267451",
+  });
+  await expect(page.getByText("1 source records")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Prepare human review" })).toBeVisible();
+  await page.getByLabel("Mastodon public hashtag").fill("#education");
+  await page.getByRole("button", { name: "Collect hashtag" }).click();
+  await expect.poll(() => calls.some((call) => call.operation === "search")).toBe(true);
+  expect(calls.find((call) => call.operation === "search")?.config).toMatchObject({
+    sources: ["mastodon"], terms: ["#education"],
+  });
+  await expect(page.getByText("1 source records")).toBeVisible();
+  await expect(page.getByText("sugar-workspace://project-1/data/raw/hashtag.csv")).toBeVisible();
 });
 
 test("active collection accepts scope edits, source retries, and cooperative stop requests", async ({ page }) => {
@@ -312,6 +355,7 @@ test("AI interpretation, translation, geographic summary, coded findings, and ex
   await page.getByLabel(/Research question/).fill("¿Cómo participan los estudiantes en programas públicos de idiomas en Ciudad Ejemplo?");
   await page.getByLabel("Collection sources").fill("x");
   await page.getByLabel("Translate collected posts").check();
+  await page.getByLabel("Infer broad locations for mapping").check();
   await page.getByLabel("New research template name").fill("Spanish education scan");
   await page.getByRole("button", { name: "Save template" }).click();
   expect(calls.some((call) => call.config?.action === "research-template-save")).toBe(true);
@@ -332,11 +376,15 @@ test("AI interpretation, translation, geographic summary, coded findings, and ex
   await page.getByRole("button", { name: /Run plan collection/ }).click();
   await expect.poll(() => calls.some((call) => call.operation === "research-collect")).toBe(true);
   expect(calls.find((call) => call.operation === "research-collect")?.config?.translate_posts).toBe(true);
+  expect(calls.find((call) => call.operation === "research-collect")?.config?.infer_locations).toBe(true);
   expect(calls.find((call) => call.operation === "research-collect")?.config?.platform_tuning).toEqual({ x: { max_posts_per_query: 3 } });
 
   await page.getByRole("button", { name: "Inspect records" }).click();
   await page.getByRole("button", { name: "Summarize geography" }).click();
   await expect(page.getByRole("region", { name: "Geographic summary" })).toContainText("Exampleland / North / Harbor");
+  await page.getByRole("button", { name: "Create evidence map" }).click();
+  await expect.poll(() => calls.some((call) => call.operation === "map")).toBe(true);
+  await expect(page.getByText("Interactive evidence map ready")).toBeVisible();
   await page.getByLabel("Assigned region").fill("Central");
   await page.getByLabel("Geography assignment note").fill("Confirmed against the source listing");
   await page.getByRole("button", { name: "Save analyst assignment" }).click();

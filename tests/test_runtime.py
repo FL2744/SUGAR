@@ -57,6 +57,20 @@ def test_search_progress_reports_major_stages(monkeypatch, tmp_path: Path):
     assert all(Path(path).exists() for path in outputs)
 
 
+def test_exact_request_budget_is_not_partial_when_all_work_finished(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(service, "collect_registered_source", lambda source, request: [PostRecord(
+        platform="bluesky", native_id="1", canonical_url="https://example.test/1",
+        query="test", query_matches=["test"], original_text="test",
+    )])
+    outputs = service.run_search({
+        "sources": ["bluesky"], "terms": ["test"], "max_collection_calls": 1,
+        "max_records": 10, "translate_posts": False, "infer_locations": False,
+        "output_directory": str(tmp_path),
+    }, {})
+    coverage = json.loads(Path(outputs[3]).read_text(encoding="utf-8"))
+    assert coverage["sources"]["bluesky"]["status"] == "success"
+
+
 def test_search_applies_per_platform_limits(monkeypatch, tmp_path: Path):
     requests = []
 

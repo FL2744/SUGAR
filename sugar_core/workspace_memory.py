@@ -316,7 +316,7 @@ def dashboard(workspace: SugarWorkspace) -> dict[str, Any]:
     if row is None:
         raise ValueError("Could not inspect the selected project.")
     row["artifacts"] = [
-        {"kind": item.kind, "path": item.path, "label": item.label, "exists": item.exists,
+        {"kind": item.kind, "path": item.path, "label": item.label, "exists": item.exists, "external": item.external,
          "updated_at": item.updated_at, "metadata": _safe_value(item.metadata)}
         for item in workspace.list_artifacts()
     ]

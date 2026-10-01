@@ -67,3 +67,12 @@ def test_ingest_rejects_missing_or_search_only_source(tmp_path: Path):
             {"source": "x", "identifier": "123", "output_directory": str(tmp_path)},
             secrets={"x_bearer_token": "not-used-for-known-item"},
         )
+
+
+def test_two_quick_public_item_ingests_keep_distinct_files(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(service, "fetch_registered_item", lambda source, identifier, request: _record())
+    config = {"source": "wechat", "identifier": "https://mp.weixin.qq.com/s/ARTICLE123", "output_directory": str(tmp_path)}
+    first = service.run_ingest(config)
+    second = service.run_ingest(config)
+    assert first[0] != second[0]
+    assert Path(first[0]).is_file() and Path(second[0]).is_file()

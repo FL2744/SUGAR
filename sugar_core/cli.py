@@ -72,7 +72,7 @@ def _lines_from_files(paths: list[str]) -> list[str]:
             raise FileNotFoundError(path)
         for line in path.read_text(encoding="utf-8-sig").splitlines():
             value = line.strip()
-            if not value or value.startswith("#"):
+            if not value or value == "#" or value.startswith(("# ", "##")):
                 continue
             key = value.casefold()
             if key not in seen:

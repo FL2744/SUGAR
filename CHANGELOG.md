@@ -2,6 +2,22 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
+## 1.6.1 — 2026-10-01
+
+### Collection and workflow
+
+- retry anonymous Bluesky searches against Bluesky's public AppView when its cached public hostname returns 403; preserve collected first-page records when a later page fails;
+- support explicit public Mastodon `#hashtag` timelines without a search token, with separate provenance from authorized keyword search;
+- restore live collection outputs in the desktop evidence panel, and allow known public Bilibili videos, Weibo posts, and WeChat articles to enter the evidence workflow by URL;
+- expose location inference and evidence-map generation in the desktop research workflow;
+- classify Bilibili challenge responses and public API 401/403 responses as unavailable coverage instead of empty results.
+
+### Live verification
+
+- collected and saved real Bluesky and Mastodon posts, completed a research plan using both, and triaged live posts into insight artifacts;
+- ingested and triaged real Bilibili video and Weibo post URLs; generated analysis and maps from live, location-enriched X and Mastodon records;
+- Weibo and Bilibili keyword search still face provider login/access challenges in this environment. WeChat article retrieval encountered a TLS hostname mismatch and remains unavailable here; SUGAR does not disable certificate verification.
+
 ## 1.6.0 — 2026-10-01
 
 ### Added

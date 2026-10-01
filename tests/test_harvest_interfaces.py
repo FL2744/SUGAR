@@ -13,13 +13,14 @@ def test_terms_file_supports_comments_bom_and_deduplication(tmp_path: Path):
     first = tmp_path / "terms_a.txt"
     second = tmp_path / "terms_b.txt"
     first.write_text("\ufeff# project terms\n文化交流\n\n技术培训\n", encoding="utf-8")
-    second.write_text("技术培训\n国际文化中心\n# ignored\n", encoding="utf-8")
+    second.write_text("技术培训\n国际文化中心\n# ignored\n#education\n", encoding="utf-8")
 
     assert _merge_terms(["汉语桥", "文化交流"], [str(first), str(second)]) == [
         "汉语桥",
         "文化交流",
         "技术培训",
         "国际文化中心",
+        "#education",
     ]
 
 

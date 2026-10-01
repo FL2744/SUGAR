@@ -292,13 +292,12 @@ COLLECTORS: dict[str, CollectorSpec] = {
     "mastodon": CollectorSpec(
         name="mastodon",
         search=_collect_mastodon,
-        required_secrets=("mastodon_token",),
         capabilities=CollectorCapabilities(
             keyword_search=True,
             authenticated_search=True,
-            anonymous_search=False,
+            anonymous_search=True,
         ),
-        description="Instance-scoped Mastodon status search using a user token with read:search.",
+        description="Instance-scoped status search with a user token, or public #hashtag timelines without one.",
     ),
     "bilibili": CollectorSpec(
         name="bilibili",
