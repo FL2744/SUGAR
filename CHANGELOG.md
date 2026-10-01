@@ -4,6 +4,13 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ## Unreleased
 
+### Map: quick response and precision
+
+- **Target panel:** click a ringed country (or "Top targets") for posts about it: counts, how many in the last 24 hours, verified count, platforms, languages, cities named, each post one click away, and a CSV download. A "Posted in" filter limits posts to the last 24 hours, 7 days or 30 days.
+- **City-level placement:** about 140 major cities are recognised in text, so a post naming a city sits on that city (still labeled as mentioned, not posted-from) and its country's target notes the city.
+- **Flashier map:** curved animated arcs, pulsing target rings, glowing pins, fly-to on selection and a small legend; motion stops when the system asks for reduced motion.
+- `docs/state-deployment.md`: install, network allow-list, signing, data handling and licensing checks for an office deployment.
+
 ### Updates and polish
 
 - **Updates follow commits, not releases:** a new **Latest** channel (the default) offers every change that lands on `main` and passes the tests. `rolling.yml` builds and publishes the single `latest-main` release automatically on each push; the app compares commits, shows what changed, and downloads the verified build. Stable, Preview and Long-term stay available for people who want a formal release.

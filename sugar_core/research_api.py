@@ -445,7 +445,7 @@ def _research_routes(method, rest, query, body, wb, project):
         run_id = str(query.get("run_id") or "")
         runs = [r["run_id"] for r in wb.list_runs(project) if r.get("status") in {"completed", "completed_with_warnings"}] if not run_id else [run_id]
         items = [i for rid in runs[:5] for i in wb.items(project, rid)]
-        return 200, post_pins(project, items, platform=str(query.get("platform") or ""), language=str(query.get("language") or ""), verdict=str(query.get("verdict") or ""))
+        return 200, post_pins(project, items, platform=str(query.get("platform") or ""), language=str(query.get("language") or ""), verdict=str(query.get("verdict") or ""), days=_int(str(query.get("days") or "0"), 0, 0, 3650))
     if rest == "review" and method == "GET":
         item_id = str(query.get("item_id") or "")
         return 200, ({"item_id": item_id, "review": project.review.state(item_id)} if item_id else {"summary": project.review.summary()})

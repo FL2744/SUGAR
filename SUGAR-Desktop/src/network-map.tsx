@@ -43,21 +43,33 @@ const postCollection = (posts: PostMap | null) => ({
   })),
 });
 const targetCollection = (posts: PostMap | null) => ({ type: "FeatureCollection" as const, features: (posts?.targets || []).map((t) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [t.longitude, t.latitude] }, properties: { name: t.name, posts: t.posts } })) });
-const flowCollection = (posts: PostMap | null) => ({ type: "FeatureCollection" as const, features: (posts?.flows || []).map((f) => ({ type: "Feature" as const, geometry: { type: "LineString" as const, coordinates: [f.from, f.to] }, properties: { posts: f.posts } })) });
+/** A gentle curve between two points (a quadratic bezier bowed away from the straight line) so lines read as arcs, not ruler marks. */
+function arc(from: [number, number], to: [number, number], steps = 36): Array<[number, number]> {
+  const dx = to[0] - from[0], dy = to[1] - from[1];
+  const bow = Math.min(0.28, 0.12 + Math.hypot(dx, dy) / 400);
+  const control: [number, number] = [(from[0] + to[0]) / 2 - dy * bow, (from[1] + to[1]) / 2 + dx * bow];
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const t = i / steps, u = 1 - t;
+    return [u * u * from[0] + 2 * u * t * control[0] + t * t * to[0], u * u * from[1] + 2 * u * t * control[1] + t * t * to[1]] as [number, number];
+  });
+}
+const flowCollection = (posts: PostMap | null) => ({ type: "FeatureCollection" as const, features: (posts?.flows || []).map((f) => ({ type: "Feature" as const, geometry: { type: "LineString" as const, coordinates: arc(f.from, f.to) }, properties: { posts: f.posts } })) });
+const reduceMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 /** Posts, institutions and targets on one map. Posts: yellow = posted from here, hollow = a place the text names (approximate). Targets: rings by country. */
-export function NetworkMap({ rows, networks, mode, lines, selectedId, onSelect, basemap, posts, layers, selectedPost, onSelectPost }: {
+export function NetworkMap({ rows, networks, mode, lines, selectedId, onSelect, basemap, posts, layers, selectedPost, onSelectPost, selectedTarget, onSelectTarget }: {
   rows: Institution[]; networks: NetworkRow[]; mode: MapMode; lines: Line[]; selectedId: string; onSelect: (id: string) => void; basemap: Basemap;
-  posts: PostMap | null; layers: PostLayers; selectedPost: string; onSelectPost: (id: string) => void;
+  posts: PostMap | null; layers: PostLayers; selectedPost: string; onSelectPost: (id: string) => void; selectedTarget: string; onSelectTarget: (name: string) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const select = useRef(onSelect);
   const selectPost = useRef(onSelectPost);
+  const selectTarget = useRef(onSelectTarget);
   const [ready, setReady] = useState(0);
   const [error, setError] = useState("");
   const initial = useRef(basemap);
-  useEffect(() => { select.current = onSelect; selectPost.current = onSelectPost; }, [onSelect, onSelectPost]);
+  useEffect(() => { select.current = onSelect; selectPost.current = onSelectPost; selectTarget.current = onSelectTarget; }, [onSelect, onSelectPost, onSelectTarget]);
 
   useEffect(() => {
     if (!container.current || map.current) return;
@@ -100,12 +112,15 @@ export function NetworkMap({ rows, networks, mode, lines, selectedId, onSelect, 
         m.addSource(POSTS, { type: "geojson", data: postCollection(null), cluster: true, clusterMaxZoom: 9, clusterRadius: 34 });
         m.addLayer({ id: "post-clusters", type: "circle", source: POSTS, filter: ["has", "point_count"], paint: { "circle-color": "#f5c518", "circle-radius": ["step", ["get", "point_count"], 15, 10, 20, 50, 26], "circle-stroke-color": "#111", "circle-stroke-width": 2 } });
         m.addLayer({ id: "post-cluster-count", type: "symbol", source: POSTS, filter: ["has", "point_count"], layout: { "text-field": "{point_count_abbreviated}", "text-size": 12, "text-font": ["Noto Sans Bold"] }, paint: { "text-color": "#111" } });
+        m.addLayer({ id: "post-glow", type: "circle", source: POSTS, filter: ["!", ["has", "point_count"]], paint: { "circle-color": "#f5c518", "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 14, 9, 24], "circle-blur": 1, "circle-opacity": 0.35 } });
         m.addLayer({ id: "post-pins", type: "circle", source: POSTS, filter: ["!", ["has", "point_count"]], paint: {
           "circle-color": ["case", ["==", ["get", "placement"], "origin"], "#f5c518", "rgba(245,197,24,.25)"], "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 6, 9, 10],
           "circle-stroke-color": ["case", ["get", "verified"], "#2bb673", "#f5c518"], "circle-stroke-width": ["case", ["get", "verified"], 3.5, 2] } });
         m.addLayer({ id: "post-selected", type: "circle", source: POSTS, filter: ["==", ["get", "id"], ""], paint: { "circle-radius": 15, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#4da3ff", "circle-stroke-width": 3 } });
+        m.addLayer({ id: "target-selected", type: "circle", source: TARGETS, filter: ["==", ["get", "name"], ""], paint: { "circle-radius": ["interpolate", ["linear"], ["get", "posts"], 1, 20, 50, 52], "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#4da3ff", "circle-stroke-width": 3 } });
+        m.on("click", "target-rings", (event) => { const name = event.features?.[0]?.properties?.name; if (name) selectTarget.current(String(name)); });
         m.on("click", "post-pins", (event) => { const id = event.features?.[0]?.properties?.id; if (id) selectPost.current(String(id)); });
-        for (const layer of ["points", "post-pins", "post-clusters", "clusters"]) {
+        for (const layer of ["points", "post-pins", "post-clusters", "clusters", "target-rings"]) {
           m.on("mouseenter", layer, () => { m.getCanvas().style.cursor = "pointer"; });
           m.on("mouseleave", layer, () => { m.getCanvas().style.cursor = ""; });
         }
@@ -145,11 +160,40 @@ export function NetworkMap({ rows, networks, mode, lines, selectedId, onSelect, 
     const heat = mode === "heat";
     m.setLayoutProperty("heat", "visibility", vis(layers.institutions && heat));
     for (const layer of ["clusters", "cluster-count", "points", "labels", "overlap-lines"]) m.setLayoutProperty(layer, "visibility", vis(layers.institutions));
-    for (const layer of ["post-pins", "post-clusters", "post-cluster-count", "post-selected"]) m.setLayoutProperty(layer, "visibility", vis(layers.posts));
-    for (const layer of ["target-rings", "target-labels"]) m.setLayoutProperty(layer, "visibility", vis(layers.targets));
+    for (const layer of ["post-glow", "post-pins", "post-clusters", "post-cluster-count", "post-selected"]) m.setLayoutProperty(layer, "visibility", vis(layers.posts));
+    for (const layer of ["target-rings", "target-labels", "target-selected"]) m.setLayoutProperty(layer, "visibility", vis(layers.targets));
     m.setLayoutProperty("post-flows", "visibility", vis(layers.flows));
     m.setPaintProperty("points", "circle-opacity", heat ? 0.55 : 1);
   }, [rows, networks, lines, mode, ready, posts, layers]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!ready || !m?.getLayer("target-selected")) return;
+    m.setFilter("target-selected", ["==", ["get", "name"], selectedTarget || ""]);
+    const t = posts?.targets.find((x) => x.name === selectedTarget);
+    if (t) m.flyTo({ center: [t.longitude, t.latitude], zoom: Math.max(m.getZoom(), 3.2), duration: reduceMotion() ? 0 : 900 });
+  }, [selectedTarget, ready, posts]);
+  useEffect(() => {
+    const m = map.current;
+    const pin = posts?.pins.find((p) => p.item_id === selectedPost);
+    if (ready && m && pin && pin.latitude !== null && pin.longitude !== null) m.flyTo({ center: [pin.longitude, pin.latitude], zoom: Math.max(m.getZoom(), 4), duration: reduceMotion() ? 0 : 700 });
+  }, [selectedPost, ready, posts]);
+
+  // Motion: marching dashes along the arcs and a slow pulse on target rings. Off when the system asks for reduced motion.
+  useEffect(() => {
+    const m = map.current;
+    if (!ready || !m || reduceMotion()) return;
+    const frames: Array<number[]> = [[0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0], [0, 0.5, 3, 3.5], [0, 1, 3, 3], [0, 1.5, 3, 2.5], [0, 2, 3, 2], [0, 2.5, 3, 1.5], [0, 3, 3, 1], [0, 3.5, 3, 0.5]];
+    let i = 0, alive = true;
+    const timer = window.setInterval(() => {
+      if (!alive || !m.getLayer("post-flows") || m.getLayoutProperty("post-flows", "visibility") === "none") return;
+      i = (i + 1) % frames.length;
+      m.setPaintProperty("post-flows", "line-dasharray", frames[i]);
+      const wave = 0.5 + 0.5 * Math.sin(Date.now() / 450);
+      if (m.getLayer("target-rings")) { m.setPaintProperty("target-rings", "circle-stroke-opacity", 0.55 + 0.45 * wave); m.setPaintProperty("target-rings", "circle-opacity", 0.55 + 0.45 * wave); }
+    }, 90);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [ready]);
 
   useEffect(() => { if (ready && map.current?.getLayer("selected")) { map.current.setFilter("selected", ["==", ["get", "id"], selectedId || ""]); map.current.setFilter("post-selected", ["==", ["get", "id"], selectedPost || ""]); } }, [selectedId, selectedPost, ready]);
 
@@ -171,6 +215,9 @@ export function NetworkMap({ rows, networks, mode, lines, selectedId, onSelect, 
 
   return (
     <div className={`map-frame network-map ${basemap === "dark" ? "dark" : ""}`}>
+      <div className="map-legend-lite" aria-hidden="true">
+        <span><i className="lg lg-origin" /> Posted from</span><span><i className="lg lg-mention" /> Place named</span><span><i className="lg lg-target" /> Target</span><span><i className="lg lg-inst" /> Institution</span>
+      </div>
       <div ref={container} className="map-canvas" role="application" aria-label="Map of posts and institutions. The list view has the same information." />
       {error && <div className="map-fallback"><span className="status-dot warn" />{error}</div>}
     </div>

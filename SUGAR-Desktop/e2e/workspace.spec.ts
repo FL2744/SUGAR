@@ -513,12 +513,17 @@ test("posts appear on the map page with a verify action", async ({ page }) => {
     placement: "origin", latitude: -1.29, longitude: 36.82, verified, verdict: verified ? "relevant" : "", verified_by: verified ? "Dana" : "", verified_at: "" });
   await page.route(/\/research\/institutions(\?.*)?$/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { institutions: [], unplaced: 0, facets: { countries: [], programs: [], audiences: [] } } }));
   await page.route(/\/research\/networks$/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { networks: [] } }));
-  await page.route(/\/research\/map\/posts/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { pins: [pin()], targets: [{ name: "Belgium", posts: 1, latitude: 50.6, longitude: 4.7 }], flows: [], note: "" } }));
+  await page.route(/\/research\/map\/posts/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { pins: [pin()], targets: [{ name: "Belgium", posts: 1, last_24h: 1, verified: 0, last_at: "2026-03-01T10:00:00Z", item_ids: ["it_1"], platforms: { mastodon: 1 }, languages: { fr: 1 }, cities: { Brussels: 1 }, latitude: 50.6, longitude: 4.7 }], flows: [], note: "" } }));
   await page.route(/\/research\/review$/, (route) => { verified = true; return route.fulfill({ status: 200, headers: corsHeaders, json: { item_id: "it_1", review: { verdict: "relevant", verdict_by: "Dana", verdict_at: "2026-03-02T00:00:00Z", tags: [], comments: [] }, summary: {} } }); });
   await useAdvancedMode(page);
   await page.goto("/");
   await createProject(page, "Posts Project");
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Map", exact: true }).click();
+  await page.getByRole("button", { name: /Belgium/ }).click();
+  const target = page.getByRole("complementary", { name: "Selected target" });
+  await expect(target).toContainText("Posts about Belgium");
+  await expect(target).toContainText("1 in the last 24 hours");
+  await expectAccessible(page, "Map with a target open");
   await page.getByRole("radio", { name: "List" }).click();
   await page.getByRole("row", { name: /@ana/ }).click();
   const detail = page.getByRole("complementary", { name: "Selected post" });

@@ -35,6 +35,8 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   const [layers, setLayers] = useState<PostLayers>({ posts: true, targets: true, flows: false, institutions: true });
   const [selectedPost, setSelectedPost] = useState("");
   const [verdictFilter, setVerdictFilter] = useState("");
+  const [days, setDays] = useState("");
+  const [selectedTarget, setSelectedTarget] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -43,10 +45,10 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
     setLoading(true); setError("");
     try {
       const [list, nets, pm] = await Promise.all([research.institutions(projectId, { status, confidence: level, country, program, audience, since: sinceDate(windowKey) }), research.networks(projectId),
-        research.postMap(projectId, { verdict: verdictFilter }).catch(() => null)]);
+        research.postMap(projectId, { verdict: verdictFilter, days }).catch(() => null)]);
       setData(list); setNetworks(nets); setPosts(pm);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setLoading(false); }
-  }, [projectId, status, level, country, program, audience, windowKey, verdictFilter]);
+  }, [projectId, status, level, country, program, audience, windowKey, verdictFilter, days]);
   useEffect(() => { void load(); }, [load]);
 
   const subjects = useMemo(() => networks.filter((n) => n.role === "subject").map((n) => n.name), [networks]);
@@ -67,6 +69,18 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
     });
   }, [showLines, overlap, byId, nearKm, hidden]);
 
+  const pickedTarget = posts?.targets.find((t) => t.name === selectedTarget);
+  const targetPosts = pickedTarget ? (posts?.pins || []).filter((p) => pickedTarget.item_ids.includes(p.item_id)) : [];
+  const exportTarget = () => {
+    if (!pickedTarget) return;
+    const esc = (v: string) => `"${String(v ?? "").replace(/"/g, '""').replace(/\s+/g, " ")}"`;
+    const rows = [["author", "platform", "published_at", "language", "verified", "posted_from", "original", "translation", "url"].join(","),
+      ...targetPosts.map((p) => [p.author, p.platform, p.published_at, p.language, p.verified ? "yes" : "no", p.origin?.label || "", p.original_text, p.translated_text, p.url].map(esc).join(","))];
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([rows.join("\n")], { type: "text/csv" }));
+    link.download = `posts-about-${pickedTarget.name.replace(/\W+/g, "-").toLowerCase()}.csv`;
+    link.click(); URL.revokeObjectURL(link.href);
+  };
   const pickedPost = posts?.pins.find((p) => p.item_id === selectedPost);
   const setVerified = async (itemId: string, verified: boolean) => {
     try {
@@ -99,7 +113,10 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             <label className="check-row"><input type="checkbox" checked={layers.targets} onChange={(e) => setLayers({ ...layers, targets: e.target.checked })} /><span><span className="swatch target" aria-hidden="true" /> Targets: where posts are about <small className="muted">{posts?.targets.length ?? 0}</small></span></label>
             <label className="check-row"><input type="checkbox" checked={layers.flows} onChange={(e) => setLayers({ ...layers, flows: e.target.checked })} /><span>Origin → target lines</span></label>
             <label className="check-row"><input type="checkbox" checked={layers.institutions} onChange={(e) => setLayers({ ...layers, institutions: e.target.checked })} /><span>Institutions</span></label>
-            <label className="field-block"><span>Posts</span><select value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)}><option value="">All posts</option><option value="relevant">Verified only</option><option value="none">Not yet checked</option></select></label></div>
+            <label className="field-block"><span>Posts</span><select value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)}><option value="">All posts</option><option value="relevant">Verified only</option><option value="none">Not yet checked</option></select></label>
+            <label className="field-block"><span>Posted in</span><select value={days} onChange={(e) => setDays(e.target.value)}><option value="">Any time</option><option value="1">Last 24 hours</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
+            {(posts?.targets.length ?? 0) > 0 && <div className="field-block"><span>Top targets</span>
+              <ul className="top-targets">{posts!.targets.slice(0, 6).map((t) => <li key={t.name}><button className={`button button-quiet button-small ${selectedTarget === t.name ? "on" : ""}`} onClick={() => { setSelected(""); setSelectedPost(""); setSelectedTarget(t.name); }}>{t.name} <strong>{t.posts}</strong>{t.last_24h > 0 && <small className="muted"> · {t.last_24h} today</small>}</button></li>)}</ul></div>}</div>
           <div className="field-block"><span>Basemap</span>
             <div className="segmented" role="radiogroup" aria-label="Basemap">{(["dark", "streets", "terrain"] as const).map((v) => <button key={v} role="radio" aria-checked={basemap === v} className={basemap === v ? "on" : ""} onClick={() => setBasemap(v)}>{titleCase(v)}</button>)}</div></div>
           <div className="field-block"><span>Networks</span>
@@ -126,8 +143,9 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             {loading && <Spinner />}<strong>{visible.filter((r) => r.placed).length}</strong> on the map · <strong>{data?.unplaced ?? 0}</strong> not placed · <strong>{posts?.pins.length ?? 0}</strong> posts
             {overlap && <> · <strong>{near}</strong> subject institutions have a reference institution within {nearKm} km</>}
           </div>
-          {view === "map" ? <NetworkMap rows={visible} networks={networks} mode={mode} lines={lines} selectedId={selected} onSelect={(id) => { setSelectedPost(""); setSelected(id); }} basemap={basemap}
-            posts={posts} layers={layers} selectedPost={selectedPost} onSelectPost={(id) => { setSelected(""); setSelectedPost(id); }} />
+          {view === "map" ? <NetworkMap rows={visible} networks={networks} mode={mode} lines={lines} selectedId={selected} onSelect={(id) => { setSelectedPost(""); setSelectedTarget(""); setSelected(id); }} basemap={basemap}
+            posts={posts} layers={layers} selectedPost={selectedPost} onSelectPost={(id) => { setSelected(""); setSelectedTarget(""); setSelectedPost(id); }}
+            selectedTarget={selectedTarget} onSelectTarget={(name) => { setSelected(""); setSelectedPost(""); setSelectedTarget(name); }} />
             : <div className="project-table" role="table" aria-label="Institutions on the map">
                 <div className="project-table-head" role="row"><span role="columnheader">Institution</span><span role="columnheader">Status</span><span role="columnheader">Where</span><span role="columnheader">Support</span></div>
                 {layers.posts && (posts?.pins || []).map((p) => <button key={p.item_id} className="project-row" role="row" onClick={() => { setSelected(""); setSelectedPost(p.item_id); }}><span role="cell"><strong dir="auto">{p.author || "Unknown author"}</strong> <small className="muted">{p.platform} · post</small></span>
@@ -141,6 +159,17 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             <p className="footnote">{overlap.method}</p></details>}
         </div>
 
+        {pickedTarget && !pickedPost && (
+          <aside className="map-detail target-detail" aria-label="Selected target">
+            <button className="inspector-close" onClick={() => setSelectedTarget("")} aria-label="Close">×</button>
+            <h3>Posts about {pickedTarget.name}</h3>
+            <div className="pill-row"><Pill tone="info">{pickedTarget.posts} post{pickedTarget.posts === 1 ? "" : "s"}</Pill>{pickedTarget.last_24h > 0 && <Pill tone="warn">{pickedTarget.last_24h} in the last 24 hours</Pill>}<Pill tone={pickedTarget.verified ? "ok" : "neutral"}>{pickedTarget.verified} verified</Pill></div>
+            <p className="muted">Where posts are about, from places named in the text. Country-level unless a city is named.</p>
+            <p><strong>Platforms</strong> {Object.entries(pickedTarget.platforms).map(([k, v]) => `${k} ${v}`).join(" · ")}<br /><strong>Languages</strong> {Object.entries(pickedTarget.languages).map(([k, v]) => `${k} ${v}`).join(" · ")}
+              {Object.keys(pickedTarget.cities).length > 0 && <><br /><strong>Cities named</strong> {Object.entries(pickedTarget.cities).map(([k, v]) => `${k} ${v}`).join(" · ")}</>}</p>
+            <ul className="post-list">{targetPosts.slice(0, 40).map((p) => <li key={p.item_id}><button className="button button-quiet button-small" onClick={() => { setSelectedTarget(""); setSelectedPost(p.item_id); }}><strong dir="auto">{p.author || "Unknown"}</strong> · <span dir="auto">{p.original_text.slice(0, 70)}</span></button></li>)}</ul>
+            <button className="button button-secondary button-small" onClick={exportTarget}>Download these posts (CSV)</button>
+          </aside>)}
         {pickedPost && (
           <aside className="map-detail post-detail" aria-label="Selected post">
             <button className="inspector-close" onClick={() => setSelectedPost("")} aria-label="Close">×</button>
@@ -151,11 +180,11 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             <div><strong>Original{pickedPost.language ? ` (${pickedPost.language})` : ""}</strong><p dir="auto" className="post-text">{pickedPost.original_text}</p></div>
             {pickedPost.translated_text && <div><strong>Translation</strong><p className="post-text">{pickedPost.translated_text}</p></div>}
             <p><strong>Posted from</strong> {pickedPost.origin ? `${pickedPost.origin.label} (${pickedPost.origin.kind})` : "Not known. The pin sits at a place the text names."}</p>
-            {pickedPost.targets.length > 0 && <p><strong>About</strong> {pickedPost.targets.map((t) => t.name).join(", ")} <small className="muted">named in the text; country-level</small></p>}
+            {pickedPost.targets.length > 0 && <p><strong>About</strong> {pickedPost.targets.map((t) => t.city ? `${t.city}, ${t.name}` : t.name).join(", ")} <small className="muted">named in the text; country-level</small></p>}
             <div className="pill-row"><button className={`button ${pickedPost.verified ? "button-secondary" : "button-primary"} button-small`} onClick={() => void setVerified(pickedPost.item_id, !pickedPost.verified)}>{pickedPost.verified ? "✓ Verified. Undo" : "✓ Mark verified"}</button>
               {pickedPost.url && <a className="button button-quiet button-small" href={pickedPost.url} target="_blank" rel="noreferrer noopener">Open post</a>}</div>
           </aside>)}
-        {picked && !pickedPost && (
+        {picked && !pickedPost && !pickedTarget && (
           <aside className="map-detail" aria-label="Selected institution">
             <button className="inspector-close" onClick={() => setSelected("")} aria-label="Close">×</button>
             <h3 dir="auto">{picked.name}</h3>

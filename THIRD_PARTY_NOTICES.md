@@ -23,7 +23,8 @@ This document is a release-facing summary of SUGAR's direct dependencies. It is 
 | MapLibre GL JS | BSD 3-Clause | Shared browser and desktop map renderer |
 | React / React DOM | MIT | Canonical browser frontend, also used by desktop packages |
 | Tauri / Tauri JavaScript API | MIT or Apache License 2.0 | Optional cross-platform desktop shell and IPC |
-| DM Sans / Manrope | SIL Open Font License 1.1 | Bundled interface typefaces |
+| Inter Tight / Barlow Semi Condensed | SIL Open Font License 1.1 | Bundled interface typefaces |
+| OpenFreeMap, OpenTopoMap, OpenStreetMap | ODbL / CC-BY-SA data; attribution shown on the map | Map tiles fetched at view time (not bundled) |
 
 ## Optional and packaging dependencies
 

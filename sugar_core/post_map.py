@@ -11,9 +11,12 @@ Nothing here judges influence or intent; it shows where things were posted from 
 """
 from __future__ import annotations
 
+import re
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from .city_centroids import CITIES
 from .country_centroids import centroid
 from .institutions import LinkStore
 from .reference_registry import list_entities
@@ -22,18 +25,30 @@ from .research_items import ResearchItem
 LIVE = {"collected", "processed"}
 
 
+_CITY_PATTERNS = [(name, re.compile(rf"(?<![\w]){re.escape(name)}(?![\w])", re.I)) for name in CITIES]
+
+
 def _targets(item: ResearchItem) -> list[dict[str, Any]]:
-    rows = []
+    """Countries the text names (placed at the country centre) and, when a known city is named, the city's own point."""
+    rows: dict[str, dict[str, Any]] = {}
     for tag in item.geography:
         name = tag.get("name", "")
         if tag.get("method") != "text_match" or not centroid(name):
             continue
         lat, lon = centroid(name) or (0.0, 0.0)
-        rows.append({"name": name, "latitude": lat, "longitude": lon, "confidence": tag.get("confidence", 0.0), "method": "named in the text", "precision": "country"})
-    return rows
+        rows[name] = {"name": name, "latitude": lat, "longitude": lon, "confidence": tag.get("confidence", 0.0), "method": "named in the text", "precision": "country", "city": ""}
+    for city, pattern in _CITY_PATTERNS:
+        if not pattern.search(item.original_text):
+            continue
+        country, lat, lon = CITIES[city]
+        base = rows.setdefault(country, {"name": country, "latitude": (centroid(country) or (lat, lon))[0], "longitude": (centroid(country) or (lat, lon))[1], "confidence": 0.6,
+                                         "method": "named city", "precision": "country", "city": ""})
+        if not base["city"]:
+            base.update({"city": city, "city_latitude": lat, "city_longitude": lon, "precision": "city", "confidence": max(base["confidence"], 0.8)})
+    return list(rows.values())
 
 
-def post_pins(project: Any, items: list[ResearchItem], *, platform: str = "", language: str = "", verdict: str = "") -> dict[str, Any]:
+def post_pins(project: Any, items: list[ResearchItem], *, platform: str = "", language: str = "", verdict: str = "", days: int = 0, now: datetime | None = None) -> dict[str, Any]:
     review = project.review.state()
     links = LinkStore(project).active()
     placed_entities = {e["entity_id"]: e for e in list_entities(project.workspace) if e.get("latitude") not in ("", None) and e.get("longitude") not in ("", None)}
@@ -43,7 +58,11 @@ def post_pins(project: Any, items: list[ResearchItem], *, platform: str = "", la
         if entity:
             link_of.setdefault(link["item_id"], entity)
     pins: list[dict[str, Any]] = []
+    clock = now or datetime.now(timezone.utc)
+    cutoff = (clock - timedelta(days=days)).isoformat() if days > 0 else ""
     for item in items:
+        if cutoff and (item.published_at or item.retrieved_at or "") < cutoff[:19]:
+            continue
         if item.status not in LIVE or (platform and item.platform != platform) or (language and item.language != language):
             continue
         state = review.get(item.item_id, {})
@@ -67,19 +86,33 @@ def post_pins(project: Any, items: list[ResearchItem], *, platform: str = "", la
             "origin": origin, "targets": targets,
             "inferred_location": {"name": inferred["name"], "confidence": inferred["confidence"], "method": inferred["method"]} if inferred else None,
             "placement": "origin" if origin else "mentioned",
-            "latitude": origin["latitude"] if origin else inferred["latitude"] if inferred else None,
-            "longitude": origin["longitude"] if origin else inferred["longitude"] if inferred else None,
+            "latitude": origin["latitude"] if origin else (inferred.get("city_latitude", inferred["latitude"]) if inferred else None),
+            "longitude": origin["longitude"] if origin else (inferred.get("city_longitude", inferred["longitude"]) if inferred else None),
             "verified": state.get("verdict") == "relevant", "verdict": state.get("verdict", ""), "verified_by": state.get("verdict_by", "") if state.get("verdict") == "relevant" else "",
             "verified_at": state.get("verdict_at", "") if state.get("verdict") == "relevant" else "",
         })
-    counts: Counter[str] = Counter()
     flows: Counter[tuple[float, float, str]] = Counter()
     for pin in pins:
         for t in pin["targets"]:
-            counts[t["name"]] += 1
             if pin["origin"]:
                 flows[(pin["origin"]["latitude"], pin["origin"]["longitude"], t["name"])] += 1
-    target_rows = [{"name": n, "posts": c, "latitude": (centroid(n) or (0, 0))[0], "longitude": (centroid(n) or (0, 0))[1]} for n, c in counts.most_common()]
+    fresh_cutoff = (clock - timedelta(hours=24)).isoformat()[:19]
+    summary: dict[str, dict[str, Any]] = {}
+    for pin in pins:
+        for t in pin["targets"]:
+            row = summary.setdefault(t["name"], {"name": t["name"], "posts": 0, "last_24h": 0, "platforms": Counter(), "languages": Counter(), "cities": Counter(), "verified": 0, "item_ids": [],
+                                                 "latitude": (centroid(t["name"]) or (0, 0))[0], "longitude": (centroid(t["name"]) or (0, 0))[1], "last_at": ""})
+            row["posts"] += 1
+            row["verified"] += 1 if pin["verified"] else 0
+            row["last_24h"] += 1 if (pin["published_at"] or "") >= fresh_cutoff else 0
+            row["platforms"][pin["platform"] or "unknown"] += 1
+            row["languages"][pin["language"] or "und"] += 1
+            if t.get("city"):
+                row["cities"][t["city"]] += 1
+            row["last_at"] = max(row["last_at"], pin["published_at"] or "")
+            row["item_ids"].append(pin["item_id"])
+    target_rows = [{**{k: v for k, v in r.items() if k not in {"platforms", "languages", "cities"}}, "platforms": dict(r["platforms"].most_common(4)), "languages": dict(r["languages"].most_common(4)),
+                    "cities": dict(r["cities"].most_common(4))} for r in sorted(summary.values(), key=lambda r: (-r["posts"], r["name"]))]
     flow_rows = [{"from": [lon, lat], "to": [(centroid(n) or (0, 0))[1], (centroid(n) or (0, 0))[0]], "target": n, "posts": c} for (lat, lon, n), c in flows.items()]
     return {"pins": pins, "targets": target_rows, "flows": flow_rows,
             "note": "Origin is shown only when the platform gave coordinates or the post is linked to a located institution. Countries named in the text are placed at the country's centre and mark what a post is about, not where it came from."}
