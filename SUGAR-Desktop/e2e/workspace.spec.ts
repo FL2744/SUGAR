@@ -17,6 +17,10 @@ async function mockApi(page: Page, calls: ApiCall[], collectionGate?: Promise<vo
       return;
     }
 
+    if (new URL(request.url()).pathname === "/api/update/check") {
+      await route.fulfill({ status: 200, headers: corsHeaders, json: { current: "1.7.0", channel: "stable", available: false, error: "", note: "You are up to date." } });
+      return;
+    }
     if (request.url().endsWith("/api/workspaces") && request.method() === "GET") {
       await route.fulfill({ status: 200, headers: corsHeaders, json: { workspaces: [] } });
       return;
@@ -525,4 +529,21 @@ test("posts appear on the map page with a verify action", async ({ page }) => {
   await detail.getByRole("button", { name: /Mark verified/ }).click();
   await expect(detail).toContainText("Verified by Dana");
   await expectAccessible(page, "Map with a post open");
+});
+
+test("a newer release is offered on launch and can be skipped", async ({ page }) => {
+  await mockApi(page, []);
+  await page.route(/\/api\/update\/check/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { current: "1.7.0", channel: "stable", available: true, error: "", latest: "1.8.0", tag: "v1.8.0", url: "https://github.com/FL2744/SUGAR/releases/tag/v1.8.0",
+    notes: "Map improvements", asset: { name: "SUGAR-macOS.zip", size: 1000, url: "https://github.com/x" }, ahead: { commits: 1, headlines: ["Fix thing"] } } }));
+  await useAdvancedMode(page);
+  await page.goto("/");
+  const banner = page.getByRole("status").filter({ hasText: "SUGAR 1.8.0 is available" });
+  await expect(banner).toBeVisible();
+  await expectAccessible(page, "Update banner");
+  await banner.getByRole("button", { name: "Skip this version" }).click();
+  await expect(banner).toBeHidden();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Updates" }).click();
+  await expect(page.getByRole("heading", { name: "Updates" })).toBeVisible();
+  await expect(page.getByText("1 change on the main branch since v1.8.0")).toBeVisible();
 });

@@ -209,9 +209,14 @@ jobs:
             git tag -a "$tag" "$target" -m "SUGAR ${tag#v}"
             git push origin "refs/tags/$tag"
           fi
+          channel_flags="--latest"
+          case "$tag" in
+            *-rc*|*-beta*|*-preview*) channel_flags="--prerelease" ;;   # the in-app "Preview" channel
+            *-lts*) channel_flags="--latest=false" ;;                    # long-term line; never replaces the stable release
+          esac
           gh release create "$tag" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$target" \
             --title "SUGAR $tag" \
             --notes-file RELEASE_NOTES.md \
-            --latest
+            $channel_flags

@@ -3,9 +3,10 @@ import { isTauri } from "@tauri-apps/api/core";
 import { research } from "./research-api";
 import type { ConnectionReport, PlatformRow, ProviderProfileRow, ProviderType } from "./research-types";
 import { applyPrefs, DEFAULT_PREFS, type Prefs } from "./prefs";
+import { UpdatesPanel, type Updates } from "./updates";
 import { Collapsible, CopyButton, Pill, Segmented, Spinner, formatTime } from "./ui";
 
-type Section = "providers" | "platforms" | "interface" | "connection" | "privacy";
+type Section = "providers" | "platforms" | "interface" | "updates" | "connection" | "privacy";
 type ProfileDraft = ProviderProfileRow & { isNew?: boolean; secret?: string; removeSecret?: boolean; replacing?: boolean };
 
 const BLANK_TYPE = "openai";
@@ -25,7 +26,8 @@ export function ConnectionResult({ report }: { report: ConnectionReport }) {
   );
 }
 
-export function SettingsPage({ onRunSetup, prefs, onSavePrefs, onDirtyChange, engineState, apiUrl, apiToken, onApiUrl, onApiToken, onConnect, busy, onError }: {
+export function SettingsPage({ updates, onRunSetup, prefs, onSavePrefs, onDirtyChange, engineState, apiUrl, apiToken, onApiUrl, onApiToken, onConnect, busy, onError }: {
+  updates: Updates;
   onRunSetup?: () => void; prefs: Prefs; onSavePrefs: (prefs: Prefs) => boolean; onDirtyChange: (dirty: boolean) => void; engineState: string;
   apiUrl: string; apiToken: string; onApiUrl: (value: string) => void; onApiToken: (value: string) => void; onConnect: () => void; busy: boolean; onError: (message: string) => void;
 }) {
@@ -147,7 +149,7 @@ export function SettingsPage({ onRunSetup, prefs, onSavePrefs, onDirtyChange, en
   };
   const revert = () => { setDraftPrefs(prefs); setPlatformSecrets({}); setPlatformClear(new Set()); setPlatformReplacing(new Set()); setReports({}); setState({ kind: "idle" }); void load(); };
 
-  const sections: Array<[Section, string, number]> = [["providers", "LLM providers", providerChanges], ["platforms", "Platform credentials", platformChanges], ["interface", "Interface", prefsDirty ? 1 : 0],
+  const sections: Array<[Section, string, number]> = [["providers", "LLM providers", providerChanges], ["platforms", "Platform credentials", platformChanges], ["interface", "Interface", prefsDirty ? 1 : 0], ["updates", "Updates", 0],
     ...(!isTauri() ? [["connection", "Connection", 0] as [Section, string, number]] : []), ["privacy", "Privacy & diagnostics", 0]];
   const modelOptions = selected ? (reports[selected.id]?.available_models || []) : [];
 
@@ -280,6 +282,7 @@ export function SettingsPage({ onRunSetup, prefs, onSavePrefs, onDirtyChange, en
               </div>
             </div>)}
 
+          {section === "updates" && <UpdatesPanel updates={updates} prefs={prefs} onSavePrefs={onSavePrefs} />}
           {section === "privacy" && (
             <div className="panel settings-panel">
               <div className="section-title"><div className="section-icon green">◉</div><div><h3>Privacy and diagnostics</h3><p>What is stored, where, and how to report a problem safely.</p></div></div>

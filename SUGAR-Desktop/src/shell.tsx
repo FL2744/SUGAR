@@ -13,6 +13,7 @@ import { MapPage } from "./map-page";
 import { MonitoringPage } from "./monitoring-page";
 import { CommandPalette, ShortcutHelp, type Command } from "./command-palette";
 import { ToastHost, type Toast } from "./ui";
+import { UpdateBanner, useUpdates } from "./updates";
 import { ProjectsPage } from "./projects-page";
 import { research } from "./research-api";
 import { ResearchPage } from "./research-page";
@@ -164,6 +165,7 @@ export function App() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [engineState, setEngineState] = useState<"checking" | "ready" | "unavailable" | "preview">("checking");
+  const updates = useUpdates(prefs, engineState === "ready");
   const [engineVersion, setEngineVersion] = useState("");
   const [apiUrl, setApiUrl] = useState(() => defaultApiUrl());
   const [apiToken, setApiToken] = useState("");
@@ -1159,6 +1161,7 @@ export function App() {
     { id: "go-about", label: "About SUGAR", keywords: "credits version", run: () => changePage("about") },
     { id: "new-project", label: "New project", keywords: "create", run: () => { changePage("projects"); setCreateSignal((n) => n + 1); } },
     { id: "setup", label: "Run first-time setup", keywords: "onboarding wizard ai model", run: () => setShowSetup(true) },
+    { id: "update", label: "Check for updates", keywords: "upgrade version release download", run: () => { changePage("settings"); void updates.check(true); } },
     { id: "mode", label: prefs.mode === "basic" ? "Switch to Advanced mode" : "Switch to Basic mode", keywords: "experience", run: () => savePrefs({ ...prefs, mode: prefs.mode === "basic" ? "advanced" : "basic" }) },
     { id: "theme", label: prefs.theme === "dark" ? "Use light theme" : "Use dark theme", keywords: "appearance color", run: () => savePrefs({ ...prefs, theme: prefs.theme === "dark" ? "light" : "dark" }) },
     { id: "help", label: "Keyboard shortcuts", hint: "?", keywords: "help keys", run: () => setHelpOpen(true) },
@@ -1192,6 +1195,7 @@ export function App() {
           <div className="topbar-actions"><div className={`connection-badge ${busy || activeRunSummary ? "working" : projectId ? "connected" : ""}`}><i />{busy ? "Working…" : activeRunSummary ? "Research running" : projectId ? "Project open" : "No project open"}</div>{overview && <StatusPill status={overview.summary.status} />}<button className="button button-primary button-small" onClick={openNewProject} disabled={Boolean(busy)}><span aria-hidden="true">＋</span> New project</button></div>
         </header>
 
+        <UpdateBanner updates={updates} prefs={prefs} onSavePrefs={savePrefs} onOpenSettings={() => changePage("settings")} />
         {error && <div className="error-banner" role="alert"><span className="error-symbol">!</span><div><strong>Action needs attention</strong><p>{error}</p></div>{/Could not reach|Failed to fetch/i.test(error) && <button className="button button-secondary button-small" onClick={() => { setError(""); changePage("settings"); }}>Connection settings</button>}<button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
         {busy && <div className="progress-line"><i /></div>}
 
@@ -1245,7 +1249,7 @@ export function App() {
         {page === "projects" && <ProjectsPage projects={projects} currentId={projectId} loading={projectsLoading} advanced={prefs.mode === "advanced"} createSignal={createSignal} onOpen={openProject} onCreate={async (name, question) => { await createProject(name, question); }} onOpenFolder={() => void openFolder()} onRefresh={() => void loadProjects()} />}
         {page === "timeline" && <TimelinePage projectId={projectId} refreshKey={timelineKey} />}
         {page === "about" && <AboutPage version="1.4" engineVersion={engineVersion} />}
-        {page === "settings" && <SettingsPage onRunSetup={() => setShowSetup(true)} prefs={prefs} onSavePrefs={savePrefs} onDirtyChange={(dirty) => { settingsDirty.current = dirty; }} engineState={engineState} apiUrl={apiUrl} apiToken={apiToken} onApiUrl={setApiUrl} onApiToken={setApiToken} onConnect={() => void connectResearchEngine()} busy={Boolean(busy)} onError={setError} />}
+        {page === "settings" && <SettingsPage updates={updates} onRunSetup={() => setShowSetup(true)} prefs={prefs} onSavePrefs={savePrefs} onDirtyChange={(dirty) => { settingsDirty.current = dirty; }} engineState={engineState} apiUrl={apiUrl} apiToken={apiToken} onApiUrl={setApiUrl} onApiToken={setApiToken} onConnect={() => void connectResearchEngine()} busy={Boolean(busy)} onError={setError} />}
 
 
         {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}

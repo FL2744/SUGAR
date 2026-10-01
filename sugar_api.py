@@ -466,6 +466,19 @@ class SugarApiHandler(BaseHTTPRequestHandler):
             rows.sort(key=lambda row: str(row["last_activity"]), reverse=True)
             self._send(200, {"workspaces": rows})
             return
+        if route.path == "/api/update/check":
+            if not self._require_admin():
+                return
+            from sugar_core import updater
+            q = {k: v[-1] for k, v in parse_qs(route.query).items()}
+            self._send(200, updater.check(q.get("channel", "stable"), force=q.get("force") == "1"))
+            return
+        if route.path == "/api/update/status":
+            if not self._require_admin():
+                return
+            from sugar_core import updater
+            self._send(200, updater.status())
+            return
         match = re.fullmatch(r"/api/workspaces/([0-9a-fA-F-]+)/files/(.+)", route.path)
         if match:
             identifier = _workspace_id(match.group(1))
@@ -559,6 +572,24 @@ class SugarApiHandler(BaseHTTPRequestHandler):
                 if not self._require_project(_workspace_id(upload_match.group(1)), "analyst"):
                     return
                 self._upload(upload_match.group(1), upload_match.group(2))
+                return
+            if route.path in {"/api/update/download", "/api/update/open"}:
+                if not self._require_admin():
+                    return
+                if not self.expose_paths:
+                    raise ApiError(403, "Updates are installed from the desktop app. Ask whoever runs this server to update it.")
+                from sugar_core import updater
+                if route.path == "/api/update/download":
+                    channel = str(self._json_body().get("channel") or "stable")
+                    info = updater.check(channel)
+                    if not info.get("available"):
+                        raise ApiError(409, info.get("error") or "You are already up to date.")
+                    self._send(202, updater.start_download(info))
+                else:
+                    try:
+                        self._send(200, updater.open_download())
+                    except ValueError as exc:
+                        raise ApiError(409, str(exc)) from exc
                 return
             if route.path == "/api/run":
                 self._run_operation()
