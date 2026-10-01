@@ -4,6 +4,13 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ## Unreleased
 
+### Updates and polish
+
+- **In-app updates:** SUGAR checks this project's GitHub releases when it opens (can be turned off), shows a banner with release notes, and downloads the installer or archive for the system with its checksum verified; Windows opens the installer, a Mac reveals the zip. Channels: Stable, Preview (release candidates) and Long-term (`-lts` tags). Also `sugar update [--download]`, `sugar serve` and `sugar doctor`.
+- Release workflow publishes `-rc`/`-beta`/`-preview` tags as pre-releases and `-lts` tags without taking "latest".
+- New typography (Inter Tight and Barlow Semi Condensed), dark theme by default, map filters tucked into one collapsible group.
+- `docs/privacy.md`: what stays local, what leaves and when.
+
 ### Map (from classmate feedback)
 
 - **Posts on the map:** each post is a pin showing author, date and time, platform, original text, translation, inferred location with confidence, and a one-click "Mark verified" check (a reviewer verdict; no extra accounts). Pins are yellow where the post came from (platform coordinates or a linked located institution) and hollow where only a place named in the text is known.

@@ -164,7 +164,7 @@ code { padding: .05rem .3rem; border-radius: .25rem; background: var(--wb-soft);
 .stage-skipped { opacity: .7; } .stage-pending { opacity: .75; }
 .counter-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: .4rem; margin-bottom: .7rem; }
 .counter { display: grid; padding: .45rem .65rem; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); }
-.counter strong { font: 700 1.3rem/1.2 "Manrope", sans-serif; color: var(--wb-ink); } .counter span { color: var(--wb-muted); font-size: 1rem; }
+.counter strong { font: 700 1.3rem/1.2 "Barlow Semi Condensed", sans-serif; color: var(--wb-ink); } .counter span { color: var(--wb-muted); font-size: 1rem; }
 .counter.has-warn { border-color: #f0dcae; background: var(--wb-amber-soft); }
 .activity-layout { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: var(--gap); align-items: start; }
 .activity-main { min-width: 0; } .activity-side { display: grid; gap: .6rem; }

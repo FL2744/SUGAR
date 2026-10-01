@@ -3,7 +3,7 @@ import { research } from "./research-api";
 import type { Institution, InstitutionList, NetworkRow, OverlapResult, PostMap } from "./research-types";
 import { NetworkMap, type Basemap, type Line, type MapMode, type PostLayers } from "./network-map";
 import { ConfidencePill } from "./institutions-page";
-import { EmptyState, Pill, Spinner, formatTime, relativeTime, titleCase } from "./ui";
+import { Collapsible, EmptyState, Pill, Spinner, formatTime, relativeTime, titleCase } from "./ui";
 
 const WINDOWS: Array<[string, string]> = [["", "All time"], ["2024-01-01", "Since 2024"], ["12m", "Last 12 months"], ["6m", "Last 6 months"]];
 const sinceDate = (value: string): string => {
@@ -84,7 +84,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
     <section className="page-content map-page">
       <div className="page-heading compact-heading">
         <div><div className="eyebrow">MAP <span className="eyebrow-line" /></div><h1>Where institutions are, and where networks meet</h1>
-          <p>Markers come from verified-or-pending records, each one open to its sources. Distances are computed from recorded coordinates; they are not findings of influence.</p></div>
+          <p>Distances are computed from recorded coordinates, not findings of influence.</p></div>
         <div className="run-controls">
           <div className="segmented" role="radiogroup" aria-label="View">{(["map", "list"] as const).map((v) => <button key={v} role="radio" aria-checked={view === v} className={view === v ? "on" : ""} onClick={() => setView(v)}>{titleCase(v)}</button>)}</div>
           <button className="button button-secondary" onClick={onOpenInstitutions}>Institutions</button>
@@ -106,12 +106,14 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             {networks.length === 0 && <small className="muted">No networks yet. Import a directory on the Institutions page.</small>}
             {networks.map((n) => <label key={n.name || "none"} className="check-row"><input type="checkbox" checked={!hidden[n.name]} onChange={(e) => setHidden({ ...hidden, [n.name]: !e.target.checked })} />
               <span><span className={`swatch ${n.role}`} aria-hidden="true" /> {n.label} <small className="muted">{n.institutions}</small></span></label>)}</div>
+          <Collapsible title="Filters" hint="Time, status, place, program, audience" badge={[windowKey, status, level, country, program, audience].filter(Boolean).length || undefined}>
           <label className="field-block"><span>Evidence from</span><select value={windowKey} onChange={(e) => setWindowKey(e.target.value)}>{WINDOWS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
           <label className="field-block"><span>Status</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Any</option>{["active", "closed", "renamed", "relocated", "unknown"].map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}</select></label>
           <label className="field-block"><span>Confidence</span><select value={level} onChange={(e) => setLevel(e.target.value)}><option value="">Any</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
           <label className="field-block"><span>Country</span><select value={country} onChange={(e) => setCountry(e.target.value)}><option value="">All</option>{data?.facets.countries.map((f) => <option key={f.key} value={f.key === "unknown" ? "" : f.key}>{f.key} ({f.count})</option>)}</select></label>
           <label className="field-block"><span>Program</span><select value={program} onChange={(e) => setProgram(e.target.value)}><option value="">Any</option>{data?.facets.programs.map((f) => <option key={f.key} value={f.key}>{titleCase(f.key)} ({f.count})</option>)}</select></label>
           <label className="field-block"><span>Audience</span><select value={audience} onChange={(e) => setAudience(e.target.value)}><option value="">Any</option>{data?.facets.audiences.map((f) => <option key={f.key} value={f.key}>{titleCase(f.key)} ({f.count})</option>)}</select></label>
+          </Collapsible>
           <div className="field-block"><span>Map style</span>
             <div className="segmented" role="radiogroup" aria-label="Map style">{([["points", "Points"], ["heat", "Activity heat"]] as const).map(([v, l]) => <button key={v} role="radio" aria-checked={mode === v} className={mode === v ? "on" : ""} onClick={() => setMode(v)}>{l}</button>)}</div>
             <small className="muted">Heat reflects recent linked items and recorded programs for the subject network, not a measure of influence.</small></div>

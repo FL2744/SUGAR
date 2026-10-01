@@ -94,3 +94,14 @@ def test_download_verifies_checksum_and_rejects_foreign_hosts(tmp_path, monkeypa
     assert not list(tmp_path.glob("*.part"))
     with pytest.raises(ValueError):
         u.download({**info, "asset": {"name": "x.zip", "url": "https://evil.example/x.zip"}}, session=Http([]), dest=tmp_path)
+
+
+def test_cli_update_and_doctor(monkeypatch, capsys, tmp_path):
+    from sugar_core import cli
+    monkeypatch.setenv("SUGAR_HOME", str(tmp_path))
+    monkeypatch.setattr(u, "check", lambda channel, **kw: {"current": "1.7.0", "available": True, "latest": "1.8.0", "url": "https://github.com/x", "error": ""})
+    assert cli.main(["update", "--channel", "preview"]) == 0
+    assert "1.8.0 is available on the preview channel" in capsys.readouterr().out
+    monkeypatch.setattr(u, "check", lambda channel, **kw: {"current": "1.7.0", "available": False, "error": "Could not check for updates: offline"})
+    assert cli.main(["update"]) == 1
+    assert cli.main(["doctor"]) == 0 and "SUGAR " in capsys.readouterr().out

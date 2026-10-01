@@ -148,6 +148,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"sugar {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    update_p = sub.add_parser("update", help="Check GitHub for a newer SUGAR release and optionally download it.")
+    update_p.add_argument("--channel", choices=("stable", "preview", "lts"), default="stable")
+    update_p.add_argument("--download", action="store_true", help="Download and verify the installer or archive for this system.")
+    update_p.add_argument("--json", action="store_true")
+
+    serve_p = sub.add_parser("serve", help="Start the local SUGAR research service and open it in a browser.")
+    serve_p.add_argument("--no-browser", action="store_true")
+
+    sub.add_parser("doctor", help="Print version, Python, platform and configuration checks to include in a bug report.")
+
     search = sub.add_parser("search", help="Run a normal bounded collection + optional enrichment.")
     search.add_argument("terms", nargs="+")
     search.add_argument("--sources", default="x")
@@ -493,6 +503,43 @@ def _llm_from_cli(provider: str, model: str | None, base_url: str, api_key: str)
 def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "update":
+        from . import updater
+        info = updater.check(args.channel, force=True)
+        if args.json:
+            print(json.dumps(info, indent=2))
+        elif info.get("error"):
+            print(info["error"])
+            return 1
+        elif info["available"]:
+            print(f"SUGAR {info['latest']} is available on the {args.channel} channel (you have {info['current']}).\n{info.get('url', '')}")
+        else:
+            print(f"{info.get('note', 'You are up to date.')} (version {info['current']})")
+        if args.download and info.get("available"):
+            done = updater.download(info)
+            print(f"Saved {done['path']} ({'checksum verified' if done.get('verified') else 'no checksum published'}).\n{updater.open_download(done['path'])['how']}")
+        return 0
+
+    if args.command == "serve":
+        import sugar_api
+        import webbrowser
+        if not args.no_browser:
+            webbrowser.open("http://127.0.0.1:8765")
+        return int(sugar_api.main([]) or 0)
+
+    if args.command == "doctor":
+        import platform
+        import sys
+        from .credential_store import sugar_home
+        print(f"SUGAR {__version__}\nPython {sys.version.split()[0]} on {platform.platform()}\nData folder: {sugar_home()}")
+        for name in ("requests", "pandas"):
+            try:
+                __import__(name)
+                print(f"  {name}: ok")
+            except ImportError:
+                print(f"  {name}: not installed")
+        return 0
 
     if args.command == "import":
         workspace = optional_workspace(args.workspace)

@@ -126,3 +126,13 @@ SUGAR is licensed under the Apache License, Version 2.0. Before publication, ver
 - GPL-only Qt modules are not introduced into an Apache-2.0 SUGAR binary without a separate compatibility review;
 - any third-party datasets, platform content, logos, fonts, or other non-SUGAR assets are distributed only when their terms permit it;
 - the release does not describe SUGAR as an official Virginia Tech or U.S. Department of State product merely because it was developed in the Diplomacy Lab context.
+
+## In-app updates and channels
+
+The desktop app and `sugar update` read this repository's GitHub Releases. Which release a person is offered depends on its tag:
+
+- `vX.Y.Z`: **Stable**, published as the latest release. This is what classmates run.
+- `vX.Y.Z-rc.N`, `-beta.N`, `-preview.N`: **Preview**, published as pre-releases.
+- `vX.Y.Z-lts.N`: **Long-term**, a maintenance line that receives fixes only and never becomes "latest".
+
+Every release must include the Windows installer (`.msi`), `SUGAR-macOS.zip` and `SHA256SUMS`; the app verifies downloads against that file. Updating is a download plus a hand-off to the OS installer. Silent in-place replacement would need signed update bundles (a Tauri updater key and, for macOS, notarization), which is a decision for the organization that distributes the app.
