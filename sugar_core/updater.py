@@ -1,6 +1,8 @@
 """Update checks against this project's GitHub Releases, with a verified download and an install hand-off.
 
 Channels
+* ``latest``: every change that lands on ``main`` and passes the tests. A rolling build is published automatically for each one
+  (tag ``latest-main``), so nobody has to cut a release. Whether it is newer is decided by commit, not version number.
 * ``stable``: the newest published release that is not marked pre-release (what classmates should run).
 * ``preview``: the newest release including pre-releases (tags such as ``v1.8.0-rc.1``).
 * ``lts``: the newest release whose tag carries ``-lts`` (a long-term line that only gets fixes).
@@ -32,7 +34,8 @@ from .credential_store import sugar_home
 
 REPO = "FL2744/SUGAR"
 API = f"https://api.github.com/repos/{REPO}"
-CHANNELS = ("stable", "preview", "lts")
+CHANNELS = ("latest", "stable", "preview", "lts")
+ROLLING_TAG = "latest-main"
 CACHE_SECONDS = 6 * 3600
 _HOSTS = (".github.com", "githubusercontent.com")
 _TAG = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:[-.](.+))?$")
@@ -54,6 +57,24 @@ def parse_version(tag: str) -> tuple[int, int, int, int, tuple[int, ...]] | None
 def is_newer(candidate: str, current: str) -> bool:
     a, b = parse_version(candidate), parse_version(current)
     return bool(a and b and a > b)
+
+
+def current_commit() -> str:
+    """The commit this installation was built from: stamped at build time, or read from git when running from a checkout."""
+    try:
+        from ._build_info import BUILD  # type: ignore[import-not-found]
+        return str(BUILD.get("commit", ""))
+    except ImportError:
+        pass
+    try:
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=5, check=True).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _release_commit(release: dict[str, Any]) -> str:
+    match = re.search(r"commit:\s*([0-9a-f]{7,40})", str(release.get("body") or ""), re.I)
+    return match.group(1).lower() if match else ""
 
 
 def _platform_key() -> str:
@@ -118,15 +139,17 @@ def _headers() -> dict[str, str]:
 
 def check(channel: str = "stable", *, current: str = __version__, session: requests.Session | None = None, force: bool = False, now: float | None = None) -> dict[str, Any]:
     """Is a newer release available on this channel? Never raises; ``error`` explains a failed check."""
-    channel = channel if channel in CHANNELS else "stable"
+    channel = channel if channel in CHANNELS else "latest"
     clock = now if now is not None else time.time()
     result: dict[str, Any] = {"current": current, "channel": channel, "available": False, "checked_at": clock, "error": "", "platform": _platform_key()}
     cache = _read_cache()
     cached = cache.get(channel) if isinstance(cache.get(channel), dict) else None
-    if cached and not force and clock - float(cached.get("checked_at", 0)) < CACHE_SECONDS and cached.get("current") == current:
+    if cached and not force and clock - float(cached.get("checked_at", 0)) < CACHE_SECONDS and cached.get("current") == current and cached.get("build", "") == (current_commit()[:7] if channel == "latest" else ""):
         return cached
     try:
         http = session or requests.Session()
+        if channel == "latest":
+            return _check_latest(http, result, cache, clock)
         response = http.get(f"{API}/releases", params={"per_page": 20}, headers=_headers(), timeout=12)
         if response.status_code == 403 and "rate limit" in response.text.lower():
             raise RuntimeError("GitHub is limiting requests from this network right now. Try again in a while.")
@@ -153,6 +176,49 @@ def check(channel: str = "stable", *, current: str = __version__, session: reque
     cache[channel] = result
     _write_cache(cache)
     return result
+
+
+def _check_latest(http: requests.Session, result: dict[str, Any], cache: dict[str, Any], clock: float) -> dict[str, Any]:
+    """Compare this build's commit with the newest rolling build. Newer means main has moved on from the commit we were built from."""
+    response = http.get(f"{API}/releases/tags/{ROLLING_TAG}", headers=_headers(), timeout=12)
+    if response.status_code == 404:
+        result["note"] = "No automatic build has been published yet."
+    else:
+        if response.status_code == 403 and "rate limit" in response.text.lower():
+            raise RuntimeError("GitHub is limiting requests from this network right now. Try again in a while.")
+        response.raise_for_status()
+        release = response.json()
+        latest, mine = _release_commit(release), current_commit()
+        asset = pick_asset(release.get("assets") or [])
+        moved: dict[str, Any] = {"commits": 0, "headlines": []}
+        if latest and mine and latest != mine and not (latest.startswith(mine) or mine.startswith(latest)):
+            moved = _compare(http, mine, latest)
+        available = bool(latest and mine and moved["commits"] > 0)
+        result.update({
+            "latest": latest[:7], "tag": ROLLING_TAG, "name": f"Latest build ({latest[:7]})", "published_at": release.get("published_at", ""), "url": release.get("html_url", ""),
+            "prerelease": True, "notes": "", "asset": {"name": asset["name"], "size": asset.get("size", 0), "url": asset.get("browser_download_url", "")} if asset else None,
+            "sums_url": next((a.get("browser_download_url", "") for a in release.get("assets") or [] if a.get("name") == "SHA256SUMS"), ""),
+            "available": available, "ahead": moved, "build": mine[:7],
+        })
+        if not mine:
+            result["note"] = "This copy of SUGAR does not know which commit it was built from, so it cannot tell whether a newer build exists."
+        elif not available:
+            result["note"] = "You have the newest build."
+    cache[result["channel"]] = result
+    _write_cache(cache)
+    return result
+
+
+def _compare(http: requests.Session, base: str, head: str) -> dict[str, Any]:
+    try:
+        response = http.get(f"{API}/compare/{base}...{head}", headers=_headers(), timeout=12)
+        response.raise_for_status()
+        data = response.json()
+        commits = data.get("commits") or []
+        ahead = int(data.get("ahead_by", len(commits))) if data.get("status") in {"ahead", "diverged"} else 0
+        return {"commits": ahead, "headlines": [str(c.get("commit", {}).get("message", "")).split("\n")[0][:140] for c in commits[-10:]][::-1]}
+    except (requests.RequestException, ValueError):
+        return {"commits": 0, "headlines": []}
 
 
 def _ahead(http: requests.Session, tag: str) -> dict[str, Any]:

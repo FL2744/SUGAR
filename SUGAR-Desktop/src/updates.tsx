@@ -67,7 +67,9 @@ export function UpdateBanner({ updates, prefs, onSavePrefs, onOpenSettings }: { 
   if (!info?.available || info.latest === prefs.skippedVersion) return null;
   return (
     <div className="update-banner" role="status">
-      <div><strong>SUGAR {info.latest} is available</strong> <span className="muted">you have {info.current}{info.prerelease ? " · preview" : ""}</span>
+      <div>{info.channel === "latest"
+        ? <><strong>A newer SUGAR build is available</strong> <span className="muted">{info.ahead?.commits ?? 0} change{info.ahead?.commits === 1 ? "" : "s"} since yours</span></>
+        : <><strong>SUGAR {info.latest} is available</strong> <span className="muted">you have {info.current}{info.prerelease ? " · preview" : ""}</span></>}
         {updates.message && <p>{updates.message}</p>}</div>
       <div className="update-actions">
         <DownloadControls updates={updates} />
@@ -86,19 +88,21 @@ export function UpdatesPanel({ updates, prefs, onSavePrefs }: { updates: Updates
       <div className="section-title"><div className="section-icon blue">↻</div><div><h3>Updates</h3><p>SUGAR looks at this project’s GitHub releases when it opens. Nothing is installed until you choose to.</p></div></div>
       <div className="settings-grid">
         <Segmented label="Release channel" value={prefs.updateChannel} onChange={(v) => onSavePrefs({ ...prefs, updateChannel: v })}
-          options={[{ value: "stable", label: "Stable", hint: "Tested releases. Recommended." }, { value: "preview", label: "Preview", hint: "Release candidates, a little earlier." }, { value: "lts", label: "Long-term", hint: "Fixes only, for a fixed term." }]} />
+          options={[{ value: "latest", label: "Latest", hint: "Every change that passes the tests, automatically." }, { value: "stable", label: "Stable", hint: "Tested releases. Recommended." }, { value: "preview", label: "Preview", hint: "Release candidates, a little earlier." }, { value: "lts", label: "Long-term", hint: "Fixes only, for a fixed term." }]} />
         <label className="check-row"><input type="checkbox" checked={prefs.autoUpdateCheck} onChange={(e) => onSavePrefs({ ...prefs, autoUpdateCheck: e.target.checked })} /><span>Check for updates when SUGAR opens</span></label>
       </div>
       <div className="update-status">
         <button className="button button-secondary" onClick={() => void updates.check(true)} disabled={checking}>{checking ? "Checking…" : "Check now"}</button>
-        {info && !info.error && <span role="status">{info.available ? <><strong>{info.latest}</strong> is available (you have {info.current}). </> : <>{info.note || "You are up to date."} (version {info.current})</>}{info.published_at && info.available ? <small className="muted"> Published {relativeTime(info.published_at)}</small> : null}</span>}
+        {info && !info.error && <span role="status">{info.available ? (info.channel === "latest" ? <>A newer build is available. </> : <><strong>{info.latest}</strong> is available (you have {info.current}). </>) : <>{info.note || "You are up to date."} (version {info.current})</>}{info.published_at && info.available ? <small className="muted"> Published {relativeTime(info.published_at)}</small> : null}</span>}
         {info?.error && <span className="notice notice-warn" role="alert">{info.error}</span>}
         <DownloadControls updates={updates} />
       </div>
       {updates.message && <p className="notice notice-ok">{updates.message}</p>}
       {info?.error === "" && info.notes && info.available && <details open><summary>What’s in {info.latest}</summary><pre className="release-notes">{info.notes}</pre></details>}
-      {info?.ahead && info.ahead.commits > 0 && <details><summary>{info.ahead.commits} change{info.ahead.commits === 1 ? "" : "s"} on the main branch since {info.tag}</summary>
-        <ul>{info.ahead.headlines.map((h, i) => <li key={i}>{h}</li>)}</ul><p className="muted">These are in development and arrive in a later release.</p></details>}
+      {info?.ahead && info.ahead.commits > 0 && (info.channel === "latest"
+        ? <details open><summary>What changed ({info.ahead.commits})</summary><ul>{info.ahead.headlines.map((h, i) => <li key={i}>{h}</li>)}</ul></details>
+        : <details><summary>{info.ahead.commits} change{info.ahead.commits === 1 ? "" : "s"} on the main branch since {info.tag}</summary>
+          <ul>{info.ahead.headlines.map((h, i) => <li key={i}>{h}</li>)}</ul><p className="muted">These are in development and arrive in a later release.</p></details>)}
       {!isTauri() && <p className="muted">This is the browser version, so it updates when whoever runs the server updates it.</p>}
     </div>
   );

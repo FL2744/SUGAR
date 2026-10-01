@@ -471,7 +471,7 @@ class SugarApiHandler(BaseHTTPRequestHandler):
                 return
             from sugar_core import updater
             q = {k: v[-1] for k, v in parse_qs(route.query).items()}
-            self._send(200, updater.check(q.get("channel", "stable"), force=q.get("force") == "1"))
+            self._send(200, updater.check(q.get("channel", "latest"), force=q.get("force") == "1"))
             return
         if route.path == "/api/update/status":
             if not self._require_admin():
@@ -580,7 +580,7 @@ class SugarApiHandler(BaseHTTPRequestHandler):
                     raise ApiError(403, "Updates are installed from the desktop app. Ask whoever runs this server to update it.")
                 from sugar_core import updater
                 if route.path == "/api/update/download":
-                    channel = str(self._json_body().get("channel") or "stable")
+                    channel = str(self._json_body().get("channel") or "latest")
                     info = updater.check(channel)
                     if not info.get("available"):
                         raise ApiError(409, info.get("error") or "You are already up to date.")

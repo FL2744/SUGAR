@@ -1,0 +1,21 @@
+name: Latest build
+
+# Every change that lands on main is built into the single "latest-main" release, which the app's Latest update channel reads.
+# The build runs the full test suite first, so a commit that breaks the tests never reaches anyone.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: rolling-build
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/release.yml
+    with:
+      mode: rolling

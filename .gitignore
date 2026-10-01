@@ -85,3 +85,4 @@ examples/ghana-education-research/workspace/.sugar/*
 !examples/ghana-education-research/workspace/.sugar/project-relations.json
 !examples/ghana-education-research/workspace/outputs/
 !examples/ghana-education-research/workspace/outputs/**
+sugar_core/_build_info.py

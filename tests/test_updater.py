@@ -105,3 +105,33 @@ def test_cli_update_and_doctor(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(u, "check", lambda channel, **kw: {"current": "1.7.0", "available": False, "error": "Could not check for updates: offline"})
     assert cli.main(["update"]) == 1
     assert cli.main(["doctor"]) == 0 and "SUGAR " in capsys.readouterr().out
+
+
+def test_latest_channel_follows_commits_not_versions(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUGAR_HOME", str(tmp_path))
+    mine, theirs = "a" * 40, "b" * 40
+    monkeypatch.setattr(u, "_platform_key", lambda: "macos")
+    release = {**rel("latest-main"), "prerelease": True, "body": f"Automatic build.\ncommit: {theirs}"}
+
+    class H(Http):
+        def get(self, url, **kw):
+            self.calls.append(url)
+            if url.endswith("/releases/tags/latest-main"):
+                return Resp(release)
+            if f"/compare/{mine}...{theirs}" in url:
+                return Resp({"status": "ahead", "ahead_by": 3, "commits": [{"commit": {"message": "one"}}, {"commit": {"message": "two"}}, {"commit": {"message": "three"}}]})
+            return Resp({}, status=404)
+
+    monkeypatch.setattr(u, "current_commit", lambda: mine)
+    info = u.check("latest", current="1.7.0", session=H([]), force=True)
+    assert info["available"] and info["ahead"]["commits"] == 3 and info["ahead"]["headlines"][0] == "three" and info["asset"]
+    monkeypatch.setattr(u, "current_commit", lambda: theirs)
+    assert not u.check("latest", current="1.7.0", session=H([]), force=True)["available"]
+    monkeypatch.setattr(u, "current_commit", lambda: "")
+    unknown = u.check("latest", current="1.7.0", session=H([]), force=True)
+    assert not unknown["available"] and "cannot tell" in unknown["note"]
+
+    class NoBuild(H):
+        def get(self, url, **kw):
+            return Resp({}, status=404)
+    assert "No automatic build" in u.check("latest", current="1.7.0", session=NoBuild([]), force=True)["note"]

@@ -6,6 +6,8 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Updates and polish
 
+- **Updates follow commits, not releases:** a new **Latest** channel (the default) offers every change that lands on `main` and passes the tests. `rolling.yml` builds and publishes the single `latest-main` release automatically on each push; the app compares commits, shows what changed, and downloads the verified build. Stable, Preview and Long-term stay available for people who want a formal release.
+- **Releases are one click:** the "Cut release" workflow (Actions tab, or weekly when the `AUTO_RELEASE` variable is `true`) bumps the version in every file, rolls the changelog into release notes (or lists commit headlines), commits to main, and starts the release build. Locally: `python tools/cut_release.py patch`.
 - **In-app updates:** SUGAR checks this project's GitHub releases when it opens (can be turned off), shows a banner with release notes, and downloads the installer or archive for the system with its checksum verified; Windows opens the installer, a Mac reveals the zip. Channels: Stable, Preview (release candidates) and Long-term (`-lts` tags). Also `sugar update [--download]`, `sugar serve` and `sugar doctor`.
 - Release workflow publishes `-rc`/`-beta`/`-preview` tags as pre-releases and `-lts` tags without taking "latest".
 - New typography (Inter Tight and Barlow Semi Condensed), dark theme by default, map filters tucked into one collapsible group.

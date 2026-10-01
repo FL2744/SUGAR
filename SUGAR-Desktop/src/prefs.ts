@@ -9,12 +9,12 @@ export type Prefs = {
   theme: "light" | "dark";
   name: string;               // shown as the author of reviews and comments
   onboarded: boolean;         // the first-run setup has been completed or skipped
-  updateChannel: "stable" | "preview" | "lts";
+  updateChannel: "latest" | "stable" | "preview" | "lts";
   autoUpdateCheck: boolean;   // look for a newer release when the app opens
   skippedVersion: string;     // a release the person chose not to be reminded about
 };
 
-export const DEFAULT_PREFS: Prefs = { mode: "basic", debug: false, density: "comfortable", textScale: 1, interpreter: "auto", theme: "dark", name: "", onboarded: false, updateChannel: "stable", autoUpdateCheck: true, skippedVersion: "" };
+export const DEFAULT_PREFS: Prefs = { mode: "basic", debug: false, density: "comfortable", textScale: 1, interpreter: "auto", theme: "dark", name: "", onboarded: false, updateChannel: "latest", autoUpdateCheck: true, skippedVersion: "" };
 const KEY = "sugar.prefs.v1";
 
 export function loadPrefs(): Prefs {
@@ -38,7 +38,7 @@ export function normalizePrefs(prefs: Prefs): Prefs {
     theme: prefs.theme === "light" ? "light" : "dark",
     name: String(prefs.name || "").trim().slice(0, 60),
     onboarded: Boolean(prefs.onboarded),
-    updateChannel: prefs.updateChannel === "preview" || prefs.updateChannel === "lts" ? prefs.updateChannel : "stable",
+    updateChannel: prefs.updateChannel === "stable" || prefs.updateChannel === "preview" || prefs.updateChannel === "lts" ? prefs.updateChannel : "latest",
     autoUpdateCheck: prefs.autoUpdateCheck !== false,
     skippedVersion: String(prefs.skippedVersion || "").slice(0, 40),
   };
