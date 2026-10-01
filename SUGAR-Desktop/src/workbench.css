@@ -481,3 +481,12 @@ kbd { padding: 0 .4rem; border: 1px solid var(--wb-line2); border-radius: .3rem;
 .code-list li { display: grid; gap: .3rem; padding: .55rem .7rem; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); }
 .code-list li.confirmed { border-color: var(--wb-green); }
 .code-list q { display: block; color: var(--wb-ink2); font-style: italic; overflow-wrap: anywhere; }
+
+/* Monitoring */
+.monitor-list, .digest-list, .digest-changes, .digest-items { list-style: none; margin: .5rem 0; padding: 0; display: grid; gap: .6rem; }
+.monitor-list li { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.digest-card { display: grid; gap: .5rem; padding: .8rem .9rem; border: 1px solid var(--wb-line); border-radius: .6rem; background: var(--wb-card); }
+.digest-head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.digest-changes { gap: .3rem; } .digest-items { gap: .25rem; padding-left: .5rem; overflow-wrap: anywhere; }
+.section-heading { margin: 1.2rem 0 .3rem; font-size: 1.15rem; color: var(--wb-ink); }
+.monitor-form { margin: .8rem 0; }

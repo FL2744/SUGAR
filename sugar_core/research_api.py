@@ -308,7 +308,44 @@ def _coding_routes(method, rest, query, body, wb, project):
     return None
 
 
+def _monitor_routes(method, rest, query, body, wb, project):
+    from . import monitoring as mon
+    actor = str(body.get("_author") or "Researcher")
+    try:
+        if rest == "monitors" and method == "GET":
+            return 200, {"monitors": mon.list_monitors(project), "cadences_hours": list(mon.CADENCES_HOURS)}
+        if rest == "monitors" and method == "POST":
+            if body.get("delete") and body.get("id"):
+                mon.delete_monitor(project, str(body["id"]), actor=actor)
+                return 200, {"monitors": mon.list_monitors(project)}
+            saved = mon.save_monitor(project, name=str(body.get("name") or ""), cadence_hours=int(body.get("cadence_hours") or 0), monitor_id=str(body.get("id") or ""),
+                                     enabled=bool(body.get("enabled", True)), note=str(body.get("note") or ""), actor=actor)
+            return 200, {"monitor": saved, "monitors": mon.list_monitors(project)}
+        if rest == "monitors/run" and method == "POST":
+            return 200, mon.run_monitor(wb, project, str(body.get("id") or ""), actor=actor)
+        if rest == "monitors/tick" and method == "POST":
+            made = mon.finalize_finished(wb, project)
+            started = []
+            for monitor in mon.due_monitors(project):
+                try:
+                    started.append(mon.run_monitor(wb, project, monitor["id"], actor=actor)["run_id"])
+                except (RunConflict, WorkbenchError):
+                    continue
+            return 200, {"started": started, "digests": [d["id"] for d in made]}
+        if rest == "digests" and method == "GET":
+            return 200, {"digests": mon.list_digests(project, _int(query.get("limit"), 30, 1, 200))}
+        if rest == "digests/checkpoint" and method == "POST":
+            return 200, {"digest": mon.build_digest(project, trigger="manual")}
+    except KeyError as exc:
+        raise WorkbenchError(str(exc.args[0]) if exc.args else "Not found.", 404) from exc
+    except ValueError as exc:
+        raise WorkbenchError(str(exc)) from exc
+    return None
+
+
 def _research_routes(method, rest, query, body, wb, project):
+    if rest.startswith("monitors") or rest.startswith("digests"):
+        return _monitor_routes(method, rest, query, body, wb, project)
     if rest == "coding" or rest.startswith("coding/"):
         return _coding_routes(method, rest, query, body, wb, project)
     if rest.startswith("networks") or rest == "overlap":

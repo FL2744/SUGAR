@@ -142,3 +142,12 @@ export type OverlapResult = {
 
 export type CodeRow = { field: "audience" | "program" | "activity_type" | "attendance"; label: string; quote: string; methods: string[]; status: "proposed" | "confirmed" | "rejected"; decided_by: string; decided_at: string };
 export type CodingSummary = { proposed: Record<string, Record<string, number>>; confirmed: Record<string, Record<string, number>>; items_coded: number };
+
+export type Monitor = { id: string; name: string; cadence_hours: number; enabled: boolean; note: string; created_at: string; last_run_at: string; last_run_id: string; last_status: string; next_due_at: string };
+export type DigestChange = { entity_id: string; name: string; kind: string; detail: string };
+export type Digest = {
+  id: string; at: string; run_id: string; monitor_id: string; trigger: string; first_pass: boolean; run_status: string; summary: string;
+  counts: { new_items: number; changed_items: number; institution_changes: number; institutions: number; incomplete_sources: number };
+  new_items: Array<{ item_id: string; platform: string; url: string; text: string }>; changed_items: Array<{ item_id: string; platform: string; url: string; text: string }>;
+  institution_changes: DigestChange[]; incomplete_sources: string[];
+};

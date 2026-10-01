@@ -774,11 +774,18 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(f"SUGAR API ready at {url}/api/health", flush=True)
         print(f"Project root: {_workspace_root}", flush=True)
+    scheduler = None
+    if os.environ.get("SUGAR_DISABLE_SCHEDULER", "").strip() not in {"1", "true", "yes"}:
+        from sugar_core.monitoring import MonitorScheduler
+        scheduler = MonitorScheduler(list_research_projects, get_workbench, on_error=lambda message: print(message, file=sys.stderr, flush=True))
+        scheduler.start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        if scheduler is not None:
+            scheduler.stop()
         server.server_close()
     return 0
 
