@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { research } from "./research-api";
 import type { Interpretation, PlanSpec, PlatformRow, ProjectOverview, ProviderProfileRow, RunSummary, SummaryRow } from "./research-types";
 import type { Prefs } from "./prefs";
@@ -39,8 +39,14 @@ export function PlanPreview({ summary, interpretation, plan, onRun, onEdit, onAd
 }) {
   const method = interpretation?.method;
   const enabled = plan.queries.filter((q) => q.enabled);
+  const card = useRef<HTMLElement>(null);
+  // A fresh interpretation lands below the request box; bring it into view so the next step is never off-screen.
+  useEffect(() => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    card.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" });
+  }, [interpretation]);
   return (
-    <section className="panel plan-preview-card" aria-label="Interpreted research plan">
+    <section ref={card} className="panel plan-preview-card" aria-label="Interpreted research plan">
       <div className="panel-heading">
         <div><span className="eyebrow">HERE IS WHAT SUGAR UNDERSTOOD</span><h3>Research plan</h3></div>
         <div className="pill-row">

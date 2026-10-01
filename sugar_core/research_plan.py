@@ -338,7 +338,8 @@ class ResearchPlanSpec:
         """Human-readable preview rows (section 7) rendered by every client identically."""
         tf = self.timeframe
         if tf["start"] or tf["end"]:
-            date_text = tf["label"] or f"{tf['start'] or 'earliest'} to {tf['end'] or 'today'}"
+            span = f"{_pretty_date(tf['start']) or 'earliest'} – {_pretty_date(tf['end']) or 'today'}"
+            date_text = f"{tf['label']} ({span})" if tf["label"] else span
         else:
             date_text = "No restriction"
         if self.source_scope == "all_enabled":
@@ -347,7 +348,11 @@ class ResearchPlanSpec:
                 platform_text += f" except {', '.join(self.exclude_platforms)}"
         else:
             platform_text = ", ".join(self.platforms) or "None selected"
-        lang = "Automatic" if self.languages == ["auto"] else ", ".join(self.languages)
+        if self.languages == ["auto"]:
+            lang = "Automatic"
+        else:
+            from .gazetteer import LANGUAGE_NAMES
+            lang = ", ".join(LANGUAGE_NAMES.get(code, code) for code in self.languages)
         return [
             {"label": "Research topic", "value": self.topic or "—"},
             {"label": "Region", "value": ", ".join(self.geography) or "Not restricted"},
@@ -356,6 +361,15 @@ class ResearchPlanSpec:
             {"label": "Date range", "value": date_text},
             {"label": "Collection depth", "value": self.depth.capitalize()},
         ]
+
+
+def _pretty_date(value: str) -> str:
+    """'2026-04-01' -> '1 Apr 2026' (unparseable values pass through unchanged)."""
+    try:
+        parsed = date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return str(value or "")
+    return f"{parsed.day} {parsed.strftime('%b %Y')}"
 
 
 def _dedupe(values: list[str]) -> list[str]:

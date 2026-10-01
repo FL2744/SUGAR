@@ -5,7 +5,7 @@ import { research } from "./research-api";
 import type { ResultItem, ResultsPayload, RunSummary } from "./research-types";
 import type { Prefs } from "./prefs";
 import { ItemInspector } from "./item-inspector";
-import { CopyButton, EmptyState, Pill, Segmented, Spinner, StatusPill, languageName, platformLabel, relativeTime, titleCase } from "./ui";
+import { CopyButton, EmptyState, IncompleteNotice, Pill, Segmented, Spinner, StatusPill, languageName, platformLabel, relativeTime, titleCase } from "./ui";
 
 type TextMode = "original" | "translation" | "both";
 const GROUPS = [["none", "No grouping"], ["platform", "Platform"], ["language", "Language"], ["geography", "Geography"], ["query", "Search query"], ["author", "Author"]] as const;
@@ -119,7 +119,7 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
         </div>
       </div>
 
-      {run?.completeness && !run.completeness.complete && <div className="notice notice-warn" role="alert"><strong>Collection was incomplete.</strong> {run.completeness.summary}</div>}
+      {run?.completeness && !run.completeness.complete && <IncompleteNotice run={run} />}
       {run?.status === "cancelled" && <div className="notice notice-info">This run was cancelled; results collected before that are shown.</div>}
 
       {exportInfo && (

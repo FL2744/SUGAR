@@ -135,3 +135,29 @@ export function CopyButton({ text, label = "Copy", className = "button button-qu
     }}>{done ? "Copied ✓" : label}</button>
   );
 }
+
+type IncompleteRun = { completeness?: { complete?: boolean; incomplete_sources?: string[]; notes?: string[]; sources?: Record<string, { status: string; error: Record<string, unknown> }> } };
+
+/** Which sources could not be collected and why, one row each, with a retry where the caller supports it. */
+export function IncompleteNotice({ run, onRetry, busy }: { run: IncompleteRun; onRetry?: (source: string) => void; busy?: boolean }) {
+  const rows = run.completeness?.sources || {};
+  const bad = run.completeness?.incomplete_sources || [];
+  const extra = (run.completeness?.notes || []).filter((note) => !/ was (skipped|not fully collected):/.test(note));
+  return (
+    <div className="notice notice-warn incomplete-card" role="alert">
+      <strong>Some sources could not be collected.</strong> Results cover only part of what you asked for.
+      <ul className="incomplete-list">
+        {bad.map((name) => {
+          const row = rows[name];
+          return (
+            <li key={name}>
+              <div><b>{platformLabel(name)}</b> <Pill tone={row?.status === "skipped" ? "neutral" : "warn"}>{row?.status === "skipped" ? "Skipped" : "Incomplete"}</Pill>
+                <span className="muted">{String(row?.error?.message || "See the warnings for details.")}</span></div>
+              {onRetry && <button className="button button-secondary button-small" disabled={busy} onClick={() => onRetry(name)}>Retry</button>}
+            </li>);
+        })}
+      </ul>
+      {extra.map((note) => <p key={note} className="muted">{note}</p>)}
+    </div>
+  );
+}

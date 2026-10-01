@@ -3,7 +3,7 @@ import { followRun, research } from "./research-api";
 import type { ActivityEvent, RunSummary, SourceRow } from "./research-types";
 import type { Prefs } from "./prefs";
 import { ItemInspector } from "./item-inspector";
-import { CopyButton, EmptyState, Pill, Spinner, StatusPill, duration, formatTime, languageName, platformLabel, titleCase } from "./ui";
+import { CopyButton, EmptyState, IncompleteNotice, Pill, Spinner, StatusPill, duration, formatTime, languageName, platformLabel, titleCase } from "./ui";
 
 const STAGES = [
   { id: "plan", label: "Plan", detail: (c: Counts) => `${c.sources_total || 0} platforms · ${c.queries_total || 0} searches` },
@@ -156,8 +156,8 @@ function TranslationList({ cards, translating, onInspect, itemLanguages }: { car
   );
 }
 
-export function ActivityView({ projectId, runId, prefs, author, onOpenResults, onNewRun, onOpenSettings, onRunStarted, onError }: {
-  projectId: string; runId: string; prefs: Prefs; author: string;
+export function ActivityView({ projectId, runId, prefs, author, onOpenResults, onNewRun, onOpenSettings, onRunStarted, onRunSettled, onError }: {
+  projectId: string; runId: string; prefs: Prefs; author: string; onRunSettled?: () => void;
   onOpenResults: (runId: string) => void; onNewRun: () => void; onOpenSettings: () => void;
   onRunStarted: (projectId: string, run: RunSummary) => void; onError: (message: string) => void;
 }) {
@@ -176,6 +176,14 @@ export function ActivityView({ projectId, runId, prefs, author, onOpenResults, o
   const advanced = prefs.mode === "advanced";
 
   const active = Boolean(run && ["queued", "running", "paused", "cancelling"].includes(run.status));
+
+  // Tell the shell when a run reaches a final state so the sidebar and top bar stop showing "running".
+  const settledKey = useRef("");
+  useEffect(() => {
+    if (!run || active) return;
+    const key = `${run.run_id}:${run.status}`;
+    if (settledKey.current !== key) { settledKey.current = key; onRunSettled?.(); }
+  }, [run, active, onRunSettled]);
 
   // Batch incoming events so a burst of hundreds does not re-render the page for every one of them.
   useEffect(() => {
@@ -285,9 +293,7 @@ export function ActivityView({ projectId, runId, prefs, author, onOpenResults, o
           <div className={`counter ${label === "Warnings" && Number(value) > 0 ? "has-warn" : ""}`} key={String(label)}><strong>{value}</strong><span>{label}</span></div>))}
       </div>
 
-      {!active && run.completeness && !run.completeness.complete && (
-        <div className="notice notice-warn" role="alert"><strong>Collection is incomplete.</strong> {run.completeness.summary}
-          {(run.completeness.incomplete_sources || []).map((s) => <button key={s} className="text-button" onClick={() => void control({ action: "retry_source", source: s }, `retry-${s}`)}>Retry {platformLabel(s)}</button>)}</div>)}
+      {!active && run.completeness && !run.completeness.complete && <IncompleteNotice run={run} busy={Boolean(busy)} onRetry={(name) => void control({ action: "retry_source", source: name }, `retry-${name}`)} />}
       {!active && run.completeness?.complete && <div className="notice notice-ok"><strong>Complete.</strong> {run.completeness.summary}</div>}
 
       <div className="activity-layout">

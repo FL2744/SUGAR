@@ -1115,7 +1115,7 @@ export function App() {
         <div className="brand-row"><div className="brand-mark">S</div><div><div className="brand-name">SUGAR</div><div className="brand-subtitle">Research workspace</div></div></div>
         <div className="side-caption">RESEARCH</div>
         <nav className="nav-list" aria-label="Main navigation">
-          {navItems.map((item) => <button key={item.id} className={`nav-item ${page === item.id ? "active" : ""}`} aria-current={page === item.id ? "page" : undefined} onClick={() => changePage(item.id)}><span className="nav-icon" aria-hidden="true">{item.icon}</span>{item.label}{item.id === "activity" && activeRunSummary && <span className="nav-live" title="A run is in progress" />}</button>)}
+          {navItems.map((item) => <button key={item.id} className={`nav-item ${page === item.id ? "active" : ""}`} aria-current={page === item.id ? "page" : undefined} onClick={() => changePage(item.id)}><span className="nav-icon" aria-hidden="true">{item.icon}</span><span className="nav-label">{item.label}</span>{item.id === "activity" && activeRunSummary && <span className="nav-live" title="A run is in progress" />}</button>)}
         </nav>
         <div className="side-caption secondary-caption">PROJECT</div>
         <button className="side-new-project" onClick={openNewProject}><span aria-hidden="true">＋</span> New project</button>
@@ -1133,7 +1133,7 @@ export function App() {
           <div className="topbar-actions"><div className={`connection-badge ${busy || activeRunSummary ? "working" : projectId ? "connected" : ""}`}><i />{busy ? "Working…" : activeRunSummary ? "Research running" : projectId ? "Project open" : "No project open"}</div>{overview && <StatusPill status={overview.summary.status} />}<button className="button button-primary button-small" onClick={openNewProject} disabled={Boolean(busy)}><span aria-hidden="true">＋</span> New project</button></div>
         </header>
 
-        {error && <div className="error-banner" role="alert"><span className="error-symbol">!</span><div><strong>Action needs attention</strong><p>{error}</p></div><button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
+        {error && <div className="error-banner" role="alert"><span className="error-symbol">!</span><div><strong>Action needs attention</strong><p>{error}</p></div>{/Could not reach|Failed to fetch/i.test(error) && <button className="button button-secondary button-small" onClick={() => { setError(""); changePage("settings"); }}>Connection settings</button>}<button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
         {busy && <div className="progress-line"><i /></div>}
 
         {page === "home" && <section className="page-content overview-page">
@@ -1178,7 +1178,7 @@ export function App() {
         </section>}
 
         {page === "research" && <ResearchPage projectId={projectId} projectName={projectName} prefs={prefs} overview={overview} onOverview={() => refreshOverview(projectId)} ensureProject={ensureProject} onRunStarted={handleRunStarted} onOpenSettings={() => changePage("settings")} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onError={setError} />}
-        {page === "activity" && <ActivityView projectId={projectId} runId={runId} prefs={prefs} author={author} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onNewRun={() => changePage("research")} onOpenSettings={() => changePage("settings")} onRunStarted={handleRunStarted} onError={setError} />}
+        {page === "activity" && <ActivityView onRunSettled={() => void refreshOverview(projectId)} projectId={projectId} runId={runId} prefs={prefs} author={author} onOpenResults={(id) => { setRunId(id); changePage("results"); }} onNewRun={() => changePage("research")} onOpenSettings={() => changePage("settings")} onRunStarted={handleRunStarted} onError={setError} />}
         {page === "results" && <ResultsView projectId={projectId} runId={runId || overview?.runs[0]?.run_id || ""} runs={overview?.runs || []} prefs={prefs} author={author} projectPath={workspace.startsWith("sugar-workspace://") ? "" : workspace} onSelectRun={setRunId} onOpenActivity={(id) => { setRunId(id); changePage("activity"); }} onOpenResearch={() => changePage("research")} onRunStarted={handleRunStarted} onError={setError} />}
         {page === "projects" && <ProjectsPage projects={projects} currentId={projectId} loading={projectsLoading} advanced={prefs.mode === "advanced"} createSignal={createSignal} onOpen={openProject} onCreate={async (name, question) => { await createProject(name, question); }} onOpenFolder={() => void openFolder()} onRefresh={() => void loadProjects()} />}
         {page === "timeline" && <TimelinePage projectId={projectId} refreshKey={timelineKey} />}
@@ -1186,7 +1186,7 @@ export function App() {
         {page === "settings" && <SettingsPage prefs={prefs} onSavePrefs={savePrefs} onDirtyChange={(dirty) => { settingsDirty.current = dirty; }} engineState={engineState} apiUrl={apiUrl} apiToken={apiToken} onApiUrl={setApiUrl} onApiToken={setApiToken} onConnect={() => void connectResearchEngine()} busy={Boolean(busy)} onError={setError} />}
 
 
-        <footer className="statusbar"><div><span className={`status-dot ${workspace ? "active" : "unknown"}`} /><span>{workspace ? `Workspace · ${workspace.split(/[\\/]/).at(-1)}` : "Local workspace not selected"}</span></div><span className="statusbar-right">SUGAR research engine <b>·</b> Python core</span></footer>
+        <footer className="statusbar"><div><span className={`status-dot ${workspace ? "active" : "unknown"}`} /><span>{workspace ? (workspace.startsWith("sugar-workspace://") ? `Project · ${projectName}` : `Workspace · ${workspace.split(/[\\/]/).at(-1)}`) : "No project open"}</span></div><span className="statusbar-right">SUGAR research engine <b>·</b> Python core</span></footer>
       </main>
     </div>
   );
