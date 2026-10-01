@@ -163,3 +163,17 @@ export type AccuracyReport = {
   relevance: Prf & { threshold: number; true_negatives: number; by_threshold: Record<string, Prf> };
   audience: { overall: Prf; by_label: Record<string, Prf> }; program: { overall: Prf; by_label: Record<string, Prf> };
 };
+
+export type PostPin = {
+  item_id: string; run_id: string; author: string; published_at: string; platform: string; url: string; language: string;
+  original_text: string; translated_text: string;
+  origin: { latitude: number; longitude: number; kind: string; precision: string; label: string } | null;
+  targets: Array<{ name: string; latitude: number; longitude: number; confidence: number; method: string; precision: string }>;
+  inferred_location: { name: string; confidence: number; method: string } | null;
+  placement: "origin" | "mentioned"; latitude: number | null; longitude: number | null;
+  verified: boolean; verdict: string; verified_by: string; verified_at: string;
+};
+export type PostMap = {
+  pins: PostPin[]; targets: Array<{ name: string; posts: number; latitude: number; longitude: number }>;
+  flows: Array<{ from: [number, number]; to: [number, number]; target: string; posts: number }>; note: string;
+};

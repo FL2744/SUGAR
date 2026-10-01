@@ -2,6 +2,14 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
+## Unreleased
+
+### Map (from classmate feedback)
+
+- **Posts on the map:** each post is a pin showing author, date and time, platform, original text, translation, inferred location with confidence, and a one-click "Mark verified" check (a reviewer verdict; no extra accounts). Pins are yellow where the post came from (platform coordinates or a linked located institution) and hollow where only a place named in the text is known.
+- **Target layer:** countries the posts name are ringed and counted (where a message is about, not where it came from), with optional origin-to-target lines.
+- **Layers and basemaps:** posts, targets, lines and institutions toggle independently; Dark, Streets and Terrain basemaps; the post list view mirrors the map.
+
 ## 1.7.0 - 2026-10-01
 
 ### Added (institution workflow)

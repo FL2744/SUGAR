@@ -462,6 +462,9 @@ kbd { padding: 0 .4rem; border: 1px solid var(--wb-line2); border-radius: .3rem;
 
 /* Map page */
 .map-layout { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 1rem; align-items: start; }
+.swatch.post { background: #f5c518; border: 2px solid #111; }
+.swatch.target { background: rgba(224,60,60,.25); border: 2px solid #e03c3c; border-radius: 50%; }
+.post-text { max-height: 9rem; overflow: auto; white-space: pre-wrap; }
 .map-layout:has(.map-detail) { grid-template-columns: 15rem minmax(0, 1fr) 17rem; }
 .map-filters { display: grid; gap: .8rem; padding: .8rem; border: 1px solid var(--wb-line); border-radius: .6rem; background: var(--wb-card); }
 .map-main { display: grid; gap: .6rem; min-width: 0; }

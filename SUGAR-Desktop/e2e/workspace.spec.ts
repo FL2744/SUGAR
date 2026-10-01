@@ -499,3 +499,30 @@ test("institutions, map and monitoring pages open cleanly and are accessible", a
     await expectAccessible(page, label);
   }
 });
+
+test("posts appear on the map page with a verify action", async ({ page }) => {
+  await mockApi(page, []);
+  let verified = false;
+  const pin = () => ({ item_id: "it_1", run_id: "run_1", author: "@ana", published_at: "2026-03-01T10:00:00Z", platform: "mastodon", url: "", language: "fr", original_text: "Une conférence à Bruxelles",
+    translated_text: "A conference in Brussels", origin: { latitude: -1.29, longitude: 36.82, kind: "platform coordinates", precision: "exact", label: "Coordinates supplied by the platform" },
+    targets: [{ name: "Belgium", latitude: 50.6, longitude: 4.7, confidence: 0.7, method: "named in the text", precision: "country" }], inferred_location: { name: "Belgium", confidence: 0.7, method: "named in the text" },
+    placement: "origin", latitude: -1.29, longitude: 36.82, verified, verdict: verified ? "relevant" : "", verified_by: verified ? "Dana" : "", verified_at: "" });
+  await page.route(/\/research\/institutions(\?.*)?$/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { institutions: [], unplaced: 0, facets: { countries: [], programs: [], audiences: [] } } }));
+  await page.route(/\/research\/networks$/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { networks: [] } }));
+  await page.route(/\/research\/map\/posts/, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { pins: [pin()], targets: [{ name: "Belgium", posts: 1, latitude: 50.6, longitude: 4.7 }], flows: [], note: "" } }));
+  await page.route(/\/research\/review$/, (route) => { verified = true; return route.fulfill({ status: 200, headers: corsHeaders, json: { item_id: "it_1", review: { verdict: "relevant", verdict_by: "Dana", verdict_at: "2026-03-02T00:00:00Z", tags: [], comments: [] }, summary: {} } }); });
+  await useAdvancedMode(page);
+  await page.goto("/");
+  await createProject(page, "Posts Project");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Map", exact: true }).click();
+  await page.getByRole("radio", { name: "List" }).click();
+  await page.getByRole("row", { name: /@ana/ }).click();
+  const detail = page.getByRole("complementary", { name: "Selected post" });
+  await expect(detail).toContainText("Une conférence à Bruxelles");
+  await expect(detail).toContainText("A conference in Brussels");
+  await expect(detail).toContainText("Inferred: Belgium");
+  await expect(detail).toContainText("Not verified");
+  await detail.getByRole("button", { name: /Mark verified/ }).click();
+  await expect(detail).toContainText("Verified by Dana");
+  await expectAccessible(page, "Map with a post open");
+});

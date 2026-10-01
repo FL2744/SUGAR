@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { research } from "./research-api";
-import type { Institution, InstitutionList, NetworkRow, OverlapResult } from "./research-types";
-import { NetworkMap, type Line, type MapMode } from "./network-map";
+import type { Institution, InstitutionList, NetworkRow, OverlapResult, PostMap } from "./research-types";
+import { NetworkMap, type Basemap, type Line, type MapMode, type PostLayers } from "./network-map";
 import { ConfidencePill } from "./institutions-page";
-import { EmptyState, Pill, Spinner, relativeTime, titleCase } from "./ui";
+import { EmptyState, Pill, Spinner, formatTime, relativeTime, titleCase } from "./ui";
 
 const WINDOWS: Array<[string, string]> = [["", "All time"], ["2024-01-01", "Since 2024"], ["12m", "Last 12 months"], ["6m", "Last 6 months"]];
 const sinceDate = (value: string): string => {
@@ -30,6 +30,11 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   const [overlap, setOverlap] = useState<OverlapResult | null>(null);
   const [view, setView] = useState<"map" | "list">("map");
   const [selected, setSelected] = useState("");
+  const [posts, setPosts] = useState<PostMap | null>(null);
+  const [basemap, setBasemap] = useState<Basemap>(dark ? "dark" : "streets");
+  const [layers, setLayers] = useState<PostLayers>({ posts: true, targets: true, flows: false, institutions: true });
+  const [selectedPost, setSelectedPost] = useState("");
+  const [verdictFilter, setVerdictFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -37,10 +42,11 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
     if (!projectId) return;
     setLoading(true); setError("");
     try {
-      const [list, nets] = await Promise.all([research.institutions(projectId, { status, confidence: level, country, program, audience, since: sinceDate(windowKey) }), research.networks(projectId)]);
-      setData(list); setNetworks(nets);
+      const [list, nets, pm] = await Promise.all([research.institutions(projectId, { status, confidence: level, country, program, audience, since: sinceDate(windowKey) }), research.networks(projectId),
+        research.postMap(projectId, { verdict: verdictFilter }).catch(() => null)]);
+      setData(list); setNetworks(nets); setPosts(pm);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setLoading(false); }
-  }, [projectId, status, level, country, program, audience, windowKey]);
+  }, [projectId, status, level, country, program, audience, windowKey, verdictFilter]);
   useEffect(() => { void load(); }, [load]);
 
   const subjects = useMemo(() => networks.filter((n) => n.role === "subject").map((n) => n.name), [networks]);
@@ -61,6 +67,14 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
     });
   }, [showLines, overlap, byId, nearKm, hidden]);
 
+  const pickedPost = posts?.pins.find((p) => p.item_id === selectedPost);
+  const setVerified = async (itemId: string, verified: boolean) => {
+    try {
+      const done = await research.postReview(projectId, itemId, { kind: "verdict", verdict: verified ? "relevant" : "" });
+      setPosts((cur) => cur && { ...cur, pins: cur.pins.map((p) => p.item_id === itemId ? { ...p, verified, verdict: done.review.verdict, verified_by: verified ? done.review.verdict_by : "", verified_at: verified ? done.review.verdict_at : "" } : p) });
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  };
+
   if (!projectId) return <section className="page-content"><EmptyState icon="⌖" title="Open a project first">The map shows the institutions recorded in a project.</EmptyState></section>;
   const picked: Institution | undefined = byId[selected];
   const pickedOverlap = overlap?.rows.find((r) => r.entity_id === selected);
@@ -80,6 +94,14 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
 
       <div className="map-layout">
         <aside className="map-filters" aria-label="Map filters">
+          <div className="field-block"><span>Layers</span>
+            <label className="check-row"><input type="checkbox" checked={layers.posts} onChange={(e) => setLayers({ ...layers, posts: e.target.checked })} /><span><span className="swatch post" aria-hidden="true" /> Posts <small className="muted">{posts?.pins.length ?? 0}</small></span></label>
+            <label className="check-row"><input type="checkbox" checked={layers.targets} onChange={(e) => setLayers({ ...layers, targets: e.target.checked })} /><span><span className="swatch target" aria-hidden="true" /> Targets: where posts are about <small className="muted">{posts?.targets.length ?? 0}</small></span></label>
+            <label className="check-row"><input type="checkbox" checked={layers.flows} onChange={(e) => setLayers({ ...layers, flows: e.target.checked })} /><span>Origin → target lines</span></label>
+            <label className="check-row"><input type="checkbox" checked={layers.institutions} onChange={(e) => setLayers({ ...layers, institutions: e.target.checked })} /><span>Institutions</span></label>
+            <label className="field-block"><span>Posts</span><select value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)}><option value="">All posts</option><option value="relevant">Verified only</option><option value="none">Not yet checked</option></select></label></div>
+          <div className="field-block"><span>Basemap</span>
+            <div className="segmented" role="radiogroup" aria-label="Basemap">{(["dark", "streets", "terrain"] as const).map((v) => <button key={v} role="radio" aria-checked={basemap === v} className={basemap === v ? "on" : ""} onClick={() => setBasemap(v)}>{titleCase(v)}</button>)}</div></div>
           <div className="field-block"><span>Networks</span>
             {networks.length === 0 && <small className="muted">No networks yet. Import a directory on the Institutions page.</small>}
             {networks.map((n) => <label key={n.name || "none"} className="check-row"><input type="checkbox" checked={!hidden[n.name]} onChange={(e) => setHidden({ ...hidden, [n.name]: !e.target.checked })} />
@@ -99,12 +121,15 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
 
         <div className="map-main">
           <div className="map-stats" role="status">
-            {loading && <Spinner />}<strong>{visible.filter((r) => r.placed).length}</strong> on the map · <strong>{data?.unplaced ?? 0}</strong> not placed
+            {loading && <Spinner />}<strong>{visible.filter((r) => r.placed).length}</strong> on the map · <strong>{data?.unplaced ?? 0}</strong> not placed · <strong>{posts?.pins.length ?? 0}</strong> posts
             {overlap && <> · <strong>{near}</strong> subject institutions have a reference institution within {nearKm} km</>}
           </div>
-          {view === "map" ? <NetworkMap rows={visible} networks={networks} mode={mode} lines={lines} selectedId={selected} onSelect={setSelected} dark={dark} />
+          {view === "map" ? <NetworkMap rows={visible} networks={networks} mode={mode} lines={lines} selectedId={selected} onSelect={(id) => { setSelectedPost(""); setSelected(id); }} basemap={basemap}
+            posts={posts} layers={layers} selectedPost={selectedPost} onSelectPost={(id) => { setSelected(""); setSelectedPost(id); }} />
             : <div className="project-table" role="table" aria-label="Institutions on the map">
                 <div className="project-table-head" role="row"><span role="columnheader">Institution</span><span role="columnheader">Status</span><span role="columnheader">Where</span><span role="columnheader">Support</span></div>
+                {layers.posts && (posts?.pins || []).map((p) => <button key={p.item_id} className="project-row" role="row" onClick={() => { setSelected(""); setSelectedPost(p.item_id); }}><span role="cell"><strong dir="auto">{p.author || "Unknown author"}</strong> <small className="muted">{p.platform} · post</small></span>
+                  <span role="cell">{p.verified ? "Verified" : "Not verified"}</span><span role="cell">{p.origin ? p.origin.label : p.inferred_location ? `About ${p.inferred_location.name}` : "—"}</span><span role="cell"><small dir="auto">{p.original_text.slice(0, 80)}</small></span></button>)}
                 {visible.map((r) => <button key={r.entity_id} className="project-row" role="row" onClick={() => setSelected(r.entity_id)}><span role="cell"><strong dir="auto">{r.name}</strong> <small className="muted">{r.network}</small></span>
                   <span role="cell">{titleCase(r.status)}</span><span role="cell">{[r.city, r.country].filter(Boolean).join(", ") || "—"}{r.placed ? "" : " · not placed"}</span><span role="cell"><ConfidencePill confidence={r.confidence} /></span></button>)}
               </div>}
@@ -114,7 +139,21 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             <p className="footnote">{overlap.method}</p></details>}
         </div>
 
-        {picked && (
+        {pickedPost && (
+          <aside className="map-detail post-detail" aria-label="Selected post">
+            <button className="inspector-close" onClick={() => setSelectedPost("")} aria-label="Close">×</button>
+            <h3 dir="auto">{pickedPost.author || "Unknown author"}</h3>
+            <p className="muted">{pickedPost.platform} · {pickedPost.published_at ? formatTime(pickedPost.published_at) : "date unknown"}</p>
+            <div className="pill-row">{pickedPost.verified ? <Pill tone="ok">Verified by {pickedPost.verified_by || "a reviewer"}</Pill> : <Pill tone="warn">Not verified</Pill>}
+              {pickedPost.inferred_location && <Pill tone="info" title={pickedPost.inferred_location.method}>Inferred: {pickedPost.inferred_location.name} · {Math.round(pickedPost.inferred_location.confidence * 100)}%</Pill>}</div>
+            <div><strong>Original{pickedPost.language ? ` (${pickedPost.language})` : ""}</strong><p dir="auto" className="post-text">{pickedPost.original_text}</p></div>
+            {pickedPost.translated_text && <div><strong>Translation</strong><p className="post-text">{pickedPost.translated_text}</p></div>}
+            <p><strong>Posted from</strong> {pickedPost.origin ? `${pickedPost.origin.label} (${pickedPost.origin.kind})` : "Not known. The pin sits at a place the text names."}</p>
+            {pickedPost.targets.length > 0 && <p><strong>About</strong> {pickedPost.targets.map((t) => t.name).join(", ")} <small className="muted">named in the text; country-level</small></p>}
+            <div className="pill-row"><button className={`button ${pickedPost.verified ? "button-secondary" : "button-primary"} button-small`} onClick={() => void setVerified(pickedPost.item_id, !pickedPost.verified)}>{pickedPost.verified ? "✓ Verified. Undo" : "✓ Mark verified"}</button>
+              {pickedPost.url && <a className="button button-quiet button-small" href={pickedPost.url} target="_blank" rel="noreferrer noopener">Open post</a>}</div>
+          </aside>)}
+        {picked && !pickedPost && (
           <aside className="map-detail" aria-label="Selected institution">
             <button className="inspector-close" onClick={() => setSelected("")} aria-label="Close">×</button>
             <h3 dir="auto">{picked.name}</h3>
