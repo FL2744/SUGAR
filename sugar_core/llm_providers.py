@@ -347,6 +347,38 @@ def _error_code(response: requests.Response) -> str:
     return ""
 
 
+class LLMBudget:
+    """Soft cap on optional model calls for one run.
+
+    The cap is a brake on spend, never a failure: once spent, callers skip the *optional* AI step and keep
+    going (items stay untranslated and are flagged; collection and deterministic processing are unaffected).
+    Work already started is allowed to finish, so a cap can overshoot by the calls of the items in flight.
+    ``limit`` of 0 means unlimited. Thread-safe.
+    """
+
+    def __init__(self, limit: int = 0) -> None:
+        self.limit = max(0, int(limit or 0))
+        self.used = 0
+        self._lock = threading.Lock()
+
+    def take(self, calls: int = 1) -> bool:
+        """Reserve ``calls``; False if the budget was already spent (nothing is reserved then)."""
+        with self._lock:
+            if self.limit and self.used >= self.limit:
+                return False
+            self.used += max(1, calls)
+            return True
+
+    @property
+    def exhausted(self) -> bool:
+        with self._lock:
+            return bool(self.limit) and self.used >= self.limit
+
+    def snapshot(self) -> dict[str, int | bool]:
+        with self._lock:
+            return {"limit": self.limit, "used": self.used, "exhausted": bool(self.limit) and self.used >= self.limit}
+
+
 class LLMProvider:
     """Common interface. Subclasses implement wire format only."""
 

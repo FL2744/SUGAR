@@ -345,3 +345,17 @@ def test_manual_structured_entry_path(tmp_path):
     assert out["plan"]["source_scope"] == "selected" and out["summary"][2]["value"] == "bluesky"
     bad = wb.manual_plan({"topic": ""})
     assert bad["plan"] is None and bad["issues"]
+
+
+def test_explicit_provider_choice_is_honoured_and_never_silently_switched(tmp_path):
+    wb, proj = bench(tmp_path), project(tmp_path)
+    wb.providers.upsert(ProviderProfile(id="openai-1", name="OpenAI", type="openai", model="gpt-x"), secret="sk-test-openai-123456", make_default=True)
+    wb.providers.upsert(ProviderProfile(id="arc-1", name="Virginia Tech ARC", type="arc", model="m"))   # ARC without a key
+    # no AI: built-in only, and the run is told not to use the default provider either
+    out = wb.interpret("Search democracy in the Middle East", mode="auto", provider_id="none", project=proj, today=TODAY)
+    assert out["method"] == "deterministic" and out["plan"]["provider"]["profile_id"] == "none"
+    assert wb.resolve_provider(project=proj, profile_id="none") is None
+    # ARC chosen but unusable: warn and use the built-in interpreter; do NOT fall back to the OpenAI default
+    out = wb.interpret("Search democracy in the Middle East", mode="auto", provider_id="arc-1", project=proj, today=TODAY)
+    assert out["method"] == "deterministic" and out["plan"]["provider"]["profile_id"] == "arc-1"
+    assert any(i["field"] == "provider" and "Virginia Tech ARC" in i["message"] for i in out["issues"])

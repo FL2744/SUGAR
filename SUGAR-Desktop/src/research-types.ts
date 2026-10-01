@@ -10,7 +10,7 @@ export type PlanSpec = {
   languages: string[]; source_scope: "all_enabled" | "selected"; source_categories: string[];
   platforms: string[]; exclude_platforms: string[]; search_terms: string[]; queries: QuerySpec[];
   exclusions: string[]; collection_mode: string; depth: "quick" | "standard" | "deep";
-  limits: { query_count: number; max_posts_per_query: number; max_pages_per_query: number; max_items_total: number; per_source: Record<string, Record<string, number>> };
+  limits: { query_count: number; max_posts_per_query: number; max_pages_per_query: number; max_items_total: number; llm_calls: number; per_source: Record<string, Record<string, number>> };
   translation: { policy: "auto" | "always" | "never"; target_language: string; translate_queries: boolean; max_chars_per_item: number; workers: number };
   dedup: { enabled: boolean; threshold: number };
   analysis_goals: string[];

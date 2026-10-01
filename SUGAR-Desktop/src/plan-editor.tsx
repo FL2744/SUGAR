@@ -123,6 +123,7 @@ export function PlanEditor({ plan, platforms, providers, advanced, saving, error
                 <NumberField label="Posts per query" value={draft.limits.max_posts_per_query} min={1} max={500} onChange={(v) => patch({ limits: { ...draft.limits, max_posts_per_query: v } })} />
                 <NumberField label="Pages per query" value={draft.limits.max_pages_per_query} min={1} max={20} onChange={(v) => patch({ limits: { ...draft.limits, max_pages_per_query: v } })} />
                 <NumberField label="Total item limit" value={draft.limits.max_items_total} min={1} max={100000} onChange={(v) => patch({ limits: { ...draft.limits, max_items_total: v } })} />
+                <NumberField label="Model-call budget per run (0 = unlimited)" value={draft.limits.llm_calls} min={0} max={1000000} onChange={(v) => patch({ limits: { ...draft.limits, llm_calls: v } })} />
               </div>
               <ChipInput label="Search terms and phrases" values={draft.search_terms} onChange={(search_terms) => patch({ search_terms })} placeholder="Extra terms or synonyms" />
               <ChipInput label="Actors and entities" values={draft.actors} onChange={(actors) => patch({ actors })} placeholder="Organizations or people in scope" />

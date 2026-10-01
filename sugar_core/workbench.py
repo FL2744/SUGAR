@@ -48,6 +48,9 @@ class RunConflict(Exception):
     pass
 
 
+NO_PROVIDER = "none"   # provider choice meaning "built-in only, no model calls"
+
+
 class WorkbenchError(Exception):
     def __init__(self, message: str, status: int = 400) -> None:
         super().__init__(message)
@@ -103,6 +106,8 @@ class ResearchWorkbench:
                          profile_id: str = "", observer: Callable[[dict[str, Any]], None] | None = None) -> LLMProvider | None:
         wanted = profile_id or (plan.provider.get("profile_id") if plan else "") or \
             ((project.meta().get("settings") or {}).get("provider_profile_id", "") if project else "") or self.providers.default_id()
+        if wanted == NO_PROVIDER:             # an explicit "no AI" choice never falls back to a default
+            return None
         profile = self.providers.get(wanted) if wanted else None
         if profile is None:
             return None
@@ -128,14 +133,27 @@ class ResearchWorkbench:
     # ------------------------------------------------------------------ interpretation and plans
     def interpret(self, text: str, *, mode: str = "auto", provider_id: str = "", project: ResearchProject | None = None,
                   today: date | None = None, base_plan: ResearchPlanSpec | None = None) -> dict[str, Any]:
-        provider = None if mode == "deterministic" else self.resolve_provider(project=project, profile_id=provider_id)
+        no_ai = provider_id == NO_PROVIDER
+        provider = None if mode == "deterministic" or no_ai else self.resolve_provider(project=project, profile_id=provider_id)
         result = interpret_request(text, provider=provider, mode=mode, today=today, available_platforms=self.available_platforms(),
                                    base_plan=base_plan)
         payload = result.as_dict()
         payload["provider_configured"] = provider is not None
-        if result.plan is not None and provider is not None:
-            result.plan.provider["profile_id"] = provider.profile.id
+        if result.plan is not None:
+            if provider is not None:
+                result.plan.provider["profile_id"] = provider.profile.id
+            elif provider_id:
+                result.plan.provider["profile_id"] = provider_id   # keep the choice so the run honours it
+                if no_ai:
+                    result.plan.provider["use_for_planning"] = False
             payload["plan"] = result.plan.to_dict()
+        if provider_id and not no_ai and mode != "deterministic" and provider is None:
+            chosen = self.providers.get(provider_id)
+            label = chosen.name if chosen else "The selected provider"
+            payload.setdefault("issues", []).append({
+                "field": "provider", "severity": "warning", "repaired": False,
+                "message": f"{label} could not be used (missing key or not found), so the built-in interpreter was used. "
+                           "SUGAR does not switch to another provider on its own."})
         return payload
 
     def manual_plan(self, fields: dict[str, Any]) -> dict[str, Any]:

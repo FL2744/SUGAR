@@ -22,7 +22,7 @@ from typing import Any, Callable
 from . import gazetteer as gz
 from . import redaction
 from .collector_registry import COLLECTORS, CollectorCapabilities, CollectorRequest, CollectorSpec
-from .llm_providers import LLMProvider, ProviderError, call_with_retries
+from .llm_providers import LLMBudget, LLMProvider, ProviderError, call_with_retries
 from .provider_pacing import SHARED_REQUEST_PACER, SharedRequestPacer
 from .query_planner import adapt_for_platform, dispatch_text
 from .research_events import EventLog, STAGES
@@ -194,6 +194,8 @@ class ResearchPipeline:
         self._search_pool: ThreadPoolExecutor | None = None
         self._translate_pool: ThreadPoolExecutor | None = None
         self._translation_blocked = ""
+        self.budget = LLMBudget(plan.limits.get("llm_calls", 0))
+        self._budget_skipped = 0
         self._translation_skipped_notice = False
         self._needs_translation = 0
         self._limit_notice = False
@@ -829,6 +831,17 @@ class ResearchPipeline:
             self.events.emit("translation.skipped", source=item.platform, item_id=item.item_id, severity="warning", message=blocked)
             self._translation_done()
             return
+        if not self.budget.take(len(item.paragraphs[:6]) or 1):
+            with self._lock:
+                first = self._budget_skipped == 0
+                self._budget_skipped += 1
+            item.translation = {"status": "skipped", "reason": "budget"}
+            if first:
+                self.events.emit("translation.skipped", source=item.platform, item_id=item.item_id, severity="warning", reason="budget",
+                                 message=f"The model-call budget for this run ({self.budget.limit}) was reached, so remaining items are kept untranslated. "
+                                         "Collection continues. Raise the limit in Advanced → Limits and choose Reprocess to translate them.")
+            self._translation_done()
+            return
         source_name = gz.LANGUAGE_NAMES.get(item.language, item.language)
         self.events.emit("translation.started", source=item.platform, item_id=item.item_id, source_language=item.language,
                          target_language=target, chars=len(item.original_text), message=f"Translating from {source_name}")
@@ -954,6 +967,8 @@ class ResearchPipeline:
             parts.append(f"{self.counts['translation_failed']} translation(s) failed.")
         if self._needs_translation and self.provider is None:
             parts.append(f"{self._needs_translation} item(s) were not translated because no LLM provider is configured.")
+        if self._budget_skipped:
+            parts.append(f"{self._budget_skipped} item(s) were not translated because the model-call budget ({self.budget.limit}) was reached.")
         if self._limit_notice:
             parts.append("An item limit stopped collection early.")
         complete = not parts
@@ -989,7 +1004,7 @@ class ResearchPipeline:
         except OSError as exc:
             self._record_error(stage="results", subsystem="storage", classification="fatal", message=f"Could not save results: {exc}", exc=exc)
         timings = self.timings.snapshot()
-        self.run.metrics = {"duration_ms": duration, "timings": timings, "events": self.events.last_seq}
+        self.run.metrics = {"duration_ms": duration, "timings": timings, "events": self.events.last_seq, "llm_budget": self.budget.snapshot()}
         self.events.emit("timing.recorded", debug=True, message="Timing summary", **timings)
         if cancelled:
             self.events.emit("run.cancelled", stage="results", message="Run cancelled. Partial results were kept.")

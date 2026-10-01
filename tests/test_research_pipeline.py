@@ -535,3 +535,31 @@ def test_anonymous_access_gates_are_not_blamed_on_missing_credentials(tmp_path):
     p = run_pipeline(project, make_plan("democracy on bilibili"), {"bilibili": gate})
     msg = next(e.message for e in p.events.since(0) if e.type == "source.failed")
     assert "access gate" in msg and "not a SUGAR setting" in msg and "Settings → Platform credentials" not in msg
+
+
+def test_model_call_budget_pauses_translation_but_never_fails_the_run(tmp_path):
+    project = make_project(tmp_path)
+    plan = make_plan(limits={"llm_calls": 1})
+    arabic = ["الديمقراطية تحتاج إلى مؤسسات قوية", "الانتخابات النزيهة أساس الحكم الرشيد", "حرية الصحافة ضرورية للمجتمع", "المجتمع المدني يحمي الحقوق"]
+
+    def bsky(request):
+        return [rec("bluesky", f"ar-{i}", text) for i, text in enumerate(arabic)]
+
+    translator = FakeTranslator()
+    p = run_pipeline(project, plan, {"bluesky": spec("bluesky", bsky)}, provider=translator)
+    run = project.get_run(p.run.run_id)
+    assert run.status in {"completed", "completed_with_warnings"}          # a spent budget is not a failure
+    assert run.counts["collected"] >= 4                                       # collection is untouched
+    assert len(translator.calls) < 4                                          # translation stopped, in-flight work may finish
+    assert run.metrics["llm_budget"]["limit"] == 1 and run.metrics["llm_budget"]["exhausted"]
+    skipped = [e for e in p.events.snapshot() if e["type"] == "translation.skipped" and e["data"].get("reason") == "budget"]
+    assert len(skipped) == 1                                                  # one clear notice, not one per item
+    assert any("model-call budget" in note for note in run.completeness["notes"])
+
+
+def test_budget_zero_means_unlimited_and_default_is_generous(tmp_path):
+    from sugar_core.llm_providers import LLMBudget
+    from sugar_core.research_plan import DEFAULT_LLM_CALLS
+    assert all(LLMBudget(0).take() for _ in range(1000)) and DEFAULT_LLM_CALLS >= 200
+    assert make_plan().limits["llm_calls"] == DEFAULT_LLM_CALLS
+    assert make_plan(limits={"llm_calls": 0}).limits["llm_calls"] == 0

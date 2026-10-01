@@ -33,6 +33,33 @@ const OPERATIONS = [
   { id: "rerun", label: "Rerun", detail: "Execute the previous plan again exactly as it was recorded, including edits." },
 ] as const;
 
+function providerState(p: ProviderProfileRow): { mark: string; text: string } {
+  if (!p.has_credential && p.type !== "local") return { mark: "⚠", text: "key missing" };
+  if (p.status.state === "ok") return { mark: "✓", text: "connected" };
+  if (p.status.state === "failed") return { mark: "✕", text: "last test failed" };
+  return { mark: "•", text: "not tested" };
+}
+
+/** One explicit place to pick which AI SUGAR uses (e.g. OpenAI or Virginia Tech ARC), or none at all. */
+function ProviderChooser({ providers, types, value, onChange, onOpenSettings }: {
+  providers: ProviderProfileRow[]; types: Record<string, string>; value: string; onChange: (id: string) => void; onOpenSettings: () => void;
+}) {
+  const current = providers.find((p) => p.id === value);
+  const state = current ? providerState(current) : null;
+  return (
+    <div className="provider-chooser">
+      <label className="field-block"><span>AI model</span>
+        <select value={value} onChange={(event) => onChange(event.target.value)} aria-label="AI model for interpretation and translation">
+          {providers.map((p) => { const st = providerState(p); return <option key={p.id} value={p.id}>{p.name} · {types[p.type] || p.type} · {p.effective_model || "no model"} ({st.text})</option>; })}
+          <option value="none">No AI — built-in only</option>
+        </select></label>
+      {value === "none"
+        ? <small className="muted">Built-in interpreter only. Non-English posts will not be translated.</small>
+        : state && state.mark !== "✓" ? <small className="warn-text">{state.mark} {current?.name}: {state.text}. <button type="button" className="text-button" onClick={onOpenSettings}>Open Settings</button></small> : null}
+    </div>
+  );
+}
+
 export function PlanPreview({ summary, interpretation, plan, onRun, onEdit, onAdvanced, running, canRun, onOpenSettings, advanced }: {
   summary: SummaryRow[]; interpretation: Interpretation | null; plan: PlanSpec; onRun: () => void; onEdit: () => void; onAdvanced: () => void;
   running: boolean; canRun: boolean; onOpenSettings: () => void; advanced: boolean;
@@ -129,13 +156,27 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
   const [saveError, setSaveError] = useState("");
   const [platforms, setPlatforms] = useState<PlatformRow[]>([]);
   const [providers, setProviders] = useState<ProviderProfileRow[]>([]);
+  const [providerTypes, setProviderTypes] = useState<Record<string, string>>({});
+  const [defaultProvider, setDefaultProvider] = useState("");
+  const [providerChoice, setProviderChoice] = useState(() => { try { return localStorage.getItem("sugar.providerChoice") || ""; } catch { return ""; } });
   const [proposal, setProposal] = useState<{ kind: string; interp: Interpretation } | null>(null);
   const advanced = prefs.mode === "advanced";
 
   useEffect(() => {
     void research.platforms().then(setPlatforms).catch(() => undefined);
-    void research.providers().then((r) => setProviders(r.profiles)).catch(() => undefined);
+    void research.providers().then((r) => {
+      setProviders(r.profiles); setDefaultProvider(r.default_profile_id);
+      setProviderTypes(Object.fromEntries(r.types.map((t) => [t.id, t.label])));
+    }).catch(() => undefined);
   }, []);
+  // The model SUGAR will use: the saved choice if it still exists, otherwise the default provider, otherwise no AI.
+  const chosenProvider = providerChoice === "none" ? "none"
+    : providers.some((p) => p.id === providerChoice) ? providerChoice : (defaultProvider || (providers[0]?.id ?? "none"));
+  const chooseProvider = (id: string) => {
+    setProviderChoice(id);
+    try { localStorage.setItem("sugar.providerChoice", id); } catch { /* storage may be unavailable */ }
+    setPlan((current) => current ? { ...current, provider: { ...current.provider, profile_id: id, use_for_planning: id !== "none" } } : current);
+  };
   useEffect(() => {
     if (overview && !plan && !interpretation) {
       setText(overview.requirement_text || "");
@@ -150,14 +191,14 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
     if (!text.trim()) return;
     setBusy("interpret"); setSaveError(""); setProposal(null);
     try {
-      const result = await research.interpret(text.trim(), prefs.interpreter, projectId);
+      const result = await research.interpret(text.trim(), prefs.interpreter, projectId, chosenProvider);
       setInterpretation(result);
       setPlan(result.plan);
       setSummary(result.summary);
     } catch (issue) {
       onError(issue instanceof Error ? issue.message : String(issue));
     } finally { setBusy(""); }
-  }, [text, prefs.interpreter, projectId, onError]);
+  }, [text, prefs.interpreter, projectId, chosenProvider, onError]);
 
   const submitManual = async (fields: Record<string, unknown>) => {
     setBusy("manual");
@@ -244,6 +285,7 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
         </label>
         <div className="request-actions">
           <div className="example-row"><span className="muted">Try:</span>{EXAMPLES.map((example) => <button type="button" key={example} className="example-chip" onClick={() => setText(example)}>{example.replace(/\.$/, "")}</button>)}</div>
+          <ProviderChooser providers={providers} types={providerTypes} value={chosenProvider} onChange={chooseProvider} onOpenSettings={onOpenSettings} />
           <button className="button button-primary" type="submit" disabled={!text.trim() || busy === "interpret"}>{busy === "interpret" ? <><Spinner /> Interpreting…</> : <>Interpret request</>}</button>
         </div>
         {noProvider && <p className="footnote">No LLM provider is set up, so SUGAR uses its built-in interpreter. <button type="button" className="text-button" onClick={onOpenSettings}>Add a provider</button> for smarter interpretation and translation.</p>}
