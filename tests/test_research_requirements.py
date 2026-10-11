@@ -139,3 +139,22 @@ def test_branch_edit_rejects_duplicate_query():
 def test_requirement_rejects_reversed_dates():
     with pytest.raises(ValueError, match="cannot be after"):
         ResearchTimeframe("2026-09-17", "2026-01-01")
+
+
+@pytest.mark.parametrize('quotes', [('“', '”'), ('"', '"'), ("'", "'")])
+def test_literal_keyword_excludes_execution_instructions(quotes):
+    left, right = quotes
+    requirement = ResearchRequirement(
+        question=f'Search for the term {left}democracy{right} from posts originating in the Middle East on X. Use the X Bearer token in the settings. Use OpenAI for inference.',
+        geographies=['Middle East'],
+    )
+    assert requirement.preferred_sources == ['x']
+    assert [branch.query for branch in build_initial_search_plan(requirement).branches] == ['democracy']
+
+
+def test_explicit_sources_override_question_and_quotes_do_not_imply_search():
+    from sugar_core.research_requirements import explicit_search_terms
+    requirement = ResearchRequirement(question='Search for "public policy" on X', preferred_sources=['bluesky'])
+    assert requirement.preferred_sources == ['bluesky']
+    assert [b.query for b in build_initial_search_plan(requirement).branches] == ['"public policy"']
+    assert explicit_search_terms('How do people understand "democracy"?') == []

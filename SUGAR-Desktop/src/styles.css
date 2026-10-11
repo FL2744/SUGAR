@@ -601,3 +601,17 @@ html[data-theme="dark"] .strategy-review-card li, html[data-theme="dark"] .geogr
 .evidence-map-result { display: flex; flex-wrap: wrap; align-items: center; gap: 0.625rem; margin: 0.75rem 0; padding: 0.75rem; border: 1px solid #dce8e1; border-radius: 0.5rem; background: #f7fbf8; color: #385d4a; }
 .evidence-map-result span { min-width: 0; flex: 1 1 16.25rem; overflow-wrap: anywhere; }
 :root[data-theme="dark"] .evidence-map-result { border-color: #375345; background: #1c3026; color: #d2e9d9; }
+
+.source-picker { margin: 0; border: 1px solid var(--border, #dce1e7); border-radius: 10px; padding: 12px; min-width: 0; }
+.source-picker legend { padding: 0 5px; font-weight: 600; }
+.source-picker .check-field { margin: 5px 0; }
+:root[data-theme="dark"] .button-secondary { transition: none; }
+:root[data-theme="dark"] .button-secondary:hover:not(:disabled) { background: #304158; color: #e2eaf3; }
+
+/* Keep result actions inside the panel at narrow desktop widths and larger text sizes. */
+.evidence-review-row { flex-direction: column; align-items: stretch; min-width: 0; }
+.evidence-review-row > .evidence-actions { flex: 1 1 auto; flex-wrap: wrap; align-items: flex-end; min-width: 0; width: 100%; }
+.evidence-review-row .evidence-actions > .field-block { flex: 0 1 10rem; min-width: 0; max-width: 100%; margin: 0; }
+.evidence-review-row .evidence-actions > .button { max-width: 100%; min-height: 2.25rem; padding: 0.5rem 0.625rem; white-space: normal; overflow-wrap: anywhere; }
+.evidence-import-row { flex-wrap: wrap; }
+.evidence-import-row > .evidence-actions { flex-wrap: wrap; }

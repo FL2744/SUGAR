@@ -9,7 +9,7 @@ use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 const OPERATIONS: &[&str] = &[
     "workspace-init", "workspace-status", "workspace-register", "workspace-hub",
     "research-requirement", "research-compile", "research-plan", "research-plan-review",
-    "research-collect", "research-handoff", "research-handoff-verify", "search", "ingest",
+    "research-collect", "research-collect-control", "research-handoff", "research-handoff-verify", "search", "ingest",
     "harvest", "map", "analysis", "overlap", "diagnostics", "llm-check",
     "research-strategy-review", "research-strategy-update", "research-plan-update",
     "research-import", "research-prepare-review", "research-triage", "research-feedback",

@@ -32,7 +32,7 @@ try {
     $BridgeName = "sugar-bridge-$RustTarget"
     & $PythonExe -m PyInstaller --noconfirm --clean --console --onefile --name $BridgeName `
         --distpath $BinaryDir --workpath (Join-Path $DesktopDir "build\bridge") `
-        --specpath (Join-Path $DesktopDir "build") --paths $RepoRoot --collect-all keyring (Join-Path $RepoRoot "sugar_bridge.py")
+        --specpath (Join-Path $DesktopDir "build") --paths $RepoRoot --collect-data sugar_core --collect-all keyring (Join-Path $RepoRoot "sugar_bridge.py")
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller sidecar build failed with exit code $LASTEXITCODE" }
     $env:PATH = $OriginalPath
     Push-Location $DesktopDir

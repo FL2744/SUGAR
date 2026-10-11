@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .map_display import configure_map_display, add_offline_basemap, save_offline_map
+
 import html
 import json
 from collections import Counter, defaultdict
@@ -267,20 +269,8 @@ def create_state_map(
         center = [20.0, 0.0]
     zoom_start = 10 if len(coordinates) == 1 else 2
     map_obj = folium.Map(location=center, zoom_start=zoom_start, control_scale=True, tiles=None)
-    folium.FeatureGroup(
-        name="Offline analytic canvas",
-        overlay=False,
-        control=True,
-        show=True,
-    ).add_to(map_obj)
-    folium.TileLayer(
-        tiles="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-        attr="&copy; OpenStreetMap contributors",
-        name="OpenStreetMap (online)",
-        control=True,
-        show=False,
-        max_zoom=19,
-    ).add_to(map_obj)
+    configure_map_display(map_obj)
+    add_offline_basemap(map_obj)
 
     groups: dict[str, folium.FeatureGroup] = {}
     clusters: dict[str, MarkerCluster] = {}
@@ -433,7 +423,7 @@ def create_state_map(
     map_obj.get_root().html.add_child(folium.Element(legend))
     folium.LayerControl(collapsed=False).add_to(map_obj)
 
-    map_obj.save(str(target))
+    save_offline_map(map_obj, target)
     metadata = target.with_suffix(target.suffix + ".metadata.json")
     metadata.write_text(
         json.dumps(

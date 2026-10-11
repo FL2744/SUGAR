@@ -90,3 +90,6 @@ source = ["sugar_core"]
 [tool.coverage.report]
 show_missing = true
 fail_under = 70
+
+[tool.setuptools.package-data]
+sugar_core = ["map_assets/*"]

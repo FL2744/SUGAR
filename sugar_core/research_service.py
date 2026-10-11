@@ -248,14 +248,14 @@ def create_research_plan(
     if strategy_path is not None and strategy_path.is_file():
         strategy = load_research_strategy(strategy_path)
         if strategy.requirement_id != requirement.requirement_id:
-            raise ValueError(
-                "The compiled research strategy belongs to a different research requirement. Recompile the current question."
-            )
-        if not strategy.approved:
-            raise ValueError(
-                "Review and approve the compiled research strategy before building a search plan."
-            )
-        plan = build_search_plan_from_strategy(requirement, strategy)
+            _notify(progress, "strategy-outdated", message="The saved interpretation belongs to an earlier question; building a fresh initial plan.")
+            plan = build_initial_search_plan(requirement)
+        else:
+            if not strategy.approved:
+                raise ValueError(
+                    "Review and approve the compiled research strategy before building a search plan."
+                )
+            plan = build_search_plan_from_strategy(requirement, strategy)
     else:
         plan = build_initial_search_plan(requirement)
     _notify(progress, "plan-created", branches=len(plan.branches), requirement_id=requirement.requirement_id)
@@ -719,6 +719,7 @@ def collect_research_plan(
                 "until": str(config.get("until") or requirement.timeframe.end or ""),
                 "post_languages": _values(config.get("post_languages")) or requirement.languages,
                 "excluded_topics": _values(config.get("excluded_topics")) or requirement.excluded_topics,
+                "llm": config.get("llm") or {},
                 "translate_posts": bool(config.get("translate_posts", False)),
                 "infer_locations": bool(config.get("infer_locations", False)),
                 "include_retweets": bool(config.get("include_retweets", False)),
