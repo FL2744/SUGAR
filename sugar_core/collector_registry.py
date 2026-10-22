@@ -146,11 +146,12 @@ def _collect_openalex(request: CollectorRequest) -> list[PostRecord]:
 
 
 def _collect_rss(request: CollectorRequest) -> list[PostRecord]:
-    return collect_rss(feeds=request.config.get("rss_feeds") or [], **_common(request))
+    return collect_rss(feeds=request.config.get("rss_feeds") or [], cache=request.config.get("_rss_cache"), **_common(request))
 
 
 def _collect_web_pages(request: CollectorRequest) -> list[PostRecord]:
-    return collect_web(seeds=request.config.get("web_seeds") or [], **_common(request))
+    return collect_web(seeds=request.config.get("web_seeds") or [], state=request.config.get("_web_state"), on_event=request.config.get("_web_observer"), checkpoint=request.config.get("_web_checkpoint"),
+                       **_common(request))
 
 
 def _set_thread_root(record: PostRecord, conversation_id: str | None = None) -> PostRecord:
@@ -295,7 +296,7 @@ COLLECTORS: dict[str, CollectorSpec] = {
     "web": CollectorSpec(
         name="web", search=_collect_web_pages, enabled_by="web_seeds",
         capabilities=CollectorCapabilities(keyword_search=True, anonymous_search=True),
-        description="Public web pages on sites you name, plus their news and event pages. Respects robots.txt; public addresses only.",
+        description="Adaptive public website research: ranks links, follows promising evidence, reuses pages across queries and stops at relevance/page budgets. No model calls; robots.txt respected.",
     ),
     "wikipedia": CollectorSpec(
         name="wikipedia", search=_collect_wikipedia,

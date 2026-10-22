@@ -443,9 +443,23 @@ def _research_routes(method, rest, query, body, wb, project):
     if rest == "map/posts" and method == "GET":
         from .post_map import post_pins
         run_id = str(query.get("run_id") or "")
-        runs = [r["run_id"] for r in wb.list_runs(project) if r.get("status") in {"completed", "completed_with_warnings"}] if not run_id else [run_id]
-        items = [i for rid in runs[:5] for i in wb.items(project, rid)]
-        return 200, post_pins(project, items, platform=str(query.get("platform") or ""), language=str(query.get("language") or ""), verdict=str(query.get("verdict") or ""), days=_int(str(query.get("days") or "0"), 0, 0, 3650))
+        runs = [r["run_id"] for r in wb.list_runs(project)] if not run_id else [run_id]
+        items = [i for rid in runs for i in wb.items(project, rid)]
+        try:
+            mapped = post_pins(project, items, platform=str(query.get("platform") or ""), language=str(query.get("language") or ""), verdict=str(query.get("verdict") or ""),
+                               days=_int(str(query.get("days") or "0"), 0, 0, 3650), since=str(query.get("since") or ""), until=str(query.get("until") or ""), order=str(query.get("sort") or "newest"))
+        except ValueError as exc:
+            raise WorkbenchError(str(exc)) from exc
+        return 200, {**mapped, "runs_scanned": len(runs)}
+    if rest == "map/export" and method == "POST":
+        from .analysis_export import export_map
+        items = [i for run in wb.list_runs(project) for i in wb.items(project, run["run_id"])]
+        filters = {k: str(body.get(k) or "") for k in ("since", "until", "platform", "language", "verdict", "target")}
+        filters["days"] = _int(body.get("days"), 0, 0, 3650)
+        try:
+            return 200, export_map(project, items, filters=filters)
+        except ValueError as exc:
+            raise WorkbenchError(str(exc)) from exc
     if rest == "review" and method == "GET":
         item_id = str(query.get("item_id") or "")
         return 200, ({"item_id": item_id, "review": project.review.state(item_id)} if item_id else {"summary": project.review.summary()})
@@ -486,7 +500,7 @@ def _run_routes(method, rest, query, body, wb, project):
         return 200, wb.results(project, run_id, group_by=query.get("group_by", "none"), text=query.get("q", ""), platform=query.get("platform", ""),
                                language=query.get("language", ""), status=query.get("status", "accepted"), geography=query.get("geography", ""),
                                translated=query.get("translated", ""), verdict=query.get("verdict", ""), tag=query.get("tag", ""), relevance=query.get("relevance", ""), new_only=_bool(query.get("new_only")), limit=_int(query.get("limit"), 200, 1, 1000),
-                               offset=_int(query.get("offset"), 0))
+                               offset=_int(query.get("offset"), 0), sort=query.get("sort", "newest"))
     match = re.fullmatch(r"items/(it_[A-Za-z0-9]+)", sub)
     if match and method == "GET":
         return 200, {"item": wb.item_detail(project, run_id, match.group(1))}

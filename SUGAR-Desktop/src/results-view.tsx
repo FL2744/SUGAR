@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { downloadWorkspaceFile } from "./bridge";
 import { research } from "./research-api";
@@ -75,19 +75,26 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
   const [exportInfo, setExportInfo] = useState<{ archive: string; directory: string; files: string[] } | null>(null);
   const [busy, setBusy] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [sort, setSort] = useState("newest");
+  const [offset, setOffset] = useState(0);
+  const requestSeq = useRef(0);
+  const pageSize = 200;
   const advanced = prefs.mode === "advanced";
 
   const load = useCallback(async () => {
     if (!projectId || !runId) return;
+    const seq = ++requestSeq.current;
     setLoading(true);
     try {
       const [payload, summary] = await Promise.all([
-        research.results(projectId, runId, { group_by: group, q, platform, language, geography, status, translated, verdict: verdictFilter, tag: tagFilter, relevance: relFilter, new_only: newOnly, limit: 300 }),
+        research.results(projectId, runId, { group_by: group, q, platform, language, geography, status, translated, verdict: verdictFilter, tag: tagFilter, relevance: relFilter, new_only: newOnly, limit: pageSize, offset, sort }),
         research.run(projectId, runId),
       ]);
-      setData(payload); setRun(summary);
-    } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setLoading(false); }
-  }, [projectId, runId, group, q, platform, language, geography, status, translated, verdictFilter, tagFilter, relFilter, newOnly, onError]);
+      if (seq === requestSeq.current) { setData(payload); setRun(summary); }
+    } catch (issue) { if (seq === requestSeq.current) onError(issue instanceof Error ? issue.message : String(issue)); } finally { if (seq === requestSeq.current) setLoading(false); }
+  }, [projectId, runId, group, q, platform, language, geography, status, translated, verdictFilter, tagFilter, relFilter, newOnly, onError, offset, sort]);
+
+  useEffect(() => { setOffset(0); }, [projectId, runId, group, q, platform, language, geography, status, translated, verdictFilter, tagFilter, relFilter, newOnly, sort]);
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), q ? 250 : 0); return () => window.clearTimeout(timer); }, [load, q]);
   useEffect(() => { setExportInfo(null); }, [runId]);
@@ -177,13 +184,14 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
 
       {run?.completeness && !run.completeness.complete && <IncompleteNotice run={run} />}
       {run?.status === "cancelled" && <div className="notice notice-info">This run was cancelled; results collected before that are shown.</div>}
+      {Boolean(run?.metrics?.collection?.target) && <div className="notice notice-info" role="status">Bulk collection: <strong>{Number(run?.metrics?.collection?.unique_collected || 0).toLocaleString()}</strong> unique items collected against a target of {Number(run?.metrics?.collection?.target).toLocaleString()}. {run?.metrics?.collection?.target_reached ? "Target reached." : "The available sources returned fewer items than the target."} <span>Source coverage and sampling still need review.</span></div>}
 
       {exportInfo && (
         <div className="notice notice-ok export-box"><strong>Export ready.</strong> Stored in the project at <code>{exportInfo.directory}</code>{isTauri() && projectPath ? <> (<code>{projectPath}</code>)</> : null}
           <div className="export-files">
             {!isTauri() && <>
               <button className="button button-secondary button-small" onClick={() => void download(exportInfo.archive, `${runId}.zip`)}>Bundle (.zip)</button>
-              {["results.csv", "corpus.jsonl", "report.md", "run-manifest.json", "plan.json", "translations.jsonl", "activity-log.jsonl", "sources.csv"].filter((f) => exportInfo.files.includes(f)).map((f) => (
+              {["analysis.csv", "analysis.jsonl", "timeline.csv", "map.geojson", "data-dictionary.json", "README-analysis.md", "results.csv", "corpus.jsonl", "report.md", "run-manifest.json", "plan.json", "translations.jsonl", "activity-log.jsonl", "sources.csv"].filter((f) => exportInfo.files.includes(f)).map((f) => (
                 <button key={f} className="button button-quiet button-small" onClick={() => void download(`${exportInfo.directory}/${f}`, f)}>{f}</button>))}
             </>}
             {isTauri() && <CopyButton text={projectPath ? `${projectPath}/${exportInfo.directory}` : exportInfo.directory} label="Copy folder path" />}
@@ -192,6 +200,7 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
       <div className="toolbar results-toolbar">
         <div className="search-field"><span aria-hidden="true">⌕</span><input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Search text, author, or link" aria-label="Search results" /></div>
         <select value={group} onChange={(event) => setGroup(event.target.value as typeof group)} aria-label="Group by">{GROUPS.map(([id, label]) => <option key={id} value={id}>{id === "none" ? label : `Group by ${label.toLowerCase()}`}</option>)}</select>
+        <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Publication order"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select>
         <select value={platform} onChange={(event) => setPlatform(event.target.value)} aria-label="Platform"><option value="">All platforms</option>{facets?.platforms.map((f) => <option key={f.key} value={f.key}>{platformLabel(f.key)} ({f.count})</option>)}</select>
         <select value={language} onChange={(event) => setLanguage(event.target.value)} aria-label="Language"><option value="">All languages</option>{facets?.languages.map((f) => <option key={f.key} value={f.key}>{languageName(f.key)} ({f.count})</option>)}</select>
         {(advanced || (facets?.geographies.length || 0) > 1) && <select value={geography} onChange={(event) => setGeography(event.target.value)} aria-label="Geography"><option value="">Everywhere</option>{facets?.geographies.map((f) => <option key={f.key} value={f.key}>{f.key} ({f.count})</option>)}</select>}
@@ -213,6 +222,11 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
       {loading && !data && <div className="loading-block"><Spinner /> Loading results…</div>}
       {data && data.total === 0 && <EmptyState icon="∅" title="Nothing matches">{data.all_items === 0 ? "This run did not keep any items. Check the Activity view for warnings." : "Try clearing a filter."}</EmptyState>}
       {data && group === "none" && data.items.length > 0 && renderItems(data.items)}
+      {data && group === "none" && data.total > 0 && <nav className="results-pagination" aria-label="Results pages">
+        <button className="button button-secondary button-small" disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}>Previous</button>
+        <span role="status">{(offset + 1).toLocaleString()}–{Math.min(offset + data.items.length, data.total).toLocaleString()} of {data.total.toLocaleString()}</span>
+        <button className="button button-secondary button-small" disabled={loading || offset + pageSize >= data.total} onClick={() => setOffset(offset + pageSize)}>Next</button>
+      </nav>}
       {data && group !== "none" && data.groups.map((g) => (
         <section className="result-group" key={g.key}>
           <button className="group-head" aria-expanded={!collapsed[g.key]} onClick={() => setCollapsed({ ...collapsed, [g.key]: !collapsed[g.key] })}>

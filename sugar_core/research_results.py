@@ -5,6 +5,7 @@ from collections import Counter
 from typing import Any
 
 from .research_items import ResearchItem
+from .temporal import publication_key
 
 GROUPINGS = ("none", "platform", "language", "geography", "query", "status", "author")
 
@@ -44,15 +45,17 @@ def item_row(item: ResearchItem, *, detail: bool = False) -> dict[str, Any]:
         row.update({"project_id": item.project_id, "native_id": item.native_id, "query_dispatched": item.query_dispatched,
                     "transformations": item.transformations, "evidence_chain": item.evidence_chain, "paragraphs": item.paragraphs,
                     "language_method": item.language_method, "warnings": item.warnings, "source_mode": item.source_mode,
-                    "translation": translation})
+                    "translation": translation, "source_metadata": item.source_metadata})
     return row
 
 
 def query_items(items: list[ResearchItem], *, group_by: str = "none", text: str = "", platform: str = "", language: str = "",
                 status: str = "accepted", geography: str = "", translated: str = "", new_only: bool = False,
-                limit: int = 200, offset: int = 0) -> dict[str, Any]:
+                limit: int = 200, offset: int = 0, sort: str = "newest") -> dict[str, Any]:
     if group_by not in GROUPINGS:
         raise ValueError(f"group_by must be one of {', '.join(GROUPINGS)}.")
+    if sort not in {"newest", "oldest"}:
+        raise ValueError("sort must be newest or oldest.")
     accepted = {"collected", "processed"}
 
     def wanted(item: ResearchItem) -> bool:
@@ -79,7 +82,7 @@ def query_items(items: list[ResearchItem], *, group_by: str = "none", text: str 
                 return False
         return True
 
-    filtered = [i for i in items if wanted(i)]
+    filtered = sorted((i for i in items if wanted(i)), key=lambda i: publication_key(i, sort))
     facets = {
         "platforms": Counter(i.platform for i in filtered), "languages": Counter(i.language or "und" for i in filtered),
         "geographies": Counter(g for i in filtered for g in _groups_of(i, "geography")),

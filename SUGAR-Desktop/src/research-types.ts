@@ -10,7 +10,7 @@ export type PlanSpec = {
   languages: string[]; source_scope: "all_enabled" | "selected"; source_categories: string[];
   platforms: string[]; exclude_platforms: string[]; search_terms: string[]; queries: QuerySpec[];
   exclusions: string[]; collection_mode: string; depth: "quick" | "standard" | "deep";
-  limits: { query_count: number; max_posts_per_query: number; max_pages_per_query: number; max_items_total: number; llm_calls: number; per_source: Record<string, Record<string, number>> };
+  limits: { query_count: number; max_posts_per_query: number; max_pages_per_query: number; max_items_total: number; target_items?: number; llm_calls: number; per_source: Record<string, Record<string, number>> };
   translation: { policy: "auto" | "always" | "never"; target_language: string; translate_queries: boolean; max_chars_per_item: number; workers: number };
   dedup: { enabled: boolean; threshold: number };
   analysis_goals: string[];
@@ -90,6 +90,7 @@ export type ResultItem = {
   evidence_chain?: Array<{ id: string; type: string; parent: string; created_at: string; data: Record<string, any> }>;
   paragraphs?: Array<{ index: number; node_id: string; text: string }>; translations?: Array<Record<string, any>>; notes?: Array<Record<string, any>>;
   translation?: Record<string, any>; language_method?: string; warnings?: string[]; source_mode?: string;
+  source_metadata?: { discovery?: { path: string[]; reason: string; depth: number; cached: boolean }; crawl_summary?: { stop_reason: string; pages_fetched: number; cache_hits: number; model_calls: number }; [key: string]: unknown };
   review_detail?: ReviewState;
 };
 export type Verdict = "" | "relevant" | "not_relevant" | "follow_up";
@@ -165,6 +166,7 @@ export type AccuracyReport = {
 };
 
 export type PostPin = {
+  sentiment?: { method: string; basis: string; status: string; reason: string; valence: number | null; intensity: number | null; direction: number | null; matched_terms: string[] };
   item_id: string; run_id: string; author: string; published_at: string; platform: string; url: string; language: string;
   original_text: string; translated_text: string;
   origin: { latitude: number; longitude: number; kind: string; precision: string; label: string } | null;
@@ -174,6 +176,8 @@ export type PostPin = {
   verified: boolean; verdict: string; verified_by: string; verified_at: string;
 };
 export type PostMap = {
+  coverage?: { unique_posts: number; mapped_posts: number; unlocated_posts: number; undated_posts: number };
+  runs_scanned?: number; sentiment_note?: string; as_of?: string;
   pins: PostPin[]; targets: Array<{ name: string; posts: number; last_24h: number; verified: number; last_at: string; item_ids: string[]; platforms: Record<string, number>; languages: Record<string, number>; cities: Record<string, number>; latitude: number; longitude: number }>;
   flows: Array<{ from: [number, number]; to: [number, number]; target: string; posts: number }>; note: string;
 };

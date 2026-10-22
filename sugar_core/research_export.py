@@ -21,7 +21,7 @@ from .research_plan import utc_now
 from .research_runs import ResearchProject
 from .utils import safe_cell
 
-EXPORT_SCHEMA = "1.0"
+EXPORT_SCHEMA = "1.1"
 
 
 def _sha256(data: bytes) -> str:
@@ -132,6 +132,8 @@ def export_run(project: ResearchProject, run_id: str, *, make_zip: bool = True) 
         "activity-log.jsonl": _jsonl(events),
         "report.md": redaction.redact_text(_report(project, run, items, translations)).encode("utf-8"),
     }
+    from .analysis_export import analysis_files
+    files.update(analysis_files(project, accepted))
     if features:
         files["geo.geojson"] = json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, indent=2).encode("utf-8")
     manifest = {

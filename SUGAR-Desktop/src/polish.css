@@ -70,3 +70,44 @@ select, input, textarea { color-scheme: inherit; }
 
 /* ---------- empty pages say what to do next ---------- */
 .empty-state, .empty { padding: 2.2rem 1rem; }
+
+/* Map additions are scoped to this page so surrounding workbench layout stays intact. */
+.map-page .map-main .map-frame { height: clamp(32rem, calc(100dvh - 15rem), 72rem); min-height: 32rem; }
+.map-page:has(.network-map.is-expanded) { container-type: normal; }
+.map-page .map-main .network-map.is-expanded { position: fixed; inset: .75rem; width: auto; height: auto; min-height: 0; max-height: none; z-index: 1000; box-shadow: 0 0 0 2rem #0b1424b0; }
+.map-canvas-actions { position: absolute; z-index: 3; top: .65rem; left: .65rem; display: flex; gap: .4rem; max-width: calc(100% - 4rem); flex-wrap: wrap; }
+.network-map .map-fallback { top: 3.8rem; z-index: 3; }
+.map-visual-controls { display: flex; gap: .6rem 1rem; align-items: center; flex-wrap: wrap; }
+.map-visual-controls label { display: flex; gap: .5rem; align-items: center; color: var(--wb-muted); }
+.map-visual-controls select { max-width: 17rem; }
+.map-visual-controls select { min-height: 2.25rem; border: 1px solid var(--wb-line2); border-radius: .4rem; background: var(--wb-card); color: var(--wb-ink); padding: 0 .6rem; font: inherit; }
+.map-page .top-strip .chip-toggle small { color: var(--wb-ink2); opacity: 1; }
+.map-color-legend { position: absolute; z-index: 2; bottom: 4.8rem; left: .65rem; display: grid; gap: .3rem; max-width: min(24rem, calc(100% - 1.3rem)); padding: .6rem .75rem; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); color: var(--wb-ink); pointer-events: none; }
+.map-color-legend > i { display: block; width: 100%; height: .45rem; border-radius: 1rem; background: linear-gradient(90deg, #2b83ba, #f0db87, #d84b32); }
+.map-color-legend.valence > i { background: linear-gradient(90deg, #c55235, #d7dce1, #16977a); }
+.map-color-legend.intensity > i { background: linear-gradient(90deg, #e3d6ee, #9b65ad, #6d1f80); }
+.map-color-legend.direction > i { background: linear-gradient(90deg, #2b83ba, #d7dce1, #d9822b); }
+.map-color-legend small { color: var(--wb-muted); }
+.post-timeline { display: grid; gap: .5rem; }
+.timeline-heading, .timeline-controls { display: flex; align-items: end; gap: .6rem 1rem; flex-wrap: wrap; }
+.timeline-heading { align-items: baseline; }
+.timeline-controls .field-block { width: 11rem; }
+.time-histogram { height: 3.5rem; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: end; gap: 2px; border-bottom: 1px solid var(--wb-line); }
+.time-histogram button { display: flex; align-items: end; height: 100%; min-width: 0; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.time-histogram button i { display: block; width: 100%; border-radius: .15rem .15rem 0 0; min-height: 1px; }
+.time-histogram button.outside { opacity: .25; }
+.time-histogram button[aria-pressed="true"], .time-histogram button:focus-visible { outline: 2px solid var(--wb-blue); outline-offset: 2px; }
+.post-timeline .time-scrubber { width: 100%; min-height: 1.25rem; padding: 0; accent-color: var(--wb-blue); }
+.timeline-range { display: flex; justify-content: space-between; gap: .5rem; color: var(--wb-muted); }
+.map-axis-summary { display: flex; flex-wrap: wrap; gap: .4rem 1rem; padding: .6rem .8rem; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-card); }
+.map-axis-summary > small { flex-basis: 100%; color: var(--wb-muted); }
+.results-pagination { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .8rem; padding: .8rem; color: var(--wb-muted); }
+.bulk-presets { display: grid; gap: .6rem; margin: 0 0 1rem; padding: .8rem 1rem; border: 1px solid var(--wb-line); border-radius: .6rem; }
+.bulk-presets legend { color: var(--wb-ink); font-weight: 600; padding: 0 .4rem; }
+.source-presets { display: grid; gap: .65rem; padding: .2rem 0 .9rem; }
+@media (max-width: 52rem) {
+  .map-page .map-main .map-frame { height: 70dvh; min-height: 26rem; }
+  .map-visual-controls, .map-visual-controls label { align-items: stretch; }
+  .map-visual-controls select { min-width: 0; max-width: 100%; }
+  .map-color-legend { bottom: 6rem; }
+}

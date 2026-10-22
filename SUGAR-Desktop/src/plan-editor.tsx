@@ -55,6 +55,13 @@ export function PlanEditor({ plan, platforms, providers, advanced, saving, error
           <button role="tab" aria-selected={tab === "advanced"} className={tab === "advanced" ? "on" : ""} onClick={() => setTab("advanced")}>Advanced configuration</button>
         </div>
         <div className="modal-body">
+          <fieldset className="bulk-presets">
+            <legend>Bulk collection target</legend>
+            <div className="chip-group">{[1000, 5000, 10000].map((target) => <button type="button" key={target} className="chip-toggle"
+              aria-pressed={draft.limits.target_items === target} onClick={() => patch({ limits: { ...draft.limits, target_items: target,
+                max_items_total: target, max_posts_per_query: Math.min(10000, target), max_pages_per_query: Math.min(100, Math.ceil(target / 100)) } })}>{target.toLocaleString()} items</button>)}</div>
+            <small className="muted">Up to the target in unique items, with pagination and source rate limits. Availability and duplicates affect the final count. Translation keeps its separate model budget.</small>
+          </fieldset>
           {tab === "basic" && <div className="form-stack">
             <Field label="Research topic"><input value={draft.topic} onChange={(event) => patch({ topic: event.target.value })} placeholder="e.g. democracy" /></Field>
             <Field label="Research question" hint="Shown in the project list and reports."><textarea rows={2} value={draft.research_question} onChange={(event) => patch({ research_question: event.target.value })} /></Field>
@@ -120,8 +127,8 @@ export function PlanEditor({ plan, platforms, providers, advanced, saving, error
               </div>
               <div className="field-grid">
                 <NumberField label="Queries to run" value={draft.limits.query_count} min={1} max={60} onChange={(v) => patch({ limits: { ...draft.limits, query_count: v } })} />
-                <NumberField label="Posts per query" value={draft.limits.max_posts_per_query} min={1} max={500} onChange={(v) => patch({ limits: { ...draft.limits, max_posts_per_query: v } })} />
-                <NumberField label="Pages per query" value={draft.limits.max_pages_per_query} min={1} max={20} onChange={(v) => patch({ limits: { ...draft.limits, max_pages_per_query: v } })} />
+                <NumberField label="Posts per query" value={draft.limits.max_posts_per_query} min={1} max={10000} onChange={(v) => patch({ limits: { ...draft.limits, max_posts_per_query: v } })} />
+                <NumberField label="Pages per query" value={draft.limits.max_pages_per_query} min={1} max={100} onChange={(v) => patch({ limits: { ...draft.limits, max_pages_per_query: v } })} />
                 <NumberField label="Total item limit" value={draft.limits.max_items_total} min={1} max={100000} onChange={(v) => patch({ limits: { ...draft.limits, max_items_total: v } })} />
                 <NumberField label="Model-call budget per run (0 = unlimited)" value={draft.limits.llm_calls} min={0} max={1000000} onChange={(v) => patch({ limits: { ...draft.limits, llm_calls: v } })} />
               </div>

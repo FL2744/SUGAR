@@ -95,7 +95,7 @@ def _strip(value: str) -> str:
 
 
 # ------------------------------------------------------------------------------------ Wikipedia
-def collect_wikipedia(*, search_terms: Iterable[str], max_posts_per_query: int = 10, languages: Iterable[str] = ("en",),
+def collect_wikipedia(*, search_terms: Iterable[str], max_posts_per_query: int = 10, max_pages_per_query: int = 1, languages: Iterable[str] = ("en",),
                       session: requests.Session | None = None, **_: Any) -> list[PostRecord]:
     """Articles matching each query, from each requested language edition. Dates do not apply to encyclopedias."""
     session = session or _session()
@@ -104,26 +104,40 @@ def collect_wikipedia(*, search_terms: Iterable[str], max_posts_per_query: int =
     for query in search_terms:
         for lang in dict.fromkeys(langs[:4]):
             endpoint = f"https://{lang}.wikipedia.org/w/api.php"
-            search = _get(session, endpoint, params={"action": "query", "list": "search", "srsearch": query, "srlimit": min(50, max(1, max_posts_per_query)),
-                                                     "format": "json", "formatversion": 2}).json()
-            hits = (search.get("query") or {}).get("search") or []
-            if not hits:
-                continue
-            ids = "|".join(str(h["pageid"]) for h in hits if "pageid" in h)
-            extracts = _get(session, endpoint, params={"action": "query", "prop": "extracts|info", "pageids": ids, "exintro": 1, "explaintext": 1,
-                                                       "inprop": "url", "format": "json", "formatversion": 2}).json()
-            pages = {str(p.get("pageid")): p for p in (extracts.get("query") or {}).get("pages") or []}
-            for hit in hits:
-                page = pages.get(str(hit.get("pageid")), {})
-                title = str(hit.get("title") or page.get("title") or "")
-                body = normalize_whitespace(str(page.get("extract") or _strip(str(hit.get("snippet") or ""))))
-                url = str(page.get("fullurl") or f"https://{lang}.wikipedia.org/wiki/{quote(title.replace(' ', '_'))}")
-                _merge(records, PostRecord(
-                    platform="wikipedia", native_id=f"{lang}:{hit.get('pageid')}", canonical_url=url, query=query, query_matches=[query],
-                    content_type="article", source_mode="wikipedia_search", source_host=f"{lang}.wikipedia.org", source_url=url,
-                    published_at=_iso(hit.get("timestamp") or page.get("touched")), author_name="Wikipedia contributors",
-                    platform_language=lang, original_text=normalize_whitespace(f"{title}. {body}"),
-                    raw_stats={"title": title, "wordcount": hit.get("wordcount", 0), "date_meaning": "last edited"}))
+            continuation: dict[str, Any] = {}
+            seen_offsets: set[str] = set()
+            count = 0
+            for _page in range(max(1, max_pages_per_query)):
+                try:
+                    search = _get(session, endpoint, params={"action": "query", "list": "search", "srsearch": query,
+                        "srlimit": min(50, max(1, max_posts_per_query - count)), "format": "json", "formatversion": 2, **continuation}).json()
+                    hits = (search.get("query") or {}).get("search") or []
+                    if not hits:
+                        break
+                    ids = "|".join(str(h["pageid"]) for h in hits if "pageid" in h)
+                    extracts = _get(session, endpoint, params={"action": "query", "prop": "extracts|info", "pageids": ids, "exintro": 1, "explaintext": 1,
+                                                               "inprop": "url", "format": "json", "formatversion": 2}).json()
+                except (requests.RequestException, RuntimeError, ValueError) as exc:
+                    exc.partial_records = list(records.values())
+                    raise
+                pages = {str(p.get("pageid")): p for p in (extracts.get("query") or {}).get("pages") or []}
+                for hit in hits[:max_posts_per_query - count]:
+                    page = pages.get(str(hit.get("pageid")), {})
+                    title = str(hit.get("title") or page.get("title") or "")
+                    body = normalize_whitespace(str(page.get("extract") or _strip(str(hit.get("snippet") or ""))))
+                    url = str(page.get("fullurl") or f"https://{lang}.wikipedia.org/wiki/{quote(title.replace(' ', '_'))}")
+                    _merge(records, PostRecord(
+                        platform="wikipedia", native_id=f"{lang}:{hit.get('pageid')}", canonical_url=url, query=query, query_matches=[query],
+                        content_type="article", source_mode="wikipedia_search", source_host=f"{lang}.wikipedia.org", source_url=url,
+                        published_at=_iso(hit.get("timestamp") or page.get("touched")), author_name="Wikipedia contributors",
+                        platform_language=lang, original_text=normalize_whitespace(f"{title}. {body}"),
+                        raw_stats={"title": title, "wordcount": hit.get("wordcount", 0), "date_meaning": "last edited"}))
+                    count += 1
+                continuation = search.get("continue") or {}
+                offset = str(continuation.get("sroffset", ""))
+                if count >= max_posts_per_query or not continuation or offset in seen_offsets:
+                    break
+                seen_offsets.add(offset)
     return list(records.values())
 
 
@@ -188,7 +202,7 @@ def _abstract(inverted: dict[str, list[int]] | None) -> str:
     return " ".join(slots[i] for i in sorted(slots))
 
 
-def collect_openalex(*, search_terms: Iterable[str], since: str | None = None, until: str | None = None, max_posts_per_query: int = 25,
+def collect_openalex(*, search_terms: Iterable[str], since: str | None = None, until: str | None = None, max_posts_per_query: int = 25, max_pages_per_query: int = 1,
                      api_key: str = "", session: requests.Session | None = None, **_: Any) -> list[PostRecord]:
     """Scholarly works matching each query (title, abstract, authors, venue, citation count)."""
     session = session or _session()
@@ -199,29 +213,44 @@ def collect_openalex(*, search_terms: Iterable[str], since: str | None = None, u
             filters.append(f"from_publication_date:{since[:10]}")
         if until:
             filters.append(f"to_publication_date:{until[:10]}")
-        params: dict[str, Any] = {"search": query, "per-page": min(200, max(1, max_posts_per_query)), "sort": "relevance_score:desc"}
+        params: dict[str, Any] = {"search": query, "per-page": min(100, max(1, max_posts_per_query)), "sort": "relevance_score:desc", "cursor": "*"}
         if filters:
             params["filter"] = ",".join(filters)
         if api_key.strip():
             params["api_key"] = api_key.strip()
-        payload = _get(session, "https://api.openalex.org/works", params=params).json()
-        for work in payload.get("results") or []:
-            work_id = str(work.get("id") or "")
-            if not work_id:
-                continue
-            doi = str(work.get("doi") or "")
-            url = doi or work_id
-            authors = [str((a.get("author") or {}).get("display_name") or "") for a in (work.get("authorships") or [])]
-            authors = [a for a in authors if a]
-            venue = str(((work.get("primary_location") or {}).get("source") or {}).get("display_name") or "")
-            title = normalize_whitespace(str(work.get("title") or work.get("display_name") or ""))
-            raw = {"cited_by_count": work.get("cited_by_count", 0), "venue": venue, "type": work.get("type", ""), "doi": doi, "authors": authors[:20]}
-            _merge(records, PostRecord(
-                platform="openalex", native_id=work_id.rsplit("/", 1)[-1], canonical_url=url, query=query, query_matches=[query],
-                content_type="scholarly_work", source_mode="openalex_works", source_host="openalex.org", source_url=work_id,
-                published_at=_iso(work.get("publication_date")), author_name="; ".join(authors[:6]) + (" et al." if len(authors) > 6 else ""),
-                platform_language=str(work.get("language") or ""), original_text=normalize_whitespace(f"{title}. {_abstract(work.get('abstract_inverted_index'))}"),
-                raw_stats=raw, engagement={"citations": int(work.get("cited_by_count") or 0)}))
+        count = 0
+        cursors: set[str] = {"*"}
+        for _page in range(max(1, max_pages_per_query)):
+            params["per-page"] = min(100, max_posts_per_query - count)
+            try:
+                payload = _get(session, "https://api.openalex.org/works", params=params).json()
+            except (requests.RequestException, RuntimeError, ValueError) as exc:
+                exc.partial_records = list(records.values())
+                raise
+            works = payload.get("results") or []
+            for work in works[:max_posts_per_query - count]:
+                work_id = str(work.get("id") or "")
+                if not work_id:
+                    continue
+                doi = str(work.get("doi") or "")
+                url = doi or work_id
+                authors = [str((a.get("author") or {}).get("display_name") or "") for a in (work.get("authorships") or [])]
+                authors = [a for a in authors if a]
+                venue = str(((work.get("primary_location") or {}).get("source") or {}).get("display_name") or "")
+                title = normalize_whitespace(str(work.get("title") or work.get("display_name") or ""))
+                raw = {"cited_by_count": work.get("cited_by_count", 0), "venue": venue, "type": work.get("type", ""), "doi": doi, "authors": authors[:20]}
+                _merge(records, PostRecord(
+                    platform="openalex", native_id=work_id.rsplit("/", 1)[-1], canonical_url=url, query=query, query_matches=[query],
+                    content_type="scholarly_work", source_mode="openalex_works", source_host="openalex.org", source_url=work_id,
+                    published_at=_iso(work.get("publication_date")), author_name="; ".join(authors[:6]) + (" et al." if len(authors) > 6 else ""),
+                    platform_language=str(work.get("language") or ""), original_text=normalize_whitespace(f"{title}. {_abstract(work.get('abstract_inverted_index'))}"),
+                    raw_stats=raw, engagement={"citations": int(work.get("cited_by_count") or 0)}))
+                count += 1
+            cursor = (payload.get("meta") or {}).get("next_cursor")
+            if count >= max_posts_per_query or not works or not cursor or cursor in cursors:
+                break
+            cursors.add(cursor)
+            params["cursor"] = cursor
     return list(records.values())
 
 
@@ -265,7 +294,7 @@ def parse_feed(content: bytes) -> list[dict[str, str]]:
 
 
 def collect_rss(*, search_terms: Iterable[str], feeds: Iterable[str], since: str | None = None, until: str | None = None,
-                max_posts_per_query: int = 25, session: requests.Session | None = None, **_: Any) -> list[PostRecord]:
+                max_posts_per_query: int = 25, session: requests.Session | None = None, cache: dict | None = None, **_: Any) -> list[PostRecord]:
     """Entries from the feeds you name whose title or summary mentions the query (every word, any order)."""
     urls = [str(f).strip() for f in feeds if str(f).strip().lower().startswith(("http://", "https://"))]
     if not urls:
@@ -275,7 +304,12 @@ def collect_rss(*, search_terms: Iterable[str], feeds: Iterable[str], since: str
     failures: list[str] = []
     for url in urls:
         try:
-            fetched[url] = parse_feed(_get(session, url).content)
+            if cache is not None and url in cache:
+                fetched[url] = cache[url]
+            else:
+                fetched[url] = parse_feed(_get(session, url).content)
+                if cache is not None:
+                    cache[url] = fetched[url]
         except (requests.RequestException, RuntimeError, ValueError) as exc:
             failures.append(f"{urlparse(url).netloc}: {exc}")
     if not fetched:

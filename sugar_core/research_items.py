@@ -309,6 +309,7 @@ class ResearchItem:
     engagement: dict[str, Any] = field(default_factory=dict)
     content_type: str = "post"
     source_mode: str = ""
+    source_metadata: dict[str, Any] = field(default_factory=dict)
     known_from_run: str = ""          # set on refresh when this item existed in an earlier run
     changed_since_known: bool = False  # refresh found different content for an item seen before
     derived_from: dict[str, str] = field(default_factory=dict)   # {run_id, item_id} for reprocessed items
@@ -353,7 +354,7 @@ def start_chain(item: ResearchItem, *, query_id: str, query_text: str, dispatche
                                                    "platform": item.platform, "discovered_at": item.retrieved_at})
     document = item.add_node("fetched_document", parent=result.id, data={
         "url": item.url, "native_id": item.native_id, "retrieved_at": item.retrieved_at,
-        "source_mode": item.source_mode, "content_hash": item.content_hash, "chars": len(item.original_text)})
+        "source_mode": item.source_mode, "content_hash": item.content_hash, "chars": len(item.original_text), "source_metadata": item.source_metadata})
     return document.id
 
 
@@ -425,6 +426,7 @@ def record_to_item(record: Any, *, run_id: str, project_id: str, query_id: str, 
         query_id=query_id, query=query_text, query_dispatched=dispatched,
         queries=[query_text], original_text=text, content_type=str(getattr(record, "content_type", "post") or "post"),
         source_mode=str(getattr(record, "source_mode", "") or ""), engagement=dict(getattr(record, "engagement", {}) or {}),
+        source_metadata=dict(getattr(record, "raw_stats", {}) or {}),
         content_hash=_sha(text, 16),
     )
     lat, lon = getattr(record, "latitude", None), getattr(record, "longitude", None)

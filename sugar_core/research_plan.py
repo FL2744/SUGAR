@@ -242,9 +242,10 @@ class ResearchPlanSpec:
         per_source = lim.get("per_source") if isinstance(lim.get("per_source"), dict) else {}
         self.limits = {
             "query_count": _bounded_int(lim.get("query_count"), preset["query_count"], 1, 60),
-            "max_posts_per_query": _bounded_int(lim.get("max_posts_per_query"), preset["max_posts_per_query"], 1, 500),
-            "max_pages_per_query": _bounded_int(lim.get("max_pages_per_query"), preset["max_pages_per_query"], 1, 20),
+            "max_posts_per_query": _bounded_int(lim.get("max_posts_per_query"), preset["max_posts_per_query"], 1, 10000),
+            "max_pages_per_query": _bounded_int(lim.get("max_pages_per_query"), preset["max_pages_per_query"], 1, 100),
             "max_items_total": _bounded_int(lim.get("max_items_total"), 2000, 1, 100000),
+            "target_items": _bounded_int(lim.get("target_items"), 0, 0, 100000),
             # Soft cap on model calls per run (0 = unlimited). Reaching it never fails a run; see LLMBudget.
             "llm_calls": _bounded_int(lim.get("llm_calls"), DEFAULT_LLM_CALLS, 0, 1000000),
             "per_source": {

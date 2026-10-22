@@ -61,6 +61,7 @@ function reduce(state: View, action: { type: "events"; events: ActivityEvent[] }
       case "source.search.started": searching[event.source] = `Searching ${platformLabel(event.source)} for “${d.dispatched || d.query}”`; break;
       case "source.search.completed": case "source.failed": delete searching[event.source]; break;
       case "source.retry.scheduled": case "provider.rate_limited": searching[event.source] = event.message; break;
+      case "web.page.selected": case "web.page.assessed": case "web.crawl.completed": searching[event.source] = event.message; break;
       case "pipeline.completed": case "run.cancelled": for (const key of Object.keys(searching)) delete searching[key]; break;
       default: break;
     }
@@ -75,6 +76,7 @@ const EVENT_ICON: Record<string, string> = {
   "run.started": "▶", "run.paused": "⏸", "run.resumed": "▶", "run.cancelling": "■", "run.cancelled": "■", "run.failed": "✕", "pipeline.completed": "✓",
   "research.plan.created": "☷", "query.generated": "⌕", "query.disabled": "⊘", "research.plan.updated": "✎",
   "source.search.started": "↗", "source.search.completed": "✓", "source.failed": "✕", "source.skipped": "⊘", "source.retry.scheduled": "↻", "provider.rate_limited": "⏳",
+  "web.page.selected": "⌕", "web.page.assessed": "◇", "web.page.skipped": "⊘", "web.crawl.completed": "✓",
   "item.discovered": "◆", "item.download.completed": "⇩", "item.rejected": "−", "item.excluded": "⊘", "item.changed": "≠", "duplicate.detected": "⧉",
   "language.detected": "文", "translation.started": "⇄", "translation.completed": "⇄", "translation.failed": "!", "translation.skipped": "!",
   "extraction.started": "¶", "extraction.completed": "¶", "stage.started": "›", "stage.completed": "✓", "provider.call": "λ", "collector.request": "⚙", "parser.decision": "⚙", "timing.recorded": "⏱",

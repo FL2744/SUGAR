@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { downloadWorkspaceFile } from "./bridge";
 import { research } from "./research-api";
 import type { Institution, InstitutionList, NetworkRow, OverlapResult, PostMap } from "./research-types";
 import { NetworkMap, type Basemap, type Line, type MapMode, type PostLayers } from "./network-map";
 import { ConfidencePill } from "./institutions-page";
+import { axisSummary, timelineBins, windowPosts, type PostStyle } from "./map-data";
+import { PostTimeline } from "./post-timeline";
 import { Collapsible, EmptyState, Pill, Spinner, formatTime, relativeTime, titleCase } from "./ui";
 
 const WINDOWS: Array<[string, string]> = [["", "All time"], ["2024-01-01", "Since 2024"], ["12m", "Last 12 months"], ["6m", "Last 6 months"]];
@@ -30,7 +33,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   const [overlap, setOverlap] = useState<OverlapResult | null>(null);
   const [view, setView] = useState<"map" | "list">("map");
   const [selected, setSelected] = useState("");
-  const [posts, setPosts] = useState<PostMap | null>(null);
+  const [allPosts, setPosts] = useState<PostMap | null>(null);
   const [basemap, setBasemap] = useState<Basemap>(dark ? "dark" : "streets");
   const [layers, setLayers] = useState<PostLayers>({ posts: true, targets: true, flows: false, institutions: true });
   const [selectedPost, setSelectedPost] = useState("");
@@ -39,15 +42,40 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   const [selectedTarget, setSelectedTarget] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [since, setSince] = useState("");
+  const [until, setUntil] = useState("");
+  const [sort, setSort] = useState<"newest" | "oldest">("newest");
+  const [postStyle, setPostStyle] = useState<PostStyle>("points");
+  const [sentiment, setSentiment] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [frame, setFrame] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [listPage, setListPage] = useState(0);
+  const requestSeq = useRef(0);
+  const bins = useMemo(() => timelineBins(allPosts?.pins || []), [allPosts]);
+  const timeDomain = useMemo<[number, number] | undefined>(() => bins.length ? [Date.parse(`${bins[0].start}T00:00:00Z`), Date.parse(`${bins[bins.length - 1].end}T23:59:59Z`)] : undefined, [bins]);
+  const effectiveUntil = frame !== null ? bins[frame]?.end || until : until;
+  const posts = useMemo(() => windowPosts(allPosts, since, effectiveUntil, sort), [allPosts, since, effectiveUntil, sort]);
+  const rangeError = Boolean(since && effectiveUntil && since > effectiveUntil);
+  useEffect(() => { setPlaying(false); setFrame(null); }, [allPosts]);
+  useEffect(() => { setListPage(0); }, [since, effectiveUntil, sort, verdictFilter, days]);
+  useEffect(() => {
+    if (!playing) return;
+    const timer = window.setInterval(() => setFrame((current) => Math.min((current ?? -1) + 1, bins.length - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [playing, bins.length]);
+  useEffect(() => { if (frame !== null && frame >= bins.length - 1) setPlaying(false); }, [frame, bins.length]);
+  const changeDates = (start: string, end: string) => { setPlaying(false); setFrame(null); setSince(start); setUntil(end); };
 
   const load = useCallback(async () => {
     if (!projectId) return;
+    const seq = ++requestSeq.current;
     setLoading(true); setError("");
     try {
       const [list, nets, pm] = await Promise.all([research.institutions(projectId, { status, confidence: level, country, program, audience, since: sinceDate(windowKey) }), research.networks(projectId),
-        research.postMap(projectId, { verdict: verdictFilter, days }).catch(() => null)]);
-      setData(list); setNetworks(nets); setPosts(pm);
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setLoading(false); }
+        research.postMap(projectId, { verdict: verdictFilter, days }).catch((e) => { if (seq === requestSeq.current) setError(`Posts could not be loaded: ${e instanceof Error ? e.message : String(e)}`); return null; })]);
+      if (seq === requestSeq.current) { setData(list); setNetworks(nets); setPosts(pm); }
+    } catch (e) { if (seq === requestSeq.current) setError(e instanceof Error ? e.message : String(e)); } finally { if (seq === requestSeq.current) setLoading(false); }
   }, [projectId, status, level, country, program, audience, windowKey, verdictFilter, days]);
   useEffect(() => { void load(); }, [load]);
 
@@ -70,16 +98,13 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   }, [showLines, overlap, byId, nearKm, hidden]);
 
   const pickedTarget = posts?.targets.find((t) => t.name === selectedTarget);
-  const targetPosts = pickedTarget ? (posts?.pins || []).filter((p) => pickedTarget.item_ids.includes(p.item_id)) : [];
-  const exportTarget = () => {
-    if (!pickedTarget) return;
-    const esc = (v: string) => `"${String(v ?? "").replace(/"/g, '""').replace(/\s+/g, " ")}"`;
-    const rows = [["author", "platform", "published_at", "language", "verified", "posted_from", "original", "translation", "url"].join(","),
-      ...targetPosts.map((p) => [p.author, p.platform, p.published_at, p.language, p.verified ? "yes" : "no", p.origin?.label || "", p.original_text, p.translated_text, p.url].map(esc).join(","))];
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([rows.join("\n")], { type: "text/csv" }));
-    link.download = `posts-about-${pickedTarget.name.replace(/\W+/g, "-").toLowerCase()}.csv`;
-    link.click(); URL.revokeObjectURL(link.href);
+  const targetPosts = useMemo(() => { const ids = new Set(pickedTarget?.item_ids || []); return (posts?.pins || []).filter((p) => ids.has(p.item_id)); }, [pickedTarget, posts]);
+  const exportMapped = async (target = "") => {
+    setExporting(true); setError("");
+    try {
+      const result = await research.exportMap(projectId, { since, until: effectiveUntil, verdict: verdictFilter, days, target });
+      await downloadWorkspaceFile(`sugar-file://${projectId}/${result.archive}`, target ? `posts-about-${target.replace(/\W+/g, "-")}.zip` : "mapped-posts-analysis.zip");
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setExporting(false); }
   };
   const pickedPost = posts?.pins.find((p) => p.item_id === selectedPost);
   const setVerified = async (itemId: string, verified: boolean) => {
@@ -102,9 +127,11 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
         <div className="run-controls">
           <div className="segmented" role="radiogroup" aria-label="View">{(["map", "list"] as const).map((v) => <button key={v} role="radio" aria-checked={view === v} className={view === v ? "on" : ""} onClick={() => setView(v)}>{titleCase(v)}</button>)}</div>
           <button className="button button-secondary" onClick={onOpenInstitutions}>Institutions</button>
+          <button className="button button-secondary" onClick={() => void exportMapped()} disabled={exporting || rangeError || !posts?.pins.length}>{exporting ? <Spinner /> : "Export mapped posts"}</button>
         </div>
       </div>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
+      {rangeError && <div className="notice notice-warn" role="alert">The start date must be on or before the through date.</div>}
 
       <div className="map-layout">
         <div className="map-main">
@@ -125,6 +152,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             <div className="filter-grid">
               <label className="field-block"><span>Posts shown</span><select value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)}><option value="">All posts</option><option value="relevant">Verified only</option><option value="none">Not yet checked</option></select></label>
               <label className="field-block"><span>Posted in</span><select value={days} onChange={(e) => setDays(e.target.value)}><option value="">Any time</option><option value="1">Last 24 hours</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
+              <label className="check-row"><input type="checkbox" checked={sentiment} onChange={(e) => { setSentiment(e.target.checked); if (!e.target.checked && ["valence", "intensity", "direction"].includes(postStyle)) setPostStyle("points"); }} /><span>Enable exploratory language axes</span></label>
               <label className="field-block"><span>Institution evidence from</span><select value={windowKey} onChange={(e) => setWindowKey(e.target.value)}>{WINDOWS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
               <label className="field-block"><span>Status</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Any</option>{["active", "closed", "renamed", "relocated", "unknown"].map((x) => <option key={x} value={x}>{titleCase(x)}</option>)}</select></label>
               <label className="field-block"><span>Confidence</span><select value={level} onChange={(e) => setLevel(e.target.value)}><option value="">Any</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
@@ -138,23 +166,40 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
                 <select value={nearKm} onChange={(e) => setNearKm(Number(e.target.value))} aria-label="Distance"><option value={5}>5 km</option><option value={25}>25 km</option><option value={100}>100 km</option><option value={250}>250 km</option></select></div>}
             </div>
           </Collapsible>
+          <div className="map-visual-controls">
+            <label>Color posts by <select aria-label="Post map coloring" value={postStyle} onChange={(e) => setPostStyle(e.target.value as PostStyle)}>
+              <option value="points">Location and review</option><option value="density">Origin density</option><option value="recency">Publication time</option>
+              {sentiment && <><option value="valence">Positive / negative language</option><option value="intensity">Language intensity</option><option value="direction">Inward / outward language</option></>}
+            </select></label>
+            <label>Sort posts <select aria-label="Map post publication order" value={sort} onChange={(e) => setSort(e.target.value as "newest" | "oldest")}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
+          </div>
+          <Collapsible title="Posts over time" hint={since || effectiveUntil ? `${since || "First dated post"} → ${effectiveUntil || "Latest post"}` : "Date range, publication counts and time playback"}>
+            <PostTimeline bins={bins} since={since} until={effectiveUntil} frame={frame} playing={playing} onDates={changeDates}
+              onFrame={(n) => { setPlaying(false); setFrame(n); if (since && since > bins[n].end) setSince(""); }}
+              onPlay={() => { if (playing) { setPlaying(false); return; } const first = Math.max(0, bins.findIndex((b) => !since || b.end >= since)); if (frame === null || frame >= bins.length - 1) setFrame(first); setPlaying(true); }}
+              onReset={() => changeDates("", "")} />
+            <p className="footnote">Counts cover mapped posts. Posts with unknown publication dates appear in All time and are excluded from dated views.</p>
+          </Collapsible>
+          {sentiment && <div className="map-axis-summary" role="status">{(["valence", "intensity", "direction"] as const).map((axis) => { const score = axisSummary(posts?.pins || [], axis); return <span key={axis}>{titleCase(axis)}: <strong>{score.mean === null ? "Unscored" : score.mean.toFixed(2)}</strong> <small>(n={score.n.toLocaleString()})</small></span>; })}<small>{allPosts?.sentiment_note || "Exploratory English lexical indicators, including English translations. Unsupported language is unscored."}</small></div>}
           {(posts?.targets.length ?? 0) > 0 && <div className="top-strip" role="group" aria-label="Top targets"><span className="muted">Where posts are about:</span>
             {posts!.targets.slice(0, 8).map((t) => <button key={t.name} className={`chip-toggle ${selectedTarget === t.name ? "on" : ""}`} aria-pressed={selectedTarget === t.name} onClick={() => { setSelected(""); setSelectedPost(""); setSelectedTarget(t.name); }}>{t.name} <strong>{t.posts}</strong>{t.last_24h > 0 && <small> · {t.last_24h} today</small>}</button>)}</div>}
 
           <div className="map-stats" role="status">
-            {loading && <Spinner />}<strong>{visible.filter((r) => r.placed).length}</strong> on the map · <strong>{data?.unplaced ?? 0}</strong> not placed · <strong>{posts?.pins.length ?? 0}</strong> posts
+            {loading && <Spinner />}<strong>{visible.filter((r) => r.placed).length}</strong> institutions placed · <strong>{data?.unplaced ?? 0}</strong> not placed · <strong>{(posts?.pins.length ?? 0).toLocaleString()}</strong> of {(allPosts?.pins.length ?? 0).toLocaleString()} located posts
+            {allPosts?.coverage && <> · {allPosts.coverage.unlocated_posts.toLocaleString()} posts without a mapped location</>}
             {overlap && <> · <strong>{near}</strong> subject institutions have a reference institution within {nearKm} km</>}
           </div>
-          {view === "map" ? <NetworkMap rows={visible} networks={networks} mode={mode} lines={lines} selectedId={selected} onSelect={(id) => { setSelectedPost(""); setSelectedTarget(""); setSelected(id); }} basemap={basemap}
+          {view === "map" ? <NetworkMap key={projectId} rows={visible} networks={networks} mode={mode} lines={lines} selectedId={selected} onSelect={(id) => { setSelectedPost(""); setSelectedTarget(""); setSelected(id); }} basemap={basemap} postStyle={postStyle} timeDomain={timeDomain}
             posts={posts} layers={layers} selectedPost={selectedPost} onSelectPost={(id) => { setSelected(""); setSelectedTarget(""); setSelectedPost(id); }}
             selectedTarget={selectedTarget} onSelectTarget={(name) => { setSelected(""); setSelectedPost(""); setSelectedTarget(name); }} />
             : <div className="project-table" role="table" aria-label="Institutions on the map">
                 <div className="project-table-head" role="row"><span role="columnheader">Institution</span><span role="columnheader">Status</span><span role="columnheader">Where</span><span role="columnheader">Support</span></div>
-                {layers.posts && (posts?.pins || []).map((p) => <button key={p.item_id} className="project-row" role="row" onClick={() => { setSelected(""); setSelectedPost(p.item_id); }}><span role="cell"><strong dir="auto">{p.author || "Unknown author"}</strong> <small className="muted">{p.platform} · post</small></span>
+                {layers.posts && (posts?.pins || []).slice(listPage * 100, (listPage + 1) * 100).map((p) => <button key={p.item_id} className="project-row" role="row" onClick={() => { setSelected(""); setSelectedPost(p.item_id); }}><span role="cell"><strong dir="auto">{p.author || "Unknown author"}</strong> <small className="muted">{p.platform} · {p.published_at ? p.published_at.slice(0, 10) : "date unknown"}</small></span>
                   <span role="cell">{p.verified ? "Verified" : "Not verified"}</span><span role="cell">{p.origin ? p.origin.label : p.inferred_location ? `About ${p.inferred_location.name}` : "—"}</span><span role="cell"><small dir="auto">{p.original_text.slice(0, 80)}</small></span></button>)}
                 {visible.map((r) => <button key={r.entity_id} className="project-row" role="row" onClick={() => setSelected(r.entity_id)}><span role="cell"><strong dir="auto">{r.name}</strong> <small className="muted">{r.network}</small></span>
                   <span role="cell">{titleCase(r.status)}</span><span role="cell">{[r.city, r.country].filter(Boolean).join(", ") || "—"}{r.placed ? "" : " · not placed"}</span><span role="cell"><ConfidencePill confidence={r.confidence} /></span></button>)}
               </div>}
+          {view === "list" && layers.posts && (posts?.pins.length || 0) > 100 && <nav className="results-pagination" aria-label="Map post list pages"><button className="button button-secondary button-small" disabled={!listPage} onClick={() => setListPage(listPage - 1)}>Previous posts</button><span>{listPage * 100 + 1}–{Math.min((listPage + 1) * 100, posts!.pins.length)} of {posts!.pins.length.toLocaleString()}</span><button className="button button-secondary button-small" disabled={(listPage + 1) * 100 >= posts!.pins.length} onClick={() => setListPage(listPage + 1)}>Next posts</button></nav>}
           {overlap && overlap.by_country.length > 0 && <details className="overlap-table"><summary>Overlap by country ({overlap.by_country.length})</summary>
             <table><thead><tr><th>Country</th><th>Subject</th><th>Reference</th><th>Subject near a reference</th><th>Share a recorded audience</th></tr></thead>
               <tbody>{overlap.by_country.map((c) => <tr key={c.country}><td>{c.country}</td><td>{c.subjects}</td><td>{c.references}</td><td>{c.subjects_near_reference}</td><td>{c.shared_audience_pairs}</td></tr>)}</tbody></table>
@@ -170,7 +215,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             <p><strong>Platforms</strong> {Object.entries(pickedTarget.platforms).map(([k, v]) => `${k} ${v}`).join(" · ")}<br /><strong>Languages</strong> {Object.entries(pickedTarget.languages).map(([k, v]) => `${k} ${v}`).join(" · ")}
               {Object.keys(pickedTarget.cities).length > 0 && <><br /><strong>Cities named</strong> {Object.entries(pickedTarget.cities).map(([k, v]) => `${k} ${v}`).join(" · ")}</>}</p>
             <ul className="post-list">{targetPosts.slice(0, 40).map((p) => <li key={p.item_id}><button className="button button-quiet button-small" onClick={() => { setSelectedTarget(""); setSelectedPost(p.item_id); }}><strong dir="auto">{p.author || "Unknown"}</strong> · <span dir="auto">{p.original_text.slice(0, 70)}</span></button></li>)}</ul>
-            <button className="button button-secondary button-small" onClick={exportTarget}>Download these posts (CSV)</button>
+            <button className="button button-secondary button-small" disabled={exporting || rangeError} onClick={() => void exportMapped(pickedTarget.name)}>Export these posts for analysis</button>
           </aside>)}
         {pickedPost && (
           <aside className="map-detail post-detail" aria-label="Selected post">

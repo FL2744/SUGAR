@@ -3,6 +3,7 @@ import { research } from "./research-api";
 import type { Interpretation, PlanSpec, PlatformRow, ProjectOverview, ProviderProfileRow, RunSummary, SummaryRow } from "./research-types";
 import type { Prefs } from "./prefs";
 import { PlanEditor } from "./plan-editor";
+import { SOURCE_PRESETS } from "./source-presets";
 import { ChipInput, Collapsible, Pill, Segmented, Spinner, StatusPill, languageName, relativeTime } from "./ui";
 
 const EXAMPLES = [
@@ -18,7 +19,7 @@ type Props = {
   projectName: string;
   prefs: Prefs;
   overview: ProjectOverview | null;
-  onOverview: () => Promise<void> | void;
+  onOverview: (projectId?: string) => Promise<void> | void;
   ensureProject: (suggestedName: string) => Promise<string>;
   onRunStarted: (projectId: string, run: RunSummary) => void;
   onOpenSettings: () => void;
@@ -40,6 +41,7 @@ function FeedsCard({ projectId, saved, savedSites, onSaved, onError }: { project
   const [sites, setSites] = useState(savedSites.join("\n"));
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [presetNote, setPresetNote] = useState("");
   useEffect(() => { setFeeds(saved.join("\n")); }, [saved]);
   useEffect(() => { setSites(savedSites.join("\n")); }, [savedSites]);
   const save = async () => {
@@ -50,11 +52,20 @@ function FeedsCard({ projectId, saved, savedSites, onSaved, onError }: { project
   const count = saved.length + savedSites.length;
   return (
     <Collapsible title="Your own sources (optional)" hint={count ? `${savedSites.length} website${savedSites.length === 1 ? "" : "s"}, ${saved.length} feed${saved.length === 1 ? "" : "s"} included in runs` : "Add institution websites and news feeds to read"}>
+      <div className="source-presets"><strong>Add public sources · no new API keys</strong>
+        <div className="chip-group">{SOURCE_PRESETS.map((preset) => <button type="button" key={preset.id} className="chip-toggle" title={preset.description} onClick={() => {
+          setFeeds((current) => [...new Set([...current.split(/\s+/).filter(Boolean), ...preset.feeds])].join("\n"));
+          setSites((current) => [...new Set([...current.split(/\s+/).filter(Boolean), ...preset.sites])].join("\n"));
+          setDone(false); setPresetNote(`${preset.label} added below. Save sources to include them in runs.`);
+        }}>{preset.label}</button>)}</div>
+        {presetNote && <small role="status">{presetNote}</small>}
+        <small className="muted">Feeds provide recent publisher entries. Use RSS and Public web in your platform selection, or All enabled platforms. Publisher material is labeled separately from social posts.</small>
+      </div>
       <label className="field-block"><span>Websites to read, one per line</span>
         <textarea rows={3} value={sites} onChange={(event) => { setSites(event.target.value); setDone(false); }} placeholder="https://example.org/" spellCheck={false} /></label>
       <label className="field-block"><span>News and institution feeds (RSS/Atom), one per line</span>
         <textarea rows={3} value={feeds} onChange={(event) => { setFeeds(event.target.value); setDone(false); }} placeholder="https://example.org/news/feed.xml" spellCheck={false} /></label>
-      <p className="footnote">Pages and feed entries that mention your search are collected, along with the news and event pages a site links to. SUGAR follows each site's robots.txt, reads one page per second, and only public web addresses. Wikipedia, news coverage (GDELT) and scholarly works (OpenAlex) are searched automatically.</p>
+      <p className="footnote">Website searches rank promising links, learn from matching pages and stop at relevance or page budgets. Pages and feeds are reused across queries within a run. This uses no model calls. SUGAR follows each site's robots.txt, reads one page per second, and only public web addresses. Wikipedia, news coverage (GDELT) and scholarly works (OpenAlex) are searched automatically when enabled.</p>
       <div className="preview-actions"><button type="button" className="button button-secondary" onClick={() => void save()} disabled={busy}>{busy ? <><Spinner /> Saving…</> : "Save sources"}</button>{done && <span className="muted" role="status">Saved — used on the next run.</span>}</div>
     </Collapsible>
   );
@@ -121,9 +132,10 @@ function ProviderChooser({ providers, types, value, onChange, onOpenSettings }: 
   );
 }
 
-export function PlanPreview({ summary, interpretation, plan, onRun, onEdit, onAdvanced, running, canRun, onOpenSettings, advanced }: {
+export function PlanPreview({ summary, interpretation, plan, onRun, onEdit, onAdvanced, running, canRun, onOpenSettings, advanced, onSave, saved }: {
   summary: SummaryRow[]; interpretation: Interpretation | null; plan: PlanSpec; onRun: () => void; onEdit: () => void; onAdvanced: () => void;
   running: boolean; canRun: boolean; onOpenSettings: () => void; advanced: boolean;
+  onSave?: () => void; saved?: boolean;
 }) {
   const method = interpretation?.method;
   const enabled = plan.queries.filter((q) => q.enabled);
@@ -167,6 +179,8 @@ export function PlanPreview({ summary, interpretation, plan, onRun, onEdit, onAd
         </ul>
       </Collapsible>
       <div className="preview-actions">
+        {saved && <span className="muted" role="status">Search saved to project</span>}
+        {onSave && <button className="button button-secondary" onClick={onSave} disabled={running || saved}>Save search</button>}
         <button className="button button-primary" onClick={onRun} disabled={running || !canRun}>{running ? <><Spinner /> Starting…</> : <>Run now <span aria-hidden="true">→</span></>}</button>
         <button className="button button-secondary" onClick={onEdit} disabled={running}>Edit plan</button>
         <button className="button button-quiet" onClick={onAdvanced} disabled={running}>Advanced configuration</button>
@@ -216,6 +230,14 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
   const [busy, setBusy] = useState("");
   const [editing, setEditing] = useState<"" | "basic" | "advanced">("");
   const [saveError, setSaveError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const previousProject = useRef(projectId);
+  useEffect(() => {
+    if (previousProject.current && previousProject.current !== projectId) {
+      setText(""); setPlan(null); setInterpretation(null); setSummary([]); setSaved(false); setEditing(""); setProposal(null);
+    }
+    previousProject.current = projectId;
+  }, [projectId]);
   const [platforms, setPlatforms] = useState<PlatformRow[]>([]);
   const [providers, setProviders] = useState<ProviderProfileRow[]>([]);
   const [providerTypes, setProviderTypes] = useState<Record<string, string>>({});
@@ -235,6 +257,7 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
   const chosenProvider = providerChoice === "none" ? "none"
     : providers.some((p) => p.id === providerChoice) ? providerChoice : (defaultProvider || (providers[0]?.id ?? "none"));
   const chooseProvider = (id: string) => {
+    setSaved(false);
     setProviderChoice(id);
     try { localStorage.setItem("sugar.providerChoice", id); } catch { /* storage may be unavailable */ }
     setPlan((current) => current ? { ...current, provider: { ...current.provider, profile_id: id, use_for_planning: id !== "none" } } : current);
@@ -252,15 +275,22 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
   const interpret = useCallback(async () => {
     if (!text.trim()) return;
     setBusy("interpret"); setSaveError(""); setProposal(null);
+    setSaved(false);
     try {
       const result = await research.interpret(text.trim(), prefs.interpreter, projectId, chosenProvider);
       setInterpretation(result);
       setPlan(result.plan);
       setSummary(result.summary);
+      if (result.plan && !result.needs_manual_entry) {
+        const id = projectId || await ensureProject(result.plan.topic || "New research project");
+        const stored = await research.savePlan(id, result.plan, "interpreted", text.trim());
+        setPlan(stored.plan); setSummary(stored.summary); setSaved(true);
+        await onOverview(id);
+      }
     } catch (issue) {
       onError(issue instanceof Error ? issue.message : String(issue));
     } finally { setBusy(""); }
-  }, [text, prefs.interpreter, projectId, chosenProvider, onError]);
+  }, [text, prefs.interpreter, projectId, chosenProvider, onError, ensureProject, onOverview]);
 
   const submitManual = async (fields: Record<string, unknown>) => {
     setBusy("manual");
@@ -269,6 +299,10 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
       if (!result.plan) { onError(result.issues.map((i) => i.message).join(" ") || "The plan is not valid."); return; }
       setInterpretation((current) => current ? { ...current, method: "manual", needs_manual_entry: false, plan: result.plan, summary: result.summary, clarifications: [], assumptions: [] } : current);
       setPlan(result.plan); setSummary(result.summary);
+      setSaved(false);
+      const id = projectId || await ensureProject(result.plan.topic || "New research project");
+      const stored = await research.savePlan(id, result.plan, "manual", text.trim());
+      setPlan(stored.plan); setSummary(stored.summary); setSaved(true); await onOverview(id);
     } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
   };
 
@@ -284,7 +318,7 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
     try {
       const { project, saved } = await persistPlan(plan, interpretation?.method === "manual" ? "manual" : "interpreted", projectId || undefined);
       const run = await research.startRun(project, { plan: saved.plan, debug: prefs.debug });
-      await onOverview();
+      await onOverview(project);
       onRunStarted(project, run);
       setInterpretation(null); setPlan(null);
     } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
@@ -294,14 +328,19 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
     setBusy("save"); setSaveError("");
     try {
       const normalized = await research.normalizePlan(edited);
-      if (interpretation || !projectId) {
-        setPlan(normalized.plan); setSummary(normalized.summary);
-      } else {
-        const { saved } = await persistPlan(normalized.plan, "edited", projectId);
-        setPlan(saved.plan); setSummary(saved.summary);
-        await onOverview();
-      }
+      const { project, saved: stored } = await persistPlan(normalized.plan, "edited", projectId || undefined);
+      setPlan(stored.plan); setSummary(stored.summary); setSaved(true);
+      await onOverview(project);
       setEditing("");
+    } catch (issue) { setSaveError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
+  };
+
+  const saveSearch = async () => {
+    if (!plan) return;
+    setBusy("save"); setSaveError("");
+    try {
+      const { project, saved: stored } = await persistPlan(plan, "saved", projectId || undefined);
+      setPlan(stored.plan); setSummary(stored.summary); setSaved(true); await onOverview(project);
     } catch (issue) { setSaveError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
   };
 
@@ -363,7 +402,8 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
       {projectId && <ProfileCard projectId={projectId} onApplied={() => void onOverview()} onError={onError} />}
       {projectId && <FeedsCard projectId={projectId} saved={overview?.settings?.rss_feeds || []} savedSites={overview?.settings?.web_seeds || []} onSaved={() => void onOverview()} onError={onError} />}
 
-      {plan && <PlanPreview summary={summary} interpretation={interpretation} plan={plan} advanced={advanced} running={busy === "run"} canRun onRun={() => void runNow()}
+      {saveError && !editing && <div className="notice notice-warn" role="alert">Search could not be saved: {saveError}</div>}
+      {plan && <PlanPreview summary={summary} interpretation={interpretation} plan={plan} advanced={advanced} running={Boolean(busy)} canRun onRun={() => void runNow()} saved={saved} onSave={() => void saveSearch()}
         onEdit={() => setEditing("basic")} onAdvanced={() => setEditing("advanced")} onOpenSettings={onOpenSettings} />}
 
       {!plan && storedPlan && overview && (

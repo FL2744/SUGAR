@@ -182,6 +182,12 @@ class ResearchPipeline:
         self._hashtags_sent: set[str] = set()
         self.controller = RunController()
         self.events = EventLog(run.run_id, project.events_path(run.run_id), capture_debug=run.debug)
+        from .web_sources import WebCrawlState
+        self.extra_config["_web_state"] = WebCrawlState()
+        self.extra_config["_rss_cache"] = {}
+        self.extra_config["_web_checkpoint"] = self.controller.checkpoint
+        self._web_crawls: list[dict[str, Any]] = []
+        self.extra_config["_web_observer"] = self._observe_web
         self.timings = self.events.timings
         self.dedup = DedupIndex(plan.dedup["threshold"], plan.dedup["enabled"])
         self.items: dict[str, ResearchItem] = {}
@@ -200,6 +206,7 @@ class ResearchPipeline:
         self._needs_translation = 0
         self._limit_notice = False
         self._last_save = 0.0
+        self._last_items_save = 0.0
         self._outstanding = {s: 0 for s in STAGES}
         self.counts: dict[str, int] = {k: 0 for k in (
             "queries_total", "queries_done", "queries_failed", "sources_total", "sources_done", "sources_failed", "sources_skipped",
@@ -349,6 +356,9 @@ class ResearchPipeline:
             self.run.collected_source_ids = [i.item_id for i in self.items.values() if i.status in {"collected", "processed"}]
             try:
                 with self.timings.measure("serialization"):
+                    if self.items and (force or now - self._last_items_save >= 15):
+                        self.project.save_items(self.run.run_id, list(self.items.values()))
+                        self._last_items_save = now
                     self.project.save_run(self.run)
             except OSError:
                 pass
@@ -571,6 +581,17 @@ class ResearchPipeline:
 
     def _run_query(self, handle: SourceHandle, query: QuerySpec) -> bool:
         plan = self.plan
+        with self._lock:
+            remaining = plan.limits["max_items_total"] - self.counts["collected"]
+            source_cap = plan.limits["per_source"].get(handle.name, {}).get("max_items")
+            if source_cap:
+                remaining = min(remaining, source_cap - handle.items)
+        if remaining <= 0:
+            self.events.emit("query.skipped", source=handle.name, query_id=query.id, reason="item_limit",
+                             message="The collection limit has been reached; no further request was sent.")
+            with self._lock:
+                self.counts["queries_done"] += 1
+            return True
         adapted, why = adapt_for_platform(query, handle.name, self.secrets)
         if adapted is None or (handle.name == "mastodon" and adapted in self._hashtags_sent):
             self.events.emit("query.skipped", source=handle.name, message=why or f"{adapted} was already searched on {handle.name.capitalize()}.",
@@ -587,7 +608,7 @@ class ResearchPipeline:
         per_source = limits["per_source"].get(handle.name, {})
         request = CollectorRequest(
             search_terms=[dispatched], since=plan.timeframe["start"] or None, until=plan.timeframe["end"] or None,
-            max_posts_per_query=per_source.get("max_posts_per_query", limits["max_posts_per_query"]),
+            max_posts_per_query=min(remaining, per_source.get("max_posts_per_query", limits["max_posts_per_query"])),
             max_pages_per_query=per_source.get("max_pages_per_query", limits["max_pages_per_query"]),
             config={"include_retweets": False, "post_languages": [c for c in plan.languages if c != "auto"][:5], **self.extra_config},
             secrets=self.secrets)
@@ -651,6 +672,12 @@ class ResearchPipeline:
             self._ingest(handle, query, dispatched, records, elapsed)
             return True
         return False
+
+    def _observe_web(self, kind: str, **data: Any) -> None:
+        self.events.emit("web." + kind, source="web", stage="search", **data)
+        if kind == "crawl.completed":
+            with self._lock:
+                self._web_crawls.append({k: v for k, v in data.items() if k != "message"})
 
     @staticmethod
     def _remedy(source: str, info: dict[str, Any], accepts_credentials: bool = False) -> str:
@@ -737,6 +764,15 @@ class ResearchPipeline:
                                  item_id=item.item_id, duplicate_of=duplicate[0], similarity=item.similarity, kind="near_duplicate")
                 continue
             # -- accepted
+            # Reserve capacity atomically: parallel sources must share the same total cap.
+            with self._lock:
+                full = self.counts["collected"] >= plan.limits["max_items_total"] or bool(per_source_cap and handle.items >= per_source_cap)
+                if not full:
+                    self.counts["collected"] += 1
+                    handle.items += 1
+            if full:
+                self._reject(item, "rejected", "The shared collection limit was reached by another source.")
+                continue
             self._stage("collect", "running")
             self.events.emit("item.download.started", source=item.platform, item_id=item.item_id, url=item.url, mode="batched_with_search")
             item.add_transformation("stored", chars=len(item.original_text))
@@ -745,9 +781,7 @@ class ResearchPipeline:
             self.timings.record("download", per_record_ms / 1000, source=handle.name)
             self._process_item(item, platform_language)
             with self._lock:
-                handle.items += 1
                 item.status = "collected"
-                self.counts["collected"] += 1
                 if item.known_from_run:
                     self.counts["known"] += 1
                     self.counts["changed"] += 1 if item.changed_since_known else 0
@@ -1005,7 +1039,10 @@ class ResearchPipeline:
         except OSError as exc:
             self._record_error(stage="results", subsystem="storage", classification="fatal", message=f"Could not save results: {exc}", exc=exc)
         timings = self.timings.snapshot()
-        self.run.metrics = {"duration_ms": duration, "timings": timings, "events": self.events.last_seq, "llm_budget": self.budget.snapshot()}
+        target = self.plan.limits.get("target_items", 0)
+        self.run.metrics = {"duration_ms": duration, "timings": timings, "events": self.events.last_seq, "llm_budget": self.budget.snapshot(), "web_crawls": self._web_crawls,
+                            "collection": {"target": target, "unique_collected": self.counts["collected"], "target_reached": self.counts["collected"] >= target if target else None,
+                                           "note": "Source access, query coverage and deduplication determine the attainable count. Collection is not a random population sample."}}
         self.events.emit("timing.recorded", debug=True, message="Timing summary", **timings)
         if cancelled:
             self.events.emit("run.cancelled", stage="results", message="Run cancelled. Partial results were kept.")

@@ -48,6 +48,7 @@ export const research = {
   postReview: (id: string, itemId: string, action: Record<string, unknown>, author = "") =>
     apiPost<{ item_id: string; review: ReviewState; summary: ReviewSummary }>(`${ws(id)}/research/review`, { item_id: itemId, author, ...action }),
   postMap: (id: string, params: Record<string, string | number | boolean | undefined> = {}) => api<PostMap>(`${ws(id)}/research/map/posts${query(params)}`),
+  exportMap: (id: string, filters: Record<string, string | number>) => apiPost<{ archive: string; directory: string; files: string[] }>(`${ws(id)}/research/map/export`, filters),
   institutions: (id: string, params: Record<string, string | number | boolean | undefined> = {}) => api<InstitutionList>(`${ws(id)}/research/institutions${query(params)}`),
   institution: (id: string, entityId: string) => api<{ institution: InstitutionDetail }>(`${ws(id)}/research/institutions/${encodeURIComponent(entityId)}`).then((r) => r.institution),
   recordInstitution: (id: string, body: { values: Record<string, unknown>; evidence: Array<Record<string, unknown>>; entity_id?: string; author?: string }) =>

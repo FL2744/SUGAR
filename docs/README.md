@@ -2,6 +2,8 @@
 
 Use this index to find the current design or methodology document for the part of SUGAR you are changing or using.
 
+- [`map-and-bulk-research.md`](map-and-bulk-research.md) — larger map, date playback, bulk targets, saved searches, public source presets, adaptive website collection and analysis exports.
+
 ## Architecture and development
 
 - [`architecture.md`](architecture.md) — system boundaries, dependency direction, desktop/core separation, and engineering rules.

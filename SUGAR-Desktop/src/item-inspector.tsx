@@ -139,7 +139,13 @@ export function ItemInspector({ projectId, runId, itemId, author, onClose }: { p
                 <div><dt>Run</dt><dd>{item.run_id}{item.derived_from?.run_id ? ` · reprocessed from ${item.derived_from.run_id}` : ""}</dd></div>
                 <div><dt>Collection status</dt><dd>{titleCase(item.status)}{item.rejection_reason ? ` — ${item.rejection_reason}` : ""}</dd></div>
                 {item.geography.length > 0 && <div><dt>Geography</dt><dd>{item.geography.join(", ")}</dd></div>}
-              </dl></div>
+              </dl>
+              {item.source_metadata?.discovery && <details className="web-discovery"><summary>Why this website page was collected</summary>
+                <p>{item.source_metadata.discovery.reason}</p>
+                <ol>{item.source_metadata.discovery.path.map((url) => <li key={url}><a href={url} target="_blank" rel="noreferrer">{url}</a></li>)}</ol>
+                {item.source_metadata.crawl_summary && <small className="muted">Website search stopped: {item.source_metadata.crawl_summary.stop_reason.replaceAll("_", " ")}. {item.source_metadata.crawl_summary.pages_fetched} pages fetched, {item.source_metadata.crawl_summary.cache_hits} cached pages reused, {item.source_metadata.crawl_summary.model_calls} model calls.</small>}
+              </details>}
+              </div>
             <div className="inspector-section"><span className="eyebrow">EVIDENCE CHAIN</span>
               <ul className="chain">{roots.map((node) => renderNode(node, 0))}</ul>
               <small className="muted">Each step links back to the one before it, so a finding can be traced to the original post.</small></div>

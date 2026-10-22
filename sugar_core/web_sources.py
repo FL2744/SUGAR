@@ -1,8 +1,8 @@
 """Read public web pages the way a careful analyst would, and see how a page has changed over time.
 
 Most of what an institution says about itself is on its own website and its host's website, not on social
-media. This module fetches pages you name (and, one step deep, the news/event pages they link to on the same
-site), extracts readable text and a publication date, and returns ordinary ``PostRecord`` rows so
+media. This module fetches pages you name and adaptively selects same-site links using query relevance and
+feedback from the pages it reads. It extracts readable text and a publication date, and returns ordinary ``PostRecord`` rows so
 de-duplication, translation, change detection, provenance and review work exactly as they do for any source.
 
 It is deliberately polite and safe:
@@ -23,11 +23,12 @@ import re
 import socket
 import threading
 import time
-from collections import OrderedDict
+from collections import Counter, OrderedDict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable
 from urllib import robotparser
-from urllib.parse import urldefrag, urljoin, urlparse
+from urllib.parse import parse_qsl, urlencode, urldefrag, urljoin, urlparse, urlunparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -115,18 +116,23 @@ def fetch(session: requests.Session, url: str, *, delay: float = 1.0, robots: bo
             raise PermissionError(f"{urlparse(current).netloc} asks automated readers not to fetch {urlparse(current).path or '/'} (robots.txt).")
         _wait_for_host(urlparse(current).netloc, delay)
         response = session.get(current, timeout=_TIMEOUT, allow_redirects=False, stream=True)
-        if response.status_code in {301, 302, 303, 307, 308} and response.headers.get("Location"):
-            current = urljoin(current, response.headers["Location"])
-            continue
-        if response.status_code == 429:
-            raise RuntimeError(f"{urlparse(current).netloc} rate limit reached (429); retry after {response.headers.get('Retry-After', 'a short wait')}.")
-        response.raise_for_status()
-        content = b""
-        for chunk in response.iter_content(65536):
-            content += chunk
-            if len(content) > _MAX_BYTES:
-                break
-        return current, content, response
+        try:
+            if response.status_code in {301, 302, 303, 307, 308} and response.headers.get("Location"):
+                current = urljoin(current, response.headers["Location"])
+                continue
+            if response.status_code == 429:
+                error = RuntimeError(f"{urlparse(current).netloc} rate limit reached (429); retry after {response.headers.get('Retry-After', 'a short wait')}.")
+                error.response = response
+                raise error
+            response.raise_for_status()
+            content = b""
+            for chunk in response.iter_content(65536):
+                content += chunk
+                if len(content) > _MAX_BYTES:
+                    break
+            return current, content[:_MAX_BYTES], response
+        finally:
+            getattr(response, "close", lambda: None)()
     raise RuntimeError("Too many redirects.")
 
 
@@ -183,72 +189,168 @@ def _terms_match(words: list[str], text: str) -> bool:
     return not words or all(w in low for w in words)
 
 
+@dataclass
+class WebCrawlState:
+    """One run's fetched-page cache and hard network budget; never persisted as settings."""
+    max_fetches: int = 240
+    pages: dict[str, Any] = field(default_factory=dict)
+    failures: dict[str, str] = field(default_factory=dict)
+    fetched: int = 0
+
+
+_STOPWORDS = set("a an the in on at of for and or to by with from is are about search find latest news website site".split())
+_SKIP_PATH = re.compile(r"(?:\.(?:jpg|jpeg|png|gif|webp|svg|mp4|mp3|zip|pdf|docx?|xlsx?|css|js)$)|(?:/(?:login|logout|signin|cart|wp-admin)(?:/|$))", re.I)
+
+
+def _crawl_url(url: str) -> str:
+    parsed = urlparse(urldefrag(url)[0])
+    query = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if not k.casefold().startswith("utm_") and k.casefold() not in {"fbclid", "gclid"}]
+    return urlunparse(parsed._replace(query=urlencode(sorted(query))))
+
+
+def _query_words(query: str) -> list[str]:
+    return [w for w in re.findall(r"[^\W_]+", query.casefold(), re.UNICODE) if w not in _STOPWORDS]
+
+
 def collect_web(*, search_terms: Iterable[str], seeds: Iterable[str], since: str | None = None, until: str | None = None,
                 max_posts_per_query: int = 25, follow: bool = True, delay: float = 1.0, robots: bool = True,
-                session: requests.Session | None = None, **_: Any) -> list[PostRecord]:
-    """Pages from the sites you named whose text mentions the query (every word, any order)."""
-    urls = [str(s).strip() for s in seeds if str(s).strip().lower().startswith(("http://", "https://"))]
+                session: requests.Session | None = None, state: WebCrawlState | None = None, on_event: Any = None,
+                max_pages_per_query: int = 1, page_budget: int | None = None, max_depth: int = 3, patience: int = 6, checkpoint: Any = None, **_: Any) -> list[PostRecord]:
+    """Observe → rank links → read → reassess until a relevance or hard budget stop.
+
+    All decisions are local. Seed origins bound discovery, robots and host pacing
+    still apply, and every kept page records its path and selection reason.
+    """
+    urls = list(dict.fromkeys(_crawl_url(str(s).strip()) for s in seeds if str(s).strip().lower().startswith(("http://", "https://"))))[:50]
     if not urls:
         raise ValueError("Websites need at least one address. Add the sites to read under Research → Your own sources.")
     session = session or _session()
-    pages: dict[str, dict[str, Any]] = {}
-    failures: list[str] = []
+    state = state if state is not None else WebCrawlState()
+    budget = max(1, min(200, page_budget if page_budget is not None else max(24, max_pages_per_query * 4)))
+    records: OrderedDict[tuple[str, str], PostRecord] = OrderedDict()
 
-    def read(url: str) -> dict[str, Any] | None:
-        if url in pages:
-            return pages[url]
+    def emit(kind: str, **data: Any) -> None:
+        if on_event:
+            on_event(kind, **data)
+
+    def read(url: str) -> tuple[dict[str, Any] | None, bool]:
+        if url in state.pages:
+            return state.pages[url], True
+        if url in state.failures or state.fetched >= state.max_fetches:
+            return None, True
+        state.fetched += 1
         try:
             final, content, response = fetch(session, url, delay=delay, robots=robots)
         except (requests.RequestException, UnsafeAddress, PermissionError, RuntimeError) as exc:
-            failures.append(f"{urlparse(url).netloc}: {exc}")
-            return None
+            if getattr(getattr(exc, "response", None), "status_code", None) == 429:
+                exc.partial_records = list(records.values())
+                raise
+            state.failures[url] = str(exc)[:300]
+            emit("page.skipped", url=url, message=str(exc)[:300])
+            return None, False
         page = extract_page(content, final)
         page.update({"url": final, "etag": response.headers.get("ETag", ""), "last_modified": response.headers.get("Last-Modified", ""),
                      "status": response.status_code, "hash": hashlib.sha256(page["text"].encode("utf-8")).hexdigest()[:16]})
-        pages[url] = page
-        return page
+        state.pages[url] = page
+        return page, False
 
-    seed_pages = [read(u) for u in urls]
-    if not any(seed_pages):
-        raise RuntimeError("None of the websites could be read. " + "; ".join(failures)[:300])
-    if follow:
-        budget = 12
-        for seed, page in zip(urls, seed_pages):
+    for query in search_terms:
+        words = _query_words(query)
+        frontier: dict[str, dict] = {u: {"url": u, "anchor": "", "depth": 0, "path": [u], "reason": "analyst-provided seed"} for u in urls}
+        visited: set[str] = set()
+        hashes: set[str] = set()
+        learned: Counter[str] = Counter()
+        fetched = cache_hits = matched = misses = readable = 0
+        stop = "frontier_exhausted"
+        query_records = []
+
+        def rank(candidate: dict) -> float:
+            if candidate["depth"] == 0:
+                return 1000
+            text = (candidate["anchor"] + " " + urlparse(candidate["url"]).path).casefold()
+            hits = sum(w in text for w in words)
+            feedback = min(2, sum(w in text for w, _n in learned.most_common(12)))
+            return 4 * hits + 2 * bool(_LISTING_HINTS.search(text)) + feedback - .2 * candidate["depth"]
+
+        while frontier:
+            if checkpoint:
+                checkpoint()
+            candidate = max(frontier.values(), key=lambda c: (rank(c), -len(c["url"]), c["url"]))
+            url = candidate["url"]
+            del frontier[url]
+            if url in visited:
+                continue
+            if candidate["depth"] and rank(candidate) <= 0:
+                stop = "low_relevance_frontier"
+                break
+            cached = url in state.pages or url in state.failures
+            if not cached and (fetched >= budget or state.fetched >= state.max_fetches):
+                stop = "query_page_budget" if fetched >= budget else "run_page_budget"
+                # Cached pages can still provide evidence without another request.
+                frontier = {u: c for u, c in frontier.items() if u in state.pages}
+                continue
+            visited.add(url)
+            priority = round(rank(candidate), 3)
+            emit("page.selected", url=url, parent_url=candidate["path"][-2] if candidate["depth"] else "", depth=candidate["depth"], priority=priority,
+                 cached=cached, message=f"{'Reusing' if cached else 'Reading'} {url}: {candidate['reason']}")
+            page, hit = read(url)
+            cache_hits += int(hit)
+            fetched += int(not hit)
             if not page:
                 continue
-            ranked = sorted(page["links"], key=lambda l: (0 if _LISTING_HINTS.search(l[1] + " " + urlparse(l[0]).path) else 1))
-            for target, _text in ranked:
-                if budget <= 0:
-                    break
-                if target != seed and target not in pages and _LISTING_HINTS.search(_text + " " + urlparse(target).path):
-                    read(target)
-                    budget -= 1
-    records: OrderedDict[tuple[str, str], PostRecord] = OrderedDict()
-    for query in search_terms:
-        words = [w for w in re.findall(r"[^\W_]+", query.casefold(), re.UNICODE) if w]
-        matched = 0
-        for url, page in pages.items():
-            if not page or not page["text"] or not _terms_match(words, f"{page['title']} {page['text']}"):
-                continue
-            published = page["published"]
-            if published and not in_inclusive_date_range(published, since, until):
-                continue
-            key = ("web", page["url"])
-            record = PostRecord(
-                platform="web", native_id=page["url"], canonical_url=page["url"], query=query, query_matches=[query], content_type="web_page",
-                source_mode="web_fetch", source_host=urlparse(page["url"]).netloc, source_url=page["url"], published_at=published,
-                author_name=urlparse(page["url"]).netloc, platform_language=page["language"],
-                original_text=normalize_whitespace(f"{page['title']}. {page['text']}")[:_MAX_TEXT],
-                raw_stats={"content_hash": page["hash"], "http_status": page["status"], "etag": page["etag"], "last_modified": page["last_modified"],
-                           "date_meaning": "published" if published else "no date found on the page"})
-            if key in records:
-                records[key].add_query_match(query)
-            else:
-                record.add_query_match(query)
-                records[key] = record
-            matched += 1
+            readable += 1
+            relevant = bool(page["text"]) and _terms_match(words, f"{page['title']} {page['text']}")
+            in_window = not page["published"] or in_inclusive_date_range(page["published"], since, until)
+            emit("page.assessed", url=page["url"], relevant=relevant, in_window=in_window, cached=hit,
+                 message=f"{'Query matched' if relevant else 'Query not matched'}: {page['title'][:120]}")
+            misses = 0 if relevant else misses + int(candidate["depth"] > 0)
+            if relevant:
+                learned.update(w for w in _query_words(page["title"]) if len(w) > 3 and w not in words)
+            if relevant and in_window:
+                key = ("web", page["url"])
+                record = PostRecord(
+                    platform="web", native_id=page["url"], canonical_url=page["url"], query=query, query_matches=[query], content_type="web_page",
+                    source_mode="web_fetch", source_host=urlparse(page["url"]).netloc, source_url=page["url"], published_at=page["published"],
+                    author_name=urlparse(page["url"]).netloc, platform_language=page["language"],
+                    original_text=normalize_whitespace(f"{page['title']}. {page['text']}")[:_MAX_TEXT],
+                    raw_stats={"content_hash": page["hash"], "http_status": page["status"], "etag": page["etag"], "last_modified": page["last_modified"],
+                               "date_meaning": "published" if page["published"] else "no date found on the page",
+                               "discovery": {"method": "local_adaptive_crawl_v1", "path": candidate["path"], "depth": candidate["depth"], "priority": priority,
+                                             "reason": candidate["reason"], "query_terms": words, "cached": hit}})
+                if key in records:
+                    records[key].add_query_match(query)
+                else:
+                    record.add_query_match(query)
+                    records[key] = record
+                query_records.append(records[key])
+                matched += 1
             if matched >= max_posts_per_query:
+                stop = "item_target_reached"
                 break
+            if misses >= max(1, patience):
+                stop = "diminishing_relevance"
+                break
+            if follow and candidate["depth"] < min(6, max_depth) and page["hash"] not in hashes:
+                hashes.add(page["hash"])
+                for target, anchor in page["links"][:500]:
+                    target = _crawl_url(target)
+                    if target in visited or _SKIP_PATH.search(urlparse(target).path):
+                        continue
+                    hint = (anchor + " " + urlparse(target).path).casefold()
+                    keyword_hits = [w for w in words if w in hint]
+                    reason = "query terms in link: " + ", ".join(keyword_hits) if keyword_hits else "news, event or program listing"
+                    row = {"url": target, "anchor": anchor, "depth": candidate["depth"] + 1, "path": candidate["path"] + [target], "reason": reason}
+                    if rank(row) > 0 and (target not in frontier or rank(row) > rank(frontier[target])):
+                        frontier[target] = row
+                if len(frontier) > 1000:
+                    frontier = dict(sorted(frontier.items(), key=lambda kv: rank(kv[1]), reverse=True)[:1000])
+        summary = {"query": query, "stop_reason": stop, "pages_fetched": fetched, "cache_hits": cache_hits, "pages_assessed": readable,
+                   "matched": matched, "run_fetches": state.fetched, "run_fetch_budget": state.max_fetches, "model_calls": 0}
+        for record in query_records:
+            record.raw_stats["crawl_summary"] = summary
+        emit("crawl.completed", **summary, message=f"Website search stopped: {stop.replace('_', ' ')}; {matched} matches, {fetched} pages fetched, {cache_hits} cached pages, no model calls.")
+        if not readable and not state.pages:
+            raise RuntimeError("None of the websites could be read. " + "; ".join(state.failures.values())[:300])
     return list(records.values())
 
 
