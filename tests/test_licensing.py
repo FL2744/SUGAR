@@ -18,7 +18,7 @@ def test_apache_license_contract_is_declared_consistently():
     assert "Version 2.0, January 2004" in license_text
 
     notice = (ROOT / "NOTICE").read_text(encoding="utf-8")
-    attribution = "Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab, Fall 2026"
+    attribution = "Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab"
     assert f"Copyright 2026 {attribution}." in notice
     assert f"Copyright for this release is identified as **{attribution}**" in (ROOT / "README.md").read_text(encoding="utf-8")
     assert f"Copyright 2026 {attribution}." in (ROOT / "SUGAR-Desktop/src/about-page.tsx").read_text(encoding="utf-8")

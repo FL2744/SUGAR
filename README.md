@@ -8,7 +8,7 @@ SUGAR is a cross-platform public-source research system for collecting social-me
 
 Current package version: **1.9.0**.
 
-License: **Apache License 2.0**. Copyright 2026 Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab, Fall 2026.
+License: **Apache License 2.0**. Copyright 2026 Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab.
 
 Authors: **Alejandro Grenier** and **William Taggart**. Developed in connection with **Virginia Tech Diplomacy Lab** coursework and research (see the project-context note at the end of this README).
 
@@ -274,7 +274,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), and [`CH
 
 SUGAR source code and repository documentation are released under the [Apache License 2.0](LICENSE), except for third-party material that carries its own license. See [`NOTICE`](NOTICE) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for attribution and dependency-license information.
 
-SUGAR was developed in connection with Virginia Tech Diplomacy Lab coursework and research. Copyright for this release is identified as **Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab, Fall 2026**; Virginia Tech is not identified as the licensor or copyright holder. References to Virginia Tech or the U.S. Department of State describe project context and do not make SUGAR an official product, endorsement, security authorization, or government publication.
+SUGAR was developed in connection with Virginia Tech Diplomacy Lab coursework and research. Copyright for this release is identified as **Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab**; Virginia Tech is not identified as the licensor or copyright holder. References to Virginia Tech or the U.S. Department of State describe project context and do not make SUGAR an official product, endorsement, security authorization, or government publication.
 
 Apache-2.0 permits use, modification, and redistribution, including by government, academic, nonprofit, and commercial users, subject to the license terms. The license does not grant rights to third-party platform content, collected research data, or third-party trademarks.
 

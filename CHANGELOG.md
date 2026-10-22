@@ -13,7 +13,7 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ### Attribution
 
-- Credit Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab, Fall 2026 in the institutional-status statement, NOTICE, and app About screen.
+- Credit Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab in the institutional-status statement, NOTICE, and app About screen.
 
 ## 1.8.0 - 2026-10-01
 
