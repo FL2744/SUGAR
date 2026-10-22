@@ -31,7 +31,7 @@ from .research_items import ResearchItem
 from .research_plan import utc_now
 
 _LOCK = threading.Lock()
-FIELDS = ("audience", "program", "activity_type", "attendance")
+FIELDS = ("audience", "program", "activity_type", "attendance", "priority_tier", "audience_group", "program_alias", "narrative_flag")
 
 # Additional phrases per canonical label, in several languages. Latin-script phrases match on word boundaries;
 # CJK phrases match as substrings. A bare "students" is deliberately absent: it is too vague to label.
@@ -200,7 +200,7 @@ def propose_by_model(items: list[ResearchItem], provider: LLMProvider, budget: L
                     if not digits or not 5 <= int(digits) <= 5_000_000 or digits not in re.sub(r"[,\s]", "", quote):
                         continue
                     label = digits
-                elif label not in allowed[field]:
+                elif label not in allowed.get(field, set()):
                     continue
                 out.setdefault(item.item_id, []).append({"field": field, "label": label, "quote": quote[:400], "method": "model"})
     return out, warnings
@@ -210,6 +210,8 @@ def propose_by_model(items: list[ResearchItem], provider: LLMProvider, budget: L
 class CodingStore:
     def __init__(self, project: Any) -> None:
         self.path = project.root / "coding.jsonl"
+        from .mission_rubric import fingerprint, load_rubric
+        self.rubric_fingerprint = fingerprint(load_rubric(project))
 
     def events(self) -> list[dict[str, Any]]:
         try:
@@ -242,16 +244,42 @@ class CodingStore:
             iid = e.get("item_id", "")
             if item_id and iid != item_id:
                 continue
+            if e.get("op") == "clear_priority_proposals":
+                prior = items.get(iid, {})
+                for key in list(prior):
+                    if key[0] == "priority_tier" and prior[key]["status"] == "proposed":
+                        del prior[key]
+                continue
             key = (e.get("field", ""), e.get("label", ""))
+            if e.get("op") == "propose" and key[0] == "priority_tier":
+                prior = items.get(iid, {})
+                for old in list(prior):
+                    if old[0] == "priority_tier" and old != key and prior[old]["status"] == "proposed":
+                        del prior[old]
             code = items.setdefault(iid, {}).setdefault(key, {"field": key[0], "label": key[1], "quote": e.get("quote", ""), "methods": [], "status": "proposed",
                                                               "decided_by": "", "decided_at": "", "run_id": e.get("run_id", "")})
             if e.get("op") == "propose":
+                if code["status"] != "confirmed":
+                    for field in ("rule", "rubric_version", "rubric_fingerprint"):
+                        if e.get(field):
+                            code[field] = e[field]
+                    code["quote"] = e.get("quote") or code["quote"]
+                    code["run_id"] = e.get("run_id") or code["run_id"]
                 if e.get("method") and e["method"] not in code["methods"]:
                     code["methods"].append(e["method"])
                 code["quote"] = code["quote"] or e.get("quote", "")
             elif e.get("op") in {"confirm", "reject"}:
                 code.update({"status": "confirmed" if e["op"] == "confirm" else "rejected", "decided_by": e.get("by", ""), "decided_at": e.get("at", "")})
-        result = {iid: {"codes": sorted(c.values(), key=lambda x: (x["field"], x["label"]))} for iid, c in items.items()}
+        result = {}
+        for iid, values in items.items():
+            codes = []
+            for code in values.values():
+                current = not code.get("rubric_fingerprint") or code["rubric_fingerprint"] == self.rubric_fingerprint
+                if code["status"] == "proposed" and not current:
+                    continue
+                code["rubric_current"] = current
+                codes.append(code)
+            result[iid] = {"codes": sorted(codes, key=lambda x: (x["field"], x["label"]))}
         return result.get(item_id, {"codes": []}) if item_id else result
 
     def summary(self, item_ids: set[str] | None = None) -> dict[str, Any]:
@@ -267,29 +295,49 @@ class CodingStore:
                 if code["status"] == "confirmed":
                     confirmed[code["field"]][code["label"]] += 1
         return {"proposed": {f: dict(c.most_common()) for f, c in counts.items()}, "confirmed": {f: dict(c.most_common()) for f, c in confirmed.items()},
-                "items_coded": sum(1 for iid in self.state() if item_ids is None or iid in item_ids)}
+                "items_coded": sum(1 for iid, row in self.state().items() if row["codes"] and (item_ids is None or iid in item_ids))}
 
 
 def code_items(project: Any, items: list[ResearchItem], *, provider: LLMProvider | None = None, budget: LLMBudget | None = None, actor: str = "SUGAR") -> dict[str, Any]:
     """Propose codes for the items (patterns always; the model too when one is supplied). Existing decisions are kept."""
     store = CodingStore(project)
     extra = (project.meta().get("settings") or {}).get("coding_terms")
-    proposals: dict[str, list[dict[str, Any]]] = {i.item_id: propose_by_pattern(i, extra) for i in items}
+    from .mission_rubric import classify_text, load_rubric
+    rubric = load_rubric(project)
+    proposals: dict[str, list[dict[str, Any]]] = {i.item_id: [*propose_by_pattern(i, extra), *classify_text(_text(i), rubric)] for i in items if i.status in {"collected", "processed"}}
     warnings: list[str] = []
     if provider is not None:
         model_rows, warnings = propose_by_model(items, provider, budget)
         for iid, rows in model_rows.items():
             proposals.setdefault(iid, []).extend(rows)
+    groups = {"university_students": "students", "technical_vocational_students": "students", "secondary_students": "k12", "educators": "teachers", "government_officials": "officials", "entrepreneurs": "business"}
+    for rows in proposals.values():
+        present = {(p["field"], p["label"]) for p in rows}
+        for p in list(rows):
+            group = groups.get(p["label"]) if p["field"] == "audience" else None
+            if group and ("audience_group", group) not in present:
+                rows.append({"field": "audience_group", "label": group, "quote": p["quote"], "method": "taxonomy_crosswalk"})
+                present.add(("audience_group", group))
     run_of = {i.item_id: i.run_id for i in items}
-    events = [{"id": f"ac_{uuid.uuid4().hex[:10]}", "op": "propose", "item_id": iid, "run_id": run_of.get(iid, ""), "field": p["field"], "label": p["label"], "quote": p["quote"],
-               "method": p["method"], "by": actor, "at": utc_now()} for iid, rows in proposals.items() for p in rows]
-    store.append(events)
+    existing = {(e.get("item_id"), e.get("run_id"), e.get("field"), e.get("label"), e.get("quote"), e.get("rubric_fingerprint", "")) for e in store.events() if e.get("op") == "propose"}
+    current = store.state()
+    current_keys = {(iid, c["field"], c["label"]) for iid, row in current.items() for c in row["codes"]}
+    events = [{**p, "id": f"ac_{uuid.uuid4().hex[:10]}", "op": "propose", "item_id": iid, "run_id": run_of.get(iid, ""),
+               "by": actor, "at": utc_now()} for iid, rows in proposals.items() for p in rows
+              if (iid, run_of.get(iid, ""), p["field"], p["label"], p["quote"], p.get("rubric_fingerprint", "")) not in existing or (iid, p["field"], p["label"]) not in current_keys]
+    clears = [{"id": f"ac_{uuid.uuid4().hex[:10]}", "op": "clear_priority_proposals", "item_id": iid, "run_id": run_of.get(iid, ""), "by": actor, "at": utc_now()}
+              for iid, rows in proposals.items() if not any(p["field"] == "priority_tier" for p in rows)
+              and any(c["field"] == "priority_tier" and c["status"] == "proposed" for c in current.get(iid, {}).get("codes", []))]
+    store.append([*clears, *events])
     return {"items": len(items), "proposed": len(events), "with_codes": sum(1 for r in proposals.values() if r), "model_used": provider is not None, "warnings": warnings}
 
 
 def decide(project: Any, item_id: str, field: str, label: str, decision: str, *, actor: str, run_id: str = "", quote: str = "") -> dict[str, Any]:
     if field not in FIELDS:
         raise ValueError("Unknown kind of code.")
+    from .mission_rubric import AUDIENCE_GROUPS
+    if (field == "priority_tier" and label not in tuple("ABCD")) or (field == "audience_group" and label not in AUDIENCE_GROUPS):
+        raise ValueError("Choose a label from the fixed rubric.")
     if decision not in {"confirm", "reject"}:
         raise ValueError("A decision is confirm or reject.")
     store = CodingStore(project)
@@ -299,7 +347,11 @@ def decide(project: Any, item_id: str, field: str, label: str, decision: str, *,
             raise ValueError("That code was not proposed for this item. Add it with the words from the item that support it.")
         store.append([{"id": f"ac_{uuid.uuid4().hex[:10]}", "op": "propose", "item_id": item_id, "run_id": run_id, "field": field, "label": label, "quote": quote.strip()[:400],
                        "method": "analyst", "by": actor, "at": utc_now()}])
-    store.append([{"id": f"ac_{uuid.uuid4().hex[:10]}", "op": decision, "item_id": item_id, "run_id": run_id, "field": field, "label": label, "by": actor, "at": utc_now()}])
+    decisions = []
+    if field == "priority_tier" and decision == "confirm":
+        decisions = [{"id": f"ac_{uuid.uuid4().hex[:10]}", "op": "reject", "item_id": item_id, "run_id": run_id, "field": field, "label": c["label"], "by": actor, "at": utc_now(), "reason": "Replaced by the reviewer's newly confirmed priority tier"}
+                     for c in store.state(item_id)["codes"] if c["field"] == field and c["label"] != label and c["status"] == "confirmed"]
+    store.append([*decisions, {"id": f"ac_{uuid.uuid4().hex[:10]}", "op": decision, "item_id": item_id, "run_id": run_id, "field": field, "label": label, "by": actor, "at": utc_now()}])
     project.log("activity_coded", {"item_id": item_id, "field": field, "label": label, "decision": decision}, actor=actor)
     return store.state(item_id)
 

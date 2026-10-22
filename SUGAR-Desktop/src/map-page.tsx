@@ -6,6 +6,7 @@ import { NetworkMap, type Basemap, type Line, type MapMode, type PostLayers } fr
 import { ConfidencePill } from "./institutions-page";
 import { axisSummary, timelineBins, windowPosts, type PostStyle } from "./map-data";
 import { PostTimeline } from "./post-timeline";
+import { CountrySnapshotButton } from "./office-desk";
 import { Collapsible, EmptyState, Pill, Spinner, formatTime, relativeTime, titleCase } from "./ui";
 
 const WINDOWS: Array<[string, string]> = [["", "All time"], ["2024-01-01", "Since 2024"], ["12m", "Last 12 months"], ["6m", "Last 6 months"]];
@@ -127,6 +128,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
         <div className="run-controls">
           <div className="segmented" role="radiogroup" aria-label="View">{(["map", "list"] as const).map((v) => <button key={v} role="radio" aria-checked={view === v} className={view === v ? "on" : ""} onClick={() => setView(v)}>{titleCase(v)}</button>)}</div>
           <button className="button button-secondary" onClick={onOpenInstitutions}>Institutions</button>
+          <CountrySnapshotButton projectId={projectId} country={country} onError={setError} />
           <button className="button button-secondary" onClick={() => void exportMapped()} disabled={exporting || rangeError || !posts?.pins.length}>{exporting ? <Spinner /> : "Export mapped posts"}</button>
         </div>
       </div>

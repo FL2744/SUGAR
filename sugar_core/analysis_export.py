@@ -20,7 +20,8 @@ COLUMNS = ["item_id", "run_id", "project_id", "native_id", "platform", "content_
            "translation_provider", "translation_model", "translation_target_language", "query", "query_dispatched", "queries",
            "status", "verdict", "reviewer", "reviewed_at", "tags", "engagement", "origin_latitude", "origin_longitude", "origin_basis",
            "map_latitude", "map_longitude", "map_placement", "mentioned_places", "valence", "intensity", "direction",
-           "sentiment_method", "sentiment_basis", "sentiment_status", "sentiment_reason", "sentiment_terms", "source_metadata"]
+           "sentiment_method", "sentiment_basis", "sentiment_status", "sentiment_reason", "sentiment_terms", "source_metadata",
+           "activity_codes", "proposed_priority_tiers", "confirmed_priority_tiers", "proposed_audience_groups", "confirmed_audience_groups"]
 
 
 def _csv(rows: list[dict], columns: list[str]) -> bytes:
@@ -50,6 +51,8 @@ def analysis_files(project: Any, items: list[Any], *, mapped: dict | None = None
     mapped = mapped if mapped is not None else post_pins(project, accepted)
     pins = {p["item_id"]: p for p in mapped["pins"]}
     reviews = project.review.state()
+    from .activity_coding import CodingStore
+    coding = CodingStore(project).state()
     rows, features = [], []
     daily: dict[tuple, list[dict]] = defaultdict(list)
     for item in accepted:
@@ -71,6 +74,11 @@ def analysis_files(project: Any, items: list[Any], *, mapped: dict | None = None
                "mentioned_places": pin.get("targets", []), **{k: score[k] for k in ("valence", "intensity", "direction")},
                **{f"sentiment_{k}": score[k] for k in ("method", "basis", "status", "reason")}, "sentiment_terms": score["matched_terms"]}
         rows.append(row)
+        codes = coding.get(item.item_id, {}).get("codes", [])
+        row["activity_codes"] = codes
+        for field, suffix in (("priority_tier", "priority_tiers"), ("audience_group", "audience_groups")):
+            row["proposed_" + suffix] = [c["label"] for c in codes if c["field"] == field and c["status"] == "proposed"]
+            row["confirmed_" + suffix] = [c["label"] for c in codes if c["field"] == field and c["status"] == "confirmed"]
         daily[(published[:10], item.platform, item.language)].append(row)
         if pin:
             features.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [pin["longitude"], pin["latitude"]]},
@@ -94,9 +102,14 @@ def analysis_files(project: Any, items: list[Any], *, mapped: dict | None = None
         "coordinates": "WGS84 decimal degrees. GeoJSON coordinate order is longitude, latitude. Origin columns are empty for places named only in text; map columns may be approximate text mentions.",
         "sentiment": NOTE, "missing": "CSV blank / JSON null for unscored axes; never silently converted to neutral or zero.",
         "sampling": "Source items can include social posts, news, encyclopedia articles and scholarship; stratify by platform/content_type. Counts do not establish statistical representativeness or influence.",
+        "coding": "activity_codes retains source quotes, methods and human decisions; priority and audience columns separate proposed from confirmed. See study-rubric.json and coding-events.jsonl for rule versions.",
         "columns": COLUMNS}
     encode = lambda value: json.dumps(redaction.redact(value), ensure_ascii=False, indent=2, allow_nan=False).encode("utf-8")
+    from .mission_rubric import load_rubric
+    ids = {i.item_id for i in accepted}
     return {"analysis.csv": _csv([redaction.redact(r) for r in rows], COLUMNS),
+            "study-rubric.json": encode(load_rubric(project)),
+            "coding-events.jsonl": "".join(json.dumps(redaction.redact(e), ensure_ascii=False) + "\n" for e in CodingStore(project).events() if e.get("item_id") in ids).encode("utf-8"),
             "analysis.jsonl": "".join(json.dumps(redaction.redact(r), ensure_ascii=False, allow_nan=False) + "\n" for r in rows).encode("utf-8"),
             "timeline.csv": _csv(timeline, timeline_columns),
             "map.geojson": encode({"type": "FeatureCollection", "features": features}), "data-dictionary.json": encode(dictionary),

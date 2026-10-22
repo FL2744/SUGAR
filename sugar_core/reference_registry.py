@@ -22,6 +22,14 @@ ENTITY_TYPES = {
     "network", "organization", "institution", "site", "program", "account", "event", "service"
 }
 ENTITY_STATUSES = {"active", "closed", "renamed", "relocated", "unknown"}
+
+
+def import_status(value: Any) -> str:
+    """Normalize documented spreadsheet wording; keep unresolved scale values unverified."""
+    raw = _clean(value).casefold()
+    return {"": "unknown", "open": "active", "tbd": "unknown", "unclear": "unknown", "unclear/unverified": "unknown",
+            "status unclear": "unknown", "active, high confidence": "active", "active, medium confidence": "active",
+            "renamed/restructured": "renamed", "suspended": "unknown", "merged": "unknown"}.get(raw, raw)
 DELIVERY_MODES = {"physical", "mobile", "virtual", "hybrid", "digital"}
 RELATIONSHIP_TYPES = {
     "hosts", "hosted_by", "partner_of", "affiliated_with", "member_of", "successor_to",
@@ -42,6 +50,7 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "longitude": ("longitude", "lon", "lng", "long", "x", "decimal_longitude"),
     "location_precision": ("location_precision", "geo_precision", "precision"),
     "status": ("status", "current_status", "institution_status", "operational_status"),
+    "affiliation_type": ("affiliation_type", "affiliation_category", "affiliation_scale", "affiliation"),
     "status_date": ("status_date", "closed_date", "closure_date", "effective_date"),
     "opened_date": ("opened_date", "opening_date", "start_date"),
     "closed_date": ("closed_date", "closure_date", "end_date"),
@@ -70,7 +79,7 @@ _CLAIM_FIELDS = {
     "accounts", "host_entities", "partner_entities", "audiences", "program_domains",
     "audience_descriptions", "program_descriptions", "normalized_audiences", "normalized_program_domains",
     "delivery_modes", "delivery_mode_descriptions", "normalized_delivery_modes",
-    "coverage_scope", "source_url", "description", "network",
+    "coverage_scope", "source_url", "description", "network", "affiliation_type",
 }
 
 
@@ -265,7 +274,7 @@ def _validate_reference_row(row: dict[str, Any], mapping: dict[str, str], row_nu
     entity_type = _clean(_mapped_value(row, mapping, "entity_type")) or "institution"
     if entity_type.casefold() not in ENTITY_TYPES:
         errors.append(f"entity_type must be one of {', '.join(sorted(ENTITY_TYPES))}")
-    status = _clean(_mapped_value(row, mapping, "status")) or "unknown"
+    status = import_status(_mapped_value(row, mapping, "status"))
     if status.casefold() not in ENTITY_STATUSES:
         errors.append(f"status must be one of {', '.join(sorted(ENTITY_STATUSES))}")
     source_url = _clean(_mapped_value(row, mapping, "source_url"))
@@ -873,9 +882,11 @@ def import_reference_dataset(
             "source_name": base["name"], "source_file": source_relative, "source_sha256": digest,
             "source_row": row_number, "source_url": _clean(_mapped_value(row, mapping, "source_url")),
             "license_notes": base["license_notes"], "imported_at": base["imported_at"],
+            "reported_status": _clean(_mapped_value(row, mapping, "status")),
+            "status_mapping_note": "Imported wording is unverified. Suspended/merged map to unknown pending the final study scale.",
         }
         values: dict[str, Any] = {"entity_id": entity_id, "entity_type": entity_type, "network": item_network,
-                                  "name": name, "status": _clean(_mapped_value(row, mapping, "status")) or "unknown"}
+                                  "name": name, "status": import_status(_mapped_value(row, mapping, "status"))}
         for field in _CLAIM_FIELDS - {"name", "network", "status"}:
             value = _mapped_value(row, mapping, field)
             if value not in (None, ""):
@@ -980,6 +991,7 @@ def import_reference_dataset(
     workspace.register_artifact("reference_dataset_manifest", manifest_path, label="Reference dataset scope and provenance")
     workspace.register_artifact("reference_dataset_source", source_copy, label=base["name"], metadata={"sha256": digest, "license_notes": base["license_notes"]})
     return {"dataset": base, "added": added, "updated": updated, "excluded_rows": errors,
+            "imported_entity_ids": [r["values"]["entity_id"] for r in bulk_records],
             "field_changes": changed_fields, "lifecycle_events": lifecycle_events,
             "similar_name_candidates": similar_name_candidates,
             "conflicted_entities": [{"entity_id": entity["entity_id"], "name": entity.get("name"),

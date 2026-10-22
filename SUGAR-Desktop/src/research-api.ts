@@ -1,4 +1,5 @@
 import { api, apiPost, openEventStream } from "./bridge";
+import type { OfficeExport, OfficeOverview } from "./research-types";
 import type {
   ActivityEvent, ConnectionReport, Interpretation, PlanSpec, PlatformRow, ProjectOverview, ProviderProfileRow, ProviderType,
   AccuracyReport, BriefResult, CodeRow, CodingSummary, ThemeRow, Digest, Monitor, InstitutionCandidate, InstitutionDetail, InstitutionList, PostMap, NetworkPreview, NetworkRow, OverlapResult, SeedRow, ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
@@ -13,6 +14,15 @@ const query = (params: Record<string, string | number | boolean | undefined>) =>
 };
 
 export const research = {
+  office: (id: string) => api<OfficeOverview>(`${ws(id)}/research/office`),
+  assessOffice: (id: string) => apiPost<OfficeOverview & { coded: { proposed: number } }>(`${ws(id)}/research/office/assess`, {}),
+  officeRubric: (id: string) => api<{ rubric: Record<string, unknown> }>(`${ws(id)}/research/office/rubric`).then((r) => r.rubric),
+  saveOfficeRubric: (id: string, rubric: Record<string, unknown>) => apiPost<{ rubric: Record<string, unknown> }>(`${ws(id)}/research/office/rubric`, { rubric }).then((r) => r.rubric),
+  officeFeeds: (id: string, body: { query: string; language: string; country: string; channel: string }) => apiPost<{ feeds: string[]; warnings: string[]; note: string }>(`${ws(id)}/research/office/feeds`, body),
+  countrySnapshot: (id: string, country: string) => apiPost<OfficeExport>(`${ws(id)}/research/office/snapshot`, { country }),
+  approvedAIExport: (id: string) => apiPost<OfficeExport>(`${ws(id)}/research/office/approved-ai`, {}),
+  capturePages: (id: string, pages: Array<{ filename: string; source_url: string; html: string }>) => apiPost<{ imported: number; run_id?: string; errors: Array<{ filename: string; reason: string }>; note?: string }>(`${ws(id)}/research/office/captures`, { pages }),
+  scanCaptureInbox: (id: string) => apiPost<{ imported: number; run_id?: string; errors: Array<{ filename: string; reason: string }>; note?: string }>(`${ws(id)}/research/office/captures/scan`, {}),
   platforms: () => api<{ platforms: PlatformRow[] }>("/api/platforms").then((r) => r.platforms),
   setPlatformCredential: (key: string, value: string) => apiPost<{ platforms: PlatformRow[] }>("/api/platform-credentials", { key, value }).then((r) => r.platforms),
   providers: () => api<{ profiles: ProviderProfileRow[]; default_profile_id: string; types: ProviderType[]; credential_storage: string }>("/api/providers"),

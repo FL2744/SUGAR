@@ -74,6 +74,28 @@ async function mockApp(page: Page, options: { saved?: boolean; results?: boolean
 
 const navigate = (page: Page, name: string) => page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name, exact: true }).click();
 
+async function mockOffice(page: Page) {
+  const calls: Array<{ path: string; body: Record<string, any> }> = [];
+  const office = { countries: ["Mexico"], institutions: 3, review_needed: 1, activity_labels: { "Active, high confidence": 2, "Status unclear": 1 },
+    coding: { proposed: { priority_tier: { A: 2 }, audience_group: { students: 2 } }, confirmed: {}, items_coded: 8 },
+    latest_digest: { at: "2026-10-22T10:00:00Z", summary: "One new program; one institution needs review.", institution_changes: [] }, rubric_fingerprint: "test", inbox: "research/capture-inbox" };
+  let rubric: Record<string, unknown> = { version: 1, tiers: ["A", "B", "C", "D"].map((tier) => ({ tier, label: tier, terms: [] })), audiences: {}, aliases: {}, alert_terms: [] };
+  await page.route("http://127.0.0.1:8765/api/workspaces/*/research/office**", async (route) => {
+    const request = route.request(), path = new URL(request.url()).pathname;
+    if (request.method() === "OPTIONS") return route.fulfill({ headers, status: 204 });
+    const body = request.method() === "POST" ? request.postDataJSON() || {} : {};
+    calls.push({ path, body });
+    const reply = (json: unknown) => route.fulfill({ headers, status: 200, json });
+    if (path.endsWith("/rubric")) { if (body.rubric) rubric = body.rubric; return reply({ rubric }); }
+    if (path.endsWith("/assess")) return reply({ ...office, coded: { proposed: 2 } });
+    if (path.endsWith("/feeds")) return reply({ feeds: ["https://news.google.com/rss/search?q=Harbor&hl=es&gl=MX&ceid=MX:es"], warnings: [], note: "Recent entries; coverage varies." });
+    if (path.endsWith("/captures")) return reply({ imported: 1, run_id: "run_capture", errors: [] });
+    if (path.endsWith("/snapshot") || path.endsWith("/approved-ai")) return reply({ archive: "research/exports/office.zip", directory: "research/exports/office", files: ["country-snapshot.html", "evidence-package.jsonl", "approved-tool-prompt.txt"] });
+    return reply(office);
+  });
+  return calls;
+}
+
 test("map grows, expands without overflow, filters dates and animates the same post set", async ({ page }) => {
   const errors: string[] = []; page.on("pageerror", (e) => errors.push(e.message));
   await mockApp(page); await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto("/"); await navigate(page, "Map");
@@ -169,4 +191,46 @@ test("a first search creates its project and restores the saved plan after reloa
   await page.reload();
   await expect(page.getByRole("region", { name: "Current project plan" })).toBeVisible();
   await expect(page.getByLabel("Research request")).toHaveValue("Find education programs in Belgium");
+});
+
+test("evidence desk saves a rubric, seeds keyless feeds and imports sanitized capture inputs", async ({ page }) => {
+  const state = await mockApp(page); const calls = await mockOffice(page);
+  const errors: string[] = []; page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/"); await navigate(page, "Research");
+  const desk = page.getByRole("region", { name: "Evidence desk" });
+  await expect(desk.getByText("One new program; one institution needs review.")).toBeVisible();
+  await desk.getByRole("button", { name: "Refresh local assessments", exact: true }).click();
+  await expect(desk.getByRole("status")).toContainText("No model calls");
+  await desk.getByRole("button", { name: /^Study rubric and multilingual terminology/ }).click();
+  const rules = JSON.parse(await desk.getByLabel("Study rubric JSON").inputValue()); rules.version = 2; rules.aliases = { "Successor Program": ["Programa anterior"] };
+  await desk.getByLabel("Study rubric JSON").fill(JSON.stringify(rules));
+  await desk.getByRole("button", { name: "Save rubric", exact: true }).click();
+  await expect.poll(() => calls.find((c) => c.path.endsWith("/rubric") && c.body.rubric?.version === 2)).toBeTruthy();
+  await desk.getByRole("button", { name: /^YouTube and local-language news feeds/ }).click();
+  await desk.getByLabel("Institution or news query").fill("Harbor"); await desk.getByLabel("News language").fill("es"); await desk.getByLabel("News country code").fill("MX");
+  await desk.getByRole("button", { name: "Preview feed seeds", exact: true }).click(); await desk.getByRole("button", { name: "Save these feeds", exact: true }).click();
+  await expect.poll(() => state.settings.rss_feeds.length).toBe(1);
+  await desk.getByRole("button", { name: /^Analyst capture inbox/ }).click();
+  await desk.getByLabel("Capture original URL").fill("https://example.test/event");
+  await desk.getByLabel("Saved HTML captures", { exact: true }).setInputFiles({ name: "event.html", mimeType: "text/html", buffer: Buffer.from("<html><p>Public workshop</p></html>") });
+  await expect(desk.getByRole("status")).toContainText("Imported 1 sanitized page");
+  expect(calls.find((c) => c.path.endsWith("/captures"))?.body.pages[0].source_url).toBe("https://example.test/event");
+  await page.setViewportSize({ width: 900, height: 800 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/evidence-desk.png", fullPage: true });
+  const a11y = await new AxeBuilder({ page }).include(".office-desk").withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(a11y.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) }))).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("country snapshots download as standalone HTML and approved AI exports remain analyst initiated", async ({ page }) => {
+  await mockApp(page); const calls = await mockOffice(page); await page.goto("/"); await navigate(page, "Research");
+  const desk = page.getByRole("region", { name: "Evidence desk" });
+  await expect(desk.getByLabel("Snapshot country")).toHaveValue("Mexico");
+  expect(calls.some((c) => c.path.endsWith("/approved-ai"))).toBe(false);
+  const file = page.waitForEvent("download"); await desk.getByRole("button", { name: "Country snapshot (.html)", exact: true }).click();
+  expect((await file).suggestedFilename()).toBe("Mexico-snapshot.html");
+  await desk.getByRole("button", { name: "Export for approved AI tool", exact: true }).click();
+  await expect(desk.getByRole("button", { name: "Download package (.zip)", exact: true })).toBeVisible();
+  expect(calls.filter((c) => c.path.endsWith("/approved-ai"))).toHaveLength(1);
 });

@@ -114,6 +114,7 @@ export function ItemInspector({ projectId, runId, itemId, author, onClose }: { p
                 <li key={`${c.field}:${c.label}`} className={c.status}>
                   <div><strong>{c.field === "attendance" ? `Reported attendance: ${Number(c.label).toLocaleString()}` : `${titleCase(c.field.replace("_", " "))}: ${titleCase(c.label)}`}</strong>
                     {c.status === "confirmed" ? <Pill tone="ok">Confirmed{c.decided_by ? ` by ${c.decided_by}` : ""}</Pill> : <Pill>Proposed · {c.methods.join(" + ") || "pattern"}</Pill>}
+                    {c.rubric_current === false && <Pill tone="warn">Earlier rubric · review retained</Pill>}
                     {c.quote && <q dir="auto">{c.quote}</q>}</div>
                   {c.status !== "confirmed" && <div className="claim-actions"><button className="button button-secondary button-small" onClick={() => void decideCode(c, "confirm")}>✓ Confirm</button><button className="button button-quiet button-small" onClick={() => void decideCode(c, "reject")}>✕ Reject</button></div>}
                 </li>))}</ul>
@@ -121,7 +122,7 @@ export function ItemInspector({ projectId, runId, itemId, author, onClose }: { p
                 <select value={applyTo} onChange={(e) => setApplyTo(e.target.value)} aria-label="Institution to add the confirmed labels to"><option value="">Add confirmed labels to an institution…</option>{institutions.map((i) => <option key={i.entity_id} value={i.entity_id}>{i.name}</option>)}</select>
                 <button className="button button-secondary button-small" disabled={!applyTo} onClick={() => void applyCodes()}>Add</button></div>}
               {codeMsg && <small className="muted" role="status">{codeMsg}</small>}
-              <small className="muted">Proposals come from the item's own words. Attendance is as reported by the source, not verified.</small></div>}
+              <small className="muted">Proposals come from the item's own words. Priority tiers and six audience groups use the project's editable rubric. Attendance is as reported by the source, not verified.</small></div>}
             <div className="inspector-section"><span className="eyebrow">ORIGINAL</span><p className="item-text" dir="auto">{item.original_text}</p>
               {item.url && <a className="source-link" href={item.url} target="_blank" rel="noreferrer"><span className="source-icon">↗</span><span><strong>Open the original</strong><small>{item.url}</small></span></a>}</div>
             {item.translated_text && <div className="inspector-section"><span className="eyebrow">TRANSLATION</span><p className="item-text" dir="auto">{item.translated_text}</p>

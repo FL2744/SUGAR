@@ -69,6 +69,9 @@ Issues = "https://github.com/FL2744/SUGAR/issues"
 packages = ["sugar_core"]
 py-modules = ["sugar_api", "sugar_bridge"]
 
+[tool.setuptools.package-data]
+sugar_core = ["data/*.json", "data/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

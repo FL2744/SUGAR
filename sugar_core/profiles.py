@@ -55,6 +55,9 @@ def parse_profile(raw: bytes | str | dict[str, Any]) -> dict[str, Any]:
     if any(_SECRET_KEY.search(str(k)) for k in data):
         raise ValueError("Profiles must not contain credentials. Remove keys, tokens and passwords from the file.")
     clean: dict[str, Any] = {"profile_version": PROFILE_VERSION, "name": _text(data.get("name"), 120), "description": _text(data.get("description"), 600)}
+    if "study_rubric" in data:
+        from .mission_rubric import validate_rubric
+        clean["study_rubric"] = validate_rubric(data["study_rubric"])
     if not clean["name"]:
         raise ValueError("Give the profile a name.")
     clean["networks"] = [{"name": _text(n.get("name"), 80), "role": n.get("role") if n.get("role") in _ROLES else "subject", "label": _text(n.get("label") or n.get("name"), 80)}
@@ -101,6 +104,10 @@ def apply_profile(wb: Any, project: Any, profile: dict[str, Any], *, actor: str 
     from .reference_registry import upsert_entity
     profile = parse_profile(profile)
     done: dict[str, Any] = {"name": profile["name"], "applied": []}
+    if "study_rubric" in profile:
+        from .mission_rubric import save_rubric
+        save_rubric(project, profile["study_rubric"], actor=actor)
+        done["applied"].append("study rubric")
     for n in profile["networks"]:
         set_network(project, n["name"], role=n["role"], label=n["label"], actor=actor)
     if profile["networks"]:
@@ -165,6 +172,8 @@ def export_profile(wb: Any, project: Any, *, name: str = "", include_institution
         "coding_terms": settings.get("coding_terms", {"audience": {}, "program": {}}), "relevance": settings.get("relevance", {"include": [], "exclude": []}),
         "monitors": [{"name": m["name"], "cadence_hours": m["cadence_hours"]} for m in list_monitors(project)],
     }
+    from .mission_rubric import load_rubric
+    profile["study_rubric"] = load_rubric(project, strict=True)
     if include_institutions:
         rows = []
         for e in list_entities(project.workspace):

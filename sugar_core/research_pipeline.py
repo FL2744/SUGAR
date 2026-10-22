@@ -952,6 +952,9 @@ class ResearchPipeline:
                     self.counts["processed"] += 1
         with self.timings.measure("serialization"):
             self.project.save_items(self.run.run_id, list(self.items.values()))
+        from .activity_coding import code_items
+        coded = code_items(self.project, list(self.items.values()))
+        self.events.emit("coding.completed", stage="process", message=f"Proposed local program and audience codes for {coded['with_codes']} items; no model calls.", **coded)
 
     def _execute_reprocess(self) -> None:
         """Repeat language detection, extraction and translation on a previous run's items without recollecting."""

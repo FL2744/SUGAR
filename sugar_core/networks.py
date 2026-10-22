@@ -107,6 +107,11 @@ def import_upload(project: Any, file_id: str, *, mapping: dict[str, str], networ
                                       geographic_scope=geographic_scope, known_coverage_limits=known_coverage_limits, license_notes=license_notes,
                                       actor=actor, review_state="unreviewed", accept_partial=accept_partial)
     set_network(project, network.strip(), role=role, actor=actor)
+    from .institutions import list_institutions
+    imported_ids = set(result.get("imported_entity_ids", []))
+    result["assessments"] = [{"entity_id": r["entity_id"], "activity": r["activity_assessment"], "programs": r["program_assessment"]}
+                             for r in list_institutions(project)["institutions"] if r["entity_id"] in imported_ids]
+    result["assessment_note"] = "Every imported row is pre-scored locally. Proposals do not verify imported status claims; no network or model calls were made."
     project.log("network_imported", {"network": network.strip(), "role": role, "dataset": dataset_name or path.name}, actor=actor)
     return result
 

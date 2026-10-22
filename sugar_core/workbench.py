@@ -376,7 +376,7 @@ class ResearchWorkbench:
             raise WorkbenchError("Run not found.", 404)
         return project.load_items(run_id)
 
-    def results(self, project: ResearchProject, run_id: str, *, verdict: str = "", tag: str = "", relevance: str = "", **filters: Any) -> dict[str, Any]:
+    def results(self, project: ResearchProject, run_id: str, *, verdict: str = "", tag: str = "", relevance: str = "", priority_tier: str = "", audience_group: str = "", **filters: Any) -> dict[str, Any]:
         items = all_items = self.items(project, run_id)
         review = project.review.state()
         if verdict:
@@ -387,6 +387,16 @@ class ResearchWorkbench:
         scores = RelevanceStore(project).latest()
         if relevance:
             items = [i for i in items if scores.get(i.item_id, {}).get("band", "unscored") == relevance]
+        from .activity_coding import CodingStore
+        coding = CodingStore(project).state()
+        def code_matches(iid: str, field: str, wanted: str) -> bool:
+            codes = [c for c in coding.get(iid, {}).get("codes", []) if c["field"] == field and c["status"] != "rejected"]
+            if field == "priority_tier":
+                codes = [c for c in codes if c["status"] == "confirmed"] or codes
+            return any(c["label"] == wanted for c in codes)
+        for field, wanted in (("priority_tier", priority_tier), ("audience_group", audience_group)):
+            if wanted:
+                items = [i for i in items if code_matches(i.item_id, field, wanted)]
         try:
             result = query_items(items, **filters)
         except ValueError as exc:
@@ -397,6 +407,7 @@ class ResearchWorkbench:
             row["review"] = {"verdict": state["verdict"], "tags": state["tags"], "comments": len(state["comments"])} if state else {"verdict": "", "tags": [], "comments": 0}
             score = scores.get(row["item_id"])
             row["relevance"] = {"score": score["score"], "band": score["band"], "reasons": score.get("reasons", []), "method": score.get("method", "")} if score else None
+            row["activity_codes"] = coding.get(row["item_id"], {}).get("codes", [])
         result["review"] = project.review.summary({i.item_id for i in all_items})
         bands = Counter(scores[i.item_id]["band"] for i in all_items if i.item_id in scores)
         result["relevance_bands"] = {"likely": bands.get("likely", 0), "uncertain": bands.get("uncertain", 0), "unlikely": bands.get("unlikely", 0), "unscored": len(all_items) - sum(bands.values())}

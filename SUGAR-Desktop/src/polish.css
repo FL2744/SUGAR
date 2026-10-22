@@ -111,3 +111,19 @@ select, input, textarea { color-scheme: inherit; }
   .map-visual-controls select { min-width: 0; max-width: 100%; }
   .map-color-legend { bottom: 6rem; }
 }
+/* Evidence desk additions are scoped; the map canvas and existing page grids retain their sizing. */
+.office-desk { grid-column: 1 / -1; min-width: 0; padding: 22px; margin-bottom: 22px; }
+.office-digest-banner { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 14px 18px; margin: 0 0 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); font-size: 13px; }
+.office-digest-banner span { flex: 1; min-width: 200px; }
+.office-desk .panel-heading { display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+.office-desk h2 { font-size: 22px; margin: 6px 0; }
+.office-digest { padding: 16px 0; }
+.office-digest p { margin: 6px 0 12px; }
+.office-actions, .office-drop { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin: 14px 0; }
+.office-actions .field-block { min-width: 200px; flex: 1; }
+.office-fields { display: grid; grid-template-columns: minmax(180px, 3fr) minmax(80px, 1fr) minmax(80px, 1fr); gap: 12px; }
+.office-rubric { box-sizing: border-box; width: 100%; font-family: ui-monospace, monospace; font-size: 12px; }
+.office-drop { border: 1px dashed var(--line); border-radius: 12px; padding: 20px; align-items: center; }
+.office-feeds { overflow-wrap: anywhere; font-size: 12px; }
+.activity-proposal { display: block; font-size: 11px; line-height: 1.5; margin-top: 5px; }
+@media (max-width: 650px) { .office-fields { grid-template-columns: 1fr; } .office-desk { padding: 16px; } }

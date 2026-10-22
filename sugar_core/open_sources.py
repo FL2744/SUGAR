@@ -267,10 +267,12 @@ def parse_feed(content: bytes) -> list[dict[str, str]]:
     if root is None:
         return []
     entries: list[dict[str, str]] = []
+    feed_title = next((normalize_whitespace("".join(c.itertext())) for c in root if isinstance(c.tag, str) and _local(c.tag) == "title"), "")
+    channel_id = next((str(c.text or "") for c in root if isinstance(c.tag, str) and _local(c.tag) == "channelId"), "")
     for node in root.iter():
         if not isinstance(node.tag, str) or _local(node.tag) not in {"item", "entry"}:
             continue
-        row = {"title": "", "link": "", "summary": "", "date": "", "author": "", "id": ""}
+        row = {"title": "", "link": "", "summary": "", "date": "", "author": "", "id": "", "feed_title": feed_title, "channel_id": channel_id}
         for child in node:
             if not isinstance(child.tag, str):
                 continue
@@ -288,6 +290,8 @@ def parse_feed(content: bytes) -> list[dict[str, str]]:
                 row["author"] = row["author"] or text
             elif name in {"guid", "id"}:
                 row["id"] = row["id"] or text
+            elif name == "group":
+                row["summary"] = row["summary"] or next((_strip(normalize_whitespace("".join(c.itertext()))) for c in child if isinstance(c.tag, str) and _local(c.tag) == "description"), "")
         if row["title"] or row["summary"]:
             entries.append(row)
     return entries
@@ -295,7 +299,7 @@ def parse_feed(content: bytes) -> list[dict[str, str]]:
 
 def collect_rss(*, search_terms: Iterable[str], feeds: Iterable[str], since: str | None = None, until: str | None = None,
                 max_posts_per_query: int = 25, session: requests.Session | None = None, cache: dict | None = None, **_: Any) -> list[PostRecord]:
-    """Entries from the feeds you name whose title or summary mentions the query (every word, any order)."""
+    """Match query words against entry text and publisher-supplied channel title."""
     urls = [str(f).strip() for f in feeds if str(f).strip().lower().startswith(("http://", "https://"))]
     if not urls:
         raise ValueError("News and institution feeds need at least one feed address. Add feed URLs under Settings → Sources.")
@@ -321,7 +325,7 @@ def collect_rss(*, search_terms: Iterable[str], feeds: Iterable[str], since: str
         for url, entries in fetched.items():
             host = urlparse(url).netloc
             for entry in entries:
-                haystack = f"{entry['title']} {entry['summary']}".casefold()
+                haystack = f"{entry['title']} {entry['summary']} {entry.get('feed_title', '')}".casefold()
                 if words and not all(w in haystack for w in words):
                     continue
                 published = _iso(entry["date"])
@@ -329,9 +333,9 @@ def collect_rss(*, search_terms: Iterable[str], feeds: Iterable[str], since: str
                     continue
                 link = entry["link"] or entry["id"]
                 _merge(records, PostRecord(
-                    platform="rss", native_id=entry["id"] or link, canonical_url=link, query=query, query_matches=[query], content_type="feed_entry",
+                    platform="rss", native_id=entry["id"] or link, canonical_url=link, query=query, query_matches=[query], content_type="video" if entry.get("channel_id") else "feed_entry",
                     source_mode="rss_feed", source_host=host, source_url=url, published_at=published, author_name=entry["author"] or host,
-                    original_text=normalize_whitespace(f"{entry['title']}. {entry['summary']}"), raw_stats={"feed": url}))
+                    original_text=normalize_whitespace(f"{entry['title']}. {entry['summary']}"), raw_stats={"feed": url, "feed_title": entry.get("feed_title", ""), "channel_id": entry.get("channel_id", ""), "match_basis": "entry text or feed title"}))
                 matched += 1
                 if matched >= max_posts_per_query:
                     break

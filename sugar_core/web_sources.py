@@ -148,6 +148,28 @@ def _meta(soup: BeautifulSoup, *names: str) -> str:
 def extract_page(html: bytes | str, url: str = "") -> dict[str, Any]:
     """Readable text, title, language, date and same-site links from an HTML page."""
     soup = BeautifulSoup(html, "lxml")
+    event_dates = []
+    cancelled_events = []
+    import json
+    def structured_events(node):
+        if isinstance(node, list):
+            for value in node:
+                structured_events(value)
+        elif isinstance(node, dict):
+            kinds = node.get("@type", [])
+            kinds = kinds if isinstance(kinds, list) else [kinds]
+            if any(str(k).endswith("Event") for k in kinds) and node.get("startDate"):
+                event_dates.append(str(node["startDate"])[:40])
+                if str(node.get("eventStatus", "")).endswith(("EventCancelled", "EventPostponed")):
+                    cancelled_events.append(str(node["startDate"])[:40])
+            for value in node.values():
+                if isinstance(value, (list, dict)):
+                    structured_events(value)
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        try:
+            structured_events(json.loads(script.string or ""))
+        except (ValueError, RecursionError):
+            continue
     for tag in soup(["script", "style", "noscript", "template", "svg", "iframe", "form"]):
         tag.decompose()
     title = normalize_whitespace((soup.title.string if soup.title and soup.title.string else "") or _meta(soup, "og:title"))
@@ -181,7 +203,7 @@ def extract_page(html: bytes | str, url: str = "") -> dict[str, Any]:
     text = normalize_whitespace(main.get_text(" "))
     lang = (soup.html.get("lang") if soup.html else "") or _meta(soup, "og:locale", "language")
     return {"title": title, "text": text, "published": _iso(published) if published else "", "language": str(lang or "").split("-")[0].split("_")[0].lower()[:3],
-            "links": list(OrderedDict.fromkeys(links))}
+            "links": list(OrderedDict.fromkeys(links)), "event_dates": list(dict.fromkeys(event_dates))[:100], "cancelled_events": list(dict.fromkeys(cancelled_events))[:100]}
 
 
 def _terms_match(words: list[str], text: str) -> bool:
@@ -313,7 +335,7 @@ def collect_web(*, search_terms: Iterable[str], seeds: Iterable[str], since: str
                     source_mode="web_fetch", source_host=urlparse(page["url"]).netloc, source_url=page["url"], published_at=page["published"],
                     author_name=urlparse(page["url"]).netloc, platform_language=page["language"],
                     original_text=normalize_whitespace(f"{page['title']}. {page['text']}")[:_MAX_TEXT],
-                    raw_stats={"content_hash": page["hash"], "http_status": page["status"], "etag": page["etag"], "last_modified": page["last_modified"],
+                    raw_stats={"content_hash": page["hash"], "http_status": page["status"], "etag": page["etag"], "last_modified": page["last_modified"], "event_dates": page.get("event_dates", []), "cancelled_events": page.get("cancelled_events", []),
                                "date_meaning": "published" if page["published"] else "no date found on the page",
                                "discovery": {"method": "local_adaptive_crawl_v1", "path": candidate["path"], "depth": candidate["depth"], "priority": priority,
                                              "reason": candidate["reason"], "query_terms": words, "cached": hit}})

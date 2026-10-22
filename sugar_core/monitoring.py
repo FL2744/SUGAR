@@ -143,6 +143,21 @@ def build_digest(project: Any, *, run_id: str = "", monitor_id: str = "", trigge
     after = _snapshot(project)
     changes = diff_registry(before, after) if before is not None else []
     first = before is None
+    from .activity_coding import CodingStore
+    coding_path = project.root / "coding-snapshot.json"
+    try:
+        previous_codes = set(json.loads(coding_path.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        previous_codes = None
+    current_codes = {}
+    for iid, row in CodingStore(project).state().items():
+        for code in row["codes"]:
+            if code["status"] == "rejected" or code["field"] not in {"program", "priority_tier", "audience_group", "narrative_flag"}:
+                continue
+            key = json.dumps([iid, code["field"], code["label"], code["status"]])
+            current_codes[key] = {"item_id": iid, **code}
+    new_codes = [value for key, value in current_codes.items() if previous_codes is not None and key not in previous_codes]
+    new_flags = [c for c in new_codes if c["field"] == "narrative_flag"]
     new_items = [i for i in (items or []) if not getattr(i, "known_from_run", "") and getattr(i, "status", "") in {"collected", "processed"}]
     changed_items = [i for i in (items or []) if getattr(i, "changed_since_known", False)]
     completeness = (run_row or {}).get("completeness") or {}
@@ -150,17 +165,21 @@ def build_digest(project: Any, *, run_id: str = "", monitor_id: str = "", trigge
         "id": f"dg_{uuid.uuid4().hex[:10]}", "at": utc_now(), "run_id": run_id, "monitor_id": monitor_id, "trigger": trigger, "first_pass": first,
         "run_status": (run_row or {}).get("status", ""),
         "counts": {"new_items": len(new_items), "changed_items": len(changed_items), "institution_changes": len(changes), "institutions": len(after),
-                   "incomplete_sources": len(completeness.get("incomplete_sources", []))},
+                   "incomplete_sources": len(completeness.get("incomplete_sources", [])), "new_program_codes": len(new_codes) - len(new_flags), "new_narrative_flags": len(new_flags)},
+        "new_codes": new_codes[:100], "new_flags": new_flags[:100],
         "new_items": [{"item_id": i.item_id, "platform": i.platform, "url": i.url, "text": (i.original_text or "")[:160]} for i in new_items[:25]],
         "changed_items": [{"item_id": i.item_id, "platform": i.platform, "url": i.url, "text": (i.original_text or "")[:160]} for i in changed_items[:25]],
         "institution_changes": changes[:100], "incomplete_sources": completeness.get("incomplete_sources", []),
         "summary": _summary(first, len(new_items), len(changed_items), changes, completeness),
     }
+    if new_codes:
+        digest["summary"] += f" {len(new_codes) - len(new_flags)} new program/audience codes; {len(new_flags)} new narrative review candidates (proposed or confirmed as labeled)."
     with project._lock:
         project.root.mkdir(parents=True, exist_ok=True)
         with _digest_path(project).open("a", encoding="utf-8", newline="\n") as stream:
             stream.write(json.dumps(digest, ensure_ascii=False) + "\n")
         snapshot_path.write_text(json.dumps(after, ensure_ascii=False), encoding="utf-8")
+        coding_path.write_text(json.dumps(sorted(current_codes), ensure_ascii=False), encoding="utf-8")
     project.log("digest_created", {"digest_id": digest["id"], "run_id": run_id, "counts": digest["counts"]}, actor="SUGAR")
     return digest
 

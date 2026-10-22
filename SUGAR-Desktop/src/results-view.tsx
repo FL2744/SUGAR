@@ -21,6 +21,7 @@ function ItemRow({ item, mode, onInspect, onReview }: { item: ResultItem; mode: 
         <span className="result-author">{item.author || "unknown"}</span>
         <span className="muted">{item.published_at ? item.published_at.slice(0, 10) : ""}</span>
         <Pill>{languageName(item.language || "und")}</Pill>
+        {(item.activity_codes || []).filter((c) => c.field === "priority_tier" && c.status !== "rejected").map((c) => <Pill key={c.label} tone={c.status === "confirmed" ? "ok" : "neutral"} title={c.quote}>Tier {c.label} · {c.status}</Pill>)}
         {item.status === "duplicate" && <Pill tone="warn" title={`Similar to ${item.duplicate_of}`}>Duplicate · {Math.round(item.similarity * 100)}%</Pill>}
         {item.status === "excluded" && <Pill tone="warn">Excluded</Pill>}
         {item.status === "rejected" && <Pill tone="warn" title={item.rejection_reason}>Rejected</Pill>}
@@ -68,6 +69,8 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
   const [verdictFilter, setVerdictFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [relFilter, setRelFilter] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("");
+  const [audienceFilter, setAudienceFilter] = useState("");
   const [accuracyOpen, setAccuracyOpen] = useState(false);
   const [newOnly, setNewOnly] = useState(false);
   const [mode, setMode] = useState<TextMode>("original");
@@ -87,14 +90,14 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
     setLoading(true);
     try {
       const [payload, summary] = await Promise.all([
-        research.results(projectId, runId, { group_by: group, q, platform, language, geography, status, translated, verdict: verdictFilter, tag: tagFilter, relevance: relFilter, new_only: newOnly, limit: pageSize, offset, sort }),
+        research.results(projectId, runId, { group_by: group, q, platform, language, geography, status, translated, verdict: verdictFilter, tag: tagFilter, relevance: relFilter, priority_tier: priorityFilter, audience_group: audienceFilter, new_only: newOnly, limit: pageSize, offset, sort }),
         research.run(projectId, runId),
       ]);
       if (seq === requestSeq.current) { setData(payload); setRun(summary); }
     } catch (issue) { if (seq === requestSeq.current) onError(issue instanceof Error ? issue.message : String(issue)); } finally { if (seq === requestSeq.current) setLoading(false); }
-  }, [projectId, runId, group, q, platform, language, geography, status, translated, verdictFilter, tagFilter, relFilter, newOnly, onError, offset, sort]);
+  }, [projectId, runId, group, q, platform, language, geography, status, translated, verdictFilter, tagFilter, relFilter, priorityFilter, audienceFilter, newOnly, onError, offset, sort]);
 
-  useEffect(() => { setOffset(0); }, [projectId, runId, group, q, platform, language, geography, status, translated, verdictFilter, tagFilter, relFilter, newOnly, sort]);
+  useEffect(() => { setOffset(0); }, [projectId, runId, group, q, platform, language, geography, status, translated, verdictFilter, tagFilter, relFilter, priorityFilter, audienceFilter, newOnly, sort]);
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), q ? 250 : 0); return () => window.clearTimeout(timer); }, [load, q]);
   useEffect(() => { setExportInfo(null); }, [runId]);
@@ -209,6 +212,8 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
         <select value={verdictFilter} onChange={(event) => setVerdictFilter(event.target.value)} aria-label="Review status"><option value="">Any review status</option><option value="unreviewed">Not yet reviewed</option>{VERDICTS.map((v) => <option key={v.id} value={v.id}>{v.label} ({data?.review?.verdicts[v.id] ?? 0})</option>)}</select>
         {Object.keys(data?.review?.tags || {}).length > 0 && <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} aria-label="Tag"><option value="">Any tag</option>{Object.entries(data?.review?.tags || {}).map(([t, n]) => <option key={t} value={t}>#{t} ({n})</option>)}</select>}
         {(data?.relevance_bands?.unscored ?? 1) < (data?.all_items ?? 0) && <select value={relFilter} onChange={(event) => setRelFilter(event.target.value)} aria-label="Relevance"><option value="">Any relevance</option><option value="likely">Likely relevant ({data?.relevance_bands?.likely ?? 0})</option><option value="uncertain">Unsure ({data?.relevance_bands?.uncertain ?? 0})</option><option value="unlikely">Likely off topic ({data?.relevance_bands?.unlikely ?? 0})</option></select>}
+        <select aria-label="Program priority tier" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="">Any priority tier</option>{["A", "B", "C", "D"].map((v) => <option key={v} value={v}>Tier {v} · proposed or confirmed</option>)}</select>
+        <select aria-label="Audience group" value={audienceFilter} onChange={(e) => setAudienceFilter(e.target.value)}><option value="">Any audience group</option>{["students", "k12", "teachers", "technical_professionals", "officials", "business"].map((v) => <option key={v} value={v}>{titleCase(v)}</option>)}</select>
         {run?.kind === "refresh_sources" && <label className="check-row"><input type="checkbox" checked={newOnly} onChange={(event) => setNewOnly(event.target.checked)} /><span>New since last run</span></label>}
         {(hasTranslations || mode !== "original") && <Segmented label="Text shown" value={mode} onChange={setMode} options={[{ value: "original", label: "Original" }, { value: "translation", label: "Translated" }, { value: "both", label: "Side by side" }]} />}
       </div>

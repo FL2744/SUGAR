@@ -172,7 +172,8 @@ def _row(entity: dict[str, Any], links: list[dict[str, Any]], *, window_start: d
         "location_precision": entity.get("location_precision", ""), "aliases": entity.get("aliases", []),
         "programs": entity.get("normalized_program_domains", []), "audiences": entity.get("normalized_audiences", []),
         "delivery_modes": entity.get("normalized_delivery_modes", []), "hosts": entity.get("host_entities", []),
-        "source_count": len(refs), "confidence": confidence(entity), "conflicts": entity.get("conflicted_fields", []),
+        "source_count": len(refs), "source_urls": list(dict.fromkeys(str(r["source_url"]) for r in refs if str(r.get("source_url") or "").startswith(("http://", "https://")))),
+        "confidence": confidence(entity), "conflicts": entity.get("conflicted_fields", []),
         "last_verified": max(verified_at) if verified_at else "", "last_evidence": max(stamps).isoformat() if stamps else "",
         "activity": {"items": len(links), "recent_items": len(in_window)}, "updated_at": entity.get("updated_at", ""),
     }
@@ -187,6 +188,15 @@ def list_institutions(project: Any, *, network: str = "", status: str = "", coun
         by_entity.setdefault(link["entity_id"], []).append(link)
     start = _parse_date(since)
     rows = [_row(e, by_entity.get(e["entity_id"], []), window_start=start) for e in entities]
+    from .institution_activity import assess, candidate_links, evidence_index, project_context
+    from .mission_rubric import entity_programs, load_rubric
+    items, histories = project_context(project, links)
+    rubric = load_rubric(project)
+    index = evidence_index(items)
+    for row, entity in zip(rows, entities):
+        row["activity_assessment"] = assess(entity, [*by_entity.get(entity["entity_id"], []), *candidate_links(entity, items, index)], items,
+                                            archives=histories.get(entity["entity_id"], {}).get("pages", []))
+        row["program_assessment"] = entity_programs(entity, rubric)
     if confidence_level:
         rows = [r for r in rows if r["confidence"]["level"] == confidence_level]
     if placed in {"yes", "no"}:
@@ -208,6 +218,11 @@ def institution_detail(project: Any, entity_id: str) -> dict[str, Any]:
     profile = entity_profile(project.workspace, entity_id)
     links = LinkStore(project).active(entity_id)
     row = _row(profile, links, window_start=None)
+    from .institution_activity import assess, candidate_links, evidence_index, project_context
+    from .mission_rubric import entity_programs, load_rubric
+    items, histories = project_context(project, links)
+    row["activity_assessment"] = assess(profile, [*links, *candidate_links(profile, items, evidence_index(items))], items, archives=histories.get(entity_id, {}).get("pages", []))
+    row["program_assessment"] = entity_programs(profile, load_rubric(project))
     fields = {}
     for name, resolution in profile.get("resolved_fields", {}).items():
         fields[name] = {"value": resolution.get("value"), "state": resolution.get("state"),
@@ -472,5 +487,8 @@ def page_history(project: Any, entity_id: str, *, history_fn: Callable[..., dict
             pages.append(history_fn(url))
         except Exception as exc:        # the archive being slow or down must not break the page
             errors.append({"url": url, "reason": str(exc)[:200]})
-    return {"entity_id": entity_id, "pages": pages, "errors": errors, "checked": len(pages) + len(errors),
-            "note": "Archive captures are leads to check. A missing capture does not by itself show that an institution closed."}
+    result = {"entity_id": entity_id, "pages": pages, "errors": errors, "checked": len(pages) + len(errors),
+              "note": "Archive captures establish page availability, not activity. A missing capture does not by itself show that an institution closed."}
+    from .institution_activity import save_history
+    save_history(project, entity_id, result)
+    return result

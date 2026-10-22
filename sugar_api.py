@@ -496,7 +496,7 @@ class SugarApiHandler(BaseHTTPRequestHandler):
         """Minimum project role for a workbench route (reads: viewer; changing plans/runs: analyst; settings: owner)."""
         if method == "GET":
             return "viewer"
-        if area == "research" and rest in {"settings", "profile"}:
+        if area == "research" and rest in {"settings", "profile", "office/rubric"}:
             return "owner"
         if area == "research" and (rest in {"review", "coding/decide", "analysis/apply-unlikely"} or (rest.startswith("institutions/") and rest.endswith("/review"))):
             return "reviewer"          # reviewers may judge, tag, comment and verify claims; viewers can only read

@@ -412,6 +412,30 @@ def _analysis_routes(method, rest, query, body, wb, project):
 
 
 def _research_routes(method, rest, query, body, wb, project):
+    if rest == "office" or rest.startswith("office/"):
+        from . import evidence_desk as desk
+        from .mission_rubric import load_rubric, save_rubric
+        actor = str(body.get("_author") or "analyst")
+        if rest == "office" and method == "GET":
+            return 200, desk.overview(project)
+        if rest == "office/rubric" and method == "GET":
+            return 200, {"rubric": load_rubric(project, strict=True)}
+        if rest == "office/rubric" and method == "POST":
+            return 200, {"rubric": save_rubric(project, body.get("rubric"), actor=actor)}
+        if rest == "office/assess" and method == "POST":
+            return 200, desk.refresh_local(project)
+        if rest == "office/feeds" and method == "POST":
+            return 200, desk.feed_seeds(project, query=str(body.get("query") or ""), language=str(body.get("language") or "en"),
+                                       country=str(body.get("country") or "US"), channel=str(body.get("channel") or ""))
+        if rest == "office/snapshot" and method == "POST":
+            return 200, desk.export_package(project, country=str(body.get("country") or ""))
+        if rest == "office/approved-ai" and method == "POST":
+            return 200, desk.export_package(project, ai_only=True)
+        if rest == "office/captures" and method == "POST":
+            return 200, desk.capture_pages(project, body.get("pages"), actor=actor)
+        if rest == "office/captures/scan" and method == "POST":
+            return 200, desk.scan_inbox(project, actor=actor)
+        return None
     if rest.startswith("analysis/") or rest == "brief":
         return _analysis_routes(method, rest, query, body, wb, project)
     if rest == "profile":
@@ -500,7 +524,7 @@ def _run_routes(method, rest, query, body, wb, project):
         return 200, wb.results(project, run_id, group_by=query.get("group_by", "none"), text=query.get("q", ""), platform=query.get("platform", ""),
                                language=query.get("language", ""), status=query.get("status", "accepted"), geography=query.get("geography", ""),
                                translated=query.get("translated", ""), verdict=query.get("verdict", ""), tag=query.get("tag", ""), relevance=query.get("relevance", ""), new_only=_bool(query.get("new_only")), limit=_int(query.get("limit"), 200, 1, 1000),
-                               offset=_int(query.get("offset"), 0), sort=query.get("sort", "newest"))
+                               offset=_int(query.get("offset"), 0), sort=query.get("sort", "newest"), priority_tier=query.get("priority_tier", ""), audience_group=query.get("audience_group", ""))
     match = re.fullmatch(r"items/(it_[A-Za-z0-9]+)", sub)
     if match and method == "GET":
         return 200, {"item": wb.item_detail(project, run_id, match.group(1))}

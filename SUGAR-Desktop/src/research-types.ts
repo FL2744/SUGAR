@@ -78,6 +78,7 @@ export type PlatformRow = {
 };
 
 export type ResultItem = {
+  activity_codes?: CodeRow[];
   item_id: string; platform: string; url: string; author: string; published_at: string; retrieved_at: string; language: string;
   status: string; rejection_reason: string; duplicate_of: string; similarity: number; query: string; queries: string[];
   original_text: string; translated_text: string; translation_status: string; translation_provider: string; translation_model: string;
@@ -114,6 +115,8 @@ export type ProjectOverview = {
 
 export type Confidence = { level: "high" | "medium" | "low"; reasons: string[]; sources: number; verified_fields: string[]; conflicts: string[] };
 export type Institution = {
+  activity_assessment?: ActivityAssessment;
+  program_assessment?: { codes: Array<{ field: string; label: string; quote: string; rule?: string }>; review_state: string; basis: string };
   entity_id: string; name: string; network: string; entity_type: string; status: string; status_date: string; country: string; region: string; city: string;
   latitude: number | null; longitude: number | null; placed: boolean; location_precision: string; aliases: string[]; programs: string[]; audiences: string[];
   delivery_modes: string[]; hosts: string[]; source_count: number; confidence: Confidence; conflicts: string[]; last_verified: string; last_evidence: string;
@@ -143,7 +146,12 @@ export type OverlapResult = {
   counts: { subject_institutions: number; reference_institutions: number; subjects_not_placed: number; references_not_placed: number }; method: string; near_km: number; bands_km: number[];
 };
 
-export type CodeRow = { field: "audience" | "program" | "activity_type" | "attendance"; label: string; quote: string; methods: string[]; status: "proposed" | "confirmed" | "rejected"; decided_by: string; decided_at: string };
+export type CodeRow = { field: "audience" | "program" | "activity_type" | "attendance" | "priority_tier" | "audience_group" | "program_alias" | "narrative_flag"; label: string; quote: string; methods: string[]; status: "proposed" | "confirmed" | "rejected"; decided_by: string; decided_at: string; rule?: string; rubric_version?: number; rubric_fingerprint?: string; rubric_current?: boolean };
+export type ActivityAssessment = { status: string; confidence: string; label: string; review_state: string; baseline: string; assessed_at: string; last_evidence_date: string; last_activity_date: string; current_program_periods?: string[]; needs_review: boolean; reasons: string[]; method: string;
+  signals: Array<{ kind: string; date: string; date_basis: string; url: string; quote: string; official: boolean; upcoming_date: string }>;
+  archive_availability: Array<{ url: string; total: number; last_ok: string }> };
+export type OfficeOverview = { countries: string[]; institutions: number; review_needed: number; activity_labels: Record<string, number>; coding: CodingSummary; latest_digest: Digest | null; rubric_fingerprint: string; inbox: string };
+export type OfficeExport = { directory: string; archive: string; files: string[] };
 export type CodingSummary = { proposed: Record<string, Record<string, number>>; confirmed: Record<string, Record<string, number>>; items_coded: number };
 
 export type Monitor = { id: string; name: string; cadence_hours: number; enabled: boolean; note: string; created_at: string; last_run_at: string; last_run_id: string; last_status: string; next_due_at: string };

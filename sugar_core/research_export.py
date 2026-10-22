@@ -134,6 +134,8 @@ def export_run(project: ResearchProject, run_id: str, *, make_zip: bool = True) 
     }
     from .analysis_export import analysis_files
     files.update(analysis_files(project, accepted))
+    from .evidence_desk import approved_ai_files
+    files.update(approved_ai_files(project, accepted))
     if features:
         files["geo.geojson"] = json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, indent=2).encode("utf-8")
     manifest = {

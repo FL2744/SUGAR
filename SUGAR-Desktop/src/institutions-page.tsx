@@ -16,7 +16,7 @@ const FIELD_LABELS: Record<string, string> = {
   name: "Name", network: "Network", status: "Status", status_date: "Status date", opened_date: "Opened", closed_date: "Closed", country: "Country", region: "Region", city: "City",
   address: "Address", latitude: "Latitude", longitude: "Longitude", location_precision: "Location precision", aliases: "Also known as", audiences: "Audiences",
   normalized_audiences: "Audiences (standard)", program_domains: "Programs", normalized_program_domains: "Programs (standard)", host_entities: "Host institutions",
-  partner_entities: "Partners", public_links: "Links", accounts: "Accounts", description: "Description", delivery_modes: "Delivery",
+  partner_entities: "Partners", public_links: "Links", accounts: "Accounts", description: "Description", delivery_modes: "Delivery", affiliation_type: "Affiliation (separate from activity)",
 };
 
 function ClaimRow({ claim, canReview, onReview }: { claim: ClaimView; canReview: boolean; onReview: (state: string) => void }) {
@@ -51,6 +51,7 @@ function DetailDrawer({ projectId, entityId, author, others, onClose, onChanged,
   const [detail, setDetail] = useState<InstitutionDetail | null>(null);
   const [mergeWith, setMergeWith] = useState("");
   const [source, setSource] = useState("");
+  const [officialSource, setOfficialSource] = useState(false);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<Awaited<ReturnType<typeof research.institutionHistory>> | null>(null);
@@ -76,6 +77,16 @@ function DetailDrawer({ projectId, entityId, author, others, onClose, onChanged,
         </div>
         <div className="inspector-content">
           {detail && <>
+            {detail.activity_assessment && <div className="inspector-section"><span className="eyebrow">ACTIVITY STATUS · PROPOSED</span>
+              <p><Pill tone={detail.activity_assessment.needs_review ? "warn" : "info"}>{detail.activity_assessment.label}</Pill></p>
+              <p>Last program/post evidence: <strong>{detail.activity_assessment.last_activity_date || "Unknown"}</strong><br />Last dated evidence: {detail.activity_assessment.last_evidence_date || "Unknown"}</p>
+              {!!detail.activity_assessment.current_program_periods?.length && <p>Current official program periods: {detail.activity_assessment.current_program_periods.join(", ")} (exact day not stated).</p>}
+              <ul className="reason-list">{detail.activity_assessment.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+              <ul className="claim-evidence">{detail.activity_assessment.signals.map((s, i) => <li key={i}><a href={s.url} target="_blank" rel="noreferrer">{titleCase(s.kind)} ↗</a> · {s.date || "Undated"}{s.upcoming_date ? ` · scheduled ${s.upcoming_date}` : ""}<q dir="auto">{s.quote}</q><small>{s.date_basis}</small></li>)}</ul>
+              {detail.activity_assessment.archive_availability.map((a) => <p key={a.url}><small>Archive availability: {a.total} captures{a.last_ok ? ` · last ${a.last_ok.slice(0, 10)}` : ""}. Capture dates do not establish activity.</small></p>)}
+              <small className="muted">{detail.activity_assessment.method} Recorded status and its verification remain in the claims below. Add official website roots under Public links to distinguish official program evidence.</small>
+            </div>}
+            {!!detail.program_assessment?.codes.length && <div className="inspector-section"><span className="eyebrow">IMPORTED PROGRAM WORDING · PROPOSED</span><ul className="claim-evidence">{detail.program_assessment.codes.map((c, i) => <li key={i}><strong>{titleCase(c.field)}: {c.label}</strong><q dir="auto">{c.quote}</q></li>)}</ul><small className="muted">{detail.program_assessment.basis}</small></div>}
             <div className="inspector-section"><span className="eyebrow">WHY THIS RATING</span><ul className="reason-list">{detail.confidence.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
               <small className="muted">The rating reflects how well the record is supported. It is not a measure of importance or influence.</small></div>
             {shown.map((field) => (
@@ -92,7 +103,8 @@ function DetailDrawer({ projectId, entityId, author, others, onClose, onChanged,
               <div className="note-add"><input value={source} onChange={(e) => setSource(e.target.value)} placeholder="https://… (an official page, report, or article)" aria-label="Source address" />
                 <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What it shows (optional)" aria-label="What the source shows" />
                 <button className="button button-secondary button-small" disabled={busy || !/^https?:\/\//i.test(source.trim())}
-                  onClick={() => void guard(async () => { const next = await research.recordInstitution(projectId, { values: { name: detail.name }, entity_id: entityId, evidence: [{ url: source.trim(), note }], author }); setSource(""); setNote(""); return next; })}>Add</button></div></div>
+                  onClick={() => void guard(async () => { const next = await research.recordInstitution(projectId, { values: { name: detail.name, ...(officialSource ? { public_links: [source.trim()] } : {}) }, entity_id: entityId, evidence: [{ url: source.trim(), note }], author }); setSource(""); setNote(""); return next; })}>Add</button></div>
+              <label className="check-row"><input type="checkbox" checked={officialSource} onChange={(e) => setOfficialSource(e.target.checked)} /><span>Record this as an official website root (Public links)</span></label></div>
             <div className="inspector-section"><span className="eyebrow">PAGE HISTORY (INTERNET ARCHIVE)</span>
               <button className="button button-secondary button-small" disabled={checking} onClick={async () => { setChecking(true); try { setHistory(await research.institutionHistory(projectId, entityId)); } catch (e) { onError(e instanceof Error ? e.message : String(e)); } finally { setChecking(false); } }}>{checking ? <><Spinner /> Checking…</> : "Check captured history of its pages"}</button>
               {history && <>{history.pages.length === 0 && history.errors.length === 0 && <small className="muted">No web pages are recorded for this institution yet. Add a source address above.</small>}
@@ -230,7 +242,7 @@ export function InstitutionsPage({ projectId, runs, author, onError, onOpenMap, 
           {data.institutions.map((row) => (
             <button key={row.entity_id} className="project-row" role="row" onClick={() => setOpen(row.entity_id)}>
               <span role="cell"><strong dir="auto">{row.name}</strong>{row.network && <small className="muted"> {row.network}</small>}</span>
-              <span role="cell"><Pill tone={TONE[row.status] || "neutral"}>{titleCase(row.status)}</Pill></span>
+              <span role="cell"><Pill tone={TONE[row.status] || "neutral"}>{titleCase(row.status)}</Pill>{row.activity_assessment && <small className="activity-proposal">{row.activity_assessment.label} · proposed{row.activity_assessment.needs_review ? " · review needed" : ""}</small>}</span>
               <span role="cell">{[row.city, row.country].filter(Boolean).join(", ") || <span className="muted">not recorded</span>}{!row.placed && (row.city || row.country) ? <small className="muted"> · not on map</small> : null}</span>
               <span role="cell"><ConfidencePill confidence={row.confidence} /> <small className="muted">{row.source_count} source{row.source_count === 1 ? "" : "s"}</small></span>
               <span role="cell">{row.last_verified ? relativeTime(row.last_verified) : <span className="muted">never</span>}</span>

@@ -4,6 +4,7 @@ import type { Interpretation, PlanSpec, PlatformRow, ProjectOverview, ProviderPr
 import type { Prefs } from "./prefs";
 import { PlanEditor } from "./plan-editor";
 import { SOURCE_PRESETS } from "./source-presets";
+import { LatestDigest, OfficeDesk } from "./office-desk";
 import { ChipInput, Collapsible, Pill, Segmented, Spinner, StatusPill, languageName, relativeTime } from "./ui";
 
 const EXAMPLES = [
@@ -379,6 +380,7 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
         {projectId && <Pill tone="info" title="The current project">Project · {projectName}</Pill>}
       </div>
 
+      {projectId && <LatestDigest key={overview?.summary.updated_at || projectId} projectId={projectId} />}
       <form className="panel request-card" onSubmit={(event) => { event.preventDefault(); void interpret(); }}>
         <label className="field-block"><span className="sr-only">Research request</span>
           <textarea className="request-box" value={text} rows={3} onChange={(event) => setText(event.target.value)} placeholder={`e.g. ${placeholder}`}
@@ -441,6 +443,7 @@ export function ResearchPage({ projectId, projectName, prefs, overview, onOvervi
             <div key={n}><span className="how-n">{n}</span><strong>{title}</strong><p>{detail}</p></div>))}
         </div>)}
 
+      {projectId && <OfficeDesk key={projectId} projectId={projectId} onChanged={() => void onOverview()} />}
       {editing && (plan || storedPlan) && (
         <PlanEditor plan={(plan || storedPlan)!} platforms={platforms} providers={providers} advanced={editing === "advanced" || advanced} saving={busy === "save"}
           error={saveError} onSave={(edited) => void saveEdited(edited)} onCancel={() => { setEditing(""); setSaveError(""); }} />)}
