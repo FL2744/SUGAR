@@ -198,7 +198,7 @@ export function SettingsPage({ updates, onRunSetup, prefs, onSavePrefs, onDirtyC
                               <div className="credential-saved"><span className="muted">Will be removed when you save.</span><button className="button button-quiet button-small" onClick={() => patchProfile(selected.id, { removeSecret: false })}>Undo</button></div>
                             ) : (
                               <input type="password" autoComplete="off" spellCheck={false} value={selected.secret || ""} placeholder={`Paste your ${selectedType.credential_label.toLowerCase()}`} onChange={(event) => patchProfile(selected.id, { secret: event.target.value })} />)}
-                            <small>Stored only on this computer in {storage === "keyring" ? "your operating system's credential vault" : storage === "file" ? "an owner-only file in your SUGAR folder" : "memory for this session"}. Never written to projects, logs, or Git.</small></div>)}</div></li>
+                            <small>Stored only on this computer in {storage === "file" ? "an unencrypted, owner-only file in your SUGAR folder" : "memory for this session; enter it again after restarting SUGAR"}. Never written to projects, logs, or Git.</small></div>)}</div></li>
                       <li className="hier-step"><span className="hier-n">3</span><div className="hier-body"><h4>Model</h4>
                         <label className="field-block"><span>Model</span><input value={selected.model} list={`models-${selected.id}`} placeholder={selectedType.default_model || "model name"} onChange={(event) => patchProfile(selected.id, { model: event.target.value })} />
                           <datalist id={`models-${selected.id}`}>{modelOptions.map((m) => <option key={m} value={m} />)}</datalist>
@@ -287,7 +287,8 @@ export function SettingsPage({ updates, onRunSetup, prefs, onSavePrefs, onDirtyC
             <div className="panel settings-panel">
               <div className="section-title"><div className="section-icon green">◉</div><div><h3>Privacy and diagnostics</h3><p>What is stored, where, and how to report a problem safely.</p></div></div>
               <ul className="plain-list">
-                <li>Credentials live in {storage === "keyring" ? "your operating system's credential vault" : "an owner-only file in your SUGAR folder"} and are referenced — never copied — by projects and runs.</li>
+                <li>Credentials live in {storage === "file" ? "an unencrypted, owner-only file in your SUGAR folder" : "memory for this session"} and are referenced — never copied — by projects and runs.</li>
+                <li>Keychain access is removed. SUGAR does not read, save, or delete passwords in your Mac Keychain.</li>
                 <li>Logs, activity events, exports, and diagnostic reports have credentials redacted.</li>
                 <li>Projects contain plans, runs, sources, translations, and notes, but no credentials.</li>
               </ul>

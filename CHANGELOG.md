@@ -2,6 +2,19 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
+## 1.9.0 - 2026-10-22
+
+### Credential privacy
+
+- Remove OS credential-vault integration, including macOS Keychain reads, writes, deletion, and the legacy platform-credential lookup fallback.
+- Keep manually entered credentials in session memory by default. Reenter them after restarting SUGAR; explicit owner-only, unencrypted file storage remains an opt-in configuration.
+- Remove the keyring dependency and exclude it from packaged applications. Existing Keychain entries are not migrated or deleted.
+- Explain credential storage in onboarding and privacy settings, and correct credential-source reporting.
+
+### Attribution
+
+- Credit Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab, Fall 2026 in the institutional-status statement, NOTICE, and app About screen.
+
 ## 1.8.0 - 2026-10-01
 
 ### Update hardening

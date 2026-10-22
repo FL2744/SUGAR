@@ -1,6 +1,6 @@
 import { EmptyState } from "./ui";
 
-export const CONTRIBUTORS = ["Alejandro Grenier", "William Taggart"];
+export const CONTRIBUTORS = ["Alejandro Grenier", "William Taggart", "Contributors from Diplomacy Lab, Fall 2026"];
 
 export function AboutPage({ version, engineVersion }: { version: string; engineVersion: string }) {
   return (
@@ -15,7 +15,7 @@ export function AboutPage({ version, engineVersion }: { version: string; engineV
         <ul className="credit-list">{CONTRIBUTORS.map((name) => <li key={name}><strong>{name}</strong></li>)}</ul>
         <h3>Developed for</h3>
         <p>Virginia Tech Diplomacy Lab research and classroom workflows.</p>
-        <p className="muted">Copyright 2026 Alejandro Grenier, William Taggart, and contributors. Third-party components and their licenses are listed in THIRD_PARTY_NOTICES.md.</p>
+        <p className="muted">Copyright 2026 Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab, Fall 2026. Third-party components and their licenses are listed in THIRD_PARTY_NOTICES.md.</p>
       </div>
       <EmptyState icon="☷" title="Where to learn more">See the README and the docs/ folder in the repository for the research workbench, activity events, provider setup, and export formats.</EmptyState>
     </section>

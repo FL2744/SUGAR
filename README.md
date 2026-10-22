@@ -6,9 +6,9 @@
 
 SUGAR is a cross-platform public-source research system for collecting social-media material, preserving provenance, organizing evidence, conducting spatial and structured analysis, and producing reviewable research products. The public engine is target-neutral; project-specific targets, query plans, and case data belong in non-public project configuration.
 
-Current package version: **1.6.0**.
+Current package version: **1.9.0**.
 
-License: **Apache License 2.0**. Copyright 2026 Alejandro Grenier and contributors.
+License: **Apache License 2.0**. Copyright 2026 Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab, Fall 2026.
 
 Authors: **Alejandro Grenier** and **William Taggart**. Developed in connection with **Virginia Tech Diplomacy Lab** coursework and research (see the project-context note at the end of this README).
 
@@ -17,7 +17,7 @@ Authors: **Alejandro Grenier** and **William Taggart**. Developed in connection 
 Type a request the way you would say it — *“Search democracy in the Middle East on all platforms.”* — and SUGAR interprets it into a structured, editable research plan, shows you that plan (with every assumption it made), then runs it while you watch: searches, sources, downloads, language detection, live translations, duplicates, and rejections stream into an Activity view. One failing platform does not end the run; the result states explicitly what is incomplete. Every item keeps its provenance and an evidence chain (search result → fetched document → extracted paragraph → translated paragraph → coded finding), and every run is saved as a reproducible record that can be exported with hashes.
 
 - **Interpretation:** an optional LLM provider (OpenAI, OpenAI-compatible, Anthropic, Virginia Tech ARC, or a local endpoint) produces schema-constrained output that is validated and repaired; a deterministic interpreter needs no model and accepts ordinary sentences.
-- **Providers and credentials:** Provider → Credential → Model → Advanced options, with *Test connection*. Credentials live in the OS vault or an owner-only file (or `.env.local` for development) and never in projects, logs, or Git.
+- **Providers and credentials:** Provider → Credential → Model → Advanced options, with *Test connection*. Keychain integration is removed. Credentials default to session memory, with an owner-only, unencrypted file available only through explicit configuration (or `.env.local` for development) and never in projects, logs, or Git.
 - **Five distinct refresh operations:** Reinterpret request, Rebuild plan, Refresh sources, Reprocess results, Rerun.
 - See [`docs/research-workbench.md`](docs/research-workbench.md). An offline demo with simulated platforms: `python tools/demo_workbench_server.py`.
 
@@ -274,7 +274,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), and [`CH
 
 SUGAR source code and repository documentation are released under the [Apache License 2.0](LICENSE), except for third-party material that carries its own license. See [`NOTICE`](NOTICE) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for attribution and dependency-license information.
 
-SUGAR was developed in connection with Virginia Tech Diplomacy Lab coursework and research. Copyright for this release is identified as **Alejandro Grenier and contributors**; Virginia Tech is not identified as the licensor or copyright holder. References to Virginia Tech or the U.S. Department of State describe project context and do not make SUGAR an official product, endorsement, security authorization, or government publication.
+SUGAR was developed in connection with Virginia Tech Diplomacy Lab coursework and research. Copyright for this release is identified as **Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab, Fall 2026**; Virginia Tech is not identified as the licensor or copyright holder. References to Virginia Tech or the U.S. Department of State describe project context and do not make SUGAR an official product, endorsement, security authorization, or government publication.
 
 Apache-2.0 permits use, modification, and redistribution, including by government, academic, nonprofit, and commercial users, subject to the license terms. The license does not grant rights to third-party platform content, collected research data, or third-party trademarks.
 

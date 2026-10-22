@@ -1,93 +1,68 @@
 from __future__ import annotations
 
-import sys
-import types
+import builtins
 
 import pytest
 
 from sugar_core import credential_vault
+from sugar_core.credential_store import CredentialError, CredentialStore
 
 
-class FakeVault:
-    __module__ = "keyring.backends.Windows"
-    priority = 5
+@pytest.fixture
+def forbid_keychain(monkeypatch):
+    """Detect even attempted keyring imports, including exceptions swallowed by fallback code."""
+    attempts = []
+    original = builtins.__import__
 
-    def __init__(self):
-        self.values = {}
+    def guarded(name, *args, **kwargs):
+        if name.split('.')[0] in {'keyring', 'keyrings'}:
+            attempts.append(name)
+            raise AssertionError('OS credential access is forbidden')
+        return original(name, *args, **kwargs)
 
-    def get_password(self, service, username):
-        return self.values.get((service, username))
-
-    def set_password(self, service, username, value):
-        self.values[(service, username)] = value
-
-    def delete_password(self, service, username):
-        del self.values[(service, username)]
-
-
-def fake_keyring(monkeypatch, backend=None):
-    selected = backend or FakeVault()
-    module = types.ModuleType("keyring")
-    module.get_keyring = lambda: selected
-    module.get_password = getattr(selected, "get_password", lambda *_args: None)
-    module.set_password = getattr(selected, "set_password", lambda *_args: None)
-    module.delete_password = getattr(selected, "delete_password", lambda *_args: None)
-    monkeypatch.setitem(sys.modules, "keyring", module)
-    return selected
+    monkeypatch.setattr(builtins, '__import__', guarded)
+    yield
+    assert attempts == []
 
 
-def test_credentials_round_trip_using_only_os_backend(monkeypatch):
-    backend = fake_keyring(monkeypatch)
-
-    saved = credential_vault.save_credentials({"llm_api_key": "test-secret", "x_bearer_token": "x-secret"})
-    assert saved == {"saved": ["llm_api_key", "x_bearer_token"], "count": 2}
-    assert credential_vault.load_credentials() == {"llm_api_key": "test-secret", "x_bearer_token": "x-secret"}
-    assert credential_vault.vault_status() == {
-        "available": True,
-        "backend": "FakeVault",
-        "stored": {name: name in {"llm_api_key", "x_bearer_token"} for name in credential_vault.SECRET_NAMES},
-    }
-    assert credential_vault.delete_credentials(["x_bearer_token"]) == {"deleted": ["x_bearer_token"], "count": 1}
-    assert credential_vault.load_credentials() == {"llm_api_key": "test-secret"}
-    assert backend.values
+def test_legacy_vault_operations_never_access_keychain(forbid_keychain):
+    assert credential_vault.vault_status()['available'] is False
+    assert credential_vault.load_credentials() == {}
+    with pytest.raises(RuntimeError, match='removed'):
+        credential_vault.save_credentials({'llm_api_key': 'test-only-secret'})
+    with pytest.raises(RuntimeError, match='removed'):
+        credential_vault.delete_credentials()
 
 
-def test_plaintext_and_unknown_keyrings_are_rejected(monkeypatch):
-    backend = type("FileKeyring", (), {"priority": 1, "__module__": "keyrings.alt.file"})()
-    fake_keyring(monkeypatch, backend)
-
-    status = credential_vault.vault_status()
-    assert status["available"] is False
-    assert "memory for this session only" in status["message"]
-    with pytest.raises(RuntimeError, match="operating-system credential vault"):
-        credential_vault.save_credentials({"llm_api_key": "test-secret"})
-
-
-def test_vault_rejects_unknown_fields_and_invalid_values(monkeypatch):
-    fake_keyring(monkeypatch)
-    with pytest.raises(ValueError, match="Unsupported credential field"):
-        credential_vault.save_credentials({"private_note": "not a credential"})
-    with pytest.raises(ValueError, match="no longer than"):
-        credential_vault.save_credentials({"llm_api_key": "x" * 32_769})
-    with pytest.raises(ValueError, match="Unsupported credential field"):
-        credential_vault.delete_credentials(["private_note"])
+@pytest.mark.parametrize('backend', ['auto', 'memory', 'file'])
+def test_all_credential_paths_avoid_keychain(tmp_path, monkeypatch, forbid_keychain, backend):
+    monkeypatch.delenv('SUGAR_X_BEARER_TOKEN', raising=False)
+    store = CredentialStore(tmp_path, backend=backend)
+    for ref in ['provider:test', 'platform:x_bearer_token', 'platform:llm_api_key']:
+        assert store.get(ref) == ''
+        store.set(ref, 'test-only-secret')
+        assert store.get(ref) == 'test-only-secret'
+        assert store.has(ref)
+        assert store.source_of(ref) == ('file' if backend == 'file' else 'memory')
+        assert ref in store.refs()
+        store.delete(ref)
+        assert not store.has(ref)
+    store.platform_secrets()
 
 
-def test_missing_keyring_reports_session_only_without_creating_a_file(monkeypatch, tmp_path):
-    monkeypatch.delitem(sys.modules, "keyring", raising=False)
-    monkeypatch.syspath_prepend(str(tmp_path))
-    # Import is intentionally lazy; simulate a machine without the optional module.
-    import builtins
+def test_default_is_session_only_and_ignores_existing_files(tmp_path, monkeypatch, forbid_keychain):
+    monkeypatch.delenv('SUGAR_CREDENTIAL_BACKEND', raising=False)
+    explicit_file = CredentialStore(tmp_path, backend='file')
+    explicit_file.set('provider:old', 'test-only-old-secret')
+    before = (tmp_path / 'credentials.json').read_bytes()
+    store = CredentialStore(tmp_path)
+    assert store.backend == 'memory'
+    assert store.get('provider:old') == ''
+    store.set('provider:new', 'test-only-new-secret')
+    assert CredentialStore(tmp_path).get('provider:new') == ''
+    assert (tmp_path / 'credentials.json').read_bytes() == before
 
-    original_import = builtins.__import__
 
-    def reject_keyring(name, *args, **kwargs):
-        if name == "keyring":
-            raise ImportError("disabled for test")
-        return original_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", reject_keyring)
-    status = credential_vault.vault_status()
-    assert status["available"] is False
-    assert "not installed" in status["message"]
-    assert list(tmp_path.iterdir()) == []
+def test_explicit_keyring_request_is_rejected(tmp_path, forbid_keychain):
+    with pytest.raises(CredentialError, match='removed'):
+        CredentialStore(tmp_path, backend='keyring')

@@ -50,7 +50,7 @@ Unknown fields survive round trips in `extra`, so the schema can grow without UI
 
 ## Providers and credentials
 
-Provider → Credential → Model → Advanced options. Types: `openai`, `openai_compatible`, `anthropic`, `arc`, `local`. *Test connection* checks reachability, credential, model availability, and a real inference call, returning stage-specific messages. Secrets are stored by `CredentialStore` (OS vault with the optional `keyring` extra, otherwise an owner-only file under `~/.sugar`), are resolved from `SUGAR_*` environment variables or an ignored `.env.local` first (see `.env.local.example`), and are referenced — never embedded — by projects and runs. The file backend is protected by permissions, not encryption.
+Provider → Credential → Model → Advanced options. Types: `openai`, `openai_compatible`, `anthropic`, `arc`, `local`. *Test connection* checks reachability, credential, model availability, and a real inference call, returning stage-specific messages. Secrets are stored by `CredentialStore` (session memory by default; an owner-only file under `~/.sugar` only with explicit `SUGAR_CREDENTIAL_BACKEND=file` configuration), are resolved from `SUGAR_*` environment variables or an ignored `.env.local` first (see `.env.local.example`), and are referenced — never embedded — by projects and runs. The file backend is protected by permissions, not encryption. OS credential-vault integration, including macOS Keychain access and legacy lookups, is removed.
 
 ## Project data model
 

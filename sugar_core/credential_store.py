@@ -3,14 +3,12 @@
 Secrets are addressed by an opaque *reference* (``provider:<profile-id>`` or
 ``platform:<name>``). Projects, run records, and exports contain only references.
 
-Backends, in order of preference (``SUGAR_CREDENTIAL_BACKEND`` can force one):
+Operating-system credential vault integration is removed. SUGAR never reads,
+writes, or deletes Keychain entries, including through legacy credential lookups.
 
-``keyring``  the operating system credential vault (macOS Keychain, Windows Credential
-             Manager, Secret Service) when the optional ``keyring`` package is installed;
-``file``     a per-user file under ``$SUGAR_HOME`` (default ``~/.sugar``) created with owner-only
-             permissions (0600 in a 0700 directory). It is protected by file permissions, not
-             encrypted; this is the documented fallback where no OS vault is available;
-``memory``   process-lifetime only (tests, or ``SUGAR_CREDENTIAL_BACKEND=memory``).
+``memory`` is the default: credentials last for this process only.
+``file`` is an explicit opt-in through ``SUGAR_CREDENTIAL_BACKEND=file``: an
+unencrypted per-user file with owner-only permissions (0600 in a 0700 directory).
 
 Environment variables always take precedence at *resolution* time so local development builds
 can use real credentials without persisting them (see :func:`load_env_file`).
@@ -26,8 +24,6 @@ from pathlib import Path
 from typing import Iterable
 
 from . import redaction
-
-SERVICE_NAME = "sugar-research"
 
 # platform secret key -> environment variable (mirrors the bridge's SECRET_ENV)
 PLATFORM_SECRET_ENV = {
@@ -114,42 +110,18 @@ class CredentialStore:
         requested = (backend or os.environ.get("SUGAR_CREDENTIAL_BACKEND", "auto")).strip().casefold()
         self._lock = threading.RLock()
         self._memory: dict[str, str] = {}
-        self._keyring = None
-        self.backend = "file"
-        if requested == "memory":
+        if requested in {"auto", "memory"}:
             self.backend = "memory"
-        elif requested in {"auto", "keyring"}:
-            self._keyring = self._load_keyring()
-            if self._keyring is not None:
-                self.backend = "keyring"
-            elif requested == "keyring":
-                raise CredentialError("The keyring backend was requested but no usable OS credential vault is available.")
-        elif requested != "file":
+        elif requested == "file":
+            self.backend = "file"
+        elif requested == "keyring":
+            raise CredentialError("Keychain and OS credential vault access has been removed. Use memory or file storage.")
+        else:
             raise CredentialError(f"Unknown credential backend {requested!r}.")
-
-    # -- backend plumbing --------------------------------------------------------------
-    @staticmethod
-    def _load_keyring():
-        try:
-            import keyring
-            from keyring.backends import fail
-        except Exception:
-            return None
-        try:
-            active = keyring.get_keyring()
-        except Exception:
-            return None
-        if isinstance(active, fail.Keyring) or active.__class__.__name__ in {"NullKeyring", "ChainerBackend"} and not getattr(active, "backends", []):
-            return None
-        return keyring
 
     @property
     def _file(self) -> Path:
         return self.home / "credentials.json"
-
-    @property
-    def _index(self) -> Path:
-        return self.home / "credential-index.json"
 
     def _ensure_home(self) -> None:
         self.home.mkdir(parents=True, exist_ok=True)
@@ -194,11 +166,6 @@ class CredentialStore:
         with self._lock:
             if self.backend == "memory":
                 self._memory[ref] = value
-            elif self.backend == "keyring":
-                self._keyring.set_password(SERVICE_NAME, ref, value)
-                index = self._read_file(self._index)
-                index[ref] = "1"
-                self._write_file(self._index, index)
             else:
                 data = self._read_file(self._file)
                 data[ref] = value
@@ -217,33 +184,14 @@ class CredentialStore:
                 value = os.environ[env_name].strip()
                 redaction.register_secret(value)
                 return value
-        if ref.startswith("platform:") or ref == "platform:llm_api_key":
-            vaulted = self._vault_value(ref.split(":", 1)[1])
-            if vaulted:
-                redaction.register_secret(vaulted)
-                return vaulted
         with self._lock:
             if self.backend == "memory":
                 value = self._memory.get(ref, "")
-            elif self.backend == "keyring":
-                try:
-                    value = self._keyring.get_password(SERVICE_NAME, ref) or ""
-                except Exception:
-                    value = ""
             else:
                 value = self._read_file(self._file).get(ref, "")
         if value:
             redaction.register_secret(value)
         return value
-
-    @staticmethod
-    def _vault_value(name: str) -> str:
-        """Value saved through the desktop app's OS credential vault (credential_vault.py), if one is available."""
-        try:
-            from .credential_vault import SERVICE_NAME as vault_service, _keyring_backend
-            return _keyring_backend().get_password(vault_service, name) or ""
-        except Exception:
-            return ""
 
     def has(self, ref: str) -> bool:
         return bool(self.get(ref))
@@ -252,30 +200,19 @@ class CredentialStore:
         """Where a credential would come from: 'environment', the backend name, or ''."""
         if os.environ.get(_ref_env_name(ref), "").strip():
             return "environment"
-        if ref.startswith("platform:") and os.environ.get(PLATFORM_SECRET_ENV.get(ref.split(":", 1)[1], "_"), "").strip():
-            return "environment"
+        if ref.startswith("platform:"):
+            env_name = PLATFORM_SECRET_ENV.get(ref.split(":", 1)[1])
+            if env_name and os.environ.get(env_name, "").strip():
+                return "environment"
         with self._lock:
             if self.backend == "memory":
                 return self.backend if ref in self._memory else ""
-            if self.backend == "keyring":
-                try:
-                    return self.backend if self._keyring.get_password(SERVICE_NAME, ref) else ""
-                except Exception:
-                    return ""
             return self.backend if ref in self._read_file(self._file) else ""
 
     def delete(self, ref: str) -> None:
         with self._lock:
             if self.backend == "memory":
                 self._memory.pop(ref, None)
-            elif self.backend == "keyring":
-                try:
-                    self._keyring.delete_password(SERVICE_NAME, ref)
-                except Exception:
-                    pass
-                index = self._read_file(self._index)
-                if index.pop(ref, None) is not None:
-                    self._write_file(self._index, index)
             else:
                 data = self._read_file(self._file)
                 if data.pop(ref, None) is not None:
@@ -285,8 +222,6 @@ class CredentialStore:
         with self._lock:
             if self.backend == "memory":
                 found: Iterable[str] = self._memory
-            elif self.backend == "keyring":
-                found = self._read_file(self._index)
             else:
                 found = self._read_file(self._file)
             return sorted(r for r in found if r.startswith(prefix))

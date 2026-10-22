@@ -138,7 +138,7 @@ def load_config(path: str) -> dict[str, Any]:
 
 
 def _stored_secret(ref: str) -> str:
-    """Credential saved through SUGAR Settings (OS vault or owner-only file); '' if none or unreadable."""
+    """Credential entered in SUGAR Settings (session memory or explicitly selected file storage); '' if none or unreadable."""
     try:
         from sugar_core.credential_store import default_store
         return default_store().get(ref)

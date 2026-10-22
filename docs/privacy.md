@@ -5,7 +5,7 @@ What SUGAR keeps, where it goes, and what it never does. Written for the people 
 ## What stays on your computer
 
 - **Projects** (plans, collected posts, reviews, comments, institution records, exports) live in a folder on your machine (desktop) or on the server that runs SUGAR (hosted). Nothing is uploaded to the SUGAR project or its authors.
-- **Credentials** (AI provider keys, platform tokens) are kept in the operating system's credential vault, or in environment variables on a server. They are never written into projects, exports, profiles, handoff bundles or logs.
+- **Credentials** (AI provider keys, platform tokens) are kept in session memory by default, or supplied through SUGAR environment variables. OS credential-vault integration, including macOS Keychain access, is removed. An unencrypted, owner-only file is available only through explicit `SUGAR_CREDENTIAL_BACKEND=file` configuration. They are never written into projects, exports, profiles, handoff bundles or logs.
 - **Review and author names** are what a person types as their name, or their member address on a hosted server. They are stored in the project's review log so a verification can be attributed.
 
 ## What leaves your computer, and only when you use it

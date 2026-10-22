@@ -104,7 +104,7 @@ export function Onboarding({ prefs, onSavePrefs, onFinish, onOpenSettings, onTry
                 {report?.ok && <button type="button" className="button button-primary" onClick={() => void saveProvider()} disabled={Boolean(busy)}>{busy === "save" ? <><Spinner /> Saving…</> : "Save and continue"}</button>}
               </div>
               {report && <ConnectionResult report={report} />}
-              <p className="footnote">Your key is stored in your computer's credential store, not in the project or the page.</p>
+              <p className="footnote">Keychain access is removed. By default, your key stays in memory for this session; enter it again after restarting SUGAR.</p>
             </div>}
             {choice === "other" && <div className="notice notice-info">Open <button type="button" className="text-button" onClick={() => { finish(); onOpenSettings(); }}>Settings → LLM providers</button> to add Anthropic, a local model, or another compatible service.</div>}
             {choice === "none" && <div className="notice notice-info">You can add a model any time. Until then SUGAR uses its built-in interpreter.</div>}
