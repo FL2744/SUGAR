@@ -26,6 +26,8 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
 import sugar_bridge
+from sugar_core import __version__
+from sugar_core.cli_runtime import run_cli
 from sugar_core.credential_store import load_env_file
 from sugar_core.research_api import ApiError, Stream, dispatch as research_dispatch
 from sugar_core.research_runs import ResearchProject
@@ -764,9 +766,10 @@ DEFAULT_DEV_ORIGINS = {"http://localhost:1420", "http://127.0.0.1:1420", "http:/
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the SUGAR HTTP API for its browser interface.")
+    parser = argparse.ArgumentParser(prog="sugar-api", description="Run the SUGAR HTTP API for its browser interface.")
+    parser.add_argument("--version", action="version", version=f"sugar-api {__version__}")
     parser.add_argument("--host", default=os.environ.get("SUGAR_API_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("SUGAR_API_PORT", "8765")), help="0 selects a free port.")
+    parser.add_argument("--port", type=int, default=os.environ.get("SUGAR_API_PORT", "8765"), help="0 selects a free port.")
     parser.add_argument("--workspace-root", default=os.environ.get("SUGAR_API_WORKSPACE_ROOT", str(Path.home() / ".sugar" / "workspaces")))
     parser.add_argument("--allow-origin", action="append", default=[])
     parser.add_argument("--env-file", default="", help="Git-ignored file of SUGAR_* variables (default: ./.env.local or ~/.sugar/.env).")
@@ -774,6 +777,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ready-json", action="store_true", help="Print one machine-readable JSON line when ready (desktop sidecar).")
     parser.add_argument("--expose-paths", action="store_true", help="Include project folder paths in listings (loopback desktop use only).")
     args = parser.parse_args(argv)
+    if not 0 <= args.port <= 65535:
+        parser.error("--port must be between 0 and 65535 (0 selects a free port).")
     loaded = load_env_file(args.env_file or None)
     if loaded and not args.ready_json:
         print(f"Loaded {len(loaded)} SUGAR_* variable(s) from the environment file (values are never printed).")
@@ -821,5 +826,9 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def console_main(argv=None) -> int:
+    return run_cli(main, argv, prog="sugar-api")
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(console_main())

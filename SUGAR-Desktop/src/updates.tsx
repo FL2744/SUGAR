@@ -3,6 +3,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { api, apiPost } from "./bridge";
 import type { Prefs } from "./prefs";
 import { Pill, Segmented, Spinner, relativeTime } from "./ui";
+import { useUpdater, UpdateNotice, UpdatePanel } from "./native-updates";
 
 export type UpdateInfo = {
   current: string; channel: string; available: boolean; error: string; note?: string; latest?: string; tag?: string; name?: string; published_at?: string; url?: string; notes?: string;
@@ -13,7 +14,9 @@ type Job = { state: "idle" | "downloading" | "done" | "error"; name?: string; re
 const mb = (n: number) => `${(n / 1048576).toFixed(n > 10485760 ? 0 : 1)} MB`;
 
 /** Checks GitHub for a newer release when the app opens (if allowed) and drives the download. */
-export function useUpdates(prefs: Prefs, ready: boolean) {
+export function useUpdates(prefs: Prefs, ready: boolean, researchBusy = false) {
+  const native = useUpdater(researchBusy, prefs.updateChannel === "stable");
+  const useNative = native.desktop;
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
   const [job, setJob] = useState<Job>({ state: "idle" });
@@ -28,10 +31,10 @@ export function useUpdates(prefs: Prefs, ready: boolean) {
   }, [prefs.updateChannel]);
 
   useEffect(() => {
-    if (!ready || launched.current || !prefs.autoUpdateCheck) return;
+    if (useNative || !ready || launched.current || !prefs.autoUpdateCheck) return;
     launched.current = true;
     void check(false);
-  }, [ready, prefs.autoUpdateCheck, check]);
+  }, [ready, prefs.autoUpdateCheck, check, useNative]);
 
   // Choosing another channel in Settings looks again right away, and never shows the old channel's answer meanwhile.
   const lastChannel = useRef(prefs.updateChannel);
@@ -39,8 +42,8 @@ export function useUpdates(prefs: Prefs, ready: boolean) {
     if (lastChannel.current === prefs.updateChannel) return;
     lastChannel.current = prefs.updateChannel;
     setInfo(null); setJob({ state: "idle" }); setMessage("");
-    if (ready) void check(true);
-  }, [prefs.updateChannel, ready, check]);
+    if (ready && !useNative) void check(true);
+  }, [prefs.updateChannel, ready, check, useNative]);
 
   useEffect(() => {
     if (job.state !== "downloading") return;
@@ -57,7 +60,7 @@ export function useUpdates(prefs: Prefs, ready: boolean) {
     try { setMessage((await apiPost<{ how: string }>("/api/update/open", {})).how); }
     catch (e) { setMessage(e instanceof Error ? e.message : String(e)); }
   };
-  return { info, checking, check, job, download, open, message };
+  return { info, checking, check, job, download, open, message, native, useNative };
 }
 export type Updates = ReturnType<typeof useUpdates>;
 
@@ -73,6 +76,7 @@ function DownloadControls({ updates }: { updates: Updates }) {
 
 /** The one-line notice shown at the top of the app when a newer release exists. */
 export function UpdateBanner({ updates, prefs, onSavePrefs, onOpenSettings }: { updates: Updates; prefs: Prefs; onSavePrefs: (p: Prefs) => void; onOpenSettings: () => void }) {
+  if (updates.useNative) return <UpdateNotice updater={updates.native} onOpen={onOpenSettings} />;
   const { info } = updates;
   if (!info?.available || info.latest === prefs.skippedVersion) return null;
   return (
@@ -99,8 +103,9 @@ export function UpdatesPanel({ updates, prefs, onSavePrefs }: { updates: Updates
       <div className="settings-grid">
         <Segmented label="Release channel" value={prefs.updateChannel} onChange={(v) => onSavePrefs({ ...prefs, updateChannel: v })}
           options={[{ value: "latest", label: "Latest", hint: "Every change that passes the tests, automatically." }, { value: "stable", label: "Stable", hint: "Tested releases. Recommended." }, { value: "preview", label: "Preview", hint: "Release candidates, a little earlier." }, { value: "lts", label: "Long-term", hint: "Fixes only, for a fixed term." }]} />
-        <label className="check-row"><input type="checkbox" checked={prefs.autoUpdateCheck} onChange={(e) => onSavePrefs({ ...prefs, autoUpdateCheck: e.target.checked })} /><span>Check for updates when SUGAR opens</span></label>
+        {!updates.useNative && <label className="check-row"><input type="checkbox" checked={prefs.autoUpdateCheck} onChange={(e) => onSavePrefs({ ...prefs, autoUpdateCheck: e.target.checked })} /><span>Check for updates when SUGAR opens</span></label>}
       </div>
+      {updates.useNative ? <UpdatePanel updater={updates.native} /> : <>
       <div className="update-status">
         <button className="button button-secondary" onClick={() => void updates.check(true)} disabled={checking}>{checking ? "Checking…" : "Check now"}</button>
         {info && !info.error && <span role="status">{info.available ? (info.channel === "latest" ? <>A newer build is available. </> : <><strong>{info.latest}</strong> is available (you have {info.current}). </>) : <>{info.note || "You are up to date."} (version {info.current})</>}{info.published_at && info.available ? <small className="muted"> Published {relativeTime(info.published_at)}</small> : null}</span>}
@@ -114,6 +119,7 @@ export function UpdatesPanel({ updates, prefs, onSavePrefs }: { updates: Updates
         : <details><summary>{info.ahead.commits} change{info.ahead.commits === 1 ? "" : "s"} on the main branch since {info.tag}</summary>
           <ul>{info.ahead.headlines.map((h, i) => <li key={i}>{h}</li>)}</ul><p className="muted">These are in development and arrive in a later release.</p></details>)}
       {!isTauri() && <p className="muted">This is the browser version, so it updates when whoever runs the server updates it.</p>}
+      </>}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from . import __version__
+from .cli_runtime import run_cli
 from .analyst_capture import capture_saved_page
 from .calibration import run_calibration_suite
 from .columnar import build_parquet_dataset, query_parquet_dataset, save_query_result
@@ -434,5 +435,9 @@ def main(argv=None) -> int:
     return 2
 
 
+def console_main(argv=None) -> int:
+    return run_cli(main, argv, prog="sugar-intel")
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(console_main())

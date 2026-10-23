@@ -64,6 +64,7 @@ jobs:
           "$RUNNER_TEMP/sugar-wheel/bin/sugar-project" --version
           "$RUNNER_TEMP/sugar-wheel/bin/sugar-state" --version
           "$RUNNER_TEMP/sugar-wheel/bin/sugar-intel" --version
+          "$RUNNER_TEMP/sugar-wheel/bin/sugar-api" --version
           "$RUNNER_TEMP/sugar-wheel/bin/python" -c "import sugar_core; print(sugar_core.__version__)"
 
   desktop-ui:

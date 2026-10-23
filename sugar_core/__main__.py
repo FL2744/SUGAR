@@ -1,2 +1,3 @@
-from .cli import main
-raise SystemExit(main())
+from .cli import console_main
+
+raise SystemExit(console_main())

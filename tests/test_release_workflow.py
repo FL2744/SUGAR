@@ -13,7 +13,14 @@ def test_release_workflow_publishes_all_supported_desktop_artifacts() -> None:
     assert "macos-15-intel" not in workflow
     assert "bundle/msi/*.msi" in workflow
     assert "SUGAR-Windows-x64.zip" not in workflow
-    assert 'tag_version="${tag_version%%-*}"' in workflow
+    assert 'release_tools.py versions --tag "$RELEASE_TAG"' in workflow
+    assert 'tag_version="${tag_version%%-*}"' not in workflow
+    assert "*.msi.sig" in workflow
+    assert "*.app.tar.gz.sig" in workflow
+    assert "release_tools.py manifest" in workflow
+    assert "--verify-tag --draft" in workflow
+    assert "--prerelease --latest=false" in workflow
+    assert "SUGAR_REQUIRE_UPDATER" in workflow
 
 
 def test_ci_retains_a_validated_mac_bundle() -> None:

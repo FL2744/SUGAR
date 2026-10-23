@@ -26,12 +26,14 @@ export function ConnectionResult({ report }: { report: ConnectionReport }) {
   );
 }
 
-export function SettingsPage({ updates, onRunSetup, prefs, onSavePrefs, onDirtyChange, engineState, apiUrl, apiToken, onApiUrl, onApiToken, onConnect, busy, onError }: {
+export function SettingsPage({ updates, initialSection = "providers", onRunSetup, prefs, onSavePrefs, onDirtyChange, engineState, apiUrl, apiToken, onApiUrl, onApiToken, onConnect, busy, onError }: {
   updates: Updates;
+  initialSection?: Section;
   onRunSetup?: () => void; prefs: Prefs; onSavePrefs: (prefs: Prefs) => boolean; onDirtyChange: (dirty: boolean) => void; engineState: string;
   apiUrl: string; apiToken: string; onApiUrl: (value: string) => void; onApiToken: (value: string) => void; onConnect: () => void; busy: boolean; onError: (message: string) => void;
 }) {
-  const [section, setSection] = useState<Section>("providers");
+  const [section, setSection] = useState<Section>(initialSection);
+  useEffect(() => setSection(initialSection), [initialSection]);
   const [types, setTypes] = useState<ProviderType[]>([]);
   const [saved, setSaved] = useState<ProviderProfileRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileDraft[]>([]);

@@ -21,6 +21,11 @@ on:
       mode:
         type: string
         default: release
+    secrets:
+      TAURI_SIGNING_PRIVATE_KEY:
+        required: false
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        required: false
 
 permissions:
   contents: write
@@ -83,15 +88,11 @@ jobs:
       - name: Verify tag and package version agree
         if: needs.release-context.outputs.mode != 'rolling'
         shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
         run: |
-          version="$(python -c 'import sugar_core; print(sugar_core.__version__)')"
-          release_tag="${{ needs.release-context.outputs.tag }}"
-          tag_version="${release_tag#v}"
-          tag_version="${tag_version%%-*}"
-          test "$tag_version" = "$version" || {
-            echo "Release tag $release_tag does not match package version $version" >&2
-            exit 1
-          }
+          python tools/release_tools.py versions --tag "$RELEASE_TAG"
+          python tools/release_tools.py notes --tag "$RELEASE_TAG" --output RELEASE_NOTES.md
       - name: Run deterministic suite
         run: python -m pytest -q
 
@@ -99,6 +100,11 @@ jobs:
     needs: [release-context, validate-release]
     runs-on: windows-latest
     timeout-minutes: 40
+    env:
+      SUGAR_UPDATER_PUBLIC_KEY: ${{ vars.SUGAR_UPDATER_PUBLIC_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      SUGAR_REQUIRE_UPDATER: ${{ vars.SUGAR_UPDATER_PUBLIC_KEY != '' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -154,12 +160,19 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: release-windows-x64
-          path: SUGAR-Desktop/src-tauri/target/release/bundle/msi/*.msi
+          path: |
+            SUGAR-Desktop/src-tauri/target/release/bundle/msi/*.msi
+            SUGAR-Desktop/src-tauri/target/release/bundle/msi/*.msi.sig
           if-no-files-found: error
 
   macos-apple-silicon:
     needs: [release-context, validate-release]
     runs-on: macos-15
+    env:
+      SUGAR_UPDATER_PUBLIC_KEY: ${{ vars.SUGAR_UPDATER_PUBLIC_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      SUGAR_REQUIRE_UPDATER: ${{ vars.SUGAR_UPDATER_PUBLIC_KEY != '' && '1' || '0' }}
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
@@ -192,7 +205,10 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: release-macos-apple-silicon
-          path: SUGAR-macOS.zip
+          path: |
+            SUGAR-macOS.zip
+            SUGAR-Desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz
+            SUGAR-Desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
           if-no-files-found: error
 
   python-distributions:
@@ -220,6 +236,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      SUGAR_UPDATER_PUBLIC_KEY: ${{ vars.SUGAR_UPDATER_PUBLIC_KEY }}
     steps:
       # The publish step needs the repository: it reads CHANGELOG.md for the release notes and pushes the tag.
       - uses: actions/checkout@v7
@@ -228,16 +245,18 @@ jobs:
       - uses: actions/download-artifact@v7
         with:
           pattern: release-*
-          path: release-assets
-          merge-multiple: true
+          path: downloaded-assets
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Collect artifacts without filename collisions
+        run: python tools/release_tools.py collect-assets --source downloaded-assets --output release-assets
       - name: Verify release payload and checksums
         run: |
           ls release-assets/*.msi >/dev/null
           test -s release-assets/SUGAR-macOS.zip
           ls release-assets/*.whl >/dev/null
           ls release-assets/*.tar.gz >/dev/null
-          (cd release-assets && sha256sum * > SHA256SUMS)
-          (cd release-assets && sha256sum --check SHA256SUMS)
       - name: Write release notes
         env:
           MODE: ${{ needs.release-context.outputs.mode }}
@@ -275,6 +294,17 @@ jobs:
               notes = pathlib.Path("RELEASE_NOTES.md").read_text(encoding="utf-8")
               pathlib.Path("RELEASE_NOTES.md").write_text(m.group(1).strip() + "\n\n---\n\n" + notes, encoding="utf-8")
           PY
+      - name: Generate optional signed feed and payload checksums
+        shell: bash
+        env:
+          MODE: ${{ needs.release-context.outputs.mode }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+        run: |
+          if [[ "$MODE" != "rolling" && -n "$SUGAR_UPDATER_PUBLIC_KEY" ]]; then
+            python tools/release_tools.py manifest --assets release-assets --tag "$RELEASE_TAG" --notes RELEASE_NOTES.md
+          fi
+          (cd release-assets && sha256sum * > SHA256SUMS)
+          (cd release-assets && sha256sum --check SHA256SUMS)
       - name: Create tag and publish GitHub release
         shell: bash
         run: |
@@ -302,7 +332,8 @@ jobs:
           esac
           gh release create "$tag" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --draft \
             --target "$target" \
             --title "SUGAR $tag" \
-            --notes-file RELEASE_NOTES.md \
-            $channel_flags
+            --notes-file RELEASE_NOTES.md
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false $channel_flags

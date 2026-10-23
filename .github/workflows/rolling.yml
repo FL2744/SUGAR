@@ -17,5 +17,6 @@ permissions:
 jobs:
   build:
     uses: ./.github/workflows/release.yml
+    secrets: inherit
     with:
       mode: rolling

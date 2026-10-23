@@ -13,7 +13,8 @@ def test_canonical_frontend_uses_one_shared_map_and_backend_boundary():
     assert '"run_backend"' in bridge
     assert '"/api/run"' in bridge
     assert "maxZoom: 18" in map_view
-    assert "Institutions, on the map." in shell
+    assert "<InstitutionsPage" in shell
+    assert "<MapPage" in shell
     assert "Research API" in shell
 
 

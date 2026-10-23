@@ -166,7 +166,7 @@ export function App() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [engineState, setEngineState] = useState<"checking" | "ready" | "unavailable" | "preview">("checking");
-  const updates = useUpdates(prefs, engineState === "ready");
+  const [settingsSection, setSettingsSection] = useState<"providers" | "updates">("providers");
   const [engineVersion, setEngineVersion] = useState("");
   const [apiUrl, setApiUrl] = useState(() => defaultApiUrl());
   const [apiToken, setApiToken] = useState("");
@@ -206,6 +206,10 @@ export function App() {
   const [inferLocations, setInferLocations] = useState(false);
   const [platformTuning, setPlatformTuning] = useState<Record<string, { max_posts_per_query: string; max_pages_per_query: string }>>({});
   const [activeCollectionRunId, setActiveCollectionRunId] = useState("");
+  const updates = useUpdates(prefs, engineState === "ready", Boolean(busy || activeCollectionRunId) || Boolean(overview?.runs.some((run) => ["queued", "running", "paused", "cancelling"].includes(run.status))));
+  useEffect(() => {
+    setBusy((current) => updates.native.installing ? "installing_update" : current === "installing_update" ? "" : current);
+  }, [updates.native.installing]);
   const [collectionScope, setCollectionScope] = useState<CollectionScope>({
     terms: "", sources: "", since: "", until: "", post_languages: "", excluded_topics: "",
   });
@@ -1190,7 +1194,7 @@ export function App() {
             </div>))}
         </nav>
         <div className="side-caption secondary-caption">Current project</div>
-        <button className="side-new-project" onClick={openNewProject}><span aria-hidden="true">＋</span> New project</button>
+        <button className="side-new-project" onClick={openNewProject} disabled={Boolean(busy)}><span aria-hidden="true">＋</span> New project</button>
         <button className="project-chip" onClick={() => changePage("projects")} title="Switch project"><span className={`project-indicator ${projectId ? "connected" : ""}`} /><span className="project-chip-copy"><strong>{projectId ? projectName : "No project open"}</strong><small>{projectId ? (overview?.summary.status ? titleCase(overview.summary.status) : "Open") : "Create or choose one"}</small></span><span className="chevron" aria-hidden="true">›</span></button>
         <div className="sidebar-spacer" />
         <div className="engine-card"><div className={`engine-light ${engineState}`} /><div><strong>{engineState === "checking" ? "Connecting to engine" : engineState === "unavailable" ? "Engine unavailable" : engineState === "preview" ? "Browser preview" : isTauri() ? "Local research engine" : "SUGAR API connected"}</strong><small>{engineState === "ready" ? `Python core · ${engineVersion || "connected"}` : engineState === "unavailable" ? "Check the API address and credentials" : engineState === "preview" ? "Connect a research API to work" : "Checking Python core"}</small></div></div>
@@ -1205,7 +1209,7 @@ export function App() {
           <div className="topbar-actions"><div className={`connection-badge ${busy || activeRunSummary ? "working" : projectId ? "connected" : ""}`}><i />{busy ? "Working…" : activeRunSummary ? "Research running" : projectId ? "Project open" : "No project open"}</div>{overview && <StatusPill status={overview.summary.status} />}<button className="button button-primary button-small" onClick={openNewProject} disabled={Boolean(busy)}><span aria-hidden="true">＋</span> New project</button></div>
         </header>
 
-        <UpdateBanner updates={updates} prefs={prefs} onSavePrefs={savePrefs} onOpenSettings={() => changePage("settings")} />
+        <UpdateBanner updates={updates} prefs={prefs} onSavePrefs={savePrefs} onOpenSettings={() => { setSettingsSection("updates"); changePage("settings"); }} />
         {error && <div className="error-banner" role="alert"><span className="error-symbol">!</span><div><strong>Action needs attention</strong><p>{error}</p></div>{/Could not reach|Failed to fetch/i.test(error) && <button className="button button-secondary button-small" onClick={() => { setError(""); changePage("settings"); }}>Connection settings</button>}<button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
         {busy && <div className="progress-line"><i /></div>}
 
@@ -1260,7 +1264,7 @@ export function App() {
         {page === "projects" && <ProjectsPage projects={projects} currentId={projectId} loading={projectsLoading} advanced={prefs.mode === "advanced"} createSignal={createSignal} onOpen={openProject} onCreate={async (name, question) => { await createProject(name, question); }} onOpenFolder={() => void openFolder()} onRefresh={() => void loadProjects()} />}
         {page === "timeline" && <TimelinePage projectId={projectId} refreshKey={timelineKey} />}
         {page === "about" && <AboutPage version="1.4" engineVersion={engineVersion} />}
-        {page === "settings" && <SettingsPage updates={updates} onRunSetup={() => setShowSetup(true)} prefs={prefs} onSavePrefs={savePrefs} onDirtyChange={(dirty) => { settingsDirty.current = dirty; }} engineState={engineState} apiUrl={apiUrl} apiToken={apiToken} onApiUrl={setApiUrl} onApiToken={setApiToken} onConnect={() => void connectResearchEngine()} busy={Boolean(busy)} onError={setError} />}
+        {page === "settings" && <SettingsPage updates={updates} initialSection={settingsSection} onRunSetup={() => setShowSetup(true)} prefs={prefs} onSavePrefs={savePrefs} onDirtyChange={(dirty) => { settingsDirty.current = dirty; }} engineState={engineState} apiUrl={apiUrl} apiToken={apiToken} onApiUrl={setApiUrl} onApiToken={setApiToken} onConnect={() => void connectResearchEngine()} busy={Boolean(busy)} onError={setError} />}
 
 
         {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}

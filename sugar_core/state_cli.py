@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from . import __version__
+from .cli_runtime import run_cli
 from .llm import ARC_BASE_URL, LLMConfig, default_model
 from .observation_storage import load_observations
 from .state_aggregate import save_state_rollups
@@ -489,5 +490,9 @@ def main(argv=None) -> int:
     return 2
 
 
+def console_main(argv=None) -> int:
+    return run_cli(main, argv, prog="sugar-state")
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(console_main())

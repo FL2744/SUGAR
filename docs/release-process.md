@@ -21,8 +21,11 @@ The package version appears in:
 
 - `pyproject.toml` under `[project].version`;
 - `sugar_core.__version__`.
+- `SUGAR-Desktop/package.json` and both root-version entries in `package-lock.json`;
+- `SUGAR-Desktop/src-tauri/tauri.conf.json`;
+- the app package entries in `SUGAR-Desktop/src-tauri/Cargo.toml` and `Cargo.lock`.
 
-`tests/test_integrity.py` enforces that these values match.
+Run `python tools/release_tools.py versions --tag vVERSION` to check every value. Release tags must match exactly, including prerelease identifiers. The release workflow enforces this before building.
 
 Schema and protocol versions are independent of the package version and should only move when their respective contracts change:
 
@@ -41,7 +44,7 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-A release candidate should have a fully green GitHub Actions matrix. The matrix covers supported Python versions on Ubuntu/macOS/Windows plus packaged desktop builds and bounded live Weibo smoke checks.
+A release candidate should have a fully green GitHub Actions matrix. The matrix covers supported Python versions, native platform checks, browser workflows/accessibility, and packaged desktop builds. Bounded live-source checks run separately through the explicitly authorized manual workflow.
 
 A live-source failure should be interpreted carefully: distinguish an actual collector regression from an external platform access/rate-limit change. Never relax access controls simply to make CI green.
 
@@ -61,10 +64,10 @@ Verify:
 
 Verify:
 
-- `SUGAR.exe` launches normally and in the offscreen smoke test;
-- `sugar-bridge.exe diagnostics` reports expected operations/protocol;
+- the canonical Tauri application installs and launches from the MSI;
+- the bundled `sugar-bridge` diagnostics report expected operations/protocol;
 - packaged analysis, State, and workspace smoke tests succeed;
-- the portable ZIP contains both GUI and backend;
+- the MSI is present (with its updater signature when signing is configured), and the installer includes the Python bridge and dependency licenses;
 - production distribution uses an organization-controlled Authenticode signing process if/when releases are distributed outside development channels.
 
 Do not disable Gatekeeper, SmartScreen, antivirus, or endpoint protections to make a release appear functional.
@@ -112,7 +115,9 @@ Historical docs should be clearly labeled historical rather than left looking cu
 
 Only tag a commit after required CI/review is complete. A release tag should point to the exact reviewed commit used for packaged artifacts.
 
-Pushing a `v*` tag invokes the cross-platform release workflow. The workflow first verifies that the base tag version matches `sugar_core.__version__`, then builds and validates Windows x64, macOS Apple Silicon, and Python distribution artifacts from that same tagged commit. Intel Mac desktop builds are not a supported distribution target. The release is published only after every platform job succeeds, and includes a `SHA256SUMS` manifest for the uploaded payload.
+Pushing a `v*` tag invokes the cross-platform release workflow. The workflow first verifies every package version, then builds and validates Windows x64, macOS Apple Silicon, and Python distribution artifacts from that same tagged commit. Intel Mac desktop builds are not a supported distribution target. With signing configured, it also validates the signed update feed. Without keys, manual installers remain available. It stages formal releases in a draft and publishes only after every platform job succeeds. Prereleases never become the latest stable release. `SHA256SUMS` covers the complete published payload.
+
+Configure the keys, test the updater, and review client behavior using [Software updates](software-updates.md). Updater signatures do not replace Apple notarization or Authenticode. Verify an actual update/restart between disposable signed installations on both platforms before production rollout.
 
 SUGAR is licensed under the Apache License, Version 2.0. Before publication, verify that:
 
@@ -144,7 +149,7 @@ The desktop app and `sugar update` read this repository's GitHub Releases. Which
 - `vX.Y.Z-rc.N`, `-beta.N`, `-preview.N`: **Preview**, published as pre-releases.
 - `vX.Y.Z-lts.N`: **Long-term**, a maintenance line that receives fixes only and never becomes "latest".
 
-Every release must include the Windows installer (`.msi`), `SUGAR-macOS.zip` and `SHA256SUMS`; the app verifies downloads against that file. Updating is a download plus a hand-off to the OS installer. Silent in-place replacement would need signed update bundles (a Tauri updater key and, for macOS, notarization), which is a decision for the organization that distributes the app.
+Every release must include the Windows installer (`.msi`), `SUGAR-macOS.zip` and `SHA256SUMS`; the Latest, Preview and Long-term channels verify manual downloads against that file and hand installation to the operating system. The Stable desktop channel uses signed updater bundles when the organization has configured an updater key. Installation always requires confirmation. Configure platform code signing/notarization separately for public distribution.
 
 ### How an update installs
 

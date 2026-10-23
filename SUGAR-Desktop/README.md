@@ -46,7 +46,7 @@ export SUGAR_API_ALLOWED_ORIGINS="https://research.vt.domains"
 python sugar_api.py --host 127.0.0.1 --port 8765
 ```
 
-Set the frontend API address to the reverse-proxied HTTPS endpoint using `VITE_SUGAR_API_URL` at build time or **Settings → Research API** at runtime. The browser keeps the API token in session memory. Remote connections require HTTPS. The current API is a single-operator boundary: it scopes files to a workspace and supports a bearer token, but does not provide per-user identity, tenant isolation, or institutional authorization. Put it behind approved identity and access controls before hosting real research data.
+Set the frontend API address to the reverse-proxied HTTPS endpoint using `VITE_SUGAR_API_URL` at build time or **Settings → Research API** at runtime. The browser keeps the API token in session memory. Remote connections require HTTPS. The operator token grants administrator access; administrators can issue and revoke project-scoped member tokens, and each request enforces the member's current project role. This does not provide institutional sign-in or simultaneous conflict-resolved editing. Put hosted research data behind approved institutional identity and access controls. See the [root README](../README.md#browser-and-desktop-use) for roles and token storage.
 
 ## Optional desktop packages
 
@@ -74,6 +74,26 @@ The packaged sidecar runs locally, so a desktop user does not need to start `sug
 - Filter institution records, view clustered locations, and inspect evidence sources.
 - Prepare a human-review draft and export a verified handoff bundle.
 - Keep provider credentials in session memory and pass them only with the requested operation.
+
+Opening a project restores its saved question, evidence, registry, and history. Changing projects clears project-specific drafts, previews, imports, and filters. Save requirement and project-profile edits before switching. After reconnecting the Research API in Settings, the selected project reloads automatically.
+
+Evidence results are paged for bulk runs. The Institutions page and Map page provide their own filters and record inspectors.
+
+## Find your way around
+
+Use **Research** to prepare a request, review its plan, run collection, inspect evidence, and export results. **Institutions**, **Map**, **Timeline**, and **Monitoring** open the corresponding project views. The advanced workspace provides additional import and review tools. Save form edits before changing projects or reloading.
+
+The evidence desk supports activity verification, rubric coding, public feed seeds, analyst captures, country snapshots, and packages for an approved AI tool. Imported evidence stays linked to its source and human review state.
+
+Use **Ctrl K** on Windows/Linux or **⌘ K** on macOS to open quick actions. Type a destination, use the arrow keys to select it, and press Enter. Escape closes the dialog. Dialogs keep keyboard focus inside and return it when closed.
+
+Choose a color theme under **Settings → Interface**, or use the theme quick action. The preference persists locally. Responsive navigation keeps the main destinations available on small screens.
+
+## Software updates
+
+**Settings → Updates → Stable** shows the desktop version, update status, release notes, and verified download progress. Signed release builds check automatically; automatic downloads are optional. Installation requires confirmation and waits for known active research work to finish. The default Latest channel keeps the rolling build and explicit installer download. Browser deployments are updated by their host. Older desktop releases need one manual installation to gain the updater.
+
+Local builds without release keys display a manual-download link. To enable signed update builds and configure release CI, follow [Software updates](../docs/software-updates.md). Private signing keys never belong in this repository.
 
 ## Map source
 

@@ -1,0 +1,22 @@
+.update-notice { display: flex; align-items: center; flex-wrap: wrap; gap: .7rem; margin: .7rem 1.6rem 0; padding: .8rem 1rem; border: 1px solid var(--wb-line); border-radius: .5rem; background: var(--wb-blue-soft); color: var(--wb-ink); }
+.update-notice > span { flex: 1; min-width: 12rem; }
+.update-notice .icon-button { display: grid; place-items: center; min-width: 2.75rem; min-height: 2.75rem; border: 0; border-radius: .4rem; background: transparent; cursor: pointer; }
+.update-panel { margin-top: 1.2rem; color: var(--wb-ink); }
+.update-panel .section-title { flex-wrap: wrap; }
+.secure-badge { display: inline-flex; align-items: center; gap: .3rem; color: var(--wb-green); }
+.update-panel .update-status { display: flex; align-items: start; flex-direction: column; gap: .4rem; margin: 1rem 0; }
+.update-panel .update-status span, .update-help, .update-preference small { color: var(--wb-muted); }
+.update-panel .update-actions, .update-dialog .update-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .7rem; margin: 1rem 0; }
+.update-panel a { color: var(--wb-blue); overflow-wrap: anywhere; }
+.update-progress { display: grid; gap: .5rem; }
+.update-progress progress { width: 100%; accent-color: var(--wb-green); }
+.update-release-notes { margin: 1rem 0; }
+.update-release-notes p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.update-preference { display: flex; align-items: start; gap: .7rem; margin: 1rem 0; }
+.update-preference input { margin-top: .3rem; }
+.update-preference span { display: grid; gap: .3rem; }
+.update-error { display: flex; align-items: start; gap: .5rem; padding: 1rem; border-radius: .4rem; background: var(--wb-red-soft); color: var(--wb-red); overflow-wrap: anywhere; }
+.app-dialog.update-dialog { max-width: min(36rem, calc(100vw - 2rem)); padding: 1.5rem; border: 1px solid var(--wb-line); border-radius: .7rem; color: var(--wb-ink); background: var(--wb-card); }
+.app-dialog.update-dialog::backdrop { background: #0008; }
+.update-dialog p { line-height: 1.6; }
+@media (max-width: 600px) { .update-notice { margin-inline: .7rem; } .update-panel { padding-inline: .8rem; } }
