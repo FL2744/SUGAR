@@ -7,6 +7,7 @@ from dataclasses import asdict
 from typing import Any
 
 from . import __version__
+from .cli_runtime import run_cli
 from .workspace import SugarWorkspace
 
 
@@ -394,5 +395,9 @@ def main(argv=None) -> int:
     return 0
 
 
+def console_main(argv=None) -> int:
+    return run_cli(main, argv, prog="sugar-project")
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(console_main())

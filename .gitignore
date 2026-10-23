@@ -16,6 +16,7 @@ secrets.*
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.pytest-tmp/
 .ruff_cache/
 .coverage
 coverage.xml
@@ -48,6 +49,9 @@ SUGAR-Desktop/node_modules/
 SUGAR-Desktop/test-results/
 SUGAR-Desktop/playwright-report/
 SUGAR-Desktop/*.tsbuildinfo
+SUGAR-Desktop/src-tauri/.updater-build.json
+*.updater.key
+*.updater.key.pub
 SUGAR-Desktop/src-tauri/target/
 SUGAR-Desktop/src-tauri/binaries/sugar-bridge-*
 SUGAR-Desktop/src-tauri/icons/android/

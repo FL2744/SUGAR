@@ -4,6 +4,7 @@ Use this index to find the current design or methodology document for the part o
 
 ## Architecture and development
 
+- [`cli-quick-start.md`](cli-quick-start.md) — installation, a complete offline CLI workflow, credentials, exit codes, and troubleshooting.
 - [`architecture.md`](architecture.md) — system boundaries, dependency direction, desktop/core separation, and engineering rules.
 - [`importer-interface.md`](importer-interface.md) ? external CSV/JSONL ingestion contract and provenance rules.
 - [`research-requirements.md`](research-requirements.md) ? research-question schema, bounded search-plan model, and drift controls.
@@ -18,6 +19,7 @@ Use this index to find the current design or methodology document for the part o
 - [`adr/0001-state-integration-first-boundary.md`](adr/0001-state-integration-first-boundary.md) — decision record establishing the integration-first State delivery architecture.
 - [`project-workspaces.md`](project-workspaces.md) — persistent project manifest/artifact-registry contract and automatic workflow routing.
 - [`release-process.md`](release-process.md) — versioning, CI, packaged-app inspection, research-integrity review, and release checklist.
+- [`software-updates.md`](software-updates.md) — automatic desktop checks/downloads, verified installation, manual CLI/service upgrades, signing keys, and update-feed publication.
 - [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — contribution/test expectations.
 - [`../SECURITY.md`](../SECURITY.md) — security, credential, workspace, and packaging policy.
 

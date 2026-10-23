@@ -46,7 +46,7 @@ export SUGAR_API_ALLOWED_ORIGINS="https://research.vt.domains"
 python sugar_api.py --host 127.0.0.1 --port 8765
 ```
 
-Set the frontend API address to the reverse-proxied HTTPS endpoint using `VITE_SUGAR_API_URL` at build time or **Settings → Research API** at runtime. The browser keeps the API token in session memory. Remote connections require HTTPS. The current API is a single-operator boundary: it scopes files to a workspace and supports a bearer token, but does not provide per-user identity, tenant isolation, or institutional authorization. Put it behind approved identity and access controls before hosting real research data.
+Set the frontend API address to the reverse-proxied HTTPS endpoint using `VITE_SUGAR_API_URL` at build time or **Settings → Research API** at runtime. The browser keeps the API token in session memory. Remote connections require HTTPS. The operator token grants administrator access; administrators can issue and revoke project-scoped member tokens, and each request enforces the member's current project role. This does not provide institutional sign-in or simultaneous conflict-resolved editing. Put hosted research data behind approved institutional identity and access controls. See the [root README](../README.md#browser-and-desktop-use) for roles and token storage.
 
 ## Optional desktop packages
 
@@ -74,6 +74,26 @@ The packaged sidecar runs locally, so a desktop user does not need to start `sug
 - Filter institution records, view clustered locations, and inspect evidence sources.
 - Prepare a human-review draft and export a verified handoff bundle.
 - Keep provider credentials in session memory and pass them only with the requested operation.
+
+Opening a project restores its saved question, evidence, registry, and history. Changing projects clears project-specific drafts, previews, imports, and filters. Save requirement and project-profile edits before switching. After reconnecting the Research API in Settings, the selected project reloads automatically.
+
+Institution lists use pages of 100 records; use **Previous** and **Next** beneath the list to inspect large registries. Search and network/status filters apply to the entire registry and map. **Clear filters** returns to the full list.
+
+## Find your way around
+
+The research project is organized into four tabs. **Research brief** holds the question, scope, templates, and collection plan. **Evidence** holds imports, public items, source records, geography tools, review, and exports. **Team & notes** holds the profile, roster, and comments. **Monitoring** holds recurring listening posts. Unsaved form values stay in memory while moving between tabs; save them before switching projects or reloading.
+
+In Evidence, expand **Public items & hashtags** to collect a known URL or Mastodon hashtag. Expand **Geographic review & comparison** for analyst place assignments and dataset comparisons. After a collection, **View evidence** opens the records directly.
+
+Use **Ctrl K** on Windows/Linux or **⌘ K** on macOS to open quick actions. Type a destination, use the arrow keys to select it, and press Enter. Escape closes the dialog. Project tabs also support Left/Right arrows and Home/End. Dialogs keep keyboard focus inside and return it when closed.
+
+**Institutions & map** offers both map and list views with the same filters and record inspector. **Run history** supports text search and an **Issues only** filter. The header's sun/moon control switches theme; this preference persists locally. On small screens, bottom navigation keeps every main destination, including Settings, available.
+
+## Software updates
+
+**Settings → Software updates** shows the desktop version, update status, release notes, and verified download progress. Signed release builds check automatically; automatic downloads are optional. Installation requires confirmation and waits for active research work to finish. Browser deployments are updated by their host. Older desktop releases need one manual installation to gain the updater.
+
+Local builds without release keys display a manual-download link. To enable signed update builds and configure release CI, follow [Software updates](../docs/software-updates.md). Private signing keys never belong in this repository.
 
 ## Map source
 

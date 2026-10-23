@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import argparse
-import getpass
 import json
 import os
 from pathlib import Path
 
 from . import __version__
+from .cli_runtime import iso_date, positive_int, read_secret, run_cli
+from .collector_registry import COLLECTORS
 from .importers import import_external_dataset, parse_field_mappings
 from .handoff import build_handoff_bundle, verify_handoff_bundle
 from .lineage import (
@@ -56,7 +57,7 @@ from .workspace_runtime import (
 
 
 def _secret(prompt: str, env: str) -> str:
-    return os.environ.get(env, "") or getpass.getpass(prompt).strip()
+    return read_secret(prompt, env)
 
 
 def _csv(value: str) -> list[str]:
@@ -115,7 +116,7 @@ def _json_mapping(path: str | None) -> dict:
     source = Path(path).expanduser()
     if not source.is_file():
         raise FileNotFoundError(source)
-    data = json.loads(source.read_text(encoding="utf-8"))
+    data = json.loads(source.read_text(encoding="utf-8-sig"))
     if not isinstance(data, dict):
         raise ValueError(f"{source} must contain a JSON object.")
     return data
@@ -151,10 +152,10 @@ def build_parser() -> argparse.ArgumentParser:
     search = sub.add_parser("search", help="Run a normal bounded collection + optional enrichment.")
     search.add_argument("terms", nargs="+")
     search.add_argument("--sources", default="x")
-    search.add_argument("--since")
-    search.add_argument("--until")
-    search.add_argument("--posts", type=int, default=10)
-    search.add_argument("--pages", type=int, default=1)
+    search.add_argument("--since", type=iso_date)
+    search.add_argument("--until", type=iso_date)
+    search.add_argument("--posts", type=positive_int, default=10)
+    search.add_argument("--pages", type=positive_int, default=1)
     search.add_argument("--output")
     search.add_argument("--provider", choices=["openai", "arc", "custom"], default="openai")
     search.add_argument("--model")
@@ -345,13 +346,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="UTF-8 query-plan file: one term per line; blank lines/# comments ignored. Repeatable.",
     )
     harvest.add_argument("--sources", default="bilibili,weibo")
-    harvest.add_argument("--since")
-    harvest.add_argument("--until")
-    harvest.add_argument("--target", type=int, default=5000)
-    harvest.add_argument("--posts-per-task", type=int, default=500)
-    harvest.add_argument("--pages-per-task", type=int, default=5)
-    harvest.add_argument("--max-pages-per-query", type=int, default=100)
-    harvest.add_argument("--shard-days", type=int, default=7)
+    harvest.add_argument("--since", type=iso_date)
+    harvest.add_argument("--until", type=iso_date)
+    harvest.add_argument("--target", type=positive_int, default=5000)
+    harvest.add_argument("--posts-per-task", type=positive_int, default=500)
+    harvest.add_argument("--pages-per-task", type=positive_int, default=5)
+    harvest.add_argument("--max-pages-per-query", type=positive_int, default=100)
+    harvest.add_argument("--shard-days", type=positive_int, default=7)
     harvest.add_argument("--max-retries", type=int, default=4)
     harvest.add_argument("--max-inline-wait", type=float, default=900.0)
     harvest.add_argument("--task-delay", type=float, default=1.0)
@@ -620,7 +621,7 @@ def main(argv=None) -> int:
         )
         if args.strategy_command == "update":
             edits_path = Path(args.edits).expanduser()
-            payload = json.loads(edits_path.read_text(encoding="utf-8"))
+            payload = json.loads(edits_path.read_text(encoding="utf-8-sig"))
             if not isinstance(payload, dict):
                 raise ValueError("Strategy edits file must contain a JSON object.")
             for raw in payload.get("concept_updates") or []:
@@ -1089,7 +1090,7 @@ def main(argv=None) -> int:
         )
         project_context = DEFAULT_PROJECT_CONTEXT
         if args.project_context_file:
-            project_context = Path(args.project_context_file).expanduser().read_text(encoding="utf-8").strip()
+            project_context = Path(args.project_context_file).expanduser().read_text(encoding="utf-8-sig").strip()
             if not project_context:
                 raise ValueError("The project context file is empty.")
         api_key = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
@@ -1105,13 +1106,20 @@ def main(argv=None) -> int:
         print("\n".join(outputs))
         return 0
 
-    sources = _csv(args.sources)
+    sources = list(dict.fromkeys(source.casefold() for source in _csv(args.sources)))
+    if not sources:
+        parser.error("--sources must include at least one collection source")
+    unknown_sources = sorted(set(sources) - set(COLLECTORS))
+    if unknown_sources:
+        parser.error(f"Unsupported collection source(s): {', '.join(unknown_sources)}. Choose from: {', '.join(sorted(COLLECTORS))}")
+    if args.since and args.until and args.since > args.until:
+        parser.error("--since must be on or before --until")
+    terms = _merge_terms(args.terms, getattr(args, "terms_file", []))
+    if not terms:
+        parser.error(f"{args.command} requires at least one search term")
     secrets = _collection_secrets(sources)
 
     if args.command == "harvest":
-        terms = _merge_terms(args.terms, args.terms_file)
-        if not terms:
-            parser.error("harvest requires at least one inline term or --terms-file entry")
         config = {
             "sources": sources,
             "terms": terms,
@@ -1147,7 +1155,7 @@ def main(argv=None) -> int:
         secrets["llm_api_key"] = _secret("LLM API key: ", "SUGAR_LLM_API_KEY")
     config = {
         "sources": sources,
-        "terms": args.terms,
+        "terms": terms,
         "since": args.since,
         "until": args.until,
         "max_posts_per_query": args.posts,
@@ -1165,3 +1173,11 @@ def main(argv=None) -> int:
     }
     print("\n".join(run_search(config, secrets)))
     return 0
+
+
+def console_main(argv=None) -> int:
+    return run_cli(main, argv, prog="sugar")
+
+
+if __name__ == "__main__":
+    raise SystemExit(console_main())

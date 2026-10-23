@@ -4,6 +4,9 @@ $RepoRoot = (Resolve-Path (Join-Path $DesktopDir "..")).Path
 $BinaryDir = Join-Path $DesktopDir "src-tauri\binaries"
 $PythonCommand = Get-Command python -CommandType Application -ErrorAction Stop | Select-Object -First 1
 $PythonExe = $PythonCommand.Source
+$UpdaterConfig = Join-Path $DesktopDir "src-tauri\.updater-build.json"
+& $PythonExe (Join-Path $RepoRoot "tools\release_tools.py") updater-config --output $UpdaterConfig
+if ($LASTEXITCODE -ne 0) { throw "Updater signing configuration is incomplete" }
 & $PythonExe -c "import PyInstaller" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Push-Location $RepoRoot
@@ -37,8 +40,8 @@ try {
     $env:PATH = $OriginalPath
     Push-Location $DesktopDir
     try {
-        if (-not (Test-Path (Join-Path $DesktopDir "node_modules"))) { npm install; if ($LASTEXITCODE -ne 0) { throw "npm install failed" } }
-        npm run tauri -- build --bundles msi
+        if ($env:CI -or -not (Test-Path (Join-Path $DesktopDir "node_modules"))) { npm ci; if ($LASTEXITCODE -ne 0) { throw "npm ci failed" } }
+        npm run tauri -- build --bundles msi --config $UpdaterConfig
         if ($LASTEXITCODE -ne 0) { throw "Tauri Windows build failed with exit code $LASTEXITCODE" }
     } finally { Pop-Location }
     Write-Host "Unified SUGAR desktop package created under $DesktopDir\src-tauri\target\release\bundle"

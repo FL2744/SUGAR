@@ -510,7 +510,7 @@ def save_requirement(requirement: ResearchRequirement, path: str | Path) -> str:
 
 def load_requirement(path: str | Path) -> ResearchRequirement:
     source = Path(path).expanduser().resolve()
-    payload = json.loads(source.read_text(encoding="utf-8"))
+    payload = json.loads(source.read_text(encoding="utf-8-sig"))
     if not isinstance(payload, dict):
         raise ValueError("Research requirement file must contain a JSON object.")
     return ResearchRequirement.from_dict(payload)
@@ -527,7 +527,7 @@ def save_search_plan(plan: SearchPlan, path: str | Path) -> str:
 
 def load_search_plan(path: str | Path) -> SearchPlan:
     source = Path(path).expanduser().resolve()
-    payload = json.loads(source.read_text(encoding="utf-8"))
+    payload = json.loads(source.read_text(encoding="utf-8-sig"))
     if not isinstance(payload, dict):
         raise ValueError("Search plan file must contain a JSON object.")
     return SearchPlan.from_dict(payload)

@@ -2,6 +2,19 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
+## Unreleased
+
+- add signed desktop updates with automatic checks, optional background downloads, progress, plain-text release notes, retryable errors, and confirmed installation/restart;
+- prevent update installation during native research operations, require signatures bound to the advertised version, and keep unsigned development builds on explicit manual downloads;
+- validate all release versions and signing configuration, publish architecture-specific updater artifacts/feed through a complete draft, isolate prereleases from stable updates, and document desktop/CLI upgrade paths;
+- redesign the browser/desktop interface with a consistent green and neutral visual system, larger headings, clearer forms, responsive bottom navigation, and a matching dark theme;
+- organize project work into Research brief, Evidence, Team & notes, and Monitoring tabs; add keyboard quick actions, registry map/list views, history search/issue filtering, and accessible native dialogs;
+- restore saved project state reliably while opening or reconnecting, clear drafts/previews when changing projects, and ignore stale project refresh responses;
+- paginate institution registries in groups of 100, expose all matching records, add a clear-filters action, and display the connected engine version;
+- add consistent CLI errors, noninteractive credential checks, source/date/count validation, API version reporting, and UTF-8 BOM support for research configuration files;
+- document a complete offline CLI workflow, Windows installation, module entry points, credentials, exit codes, and troubleshooting;
+- scope the public-directory terminology exception to the supported adapter and its entry points/documentation while retaining other repository mission-marker checks.
+
 ## 1.6.1 — 2026-10-01
 
 ### Collection and workflow

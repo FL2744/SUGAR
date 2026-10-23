@@ -1199,7 +1199,7 @@ def save_research_strategy(strategy: CompiledResearchStrategy, path: str | Path)
 
 def load_research_strategy(path: str | Path) -> CompiledResearchStrategy:
     source = Path(path).expanduser().resolve()
-    payload = json.loads(source.read_text(encoding="utf-8"))
+    payload = json.loads(source.read_text(encoding="utf-8-sig"))
     if not isinstance(payload, dict):
         raise ValueError("Compiled research strategy must contain a JSON object.")
     return CompiledResearchStrategy.from_dict(payload)

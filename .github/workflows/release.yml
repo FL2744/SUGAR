@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   validate-release:
     runs-on: ubuntu-latest
@@ -19,16 +23,15 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
-      - name: Verify tag and package version agree
-        shell: bash
+      - name: Verify all release versions and signing configuration
+        env:
+          SUGAR_REQUIRE_UPDATER: "1"
+          SUGAR_UPDATER_PUBLIC_KEY: ${{ vars.SUGAR_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
-          version="$(python -c 'import sugar_core; print(sugar_core.__version__)')"
-          tag_version="${GITHUB_REF_NAME#v}"
-          tag_version="${tag_version%%-*}"
-          test "$tag_version" = "$version" || {
-            echo "Release tag $GITHUB_REF_NAME does not match package version $version" >&2
-            exit 1
-          }
+          python tools/release_tools.py versions --tag "$GITHUB_REF_NAME"
+          python tools/release_tools.py updater-config --output "$RUNNER_TEMP/updater.json"
+          python tools/release_tools.py notes --tag "$GITHUB_REF_NAME" --output "$RUNNER_TEMP/release-notes.md"
       - name: Run deterministic suite
         run: python -m pytest -q
 
@@ -36,6 +39,11 @@ jobs:
     needs: validate-release
     runs-on: windows-latest
     timeout-minutes: 40
+    env:
+      SUGAR_REQUIRE_UPDATER: "1"
+      SUGAR_UPDATER_PUBLIC_KEY: ${{ vars.SUGAR_UPDATER_PUBLIC_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -53,6 +61,8 @@ jobs:
       - name: Build shared Windows application
         shell: pwsh
         run: .\SUGAR-Desktop\scripts\build-windows.ps1
+      - name: Test native updater safeguards
+        run: cargo test --release --locked --manifest-path SUGAR-Desktop/src-tauri/Cargo.toml
       - name: Validate Windows installer and bridge
         shell: pwsh
         run: |
@@ -70,13 +80,20 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: release-windows-x64
-          path: SUGAR-Desktop/src-tauri/target/release/bundle/msi/*.msi
+          path: |
+            SUGAR-Desktop/src-tauri/target/release/bundle/msi/*.msi
+            SUGAR-Desktop/src-tauri/target/release/bundle/msi/*.msi.sig
           if-no-files-found: error
 
   macos-apple-silicon:
     needs: validate-release
     runs-on: macos-15
     timeout-minutes: 40
+    env:
+      SUGAR_REQUIRE_UPDATER: "1"
+      SUGAR_UPDATER_PUBLIC_KEY: ${{ vars.SUGAR_UPDATER_PUBLIC_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -91,6 +108,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build macOS Apple Silicon application
         run: ./SUGAR-Desktop/scripts/build-macos.sh
+      - name: Test native updater safeguards
+        run: cargo test --release --locked --manifest-path SUGAR-Desktop/src-tauri/Cargo.toml
       - name: Validate and archive Apple Silicon app
         run: |
           test "$(uname -m)" = "arm64"
@@ -105,7 +124,10 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: release-macos-apple-silicon
-          path: SUGAR-macOS.zip
+          path: |
+            SUGAR-macOS.zip
+            SUGAR-Desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz
+            SUGAR-Desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
           if-no-files-found: error
 
   python-distributions:
@@ -133,38 +155,60 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      SUGAR_UPDATER_PUBLIC_KEY: ${{ vars.SUGAR_UPDATER_PUBLIC_KEY }}
     steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
       - uses: actions/download-artifact@v7
         with:
           pattern: release-*
-          path: release-assets
-          merge-multiple: true
-      - name: Verify release payload and checksums
+          path: release-builds
+      - name: Collect complete release payload
         run: |
+          python tools/release_tools.py collect-assets --source release-builds --output release-assets
           ls release-assets/*.msi >/dev/null
           test -s release-assets/SUGAR-macOS.zip
           ls release-assets/*.whl >/dev/null
-          ls release-assets/*.tar.gz >/dev/null
-          (cd release-assets && sha256sum * > SHA256SUMS)
-          (cd release-assets && sha256sum --check SHA256SUMS)
+          ls release-assets/sugar_osint-*.tar.gz >/dev/null
       - name: Write release notes
         run: |
-          cat > RELEASE_NOTES.md <<'EOF'
+          python tools/release_tools.py notes --tag "$GITHUB_REF_NAME" --output RELEASE_NOTES.md
+          cat >> RELEASE_NOTES.md <<'EOF'
+
+          ---
+
           SUGAR browser and optional desktop release.
 
           **Choose the file for your system:**
           - Windows 10/11 x64: the included SUGAR MSI installer
           - Mac: `SUGAR-macOS.zip` (Tauri app bundle)
 
+          Updater-enabled desktop builds check for stable releases automatically. Open Settings → Software updates to download a verified update and choose when to install and restart. Older builds need one manual installation to enable this feature. The `.app.tar.gz`, `.sig`, and `latest.json` files support in-app updates.
+
           macOS desktop releases support Apple Silicon and target macOS 13 or newer. They are local-use builds; configure organization signing and notarization before public distribution. The Python wheel/source archive is included for CLI and development use.
 
           See `CHANGELOG.md` in the repository for release-specific fixes and methodology notes.
           EOF
-      - name: Publish GitHub release
+      - name: Generate and validate signed update feed
         run: |
+          python tools/release_tools.py manifest --assets release-assets --tag "$GITHUB_REF_NAME" --notes RELEASE_NOTES.md
+          (cd release-assets && sha256sum * > SHA256SUMS)
+          (cd release-assets && sha256sum --check SHA256SUMS)
+      - name: Stage complete GitHub release
+        run: |
+          # A failed upload leaves a draft, so clients never see a partial feed.
           gh release create "$GITHUB_REF_NAME" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "SUGAR $GITHUB_REF_NAME" \
             --notes-file RELEASE_NOTES.md \
-            --latest
+            --verify-tag --draft
+      - name: Publish to the appropriate channel
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          fi

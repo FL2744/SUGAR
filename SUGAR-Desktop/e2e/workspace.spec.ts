@@ -159,7 +159,7 @@ test("browser creates a project and saves its research requirement", async ({ pa
   await mockApi(page, calls);
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Good work starts with a clear question." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your research, connected." })).toBeVisible();
   await page.getByRole("button", { name: /Create or open project/ }).click();
   const picker = page.getByRole("dialog", { name: "Choose a research project" });
   await expect(picker).toBeVisible();
@@ -174,6 +174,7 @@ test("browser creates a project and saves its research requirement", async ({ pa
   await page.getByLabel("Start date").fill("2025-01-01");
   await page.getByLabel("End date").fill("2025-12-31");
   await page.getByLabel("Languages").fill("es, zh");
+  await page.getByRole("tab", { name: /Team & notes/ }).click();
   await page.getByLabel("Project context notes").fill("Coordinate the review and preserve source context.");
   await page.getByRole("button", { name: "＋ Add member" }).click();
   await page.getByLabel("Member 1 name").fill("Analyst One");
@@ -185,6 +186,7 @@ test("browser creates a project and saves its research requirement", async ({ pa
     notes: "Coordinate the review and preserve source context.",
     members: [{ name: "Analyst One", email: "analyst@example.test", role: "analyst" }],
   });
+  await page.getByRole("tab", { name: /Research brief/ }).click();
   await page.getByLabel("Collection sources").fill("x, bluesky");
   await page.getByLabel("Excluded topics").fill("unrelated tourism");
   await page.getByRole("button", { name: /Save research requirement/ }).click();
@@ -211,6 +213,7 @@ test("browser creates a project and saves its research requirement", async ({ pa
     until: "2025-12-31",
     post_languages: ["es", "zh"],
   });
+  await page.getByRole("tab", { name: /Evidence/ }).click();
   await expect(page.getByText("1 source records")).toBeVisible();
   await expect(page.getByText("sugar-workspace://project-1/data/raw/live_collection.csv")).toBeVisible();
   await expect(page.getByRole("button", { name: "Generate coded findings" })).toBeVisible();
@@ -226,6 +229,8 @@ test("known public items become inspectable evidence", async ({ page }) => {
   await picker.getByRole("button", { name: /Create project/ }).click();
   await page.getByRole("navigation", { name: "Main navigation" })
     .getByRole("button", { name: "Research project" }).click();
+  await page.getByRole("tab", { name: /Evidence/ }).click();
+  await page.getByText("Public items & hashtags", { exact: true }).click();
   await page.getByLabel("Public item source").selectOption("weibo");
   await page.getByLabel("Public item URL").fill("https://weibo.com/2/detail/5341549823267451");
   await page.getByRole("button", { name: "Collect public item" }).click();
@@ -324,6 +329,7 @@ test("AI interpretation, translation, geographic summary, coded findings, and ex
   await picker.getByRole("button", { name: /Create project/ }).click();
 
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Research project" }).click();
+  await page.getByRole("tab", { name: /Team & notes/ }).click();
   await page.getByRole("textbox", { name: "Project comment" }).fill("Check the scope before the scheduled run.");
   await page.getByRole("button", { name: "Add comment" }).click();
   await expect(page.getByRole("log", { name: "Project comments" })).toContainText("Check the scope before the scheduled run.");
@@ -340,6 +346,7 @@ test("AI interpretation, translation, geographic summary, coded findings, and ex
   expect(calls.some((call) => call.operation === "member-access-issue")).toBe(true);
   expect(calls.some((call) => call.operation === "member-access-revoke")).toBe(true);
 
+  await page.getByRole("tab", { name: /Monitoring/ }).click();
   await page.getByLabel("Listening post name").fill("Weekly listening");
   await page.getByLabel("Listening post search terms").fill("public education programs");
   await page.getByRole("button", { name: "Save listening post" }).click();
@@ -349,6 +356,7 @@ test("AI interpretation, translation, geographic summary, coded findings, and ex
   await page.getByRole("button", { name: "Pause" }).click();
   expect(calls.some((call) => call.config?.action === "monitor-status" && call.config?.status === "paused")).toBe(true);
 
+  await page.getByRole("tab", { name: /Research brief/ }).click();
   await page.getByRole("button", { name: "Load templates" }).click();
   await page.getByLabel("Research requirement template").selectOption("public-service-access");
   await page.getByRole("button", { name: "Use template" }).click();
@@ -379,12 +387,14 @@ test("AI interpretation, translation, geographic summary, coded findings, and ex
   expect(calls.find((call) => call.operation === "research-collect")?.config?.infer_locations).toBe(true);
   expect(calls.find((call) => call.operation === "research-collect")?.config?.platform_tuning).toEqual({ x: { max_posts_per_query: 3 } });
 
+  await page.getByRole("tab", { name: /Evidence/ }).click();
   await page.getByRole("button", { name: "Inspect records" }).click();
   await page.getByRole("button", { name: "Summarize geography" }).click();
   await expect(page.getByRole("region", { name: "Geographic summary" })).toContainText("Exampleland / North / Harbor");
   await page.getByRole("button", { name: "Create evidence map" }).click();
   await expect.poll(() => calls.some((call) => call.operation === "map")).toBe(true);
   await expect(page.getByText("Interactive evidence map ready")).toBeVisible();
+  await page.getByText("Geographic review & comparison", { exact: true }).click();
   await page.getByLabel("Assigned region").fill("Central");
   await page.getByLabel("Geography assignment note").fill("Confirmed against the source listing");
   await page.getByRole("button", { name: "Save analyst assignment" }).click();
@@ -417,15 +427,121 @@ test("provider credentials remain session-only in the browser", async ({ page })
   await expect(page.getByLabel("LLM provider key")).toHaveValue("");
 });
 
+test("opening a saved project restores its question and switching projects clears drafts and previews", async ({ page }) => {
+  const calls: ApiCall[] = [];
+  await mockApi(page, calls);
+  const first = { id: "saved-project", workspace: "sugar-workspace://saved-project", name: "Saved project" };
+  const second = { id: "empty-project", workspace: "sugar-workspace://empty-project", name: "Empty project" };
+  await page.addInitScript((workspace) => localStorage.setItem("sugar.workspace", workspace), first.workspace);
+  await page.route(`${apiOrigin}/api/workspaces`, (route) => route.fulfill({ status: 200, headers: corsHeaders, json: { workspaces: [first, second] } }));
+  await page.route(`${apiOrigin}/api/run`, async (route) => {
+    const body = route.request().postDataJSON() as ApiCall;
+    if (body.config?.action !== "dashboard") { await route.fallback(); return; }
+    calls.push(body);
+    const saved = body.config.workspace === first.workspace;
+    const data = saved ? {
+      name: first.name, artifacts: [{ kind: "import", path: "data/raw/saved.jsonl" }],
+      research_requirement: { question: "Saved project question", geographies: ["Exampleland"] },
+      project_profile: { notes: "Saved project notes", members: [{ name: "Reviewer", email: "reviewer@example.test", role: "reviewer" }] },
+    } : { name: second.name, artifacts: [], project_profile: { notes: "", members: [] } };
+    await route.fulfill({ status: 200, headers: corsHeaders, json: { code: 0, events: [{ event: "workspace_hub_data", action: "dashboard", data }], stdout: "", stderr: "" } });
+  });
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Research project" }).click();
+  await expect(page.getByLabel(/Research question/)).toHaveValue("Saved project question");
+  await page.getByRole("tab", { name: /Team & notes/ }).click();
+  await expect(page.getByLabel("Project context notes")).toHaveValue("Saved project notes");
+  await page.getByRole("tab", { name: /Evidence/ }).click();
+  await page.getByRole("button", { name: "Inspect records" }).click();
+  await expect(page.getByRole("cell", { name: "Public program evidence", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: /Research brief/ }).click();
+  await page.getByLabel(/Research question/).fill("Unsaved draft from the previous project");
+  await page.getByRole("button", { name: "Change project" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /Empty project/ }).click();
+  await expect(page.getByRole("heading", { name: "Empty project", exact: true })).toBeVisible();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Research project" }).click();
+  await expect(page.getByLabel(/Research question/)).toHaveValue("");
+  await page.getByRole("tab", { name: /Team & notes/ }).click();
+  await expect(page.getByLabel("Project context notes")).toHaveValue("");
+  await expect(page.getByLabel("Member 1 name")).toHaveCount(0);
+  await page.getByRole("tab", { name: /Evidence/ }).click();
+  await expect(page.getByRole("cell", { name: "Public program evidence", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Inspect records" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Change project" })).toBeEnabled();
+});
+
+test("a newly created project loads its saved dashboard while creation is finishing", async ({ page }) => {
+  const calls: ApiCall[] = [];
+  await mockApi(page, calls, undefined, true);
+  let releaseDashboard!: () => void;
+  let markDashboardRequested!: () => void;
+  const dashboardGate = new Promise<void>((resolve) => { releaseDashboard = resolve; });
+  const dashboardRequested = new Promise<void>((resolve) => { markDashboardRequested = resolve; });
+  await page.route(`${apiOrigin}/api/run`, async (route) => {
+    const body = route.request().postDataJSON() as ApiCall;
+    if (body.config?.action === "dashboard") {
+      markDashboardRequested();
+      await dashboardGate;
+    }
+    await route.fallback();
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Create or open project/ }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /Create project/ }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Research project" }).click();
+  await dashboardRequested;
+  try {
+    await expect(page.getByRole("button", { name: "Change project" })).toBeDisabled();
+  } finally { releaseDashboard(); }
+  await page.getByRole("tab", { name: /Evidence/ }).click();
+  await expect(page.getByRole("button", { name: "Inspect records" })).toBeEnabled();
+  expect(calls.some((call) => call.config?.action === "dashboard")).toBe(true);
+});
+
+test("institution pagination exposes records beyond 300 and filters can be cleared", async ({ page }) => {
+  await mockApi(page, []);
+  await page.addInitScript(() => localStorage.setItem("sugar.workspace", "sugar-workspace://project-1"));
+  const entities = Array.from({ length: 305 }, (_, index) => ({
+    entity_id: `institution-${index + 1}`, name: `Institution ${index + 1}`,
+    network: "Example network", entity_type: "institution", status: "unknown",
+  }));
+  await page.route(`${apiOrigin}/api/run`, async (route) => {
+    const body = route.request().postDataJSON() as ApiCall;
+    if (body.config?.action !== "registry-list") { await route.fallback(); return; }
+    await route.fulfill({ status: 200, headers: corsHeaders, json: { code: 0, events: [{ event: "workspace_hub_data", action: "registry-list", data: { entities, count: entities.length } }], stdout: "", stderr: "" } });
+  });
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Institutions & map" }).click();
+  const pagination = page.getByRole("navigation", { name: "Institution pages" });
+  await expect(pagination).toContainText("Page 1 of 4");
+  await expect(page.locator(".registry-row")).toHaveCount(100);
+  await expect(pagination.getByRole("button", { name: "Previous" })).toBeDisabled();
+  for (let index = 0; index < 3; index += 1) await pagination.getByRole("button", { name: "Next" }).click();
+  await expect(page.locator(".registry-row")).toHaveCount(5);
+  await expect(page.locator(".registry-list")).toContainText("Institution 305");
+  await expect(pagination.getByRole("button", { name: "Next" })).toBeDisabled();
+  await page.getByLabel("Search institutions").fill("Institution 305");
+  await expect(page.locator(".registry-row")).toHaveCount(1);
+  await expect(pagination).toHaveCount(0);
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(pagination).toContainText("Page 1 of 4");
+  await expect(page.locator(".registry-row")).toHaveCount(100);
+});
+
 test("main browser screens have no automated WCAG 2.2 A/AA violations", async ({ page }) => {
+  test.setTimeout(60_000);
   await mockApi(page, []);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Good work starts with a clear question." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your research, connected." })).toBeVisible();
   await expectAccessible(page, "overview");
 
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await navigation.getByRole("button", { name: "Research project" }).click();
   await expectAccessible(page, "research project");
+  for (const section of ["Evidence", "Team & notes", "Monitoring"]) {
+    await page.getByRole("tab", { name: new RegExp(section) }).click();
+    await expectAccessible(page, section);
+  }
   await navigation.getByRole("button", { name: "Institutions & map" }).click();
   await expectAccessible(page, "institutions and map");
   await navigation.getByRole("button", { name: "Run history" }).click();
@@ -439,4 +555,111 @@ test("main browser screens have no automated WCAG 2.2 A/AA violations", async ({
   await expectAccessible(page, "dark overview");
   await navigation.getByRole("button", { name: "Research project" }).click();
   await expectAccessible(page, "dark research project");
+  for (const section of ["Research brief", "Evidence", "Team & notes"]) {
+    await page.getByRole("tab", { name: new RegExp(section) }).click();
+    await expectAccessible(page, `dark ${section}`);
+  }
+});
+
+test("quick actions and project tabs support keyboard navigation", async ({ page }) => {
+  await mockApi(page, []);
+  await page.goto("/");
+  const opener = page.getByRole("button", { name: "Open quick actions" });
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: "Quick actions" });
+  const input = dialog.getByRole("combobox", { name: "Search actions" });
+  await expect(input).toBeFocused();
+  await input.fill("zzzzzz");
+  await expect(dialog.getByText("No matching actions")).toBeVisible();
+  await input.fill("evidence");
+  await expect(dialog.getByRole("option")).toHaveCount(1);
+  await expectAccessible(page, "quick actions");
+  await input.press("Enter");
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole("tab", { name: /Evidence/ })).toHaveAttribute("aria-selected", "true");
+  const evidenceTab = page.getByRole("tab", { name: /Evidence/ });
+  await evidenceTab.focus();
+  await evidenceTab.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: /Team & notes/ })).toBeFocused();
+  await expect(page.getByRole("tabpanel", { name: /Team & notes/ })).toBeVisible();
+  await page.getByRole("tab", { name: /Team & notes/ }).press("Home");
+  await expect(page.getByRole("tab", { name: /Research brief/ })).toBeFocused();
+  await page.keyboard.press("Control+k");
+  await expect(dialog).toBeVisible();
+  await input.press("Escape");
+  await expect(dialog).not.toBeVisible();
+});
+
+test("mobile navigation keeps every screen and project section reachable", async ({ page }, testInfo) => {
+  await mockApi(page, []);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+  await page.screenshot({ path: testInfo.outputPath("overview-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  for (const screen of ["Research project", "Institutions & map", "Run history", "Settings", "Overview"]) {
+    await navigation.getByRole("button", { name: screen, exact: true }).click();
+    await expect(navigation.getByRole("button", { name: screen, exact: true })).toBeVisible();
+    expect(await page.locator(".page-content").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  }
+  await navigation.getByRole("button", { name: "Research project", exact: true }).click();
+  for (const section of ["Evidence", "Team & notes", "Monitoring", "Research brief"]) {
+    await page.getByRole("tab", { name: new RegExp(section) }).click();
+    await expect(page.getByRole("tabpanel", { name: new RegExp(section) })).toBeVisible();
+    expect(await page.locator(".page-content").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  }
+  await page.screenshot({ path: testInfo.outputPath("research-mobile.png"), fullPage: true });
+  await page.getByRole("button", { name: "Switch to dark theme" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await navigation.getByRole("button", { name: "Overview", exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath("overview-dark-mobile.png"), fullPage: true });
+});
+
+test("institution list view and source inspector preserve keyboard focus and reject malformed links", async ({ page }) => {
+  await mockApi(page, []);
+  await page.addInitScript(() => localStorage.setItem("sugar.workspace", "sugar-workspace://project-1"));
+  await page.route(`${apiOrigin}/api/run`, async (route) => {
+    const body = route.request().postDataJSON() as ApiCall;
+    if (body.config?.action !== "registry-list") { await route.fallback(); return; }
+    const data = { entities: [{ entity_id: "test-1", name: "Example Education Center", city: "Harbor", country: "Exampleland", status: "active", network: "Public education", public_links: ["https://", "javascript:alert(1)", "https://example.org/source"] }], count: 1 };
+    await route.fulfill({ status: 200, headers: corsHeaders, json: { code: 0, events: [{ event: "workspace_hub_data", action: "registry-list", data }], stdout: "", stderr: "" } });
+  });
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Institutions & map" }).click();
+  await page.getByRole("button", { name: "List view", exact: true }).click();
+  await expect(page.locator(".map-column")).not.toBeVisible();
+  const row = page.locator(".registry-row");
+  await row.click();
+  const inspector = page.getByRole("dialog", { name: "Example Education Center" });
+  await expect(inspector).toBeVisible();
+  await expect(inspector.getByRole("link")).toHaveCount(1);
+  await expect(inspector.getByRole("link")).toHaveAttribute("href", "https://example.org/source");
+  await expect(inspector.getByRole("button", { name: "Close inspector" })).toBeFocused();
+  await expectAccessible(page, "source inspector");
+  await page.keyboard.press("Escape");
+  await expect(inspector).not.toBeVisible();
+  await expect(row).toBeFocused();
+  await page.getByRole("button", { name: "Map view", exact: true }).click();
+  await expect(page.locator(".map-column")).toBeVisible();
+});
+
+test("run history can be searched and filtered to issues", async ({ page }) => {
+  await mockApi(page, []);
+  await page.addInitScript(() => localStorage.setItem("sugar.workspace", "sugar-workspace://project-1"));
+  await page.route(`${apiOrigin}/api/run`, async (route) => {
+    const body = route.request().postDataJSON() as ApiCall;
+    if (body.config?.action !== "project-history") { await route.fallback(); return; }
+    const data = [{ command: "evidence-import", status: "completed" }, { command: "collection-failed", status: "failed" }];
+    await route.fulfill({ status: 200, headers: corsHeaders, json: { code: 0, events: [{ event: "workspace_hub_data", action: "project-history", data }], stdout: "", stderr: "" } });
+  });
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Run history" }).click();
+  await expect(page.locator(".history-panel .activity-row")).toHaveCount(2);
+  await page.getByLabel("Search run history").fill("import");
+  await expect(page.locator(".history-panel .activity-row")).toHaveCount(1);
+  await page.getByRole("button", { name: "Issues only" }).click();
+  await expect(page.getByRole("heading", { name: "No matching activity" })).toBeVisible();
+  await page.getByLabel("Search run history").fill("");
+  await expect(page.locator(".history-panel .activity-row")).toHaveCount(1);
+  await expect(page.locator(".history-panel .activity-row")).toContainText("Collection Failed");
 });

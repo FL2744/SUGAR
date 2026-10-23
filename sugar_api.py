@@ -26,6 +26,8 @@ from typing import Any
 from urllib.parse import unquote, urlsplit
 
 import sugar_bridge
+from sugar_core import __version__
+from sugar_core.cli_runtime import run_cli
 from sugar_core.workspace import SugarWorkspace
 
 
@@ -572,12 +574,15 @@ class SugarApiHandler(BaseHTTPRequestHandler):
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the SUGAR HTTP API for its browser interface.")
+    parser = argparse.ArgumentParser(prog="sugar-api", description="Run the SUGAR HTTP API for its browser interface.")
+    parser.add_argument("--version", action="version", version=f"sugar-api {__version__}")
     parser.add_argument("--host", default=os.environ.get("SUGAR_API_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("SUGAR_API_PORT", "8765")))
+    parser.add_argument("--port", type=int, default=os.environ.get("SUGAR_API_PORT", "8765"))
     parser.add_argument("--workspace-root", default=os.environ.get("SUGAR_API_WORKSPACE_ROOT", str(Path.home() / ".sugar" / "workspaces")))
     parser.add_argument("--allow-origin", action="append", default=[])
     args = parser.parse_args(argv)
+    if not 1 <= args.port <= 65535:
+        parser.error("--port must be between 1 and 65535.")
     global _workspace_root
     _workspace_root = Path(args.workspace_root).expanduser().resolve()
     _workspace_root.mkdir(parents=True, exist_ok=True)
@@ -604,5 +609,9 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def console_main(argv=None) -> int:
+    return run_cli(main, argv, prog="sugar-api")
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(console_main())

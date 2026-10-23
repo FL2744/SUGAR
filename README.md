@@ -52,7 +52,7 @@ The browser is the canonical UI. The optional Tauri packages run that same front
 
 ## Browser and desktop use
 
-Start the Python API from the repository root with `python -m pip install -e .` followed by `python sugar_api.py`. In another terminal, run `cd SUGAR-Desktop`, `npm install`, and `npm run dev`. The browser opens the shared UI and connects to `http://127.0.0.1:8765` by default. Projects created through the API are stored under `~/.sugar/workspaces`; set `SUGAR_API_WORKSPACE_ROOT` to select another location.
+Start the Python API from the repository root with `python -m pip install -e .` followed by `python sugar_api.py`. In another terminal, run `cd SUGAR-Desktop`, `npm ci`, and `npm run dev`. Open `http://127.0.0.1:1420` in your browser; the UI connects to `http://127.0.0.1:8765` by default. Projects created through the API are stored under `~/.sugar/workspaces`; set `SUGAR_API_WORKSPACE_ROOT` to select another location.
 
 `sugar_api.py` serves the same UI against a local or hosted Python backend. A remote deployment requires HTTPS, `SUGAR_API_TOKEN`, and an explicit allowed browser origin (`SUGAR_API_ALLOWED_ORIGINS`). The operator token is an administrator credential. An administrator can issue a one-time, project-scoped access token to a person listed in that project's roster and revoke or rotate it later. Each request checks the member's current project role; viewers can read, reviewers can perform review/export actions, analysts can run research operations, and owners can change the project profile and membership. Only token hashes are kept in `.sugar-member-access.json` under the configured API workspace root. Member tokens do not provide institutional sign-in or simultaneous conflict-resolved editing; portable project bundles remain asynchronous handoffs.
 
@@ -78,7 +78,9 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-SUGAR never installs or upgrades packages at runtime.
+The Python CLI never installs or upgrades packages at runtime. Updater-enabled desktop builds check for signed app releases; you choose when to install and restart. See [software updates](docs/software-updates.md) for desktop, browser, service, and CLI upgrade instructions.
+
+Start with [`docs/cli-quick-start.md`](docs/cli-quick-start.md) for a complete offline CLI workflow, Windows setup, environment variables, exit codes, and troubleshooting. `python -m sugar_core --help` also works when the `sugar` launcher is not on your PATH.
 
 ## Project workspaces
 
@@ -91,7 +93,7 @@ sugar-project init ./team4 \
 
 sugar-project status ./team4
 sugar-project path ./team4 observations
-sugar-project register ./team4 observations data/observations/example host country.xlsx
+sugar-project register ./team4 observations "data/observations/example host country.xlsx"
 ```
 
 Research files remain ordinary CSV/XLSX/JSONL/GeoJSON/HTML/Word/PDF files rather than being hidden inside the project database. Secrets are never stored in the workspace manifest or registry by SUGAR.
