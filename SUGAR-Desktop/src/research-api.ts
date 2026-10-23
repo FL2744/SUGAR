@@ -20,7 +20,7 @@ export const research = {
   saveOfficeRubric: (id: string, rubric: Record<string, unknown>) => apiPost<{ rubric: Record<string, unknown> }>(`${ws(id)}/research/office/rubric`, { rubric }).then((r) => r.rubric),
   officeFeeds: (id: string, body: { query: string; language: string; country: string; channel: string }) => apiPost<{ feeds: string[]; warnings: string[]; note: string }>(`${ws(id)}/research/office/feeds`, body),
   countrySnapshot: (id: string, country: string) => apiPost<OfficeExport>(`${ws(id)}/research/office/snapshot`, { country }),
-  approvedAIExport: (id: string) => apiPost<OfficeExport>(`${ws(id)}/research/office/approved-ai`, {}),
+  approvedAIExport: (id: string, country: string) => apiPost<OfficeExport>(`${ws(id)}/research/office/approved-ai`, { country }),
   capturePages: (id: string, pages: Array<{ filename: string; source_url: string; html: string }>) => apiPost<{ imported: number; run_id?: string; errors: Array<{ filename: string; reason: string }>; note?: string }>(`${ws(id)}/research/office/captures`, { pages }),
   scanCaptureInbox: (id: string) => apiPost<{ imported: number; run_id?: string; errors: Array<{ filename: string; reason: string }>; note?: string }>(`${ws(id)}/research/office/captures/scan`, {}),
   platforms: () => api<{ platforms: PlatformRow[] }>("/api/platforms").then((r) => r.platforms),

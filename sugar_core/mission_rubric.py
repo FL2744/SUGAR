@@ -12,13 +12,29 @@ from typing import Any
 
 AUDIENCE_GROUPS = ("students", "k12", "teachers", "technical_professionals", "officials", "business")
 DEFAULT_RUBRIC = {
-    "version": 1,
+    "version": 2,
     "description": "Proposed A–D program priorities; review against your study's agreed rubric.",
     "tiers": [
-        {"tier": "A", "label": "Strategic policy and commercial priorities", "terms": ["Freedom 250", "commercial diplomacy", "AI standards", "artificial intelligence standards", "technology standards", "critical minerals", "mining sector"]},
-        {"tier": "B", "label": "Next-generation leaders and sector audiences", "terms": ["next-generation leaders", "emerging leaders", "young leaders", "technical professionals", "business leaders", "mining professionals"]},
-        {"tier": "C", "label": "Education and professional exchange", "terms": ["scholarship", "course registration", "language course", "teacher training", "student exchange", "test center", "test centre", "competition"]},
-        {"tier": "D", "label": "General cultural programming", "terms": ["tea ceremony", "cultural festival", "calligraphy", "dance performance", "cooking class"]},
+        {"tier": "A", "label": "Strategic technology, energy and commercial sectors", "terms": [
+            "artificial intelligence", "人工智能", "inteligencia artificial", "inteligência artificial", "intelligence artificielle",
+            "5G", "telecom", "telecommunications", "电信", "通信", "telecomunicaciones", "telecomunicações", "télécommunications",
+            "digital economy", "数字经济", "economía digital", "economia digital", "économie numérique",
+            "mining", "minería", "mineria", "矿业", "mineração", "exploitation minière", "lithium", "锂", "litio", "lítio",
+            "critical minerals", "关键矿产", "minerales críticos", "minerais críticos", "minéraux critiques",
+            "new energy", "新能源", "nuevas energías", "nova energia", "nouvelles énergies",
+            "Freedom 250", "commercial diplomacy", "AI standards", "artificial intelligence standards", "technology standards"]},
+        {"tier": "B", "label": "Vocational capacity, partnerships and emerging leaders", "terms": [
+            "vocational training", "vocational education", "职业教育", "职业培训", "formación profesional", "educação profissional", "formation professionnelle",
+            "Luban", "鲁班工坊", "Belt and Road", "一带一路", "Franja y la Ruta", "Cinturão e Rota", "Ceinture et la Route",
+            "next-generation leaders", "emerging leaders", "young leaders", "青年领袖", "jóvenes líderes", "jovens líderes", "jeunes dirigeants",
+            "technical professionals", "business leaders", "mining professionals"]},
+        {"tier": "C", "label": "Education and professional exchange", "terms": [
+            "scholarship", "course registration", "language course", "teacher training", "student exchange", "test center", "test centre", "competition",
+            "Chinese Bridge", "汉语桥", "奖学金", "教师培训", "beca", "intercambio estudiantil", "formación docente", "Puente Chino",
+            "bolsa de estudos", "intercâmbio estudantil", "formação de professores", "bourse d'études", "échange étudiant", "formation des enseignants"]},
+        {"tier": "D", "label": "General cultural programming", "terms": [
+            "tea ceremony", "cultural festival", "calligraphy", "dance performance", "cooking class", "茶艺", "文化节", "书法",
+            "ceremonia del té", "festival cultural", "caligrafía", "cerimônia do chá", "caligrafia", "cérémonie du thé", "festival culturel", "calligraphie"]},
     ],
     "audiences": {
         "students": ["university students", "college students", "undergraduates", "estudiantes universitarios", "étudiants universitaires", "大学生"],

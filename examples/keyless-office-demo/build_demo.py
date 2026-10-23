@@ -39,13 +39,14 @@ def main() -> None:
         ("Synthetic Harbor Institute", "Merida", 20.97, -89.59, now - timedelta(days=10), "Commercial diplomacy workshop for engineers and business leaders. Attendance: 120 participants. An example narrative review phrase for demonstration only."),
         ("Synthetic River Institute", "Mexico City", 19.43, -99.13, now - timedelta(days=25), "Teacher training and scholarship course registration for university students."),
         ("Synthetic Historic Institute", "Monterrey", 25.69, -100.32, datetime(2023, 5, 1, tzinfo=timezone.utc), "A tea ceremony and cultural festival in 2023."),
+        ("Synthetic Closure Review Institute", "Tijuana", 32.51, -117.04, now - timedelta(days=5), "El Instituto Confucio cerró sus puertas. Cursos cancelados definitivamente."),
     ]
     items = []
     for n, (name, city, lat, lon, date, text) in enumerate(examples, 1):
         url = f"https://example.org/synthetic-demo/{n}/event"
         post = ResearchItem(item_id=f"it_demo_{n}", run_id=run.run_id, project_id=p.project_id, platform="web", url=url,
                             published_at=date.isoformat(), retrieved_at=now.isoformat(), language="en", original_text="SYNTHETIC DEMONSTRATION. Mexico. " + text,
-                            status="processed", source_metadata={"synthetic": True})
+                            status="processed", source_metadata={"synthetic": True, "event_dates": [date.date().isoformat()] if n <= 2 else []})
         tag_geography(post, [])
         items.append(post)
     p.save_items(run.run_id, items)

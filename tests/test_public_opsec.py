@@ -21,6 +21,7 @@ PUBLIC_BASELINE_FILES = {
     "sugar_core/official_baselines.py", "sugar_core/workspace_cli.py",
     "sugar_core/workspace_hub.py", "tests/test_official_baselines.py",
 }
+PUBLIC_PROGRAM_FILES = {"sugar_core/mission_rubric.py", "tests/test_activity_edge_cases.py"}
 
 
 def _patterns_for(relative: str) -> list[re.Pattern]:
@@ -28,6 +29,7 @@ def _patterns_for(relative: str) -> list[re.Pattern]:
         re.compile(rf"(?i)(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])")
         for term in _blocked_terms()
         if not (term == "Con" + "fucius" and relative in PUBLIC_BASELINE_FILES)
+        and not (term in {"Lu" + "ban", "鲁" + "班工坊"} and relative in PUBLIC_PROGRAM_FILES)
     ]
 
 

@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 from .models import PostRecord
 from .storage import save_records
 from .workspace import SugarWorkspace
+from .web_sources import publication_date
 
 _SECRET_KEY = re.compile(r"(?:token|secret|session|cookie|authorization|password|credential|api[_-]?key)", re.I)
 _SECRET_TEXT = re.compile(
@@ -57,6 +58,7 @@ def capture_saved_page(
     if not safe_url:
         raise ValueError("Provide the original public or authorized HTTP(S) page URL.")
     soup = BeautifulSoup(source.read_text(encoding="utf-8-sig", errors="replace"), "html.parser")
+    published, published_basis = publication_date(soup)
     for tag in soup.select("script, style, noscript, form, input, textarea, select, option, button, iframe, object, embed"):
         tag.decompose()
     for tag in list(soup.find_all(True)):
@@ -98,6 +100,8 @@ def capture_saved_page(
         "capture_method": "analyst_saved_html_import",
         "source_url": safe_url,
         "captured_at": captured_at,
+        "published_at": published,
+        "published_basis": published_basis,
         "title": title,
         "metadata": metadata,
         "visible_text": text,
@@ -125,9 +129,9 @@ def capture_saved_page(
         source_host=urlsplit(safe_url).hostname or "",
         source_url=safe_url,
         collected_at=captured_at,
-        published_at=metadata.get("article:published_time", ""),
+        published_at=published,
         original_text=text,
-        raw_stats={"title": title, "metadata": metadata, "media_references": payload["media_references"], "capture_sha256": digest},
+        raw_stats={"title": title, "metadata": metadata, "published_basis": published_basis, "media_references": payload["media_references"], "capture_sha256": digest},
     )
     records_path = raw_dir / f"{capture_id}.csv"
     save_records([record], records_path, metadata={"capture_method": payload["capture_method"]})

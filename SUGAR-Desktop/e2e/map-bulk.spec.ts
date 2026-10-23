@@ -233,4 +233,8 @@ test("country snapshots download as standalone HTML and approved AI exports rema
   await desk.getByRole("button", { name: "Export for approved AI tool", exact: true }).click();
   await expect(desk.getByRole("button", { name: "Download package (.zip)", exact: true })).toBeVisible();
   expect(calls.filter((c) => c.path.endsWith("/approved-ai"))).toHaveLength(1);
+  expect(calls.find((c) => c.path.endsWith("/approved-ai"))?.body.country).toBe("Mexico");
+  await desk.getByLabel("Snapshot country").selectOption("");
+  await expect(desk.getByRole("button", { name: "Export for approved AI tool", exact: true })).toBeDisabled();
+  await expect(desk.getByRole("button", { name: "Download package (.zip)", exact: true })).toHaveCount(0);
 });

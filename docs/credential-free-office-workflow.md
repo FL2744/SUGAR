@@ -13,19 +13,26 @@ section 10 methodology supplied by the project team:
 
 | Assessment | Registry status | Activity confidence | Required basis |
 | --- | --- | --- | --- |
-| Active, high confidence | active | high | Current-year official program evidence |
+| Active, high confidence | active | high | Official program evidence in the rolling twelve-month window, a current advertised program year, or an event scheduled within twelve months |
 | Active, medium confidence | active | medium | Evidence in the 2024–present window without current official programming |
 | Status unclear | unknown | low | Insufficient or conflicting evidence |
 | Closed | closed | high | A human-verified registry lifecycle claim |
 | Renamed/restructured | renamed | high | A human-verified registry lifecycle claim |
 | Relocated | relocated | high | A human-verified registry lifecycle claim |
 
-The current year follows the assessment date. Publication dates, structured
+The current window follows the assessment date and crosses January 1 without
+discarding dated evidence. An undated previous-year program supplies medium
+confidence; older program wording prompts review. A navigation word such as
+Courses or Events alone never establishes programming: require a structured event
+date, a nearby date/term, or an explicit registration or held-on statement.
+Publication dates, structured
 event dates, explicit advertised terms such as “Autumn 2026,” known-account
 posts, and news mentions retain their separate meanings. A stated term does not
 invent an exact day. Future publication dates, retrieval dates and archive
 capture dates do not substitute for evidence of completed activity. Cancellation
-and historical wording prompt review. Pattern checks are conservative proposals,
+and historical wording prompt review. English, Spanish, Portuguese and French
+closure/cancellation cues always require review, even alongside positive evidence.
+Pattern checks are conservative proposals,
 not independently validated status findings.
 
 Add institution-specific official URL roots under **Public links**. The detail
@@ -42,7 +49,10 @@ assessment refreshes do not request archive history again.
 
 The importer maps `Open` to `active`, `TBD`/`unclear` to `unknown`, both Active
 confidence labels to `active`, and `Renamed/restructured` to `renamed`. Original
-wording remains in `reported_status` provenance. `Suspended` and `merged` remain
+wording remains in `reported_status` provenance. Dashes, parentheses and punctuation
+are normalized. A reported high/medium confidence survives in a separate
+`reported_status_confidence` claim and provenance, without becoming verified.
+`Suspended` and `merged` remain
 unverified `unknown` pending resolution of the two inconsistent source scales;
 the original words are retained. `affiliation_type` is a separate importable
 claim, never part of activity status. Importing a claimed active status alone
@@ -57,6 +67,10 @@ page import. Imported institution rows receive separate row-wording proposals.
 The proposed A–D rubric gives strategic policy/commercial priorities precedence
 over leader/sector programs, education, and generic cultural programming. These
 are editable study rules, not a claim that the sponsor approved exact thresholds.
+The default tier terms cover strategic technology, telecom, digital economy,
+mining, energy and vocational partnerships in English, Chinese, Spanish,
+Portuguese and French. Existing project rubric files are kept; update those
+explicitly to adopt the revised defaults without losing local edits.
 Unmatched material remains uncoded. Results can filter by tier and audience;
 choosing a tier does not delete other items.
 
@@ -83,7 +97,7 @@ does not take down the map; the desk reports that it needs repair.
 Choose a country in the desk and select **Country snapshot (.html)**. The Map
 page offers the same button after choosing a country in Filters. The standalone
 HTML includes an offline land map, numbered institution locations, activity
-assessments, recent programs/mentions from the past 365 days and explicitly dated
+assessments, recent programs/mentions from the same rolling twelve-month window and explicitly dated
 current/scheduled programming, narrative review
 candidates, coverage gaps and evidence links. It uses recorded WGS84 coordinates;
 unplaced institutions remain in the table. Approximate city/country placements
@@ -153,10 +167,17 @@ without the analyst selecting it.
 
 **Export for approved AI tool** packages saved evidence, coding/human decisions,
 the rubric and `approved-tool-prompt.txt`. Run exports also include these files.
+The desk uses the selected country and disables the export until a country is
+selected. The API likewise requires `country`; whole-project exports require an
+explicit boolean `all_countries: true`. The export manifest records this scope.
 The prompt requests item/URL/date/run citations, explicit unknowns, coverage limits,
 and human adjudication; source text is data, not instructions. The analyst chooses
 whether/where to upload it. SUGAR does not claim a particular external tool is
 approved for a specific organization or data classification.
+
+Saved-page captures read publication dates from supported metadata, `<time datetime>`
+and JSON-LD `datePublished` (including graph nodes). The extraction basis is kept;
+modification/retrieval dates never stand in for publication. Scripts are discarded.
 
 ## Sources and limits
 

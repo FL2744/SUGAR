@@ -37,6 +37,7 @@ jobs:
       tag: ${{ steps.ctx.outputs.tag }}
       target: ${{ steps.ctx.outputs.target }}
       mode: ${{ steps.ctx.outputs.mode }}
+      published: ${{ steps.published.outputs.exists }}
     steps:
       - uses: actions/checkout@v7
       - id: ctx
@@ -72,8 +73,32 @@ jobs:
             echo "target=$target" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Recognize an already published immutable release
+        id: published
+        if: steps.ctx.outputs.mode != 'rolling'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.ctx.outputs.tag }}
+          RELEASE_TARGET: ${{ steps.ctx.outputs.target }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' > release-draft.txt 2>/dev/null; then
+            if [[ "$(cat release-draft.txt)" == "false" ]]; then
+              git fetch --no-tags origin "refs/tags/$RELEASE_TAG"
+              actual="$(git rev-parse 'FETCH_HEAD^{commit}')"
+              expected="$(git rev-parse "${RELEASE_TARGET}^{commit}")"
+              if [[ "$actual" != "$expected" ]]; then
+                echo "Published release $RELEASE_TAG points at another commit. Bump the version to publish new work." >&2
+                exit 1
+              fi
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+              echo "$RELEASE_TAG is already published at $actual; no release is replaced." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
   validate-release:
     needs: release-context
+    if: needs.release-context.outputs.published != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

@@ -2,6 +2,12 @@
 
 This document describes the repository-level release checklist. It does not replace Virginia Tech, Apple, Microsoft, State Department, or other institutional distribution/security requirements.
 
+`RELEASE_VERSION` records a formal release tag and its immutable source commit.
+It currently points at the published v1.9.0 release; newer main-branch work remains
+available through the Latest build. Refreshing that marker recognizes an already
+published matching release and skips republishing it. Publishing new code under
+an existing released version is rejected; cut a higher version instead.
+
 ## 1. Define the release scope
 
 Before changing the version, identify:

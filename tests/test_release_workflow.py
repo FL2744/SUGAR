@@ -4,6 +4,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_release_marker_is_current_and_existing_publication_is_immutable():
+    from sugar_core import __version__
+    import re
+    from packaging.version import Version
+    marker = (ROOT / "RELEASE_VERSION").read_text().split()
+    # The last formal publication can precede code prepared for the next one.
+    assert Version(marker[0].removeprefix("v")) <= Version(__version__)
+    assert re.fullmatch(r"[0-9a-f]{40}", marker[1])
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    assert "needs.release-context.outputs.published != 'true'" in workflow
+    assert "${RELEASE_TARGET}^{commit}" in workflow
+    assert '"$actual" != "$expected"' in workflow
+
+
 def test_release_workflow_publishes_all_supported_desktop_artifacts() -> None:
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     assert "runs-on: macos-15" in workflow

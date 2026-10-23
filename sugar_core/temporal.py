@@ -6,6 +6,15 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 
 
+def rolling_year_start(now: datetime) -> str:
+    """Start of the preceding twelve calendar months, including leap-day handling."""
+    day = now.date()
+    try:
+        return day.replace(year=day.year - 1).isoformat()
+    except ValueError:  # February 29 has no counterpart in the preceding year.
+        return day.replace(year=day.year - 1, day=28).isoformat()
+
+
 def timestamp(value: Any) -> datetime | None:
     text = str(value or "").strip()
     if not text:

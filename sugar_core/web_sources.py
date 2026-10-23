@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
+import json
 import re
 import socket
 import threading
@@ -34,8 +35,9 @@ import requests
 from bs4 import BeautifulSoup
 
 from .models import PostRecord
-from .open_sources import USER_AGENT, _iso
+from .open_sources import USER_AGENT
 from .utils import in_inclusive_date_range, normalize_whitespace
+from .temporal import iso_utc
 
 _TIMEOUT = 30
 _MAX_BYTES = 2_000_000
@@ -145,9 +147,41 @@ def _meta(soup: BeautifulSoup, *names: str) -> str:
     return ""
 
 
+def publication_date(soup: BeautifulSoup) -> tuple[str, str]:
+    """Read only explicit publication dates, preserving their extraction basis."""
+    for name in ("article:published_time", "og:published_time", "datePublished", "date", "DC.date.issued", "pubdate"):
+        value = iso_utc(_meta(soup, name))
+        if value:
+            return value, "meta:" + name
+    for tag in soup.find_all("time", attrs={"datetime": True}):
+        value = iso_utc(tag.get("datetime"))
+        if value:
+            return value, "time:datetime"
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        try:
+            nodes = [(json.loads(script.string or ""), 0)]
+        except (ValueError, RecursionError):
+            continue
+        for _ in range(2000):
+            if not nodes:
+                break
+            node, depth = nodes.pop()
+            if depth > 12:
+                continue
+            if isinstance(node, dict):
+                value = iso_utc(node.get("datePublished"))
+                if value:
+                    return value, "jsonld:datePublished"
+                nodes.extend((v, depth + 1) for v in reversed(list(node.values())) if isinstance(v, (dict, list)))
+            elif isinstance(node, list):
+                nodes.extend((v, depth + 1) for v in reversed(node))
+    return "", "undated"
+
+
 def extract_page(html: bytes | str, url: str = "") -> dict[str, Any]:
     """Readable text, title, language, date and same-site links from an HTML page."""
     soup = BeautifulSoup(html, "lxml")
+    published, published_basis = publication_date(soup)
     event_dates = []
     cancelled_events = []
     import json
@@ -173,23 +207,6 @@ def extract_page(html: bytes | str, url: str = "") -> dict[str, Any]:
     for tag in soup(["script", "style", "noscript", "template", "svg", "iframe", "form"]):
         tag.decompose()
     title = normalize_whitespace((soup.title.string if soup.title and soup.title.string else "") or _meta(soup, "og:title"))
-    published = _meta(soup, "article:published_time", "og:published_time", "datePublished", "date", "DC.date.issued", "pubdate")
-    if not published:
-        time_tag = soup.find("time", attrs={"datetime": True})
-        published = str(time_tag["datetime"]) if time_tag else ""
-    if not published:
-        import json
-        for script in BeautifulSoup(html, "lxml").find_all("script", attrs={"type": "application/ld+json"}):
-            try:
-                data = json.loads(script.string or "")
-            except ValueError:
-                continue
-            for node in data if isinstance(data, list) else [data]:
-                if isinstance(node, dict) and node.get("datePublished"):
-                    published = str(node["datePublished"])
-                    break
-            if published:
-                break
     links: list[tuple[str, str]] = []
     base_host = urlparse(url).netloc.lower()
     for a in soup.find_all("a", href=True):
@@ -202,7 +219,7 @@ def extract_page(html: bytes | str, url: str = "") -> dict[str, Any]:
     main = soup.find("article") or soup.find("main") or soup.body or soup
     text = normalize_whitespace(main.get_text(" "))
     lang = (soup.html.get("lang") if soup.html else "") or _meta(soup, "og:locale", "language")
-    return {"title": title, "text": text, "published": _iso(published) if published else "", "language": str(lang or "").split("-")[0].split("_")[0].lower()[:3],
+    return {"title": title, "text": text, "published": published, "published_basis": published_basis, "language": str(lang or "").split("-")[0].split("_")[0].lower()[:3],
             "links": list(OrderedDict.fromkeys(links)), "event_dates": list(dict.fromkeys(event_dates))[:100], "cancelled_events": list(dict.fromkeys(cancelled_events))[:100]}
 
 

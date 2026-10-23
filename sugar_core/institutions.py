@@ -167,6 +167,7 @@ def _row(entity: dict[str, Any], links: list[dict[str, Any]], *, window_start: d
     return {
         "entity_id": entity["entity_id"], "name": entity.get("name", ""), "network": entity.get("network", ""), "entity_type": entity.get("entity_type", ""),
         "status": entity.get("status", "unknown"), "status_date": entity.get("status_date", ""), "country": entity.get("country", ""),
+        "reported_status_confidence": entity.get("reported_status_confidence", ""),
         "region": entity.get("region", ""), "city": entity.get("city", ""), "latitude": lat if lat not in ("", None) else None,
         "longitude": lon if lon not in ("", None) else None, "placed": lat not in ("", None) and lon not in ("", None),
         "location_precision": entity.get("location_precision", ""), "aliases": entity.get("aliases", []),

@@ -30,7 +30,7 @@ def project(tmp_path):
     return ResearchProject(SugarWorkspace.create(tmp_path / "ws", name="Office workflow"))
 
 
-def item(text="Autumn courses and course registration for university students.", date="2026-10-01", **kw):
+def item(text="Registration is open for Autumn courses for university students.", date="2026-10-01", **kw):
     return ResearchItem(item_id="it_a", run_id="run_a", project_id="p", platform="web", url="https://institute.example/programs/autumn", original_text=text,
                         published_at=date, retrieved_at="2026-10-22", **kw)
 
@@ -181,7 +181,7 @@ def test_country_snapshot_offline_map_source_chains_flags_and_exports(tmp_path):
     assert post.url in rendered and "country_named_in_text" not in rendered
     snapshot["country"] = '<script>alert("bad")</script>'
     assert "<script>" not in snapshot_html(snapshot)
-    for result in [export_package(p, country="Mexico"), export_package(p, ai_only=True)]:
+    for result in [export_package(p, country="Mexico"), export_package(p, ai_only=True, country="Mexico")]:
         archive = p.workspace.root / result["archive"]
         assert verify_export(archive)["ok"]
         with zipfile.ZipFile(archive) as bundle:
@@ -248,7 +248,7 @@ def test_office_api_is_keyless_and_configuration_uses_owner_role(tmp_path):
     with patch("requests.sessions.Session.request", side_effect=AssertionError("No network allowed")):
         status, payload = _research_routes("GET", "office", {}, {}, None, p)
         assert status == 200 and payload["institutions"] == 0
-        status, payload = _research_routes("POST", "office/approved-ai", {}, {}, None, p)
+        status, payload = _research_routes("POST", "office/approved-ai", {}, {"country": "Mexico"}, None, p)
         assert status == 200 and "archive" in payload
         status, payload = _research_routes("POST", "office/feeds", {}, {"query": "Harbor", "language": "es", "country": "MX"}, None, p)
         assert status == 200 and payload["feeds"]
@@ -314,7 +314,7 @@ def test_priority_reassessment_supersedes_proposals_and_retains_versioned_human_
     save_rubric(p, rubric)
     code_items(p, [post])
     kept = next(c for c in CodingStore(p).state(post.item_id)["codes"] if c["field"] == "priority_tier" and c["label"] == "A")
-    assert kept["status"] == "confirmed" and not kept["rubric_current"] and kept["rubric_version"] == 1
+    assert kept["status"] == "confirmed" and not kept["rubric_current"] and kept["rubric_version"] == rubric["version"] - 1
     decide(p, post.item_id, "priority_tier", "B", "confirm", quote="business leaders", actor="reviewer")
     codes = [c for c in CodingStore(p).state(post.item_id)["codes"] if c["field"] == "priority_tier"]
     assert [c["label"] for c in codes if c["status"] == "confirmed"] == ["B"]

@@ -4,6 +4,10 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ## Unreleased
 
+- require dated or explicit program context for activity proposals, flag multilingual closure cues, and preserve recent evidence across the new year;
+- normalize imported status punctuation while retaining reported confidence separately, and expand default A–D sector terms across five languages;
+- read saved-page publication dates from time tags and JSON-LD, scope approved-AI packages to the selected country, and align the release marker with the published v1.9.0 tag without replacing that release;
+
 - add signed desktop updates with automatic checks, optional background downloads, progress, plain-text release notes, retryable errors, and confirmed installation/restart;
 - prevent update installation during native research operations, require signatures bound to the advertised version, and keep unsigned development builds on explicit manual downloads;
 - validate all release versions and signing configuration, publish architecture-specific updater artifacts/feed through a complete draft, isolate prereleases from stable updates, and document desktop/CLI upgrade paths;

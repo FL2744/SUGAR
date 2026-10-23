@@ -7,6 +7,7 @@ import json
 import re
 import shutil
 import uuid
+import unicodedata
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -24,12 +25,24 @@ ENTITY_TYPES = {
 ENTITY_STATUSES = {"active", "closed", "renamed", "relocated", "unknown"}
 
 
+def _status_words(value: Any) -> str:
+    return re.sub(r"[\W_]+", " ", unicodedata.normalize("NFKC", _clean(value)).casefold()).strip()
+
+
+def import_status_confidence(value: Any) -> str:
+    """Source-reported confidence, never an independent verification score."""
+    words = _status_words(value).split()
+    return next((level for level in ("high", "medium", "low") if words and words[0] == "active" and level in words), "")
+
+
 def import_status(value: Any) -> str:
     """Normalize documented spreadsheet wording; keep unresolved scale values unverified."""
-    raw = _clean(value).casefold()
-    return {"": "unknown", "open": "active", "tbd": "unknown", "unclear": "unknown", "unclear/unverified": "unknown",
-            "status unclear": "unknown", "active, high confidence": "active", "active, medium confidence": "active",
-            "renamed/restructured": "renamed", "suspended": "unknown", "merged": "unknown"}.get(raw, raw)
+    raw = _status_words(value)
+    if raw.split()[:1] == ["active"]:
+        return "active"
+    return {"": "unknown", "open": "active", "tbd": "unknown", "unclear": "unknown", "unclear unverified": "unknown",
+            "status unclear": "unknown", "renamed restructured": "renamed", "restructured": "renamed",
+            "suspended": "unknown", "merged": "unknown"}.get(raw, raw)
 DELIVERY_MODES = {"physical", "mobile", "virtual", "hybrid", "digital"}
 RELATIONSHIP_TYPES = {
     "hosts", "hosted_by", "partner_of", "affiliated_with", "member_of", "successor_to",
@@ -50,6 +63,7 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "longitude": ("longitude", "lon", "lng", "long", "x", "decimal_longitude"),
     "location_precision": ("location_precision", "geo_precision", "precision"),
     "status": ("status", "current_status", "institution_status", "operational_status"),
+    "reported_status_confidence": ("reported_status_confidence", "status_confidence"),
     "affiliation_type": ("affiliation_type", "affiliation_category", "affiliation_scale", "affiliation"),
     "status_date": ("status_date", "closed_date", "closure_date", "effective_date"),
     "opened_date": ("opened_date", "opening_date", "start_date"),
@@ -79,7 +93,7 @@ _CLAIM_FIELDS = {
     "accounts", "host_entities", "partner_entities", "audiences", "program_domains",
     "audience_descriptions", "program_descriptions", "normalized_audiences", "normalized_program_domains",
     "delivery_modes", "delivery_mode_descriptions", "normalized_delivery_modes",
-    "coverage_scope", "source_url", "description", "network", "affiliation_type",
+    "coverage_scope", "source_url", "description", "network", "affiliation_type", "reported_status_confidence",
 }
 
 
@@ -369,7 +383,7 @@ def _resolved(entity: dict[str, Any], field: str) -> dict[str, Any]:
 def _refresh_entity(entity: dict[str, Any]) -> dict[str, Any]:
     fields = sorted({str(claim.get("field")) for claim in entity.get("claims", []) if claim.get("field")})
     entity["resolved_fields"] = {field: _resolved(entity, field) for field in fields}
-    for field in ("name", "network", "status", "status_date", "opened_date", "closed_date", "country", "region", "city", "address", "latitude", "longitude", "location_precision", "description"):
+    for field in ("name", "network", "status", "reported_status_confidence", "status_date", "opened_date", "closed_date", "country", "region", "city", "address", "latitude", "longitude", "location_precision", "description"):
         resolved = entity["resolved_fields"].get(field, {})
         default = "unknown" if field == "status" else ""
         entity[field] = resolved.get("value") if resolved.get("value") is not None else default
@@ -883,6 +897,7 @@ def import_reference_dataset(
             "source_row": row_number, "source_url": _clean(_mapped_value(row, mapping, "source_url")),
             "license_notes": base["license_notes"], "imported_at": base["imported_at"],
             "reported_status": _clean(_mapped_value(row, mapping, "status")),
+            "reported_status_confidence": import_status_confidence(_mapped_value(row, mapping, "status")),
             "status_mapping_note": "Imported wording is unverified. Suspended/merged map to unknown pending the final study scale.",
         }
         values: dict[str, Any] = {"entity_id": entity_id, "entity_type": entity_type, "network": item_network,
@@ -891,6 +906,8 @@ def import_reference_dataset(
             value = _mapped_value(row, mapping, field)
             if value not in (None, ""):
                 values[field] = _list(value) if field in list_fields else value
+        if evidence["reported_status_confidence"]:
+            values["reported_status_confidence"] = evidence["reported_status_confidence"]
         values["status_date"] = _clean(_mapped_value(row, mapping, "status_date") or _mapped_value(row, mapping, "closed_date") or _mapped_value(row, mapping, "opened_date"))
         was_existing = entity_id in existing_ids
         bulk_records.append({
@@ -1009,6 +1026,7 @@ def export_registry(workspace: SugarWorkspace, output: str | Path, *, format: st
         _write_jsonl(target, entities)
     elif kind == "csv":
         columns = ["entity_id", "entity_type", "network", "name", "aliases", "status", "country", "region", "city", "address", "latitude", "longitude", "location_precision", "audiences", "audience_descriptions", "normalized_audiences", "program_domains", "program_descriptions", "normalized_program_domains", "delivery_modes", "delivery_mode_descriptions", "normalized_delivery_modes", "coverage_scope", "public_links", "accounts", "host_entities", "partner_entities", "conflicted_fields", "claims"]
+        columns.insert(columns.index("status") + 1, "reported_status_confidence")
         with target.open("w", encoding="utf-8-sig", newline="") as stream:
             writer = csv.DictWriter(stream, fieldnames=columns, extrasaction="ignore")
             writer.writeheader()

@@ -1,23 +1,50 @@
 """Evidence-based activity proposals, separate from the registry's reviewed status.
 
 Group 1 section 10 supplies the six display labels. The historical window starts
-in 2024; 'current' follows the assessment year rather than a hardcoded year.
+in 2024; dated current programming uses a rolling twelve-month window.
 Archive captures and retrieval timestamps never count as program activity.
 """
 from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
-from .temporal import timestamp as parse_timestamp
+from .temporal import rolling_year_start, timestamp as parse_timestamp
 
 BASELINE = "2024-01-01"
-PROGRAM = re.compile(r"\b(courses?|classes|registration|enrol[l]?ment|programming|workshops?|conferences?|competitions?|held|hosted|events?|scholarships?)\b|课程|活动|招生|课程报名|课程注册|taller|inscripci[oó]n|evento|curso", re.I)
-NEGATIVE = re.compile(r"\b(cancelled|canceled|suspended|closed|closure|ceased|discontinued|no longer|will not|did not|not holding)\b|取消|关闭|暂停", re.I)
+PROGRAM = re.compile(r"\b(courses?|classes|registration|enrol[l]?ment|programming|workshops?|conferences?|competitions?|held|hosted|events?|scholarships?|taller(?:es)?|inscripci[oó]n(?:es)?|eventos?|cursos?|oficinas?|forma[cç][aã]o|inscri[cç][aã]o|inscri[cç][oõ]es|cours|inscriptions?|ateliers?|formations?|[eé]v[eé]nements?)\b|课程|活动|招生|课程报名|课程注册", re.I)
+# Latin text is accent-folded before matching; original evidence is preserved.
+NEGATIVE = re.compile(r"\b(cancel(?:led|ed|lations?)|suspend(?:ed|u|ue|us|ues)|closed|closures?|closing|ceased|discontinued|terminated?|terminations?|shut[ -]+down|shutdowns?|no longer|will not|did not|not holding|cerr(?:o|aron|ar|ara|ad[oa]s?)|cierres?|clausur(?:a|ad[oa]s?)|cancelad[oa]s?|cancelacion(?:es)?|suspendid[oa]s?|suspensiones?|encerrad[oa]s?|encerramentos?|fechad[oa]s?|fechamentos?|suspens[oa]s?|suspensao|fermetures?|ferme(?:e|es|ees)?|annul(?:e|es|ee|ees|ations?)|cessation)\b|取消|关闭|暂停", re.I)
 PRESENCE = re.compile(r"\b(staff|contact|address|director|institute|centre|center)\b|联系|地址|教师", re.I)
+PERIOD = re.compile(r"(?:autumn|fall|spring|summer|winter|january|february|march|april|may|june|july|august|september|october|november|december|otoño|primavera|verano|invierno|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|outono|verão|inverno|janeiro|fevereiro|março|maio|junho|julho|setembro|outubro|automne|printemps|hiver|été|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+(?:de\s+)?((?:19|20)\d{2})|((?:19|20)\d{2})年(?:春|夏|秋|冬)季?", re.I)
+REGISTRATION = re.compile(r"\b(?:registration|enrolment|enrollment|inscripcion(?:es)?|inscription(?:s)?|inscricao|inscricoes)\s+(?:(?:is|are|now|already|est[aá]n?|abierta[s]?|estao|sont|est|a|as|estara)\s+){0,3}(?:open|opens|opened|abiert[oa]s?|abert[oa]s?|ouvert(?:e|es|s)?)\b|\bregister\s+(?:now|for)\b|\bheld\s+on\b|\b(?:se\s+celebr(?:a|o)|realizado|teve lugar|a eu lieu)\b|报名(?:开放|开始)|开放报名|开始招生|举行于|举办于", re.I)
+
+
+def _program_context(quote: str, event_dates: list[str], year: int) -> tuple[bool, str, str, bool]:
+    """A menu keyword alone is never program evidence. Dates must share a clause."""
+    periods: list[tuple[str, str]] = []
+    explicit = False
+    for clause in re.split(r"[.!?。！？\n|;]", quote):
+        programs = list(PROGRAM.finditer(clause))
+        if not programs:
+            continue
+        folded = "".join(c for c in unicodedata.normalize("NFD", clause) if not unicodedata.combining(c))
+        explicit |= bool(REGISTRATION.search(folded))
+        for period in PERIOD.finditer(clause):
+            if any(max(period.start() - p.end(), p.start() - period.end(), 0) <= 100 for p in programs):
+                periods.append((period.group(1) or period.group(2), period.group(0)))
+        for date in re.finditer(r"\b(?:19|20)\d{2}(?:-\d{2}-\d{2})?\b", clause):
+            if any(max(date.start() - p.end(), p.start() - date.end(), 0) <= 32 for p in programs):
+                if not re.search(r"founded|fundad|fond[eé]|established|copyright|©", clause, re.I):
+                    periods.append((date.group(0)[:4], date.group(0)))
+    # Prefer the complete named period over the year alone; never invent a day.
+    period_year, period = max(periods, key=lambda p: (p[0], len(p[1])), default=("", ""))
+    historical = bool(period_year and int(period_year) < year - 1 and not event_dates)
+    return bool(event_dates or periods or explicit) and not historical, period, period_year, historical
 
 
 def evidence_index(items: dict[str, Any]) -> dict[str, Any]:
@@ -110,6 +137,8 @@ def assess(entity: dict[str, Any], links: list[dict[str, Any]], items: dict[str,
            now: datetime | None = None) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     today, year = now.date().isoformat(), str(now.year)
+    current_start = rolling_year_start(now)
+    horizon = now.date().replace(year=now.year + 1, day=28 if now.month == 2 and now.day == 29 else now.day).isoformat()
     roots = _urls(entity.get("public_links"))
     accounts = _urls(entity.get("accounts"))
     signals: list[dict[str, Any]] = []
@@ -136,21 +165,16 @@ def assess(entity: dict[str, Any], links: list[dict[str, Any]], items: dict[str,
         if not isinstance(event_dates, list):
             event_dates = []
         event_dates = sorted({_date(d) for d in event_dates if _date(d)})
-        negative = bool(NEGATIVE.search(quote) or metadata.get("cancelled_events"))
-        old_years = {y for y in re.findall(r"\b(?:19|20)\d{2}\b", quote) if y < year}
-        historical = not event_dates and year not in quote and any(re.search(rf"\b(?:in|from|during)\s+{y}\b|\b{y}\s+(?:courses|events|programs|programming)\b", quote, re.I) for y in old_years)
-        program = bool(PROGRAM.search(quote)) and not negative and not historical
-        period_pattern = r"(?:autumn|fall|spring|summer|winter|january|february|march|april|may|june|july|august|september|october|november|december|otoño|primavera|octubre|automne)\s+(?:de\s+)?((?:19|20)\d{2})"
-        period = re.search(period_pattern, quote, re.I) if official and program else None
-        period_year = period.group(1) if period else ""
-        if period_year and period_year < year and stamp.startswith(year) and year not in quote and not event_dates:
-            historical, program = True, False
+        folded = "".join(c for c in unicodedata.normalize("NFD", quote) if not unicodedata.combining(c))
+        negative = bool(NEGATIVE.search(folded) or metadata.get("cancelled_events"))
+        program, period, period_year, historical = _program_context(quote, event_dates, now.year)
+        program = program and not negative
         event_date = max((d for d in event_dates if d <= today), default="")
         upcoming = min((d for d in event_dates if d > today), default="")
         date = event_date or stamp
         if date > today:
             date = ""  # Future publication timestamps do not prove activity.
-        key = (url, date, kind)
+        key = (url, date, kind, quote)
         if key in seen:
             continue
         seen.add(key)
@@ -158,11 +182,20 @@ def assess(entity: dict[str, Any], links: list[dict[str, Any]], items: dict[str,
                         "url": url, "item_id": item.item_id if item else link.get("item_id", ""), "run_id": item.run_id if item else link.get("run_id", ""),
                         "quote": quote[:600], "official": official, "program": program, "negative_cue": negative,
                         "upcoming_date": upcoming, "presence": bool(PRESENCE.search(quote)), "historical_cue": historical,
-                        "program_period": period.group(0) if period else "", "program_year": period_year,
+                        "program_period": period, "program_year": period_year,
                         "association": str(link.get("association") or "recorded_link_or_citation")})
     dated = [s for s in signals if s["date"]]
-    activity = [s for s in dated if (s["program"] or s["kind"] == "known_account_post") and not s["negative_cue"]]
-    current = [s for s in signals if s["official"] and s["program"] and (s["date"].startswith(year) or s["upcoming_date"].startswith(year) or s["program_year"] == year)]
+    activity = [s for s in dated if (s["program"] or s["kind"] == "known_account_post") and not s["negative_cue"] and not s["historical_cue"]]
+    for signal in signals:
+        # Republished, undated prior-year program descriptions establish medium
+        # confidence; an actual event/publication date can remain current across January 1.
+        dated_current = bool(signal["date"] and current_start <= signal["date"] <= today)
+        republished_old_period = bool(signal["program_year"] and signal["program_year"] < year and signal["date"].startswith(year) and signal["date_basis"] == "publication_date")
+        future_period = bool(signal["program_year"] and signal["program_year"] > year)
+        signal["current_program"] = bool(signal["official"] and signal["program"] and (
+            (dated_current and not republished_old_period and not future_period)
+            or today < signal["upcoming_date"] <= horizon or signal["program_year"] == year))
+    current = [s for s in signals if s["current_program"]]
     recent = [s for s in signals if not s["negative_cue"] and not s["historical_cue"] and ((s["date"] and s["date"] >= BASELINE) or ("2024" <= s["program_year"] <= year))]
     # Only a human-verified lifecycle claim can yield a terminal status proposal.
     verified = [c for c in entity.get("claims", []) if c.get("field") == "status" and c.get("review_state") == "human_verified"]
@@ -176,7 +209,7 @@ def assess(entity: dict[str, Any], links: list[dict[str, Any]], items: dict[str,
         reasons.append("A person verified the registry's lifecycle status; see its source claims.")
     elif current:
         status, confidence, label = "active", "high", "Active, high confidence"
-        reasons.append(f"An institution website recorded in Public links supplies {year} program evidence.")
+        reasons.append(f"An institution website supplies dated program evidence in the rolling window {current_start}–{today}, a current program year, or upcoming programming within twelve months.")
     elif recent:
         status, confidence, label = "active", "medium", "Active, medium confidence"
         reasons.append("Dated evidence exists in the 2024–present window; current official programming is not established.")
@@ -190,6 +223,7 @@ def assess(entity: dict[str, Any], links: list[dict[str, Any]], items: dict[str,
         status, confidence, label = "unknown", "low", "Status unclear"
         reasons.append("Status claims conflict.")
     return {"status": status, "confidence": confidence, "label": label, "review_state": "proposed", "baseline": BASELINE,
+            "current_window_start": current_start,
             "assessed_at": now.isoformat(), "last_evidence_date": max((s["date"] for s in dated), default=""),
             "last_activity_date": max((s["date"] for s in activity), default=""),
             "current_program_periods": list(dict.fromkeys(s["program_period"] for s in current if s["program_period"])),

@@ -430,7 +430,7 @@ def _research_routes(method, rest, query, body, wb, project):
         if rest == "office/snapshot" and method == "POST":
             return 200, desk.export_package(project, country=str(body.get("country") or ""))
         if rest == "office/approved-ai" and method == "POST":
-            return 200, desk.export_package(project, ai_only=True)
+            return 200, desk.export_package(project, ai_only=True, country=str(body.get("country") or ""), all_countries=body.get("all_countries") is True)
         if rest == "office/captures" and method == "POST":
             return 200, desk.capture_pages(project, body.get("pages"), actor=actor)
         if rest == "office/captures/scan" and method == "POST":
