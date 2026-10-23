@@ -5,7 +5,7 @@ folium>=0.17,<1
 geopy>=2.4,<3
 langdetect>=1.0.9,<2
 matplotlib>=3.8,<4
-openai>=1.50,<3
+openai>=1.50,<4
 openpyxl>=3.1,<4
 pandas>=2.2,<3; python_version < '3.14'
 pandas>=2.3.3,<3; python_version >= '3.14'
