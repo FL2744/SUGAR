@@ -74,6 +74,14 @@ For optional desktop installs, `SUGAR-Desktop/scripts/build-windows.ps1` builds 
 
 The web app covers project setup, research requirements, evidence import and inspection, plan review and collection, institution registry import and mapping, evidence source inspection, run history, and verified handoff export. Map tiles require network access; research records remain in project workspaces.
 
+### Desktop startup time
+
+SUGAR uses a local Python engine upon startup. It can take a minute to load completely. Measured using the released v2.0 Mac backend:
+
+- Local engine startup: **25.9 seconds**
+- Separate diagnostics process: **24.4 seconds**
+- Actual provider request: **24 milliseconds**, then under 1 millisecond
+
 ## Python installation
 
 Python **3.11–3.14** is supported.
