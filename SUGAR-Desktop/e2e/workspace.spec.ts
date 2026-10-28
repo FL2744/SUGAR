@@ -600,3 +600,16 @@ test("a failed update check is explained in Settings and never blocks the app", 
   await expect(page.getByRole("alert").filter({ hasText: "Could not check for updates" })).toBeVisible();
   await expectAccessible(page, "Updates settings with an error");
 });
+
+test("Add provider does not wait for platform status", async ({ page }) => {
+  await mockApi(page, []);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route(/\/api\/providers$/, (route) => route.fulfill({ headers: corsHeaders, json: { profiles: [], default_profile_id: "", credential_storage: "session", types: [{ id: "openai", label: "OpenAI", default_model: "test-model", default_endpoint: "", needs_credential: true, credential_label: "API key" }] } }));
+  await page.route(/\/api\/platforms$/, async (route) => { await gate; await route.fulfill({ headers: corsHeaders, json: { platforms: [] } }); });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "＋ Add provider", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: /^Model/ })).toHaveValue("test-model", { timeout: 1500 });
+  release();
+});

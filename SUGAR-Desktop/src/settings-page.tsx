@@ -50,18 +50,24 @@ export function SettingsPage({ updates, initialSection = "providers", onRunSetup
   const [testing, setTesting] = useState("");
   const [state, setState] = useState<{ kind: "idle" | "saving" | "saved" | "error"; at?: string; message?: string }>({ kind: "idle" });
   const [loaded, setLoaded] = useState(false);
+  const [addRequested, setAddRequested] = useState(false);
   const [diagnostic, setDiagnostic] = useState("");
 
   const load = useCallback(async () => {
     try {
-      const [providerData, platformData] = await Promise.all([research.providers(), research.platforms()]);
+      const providerData = await research.providers();
       setTypes(providerData.types); setSaved(providerData.profiles); setProfiles(providerData.profiles.map((p) => ({ ...p })));
       setDefaultId(providerData.default_profile_id); setSavedDefault(providerData.default_profile_id); setStorage(providerData.credential_storage);
       setSelectedId((current) => (providerData.profiles.some((p) => p.id === current) ? current : providerData.profiles[0]?.id || ""));
-      setPlatforms(platformData); setPlatformSecrets({}); setPlatformClear(new Set()); setPlatformReplacing(new Set()); setLoaded(true);
+      setLoaded(true);
     } catch (issue) { setLoaded(true); onError(issue instanceof Error ? issue.message : String(issue)); }
   }, [onError]);
-  useEffect(() => { void load(); }, [load, engineState]);
+  const loadPlatforms = useCallback(async () => {
+    try {
+      setPlatforms(await research.platforms()); setPlatformSecrets({}); setPlatformClear(new Set()); setPlatformReplacing(new Set());
+    } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); }
+  }, [onError]);
+  useEffect(() => { void load(); void loadPlatforms(); }, [load, loadPlatforms, engineState]);
 
   // Interface changes preview live but are not persisted until Save; leaving the page restores the saved look.
   useEffect(() => { applyPrefs(draftPrefs); }, [draftPrefs]);
@@ -97,7 +103,8 @@ export function SettingsPage({ updates, initialSection = "providers", onRunSetup
 
   const addProfile = () => {
     const type = types.find((t) => t.id === BLANK_TYPE) || types[0];
-    if (!type) return;
+    if (!type) { setAddRequested(true); return; }
+    setAddRequested(false);
     const id = `prov_${Math.random().toString(36).slice(2, 12)}`;
     const draft: ProfileDraft = {
       id, name: type.label, type: type.id, endpoint: "", model: type.default_model, organization: "", project: "", credential_ref: type.needs_credential ? `provider:${id}` : "", advanced: {},
@@ -106,6 +113,7 @@ export function SettingsPage({ updates, initialSection = "providers", onRunSetup
     };
     setProfiles((rows) => [...rows, draft]); setSelectedId(id); if (!defaultId) setDefaultId(id);
   };
+  useEffect(() => { if (addRequested && types.length) addProfile(); }, [addRequested, types]);
   const changeType = (id: string, typeId: string) => {
     const type = types.find((t) => t.id === typeId);
     if (type) patchProfile(id, { type: typeId, name: type.label, model: type.default_model, endpoint: "", credential_label: type.credential_label, credential_ref: type.needs_credential ? `provider:${id}` : "", organization: "", project: "" });
@@ -143,13 +151,13 @@ export function SettingsPage({ updates, initialSection = "providers", onRunSetup
       for (const [key, value] of Object.entries(platformSecrets)) if (value.trim()) await research.setPlatformCredential(key, value.trim());
       for (const key of platformClear) await research.setPlatformCredential(key, "");
       const persisted = onSavePrefs(draftPrefs);
-      await load();
+      await Promise.all([load(), loadPlatforms()]);
       setState(persisted ? { kind: "saved", at: new Date().toISOString() } : { kind: "error", message: "Settings were applied but this browser would not store the interface preferences." });
     } catch (issue) {
       setState({ kind: "error", message: issue instanceof Error ? issue.message : String(issue) });
     }
   };
-  const revert = () => { setDraftPrefs(prefs); setPlatformSecrets({}); setPlatformClear(new Set()); setPlatformReplacing(new Set()); setReports({}); setState({ kind: "idle" }); void load(); };
+  const revert = () => { setDraftPrefs(prefs); setPlatformSecrets({}); setPlatformClear(new Set()); setPlatformReplacing(new Set()); setReports({}); setState({ kind: "idle" }); void load(); void loadPlatforms(); };
 
   const sections: Array<[Section, string, number]> = [["providers", "LLM providers", providerChanges], ["platforms", "Platform credentials", platformChanges], ["interface", "Interface", prefsDirty ? 1 : 0], ["updates", "Updates", 0],
     ...(!isTauri() ? [["connection", "Connection", 0] as [Section, string, number]] : []), ["privacy", "Privacy & diagnostics", 0]];
