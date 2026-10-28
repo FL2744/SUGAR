@@ -14,6 +14,8 @@ use tauri_plugin_shell::{
     ShellExt,
 };
 
+use tauri_plugin_dialog::DialogExt;
+
 mod updates;
 
 const OPERATIONS: &[&str] = &[
@@ -275,6 +277,17 @@ fn redact_secrets(mut text: String, secrets: Option<&HashMap<String, String>>) -
     text
 }
 
+#[tauri::command]
+async fn save_export(app: AppHandle, file_name: String, bytes: Vec<u8>) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let name = std::path::Path::new(&file_name).file_name().and_then(|s| s.to_str()).unwrap_or("sugar-export.zip");
+        let Some(file) = app.dialog().file().set_file_name(name).blocking_save_file() else { return Ok(false); };
+        let path = file.into_path().map_err(|e| e.to_string())?;
+        fs::write(path, bytes).map_err(|e| format!("Could not save export: {e}"))?;
+        Ok(true)
+    }).await.map_err(|e| e.to_string())?
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -285,6 +298,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             run_backend,
             start_local_api,
+            save_export,
             updates::updater_status,
             updates::check_for_update,
             updates::download_update,

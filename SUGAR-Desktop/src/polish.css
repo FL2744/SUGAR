@@ -127,3 +127,10 @@ select, input, textarea { color-scheme: inherit; }
 .office-feeds { overflow-wrap: anywhere; font-size: 12px; }
 .activity-proposal { display: block; font-size: 11px; line-height: 1.5; margin-top: 5px; }
 @media (max-width: 650px) { .office-fields { grid-template-columns: 1fr; } .office-desk { padding: 16px; } }
+
+/* Selected-post reading space: 50% larger text viewport and panel ceiling. */
+.map-detail.post-detail{min-height:36rem;max-height:calc(150dvh - 10.5rem);align-content:start}
+.map-detail.post-detail .post-text{max-height:13.5rem}
+
+/* Verification changes button style; keep text and background contrast in the same frame. */
+.post-detail .pill-row .button{transition:transform .15s ease}

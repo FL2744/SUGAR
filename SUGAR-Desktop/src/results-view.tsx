@@ -153,6 +153,11 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
     try { setExportInfo(await research.exportRun(projectId, runId)); }
     catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
   };
+  const downloadResults = async () => {
+    setBusy("download");
+    try { const exported = await research.exportRun(projectId, runId); setExportInfo(exported); await downloadWorkspaceFile(`sugar-file://${projectId}/${exported.archive}`, `${runId}-results.zip`); }
+    catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
+  };
   const download = async (relative: string, name: string) => {
     try { await downloadWorkspaceFile(`sugar-file://${projectId}/${relative}`, name); } catch (issue) { onError(issue instanceof Error ? issue.message : String(issue)); }
   };
@@ -181,6 +186,7 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
             </select></label>
           {selected && <StatusPill status={selected.status} />}
           <button className="button button-secondary" onClick={() => onOpenActivity(runId)}>Activity</button>
+          <button className="button button-secondary" disabled={Boolean(busy)} onClick={() => void downloadResults()} title="Download all results and provenance for this run as a ZIP">{busy === "download" ? <Spinner /> : "Download"}</button>
           <button className="button button-primary" disabled={busy === "export"} onClick={() => void exportRun()}>{busy === "export" ? <Spinner /> : "Export"}</button>
         </div>
       </div>
@@ -192,7 +198,7 @@ export function ResultsView({ projectId, runId, runs, prefs, author, onSelectRun
       {exportInfo && (
         <div className="notice notice-ok export-box"><strong>Export ready.</strong> Stored in the project at <code>{exportInfo.directory}</code>{isTauri() && projectPath ? <> (<code>{projectPath}</code>)</> : null}
           <div className="export-files">
-            {!isTauri() && <>
+            {<>
               <button className="button button-secondary button-small" onClick={() => void download(exportInfo.archive, `${runId}.zip`)}>Bundle (.zip)</button>
               {["analysis.csv", "analysis.jsonl", "timeline.csv", "map.geojson", "data-dictionary.json", "README-analysis.md", "results.csv", "corpus.jsonl", "report.md", "run-manifest.json", "plan.json", "translations.jsonl", "activity-log.jsonl", "sources.csv"].filter((f) => exportInfo.files.includes(f)).map((f) => (
                 <button key={f} className="button button-quiet button-small" onClick={() => void download(`${exportInfo.directory}/${f}`, f)}>{f}</button>))}

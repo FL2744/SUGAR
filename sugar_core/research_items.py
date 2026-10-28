@@ -429,6 +429,8 @@ def record_to_item(record: Any, *, run_id: str, project_id: str, query_id: str, 
         source_metadata=dict(getattr(record, "raw_stats", {}) or {}),
         content_hash=_sha(text, 16),
     )
+    if getattr(record, "author_location", ""):
+        item.source_metadata["author_location"] = str(record.author_location)
     lat, lon = getattr(record, "latitude", None), getattr(record, "longitude", None)
     if lat is not None and lon is not None:
         item.coordinates = {"lat": float(lat), "lon": float(lon)}

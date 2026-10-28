@@ -40,6 +40,9 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   const [selectedPost, setSelectedPost] = useState("");
   const [verdictFilter, setVerdictFilter] = useState("");
   const [days, setDays] = useState("");
+  const [minConfidence, setMinConfidence] = useState("0");
+  const [inferring, setInferring] = useState(false);
+  const [inferenceNote, setInferenceNote] = useState("");
   const [selectedTarget, setSelectedTarget] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -74,10 +77,10 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
     setLoading(true); setError("");
     try {
       const [list, nets, pm] = await Promise.all([research.institutions(projectId, { status, confidence: level, country, program, audience, since: sinceDate(windowKey) }), research.networks(projectId),
-        research.postMap(projectId, { verdict: verdictFilter, days }).catch((e) => { if (seq === requestSeq.current) setError(`Posts could not be loaded: ${e instanceof Error ? e.message : String(e)}`); return null; })]);
+        research.postMap(projectId, { verdict: verdictFilter, days, min_confidence: minConfidence }).catch((e) => { if (seq === requestSeq.current) setError(`Posts could not be loaded: ${e instanceof Error ? e.message : String(e)}`); return null; })]);
       if (seq === requestSeq.current) { setData(list); setNetworks(nets); setPosts(pm); }
     } catch (e) { if (seq === requestSeq.current) setError(e instanceof Error ? e.message : String(e)); } finally { if (seq === requestSeq.current) setLoading(false); }
-  }, [projectId, status, level, country, program, audience, windowKey, verdictFilter, days]);
+  }, [projectId, status, level, country, program, audience, windowKey, verdictFilter, days, minConfidence]);
   useEffect(() => { void load(); }, [load]);
 
   const subjects = useMemo(() => networks.filter((n) => n.role === "subject").map((n) => n.name), [networks]);
@@ -103,9 +106,17 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   const exportMapped = async (target = "") => {
     setExporting(true); setError("");
     try {
-      const result = await research.exportMap(projectId, { since, until: effectiveUntil, verdict: verdictFilter, days, target });
+      const result = await research.exportMap(projectId, { since, until: effectiveUntil, verdict: verdictFilter, days, target, min_confidence: Number(minConfidence) });
       await downloadWorkspaceFile(`sugar-file://${projectId}/${result.archive}`, target ? `posts-about-${target.replace(/\W+/g, "-")}.zip` : "mapped-posts-analysis.zip");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setExporting(false); }
+  };
+  const inferLocations = async () => {
+    setInferring(true); setError(""); setInferenceNote("");
+    try {
+      const result = await research.inferPostLocations(projectId);
+      setInferenceNote(`Suggested ${result.proposed} broad locations from ${result.scanned} posts. ${result.remaining} still unprocessed. ${result.warnings.join(" ")}`);
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setInferring(false); }
   };
   const pickedPost = posts?.pins.find((p) => p.item_id === selectedPost);
   const setVerified = async (itemId: string, verified: boolean) => {
@@ -128,11 +139,13 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
         <div className="run-controls">
           <div className="segmented" role="radiogroup" aria-label="View">{(["map", "list"] as const).map((v) => <button key={v} role="radio" aria-checked={view === v} className={view === v ? "on" : ""} onClick={() => setView(v)}>{titleCase(v)}</button>)}</div>
           <button className="button button-secondary" onClick={onOpenInstitutions}>Institutions</button>
+          <button className="button button-secondary" disabled={inferring} onClick={() => void inferLocations()} title="Use your configured AI provider to suggest broad locations for existing unmapped posts">{inferring ? <Spinner /> : "Infer post locations"}</button>
           <CountrySnapshotButton projectId={projectId} country={country} onError={setError} />
           <button className="button button-secondary" onClick={() => void exportMapped()} disabled={exporting || rangeError || !posts?.pins.length}>{exporting ? <Spinner /> : "Export mapped posts"}</button>
         </div>
       </div>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
+      {inferenceNote && <div className="notice notice-info" role="status">{inferenceNote}</div>}
       {rangeError && <div className="notice notice-warn" role="alert">The start date must be on or before the through date.</div>}
 
       <div className="map-layout">
@@ -169,6 +182,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             </div>
           </Collapsible>
           <div className="map-visual-controls">
+            <label>Location confidence <select aria-label="Minimum post location confidence" value={minConfidence} onChange={(e) => setMinConfidence(e.target.value)}><option value="0">All estimates</option><option value="0.3">30% and above</option><option value="0.6">60% and above</option><option value="0.8">80% and above</option><option value="1">Platform coordinates / linked places only</option></select></label>
             <label>Color posts by <select aria-label="Post map coloring" value={postStyle} onChange={(e) => setPostStyle(e.target.value as PostStyle)}>
               <option value="points">Location and review</option><option value="density">Origin density</option><option value="recency">Publication time</option>
               {sentiment && <><option value="valence">Positive / negative language</option><option value="intensity">Language intensity</option><option value="direction">Inward / outward language</option></>}
@@ -213,7 +227,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             <button className="inspector-close" onClick={() => setSelectedTarget("")} aria-label="Close">×</button>
             <h3>Posts about {pickedTarget.name}</h3>
             <div className="pill-row"><Pill tone="info">{pickedTarget.posts} post{pickedTarget.posts === 1 ? "" : "s"}</Pill>{pickedTarget.last_24h > 0 && <Pill tone="warn">{pickedTarget.last_24h} in the last 24 hours</Pill>}<Pill tone={pickedTarget.verified ? "ok" : "neutral"}>{pickedTarget.verified} verified</Pill></div>
-            <p className="muted">Where posts are about, from places named in the text. Country-level unless a city is named.</p>
+            <p className="muted">Places posts concern, from named places or evidence-backed model suggestions. Locations are approximate; regions stay regional.</p>
             <p><strong>Platforms</strong> {Object.entries(pickedTarget.platforms).map(([k, v]) => `${k} ${v}`).join(" · ")}<br /><strong>Languages</strong> {Object.entries(pickedTarget.languages).map(([k, v]) => `${k} ${v}`).join(" · ")}
               {Object.keys(pickedTarget.cities).length > 0 && <><br /><strong>Cities named</strong> {Object.entries(pickedTarget.cities).map(([k, v]) => `${k} ${v}`).join(" · ")}</>}</p>
             <ul className="post-list">{targetPosts.slice(0, 40).map((p) => <li key={p.item_id}><button className="button button-quiet button-small" onClick={() => { setSelectedTarget(""); setSelectedPost(p.item_id); }}><strong dir="auto">{p.author || "Unknown"}</strong> · <span dir="auto">{p.original_text.slice(0, 70)}</span></button></li>)}</ul>
@@ -226,10 +240,11 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             <p className="muted">{pickedPost.platform} · {pickedPost.published_at ? formatTime(pickedPost.published_at) : "date unknown"}</p>
             <div className="pill-row">{pickedPost.verified ? <Pill tone="ok">Verified by {pickedPost.verified_by || "a reviewer"}</Pill> : <Pill tone="warn">Not verified</Pill>}
               {pickedPost.inferred_location && <Pill tone="info" title={pickedPost.inferred_location.method}>Inferred: {pickedPost.inferred_location.name} · {Math.round(pickedPost.inferred_location.confidence * 100)}%</Pill>}</div>
+            {pickedPost.inferred_location?.reason && <p><strong>Location rationale</strong> {pickedPost.inferred_location.reason}{pickedPost.inferred_location.evidence && <><br /><q dir="auto">{pickedPost.inferred_location.evidence}</q></>}</p>}
             <div><strong>Original{pickedPost.language ? ` (${pickedPost.language})` : ""}</strong><p dir="auto" className="post-text">{pickedPost.original_text}</p></div>
             {pickedPost.translated_text && <div><strong>Translation</strong><p className="post-text">{pickedPost.translated_text}</p></div>}
-            <p><strong>Posted from</strong> {pickedPost.origin ? `${pickedPost.origin.label} (${pickedPost.origin.kind})` : "Not known. The pin sits at a place the text names."}</p>
-            {pickedPost.targets.length > 0 && <p><strong>About</strong> {pickedPost.targets.map((t) => t.city ? `${t.city}, ${t.name}` : t.name).join(", ")} <small className="muted">named in the text; country-level</small></p>}
+            <p><strong>Posted from</strong> {pickedPost.origin ? `${pickedPost.origin.label} (${pickedPost.origin.kind})` : "Not known. The pin represents named or inferred geographic context, not the author’s location."}</p>
+            {pickedPost.targets.length > 0 && <p><strong>About</strong> {pickedPost.targets.map((t) => t.city ? `${t.city}, ${t.name}` : t.name).join(", ")} <small className="muted">named or inferred; approximate location</small></p>}
             <div className="pill-row"><button className={`button ${pickedPost.verified ? "button-secondary" : "button-primary"} button-small`} onClick={() => void setVerified(pickedPost.item_id, !pickedPost.verified)}>{pickedPost.verified ? "✓ Verified. Undo" : "✓ Mark verified"}</button>
               {pickedPost.url && <a className="button button-quiet button-small" href={pickedPost.url} target="_blank" rel="noreferrer noopener">Open post</a>}</div>
           </aside>)}

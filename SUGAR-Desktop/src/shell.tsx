@@ -24,7 +24,7 @@ import { SettingsPage } from "./settings-page";
 import { TimelinePage } from "./timeline-page";
 import { StatusPill } from "./ui";
 
-type Page = "research" | "activity" | "results" | "projects" | "network" | "map" | "monitoring" | "home" | "project" | "institutions" | "timeline" | "settings" | "about";
+type Page = "research" | "activity" | "results" | "projects" | "network" | "map" | "monitoring" | "home" | "project" | "institutions" | "timeline" | "setup" | "settings" | "about";
 type ActivityItem = { id: number; time: string; title: string; detail: string; kind: "ok" | "error" | "info" };
 type Dashboard = {
   name?: string;
@@ -90,7 +90,7 @@ const NAV_ADVANCED: Array<{ id: Page; label: string; icon: string }> = [
 ];
 const PAGE_TITLES: Record<Page, string> = {
   research: "Research", activity: "Activity", results: "Results", network: "Institutions", map: "Map", monitoring: "Monitoring", projects: "Projects", home: "Overview", project: "Evidence & handoff",
-  institutions: "Reference registry", timeline: "Project timeline", settings: "Settings", about: "About",
+  institutions: "Reference registry", timeline: "Project timeline", setup: "Setup", settings: "Settings", about: "About",
 };
 
 function titleCase(value: string) {
@@ -138,7 +138,6 @@ export function App() {
   const [page, setPage] = useState<Page>("research");
   const [prefs, savePrefs] = usePrefs();
   const [prefill, setPrefill] = useState<{ text: string; n: number }>({ text: "", n: 0 });
-  const [showSetup, setShowSetup] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [openInstitution, setOpenInstitution] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -1171,7 +1170,7 @@ export function App() {
     { id: "go-settings", label: "Open Settings", keywords: "providers keys credentials preferences", run: () => changePage("settings") },
     { id: "go-about", label: "About SUGAR", keywords: "credits version", run: () => changePage("about") },
     { id: "new-project", label: "New project", keywords: "create", run: () => { changePage("projects"); setCreateSignal((n) => n + 1); } },
-    { id: "setup", label: "Run first-time setup", keywords: "onboarding wizard ai model", run: () => setShowSetup(true) },
+    { id: "setup", label: "Open optional setup", keywords: "onboarding wizard ai model", run: () => changePage("setup") },
     { id: "update", label: "Check for updates", keywords: "upgrade version release download", run: () => { changePage("settings"); void updates.check(true); } },
     { id: "mode", label: prefs.mode === "basic" ? "Switch to Advanced mode" : "Switch to Basic mode", keywords: "experience", run: () => savePrefs({ ...prefs, mode: prefs.mode === "basic" ? "advanced" : "basic" }) },
     { id: "theme", label: prefs.theme === "dark" ? "Use light theme" : "Use dark theme", keywords: "appearance color", run: () => savePrefs({ ...prefs, theme: prefs.theme === "dark" ? "light" : "dark" }) },
@@ -1198,6 +1197,7 @@ export function App() {
         <button className="project-chip" onClick={() => changePage("projects")} title="Switch project"><span className={`project-indicator ${projectId ? "connected" : ""}`} /><span className="project-chip-copy"><strong>{projectId ? projectName : "No project open"}</strong><small>{projectId ? (overview?.summary.status ? titleCase(overview.summary.status) : "Open") : "Create or choose one"}</small></span><span className="chevron" aria-hidden="true">›</span></button>
         <div className="sidebar-spacer" />
         <div className="engine-card"><div className={`engine-light ${engineState}`} /><div><strong>{engineState === "checking" ? "Connecting to engine" : engineState === "unavailable" ? "Engine unavailable" : engineState === "preview" ? "Browser preview" : isTauri() ? "Local research engine" : "SUGAR API connected"}</strong><small>{engineState === "ready" ? `Python core · ${engineVersion || "connected"}` : engineState === "unavailable" ? "Check the API address and credentials" : engineState === "preview" ? "Connect a research API to work" : "Checking Python core"}</small></div></div>
+        <button className={`nav-item ${page === "setup" ? "active" : ""}`} onClick={() => changePage("setup")} title="Optional setup"><span className="nav-icon" aria-hidden="true">☷</span><span className="nav-label">Setup</span></button>
         <button className={`nav-item settings-link ${page === "settings" ? "active" : ""}`} onClick={() => changePage("settings")} title="Settings"><span className="nav-icon" aria-hidden="true">⚙</span><span className="nav-label">Settings</span></button>
         <button className={`nav-item about-link ${page === "about" ? "active" : ""}`} onClick={() => changePage("about")} title="About SUGAR"><span className="nav-icon" aria-hidden="true">ⓘ</span><span className="nav-label">About</span></button>
         <div className="sidebar-version">SUGAR <span>{engineVersion || "1.4"}</span> · Diplomacy Lab</div>
@@ -1264,14 +1264,14 @@ export function App() {
         {page === "projects" && <ProjectsPage projects={projects} currentId={projectId} loading={projectsLoading} advanced={prefs.mode === "advanced"} createSignal={createSignal} onOpen={openProject} onCreate={async (name, question) => { await createProject(name, question); }} onOpenFolder={() => void openFolder()} onRefresh={() => void loadProjects()} />}
         {page === "timeline" && <TimelinePage projectId={projectId} refreshKey={timelineKey} />}
         {page === "about" && <AboutPage version="1.4" engineVersion={engineVersion} />}
-        {page === "settings" && <SettingsPage updates={updates} initialSection={settingsSection} onRunSetup={() => setShowSetup(true)} prefs={prefs} onSavePrefs={savePrefs} onDirtyChange={(dirty) => { settingsDirty.current = dirty; }} engineState={engineState} apiUrl={apiUrl} apiToken={apiToken} onApiUrl={setApiUrl} onApiToken={setApiToken} onConnect={() => void connectResearchEngine()} busy={Boolean(busy)} onError={setError} />}
+        {page === "settings" && <SettingsPage updates={updates} initialSection={settingsSection} onRunSetup={() => changePage("setup")} prefs={prefs} onSavePrefs={savePrefs} onDirtyChange={(dirty) => { settingsDirty.current = dirty; }} engineState={engineState} apiUrl={apiUrl} apiToken={apiToken} onApiUrl={setApiUrl} onApiToken={setApiToken} onConnect={() => void connectResearchEngine()} busy={Boolean(busy)} onError={setError} />}
 
 
         {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
         {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
         <ToastHost toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))} />
-        {(showSetup || (!prefs.onboarded && engineState === "ready")) && <Onboarding prefs={prefs} onSavePrefs={savePrefs} onOpenSettings={() => changePage("settings")}
-          onFinish={() => setShowSetup(false)} onTryExample={(text) => { setPrefill((p) => ({ text, n: p.n + 1 })); changePage("research"); }} />}
+        {page === "setup" && <Onboarding prefs={prefs} onSavePrefs={savePrefs} onOpenSettings={() => changePage("settings")}
+          onFinish={() => changePage("research")} onTryExample={(text) => { setPrefill((p) => ({ text, n: p.n + 1 })); changePage("research"); }} />}
         <footer className="statusbar"><div><span className={`status-dot ${workspace ? "active" : "unknown"}`} /><span>{workspace ? (workspace.startsWith("sugar-workspace://") ? `Project · ${projectName}` : `Workspace · ${workspace.split(/[\\/]/).at(-1)}`) : "No project open"}</span></div><span className="statusbar-right">SUGAR research engine <b>·</b> Python core</span></footer>
       </main>
     </div>

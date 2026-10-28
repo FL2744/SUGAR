@@ -57,6 +57,7 @@ export const research = {
   review: (id: string, itemId: string) => api<{ item_id: string; review: ReviewState }>(`${ws(id)}/research/review${query({ item_id: itemId })}`),
   postReview: (id: string, itemId: string, action: Record<string, unknown>, author = "") =>
     apiPost<{ item_id: string; review: ReviewState; summary: ReviewSummary }>(`${ws(id)}/research/review`, { item_id: itemId, author, ...action }),
+  inferPostLocations: (id: string) => apiPost<{ scanned: number; proposed: number; remaining: number; warnings: string[] }>(`${ws(id)}/research/map/infer`),
   postMap: (id: string, params: Record<string, string | number | boolean | undefined> = {}) => api<PostMap>(`${ws(id)}/research/map/posts${query(params)}`),
   exportMap: (id: string, filters: Record<string, string | number>) => apiPost<{ archive: string; directory: string; files: string[] }>(`${ws(id)}/research/map/export`, filters),
   institutions: (id: string, params: Record<string, string | number | boolean | undefined> = {}) => api<InstitutionList>(`${ws(id)}/research/institutions${query(params)}`),

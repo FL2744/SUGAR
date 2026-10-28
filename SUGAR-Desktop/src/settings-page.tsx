@@ -202,7 +202,7 @@ export function SettingsPage({ updates, initialSection = "providers", onRunSetup
                               <input type="password" autoComplete="off" spellCheck={false} value={selected.secret || ""} placeholder={`Paste your ${selectedType.credential_label.toLowerCase()}`} onChange={(event) => patchProfile(selected.id, { secret: event.target.value })} />)}
                             <small>Stored only on this computer in {storage === "file" ? "an unencrypted, owner-only file in your SUGAR folder" : "memory for this session; enter it again after restarting SUGAR"}. Never written to projects, logs, or Git.</small></div>)}</div></li>
                       <li className="hier-step"><span className="hier-n">3</span><div className="hier-body"><h4>Model</h4>
-                        <label className="field-block"><span>Model</span><input value={selected.model} list={`models-${selected.id}`} placeholder={selectedType.default_model || "model name"} onChange={(event) => patchProfile(selected.id, { model: event.target.value })} />
+                        <label className="field-block"><span>Model</span><input autoCapitalize="none" autoCorrect="off" spellCheck={false} value={selected.model} list={`models-${selected.id}`} placeholder={selectedType.default_model || "model name"} onChange={(event) => patchProfile(selected.id, { model: event.target.value })} />
                           <datalist id={`models-${selected.id}`}>{modelOptions.map((m) => <option key={m} value={m} />)}</datalist>
                           <small>{modelOptions.length ? `${modelOptions.length} models available to this credential — start typing to choose.` : "Run Test connection to list the models this credential can use."}</small></label></div></li>
                       <li className="hier-step"><span className="hier-n">4</span><div className="hier-body"><Collapsible title="Advanced options" hint="Endpoint override, organization, timeout">
@@ -260,7 +260,7 @@ export function SettingsPage({ updates, initialSection = "providers", onRunSetup
                   <input type="range" min={85} max={150} step={5} value={Math.round(draftPrefs.textScale * 100)} onChange={(event) => setDraftPrefs({ ...draftPrefs, textScale: Number(event.target.value) / 100 })} aria-label="Text size" />
                   <small>This adjusts SUGAR's text on top of your operating system's display scaling. Everything, including buttons and spacing, scales with it.</small>
                   <p className="text-sample">The quick brown fox — تجربة النص — 文本示例</p></div>
-                {onRunSetup && <div><button type="button" className="button button-secondary button-small" onClick={onRunSetup}>Run first-time setup again</button></div>}
+                {onRunSetup && <div><button type="button" className="button button-secondary button-small" onClick={onRunSetup}>Open optional setup again</button></div>}
                 <label className="field-block"><span>Your name <small>Shown on your reviews and comments</small></span><input value={draftPrefs.name} maxLength={60} onChange={(event) => setDraftPrefs({ ...draftPrefs, name: event.target.value })} placeholder="e.g. Alex Rivera" /></label>
                 <div className="field-block"><span>Color theme</span>
                   <Segmented label="Color theme" value={draftPrefs.theme} onChange={(theme) => setDraftPrefs({ ...draftPrefs, theme })} options={[{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} /></div>

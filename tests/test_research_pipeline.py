@@ -62,6 +62,11 @@ class FakeTranslator(LLMProvider):
         original = messages[-1]["content"].split("<content>\n")[1].split("\n</content>")[0]
         return ChatResult(text=f"EN[{original[:30]}]", model="fake-model", latency_ms=1.0)
 
+    def chat_json(self, messages, schema, **kw):
+        if kw.get("purpose") == "post_location_inference":
+            return {"locations": []}, ChatResult(text='{"locations":[]}', model="fake-model", latency_ms=1.0)
+        return super().chat_json(messages, schema, **kw)
+
     def list_models(self):
         return ["fake-model"]
 

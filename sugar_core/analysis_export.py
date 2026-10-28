@@ -83,7 +83,10 @@ def analysis_files(project: Any, items: list[Any], *, mapped: dict | None = None
         if pin:
             features.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [pin["longitude"], pin["latitude"]]},
                 "properties": {"item_id": item.item_id, "run_id": item.run_id, "platform": item.platform, "url": item.url, "published_at": published,
-                               "placement": pin["placement"], "location_basis": origin.get("kind") or "place named in text; approximate",
+                               "placement": pin["placement"], "location_basis": origin.get("kind") or (pin.get("inferred_location") or {}).get("method", "approximate location"),
+                               "location_confidence": (pin.get("inferred_location") or {}).get("confidence"),
+                               "location_evidence": (pin.get("inferred_location") or {}).get("evidence", ""),
+                               "location_reason": (pin.get("inferred_location") or {}).get("reason", ""),
                                "origin_known": bool(origin), "verified": pin["verified"], **{k: score[k] for k in ("valence", "intensity", "direction")}}})
     timeline = []
     for (day, platform, language), group in sorted(daily.items()):
@@ -120,7 +123,7 @@ def analysis_files(project: Any, items: list[Any], *, mapped: dict | None = None
 
 def export_map(project: Any, items: list[Any], *, filters: dict[str, Any]) -> dict[str, Any]:
     from .research_plan import utc_now
-    mapped = post_pins(project, items, **{k: filters[k] for k in ("since", "until", "platform", "language", "verdict", "days") if k in filters})
+    mapped = post_pins(project, items, **{k: filters[k] for k in ("since", "until", "platform", "language", "verdict", "days", "min_confidence") if k in filters})
     target = str(filters.get("target") or "")
     ids = {p["item_id"] for p in mapped["pins"] if not target or any(t["name"] == target for t in p["targets"])}
     selected = [i for i in items if i.item_id in ids]

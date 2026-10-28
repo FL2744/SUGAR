@@ -49,6 +49,14 @@ def _targets(item: ResearchItem) -> list[dict[str, Any]]:
             continue
         lat, lon = centroid(name) or (0.0, 0.0)
         rows[name] = {"name": name, "latitude": lat, "longitude": lon, "confidence": tag.get("confidence", 0.0), "method": "named in the text", "precision": "country", "city": ""}
+    # Recognise common demonyms and place aliases too, rather than English country names only.
+    from . import gazetteer as gz
+    aliases = {**gz.COUNTRY_ALIASES, **gz.DEMONYMS, "palestinian": "Palestine"}
+    for alias, country in aliases.items():
+        pair = centroid(country)
+        if pair and len(alias) >= 3 and re.search(rf"(?<![\w]){re.escape(alias)}(?![\w])", item.original_text, re.I):
+            rows.setdefault(country, {"name": country, "latitude": pair[0], "longitude": pair[1], "confidence": .65,
+                                      "method": "place alias or demonym in text", "precision": "country", "city": ""})
     for city, pattern in _CITY_PATTERNS:
         if not pattern.search(item.original_text):
             continue
@@ -61,7 +69,12 @@ def _targets(item: ResearchItem) -> list[dict[str, Any]]:
 
 
 def post_pins(project: Any, items: list[ResearchItem], *, platform: str = "", language: str = "", verdict: str = "", days: int = 0,
-              since: str = "", until: str = "", order: str = "newest", now: datetime | None = None) -> dict[str, Any]:
+              since: str = "", until: str = "", order: str = "newest", min_confidence: float = 0, now: datetime | None = None) -> dict[str, Any]:
+    if not math.isfinite(min_confidence) or not 0 <= min_confidence <= 1:
+        raise ValueError("Location confidence must be between 0 and 1.")
+    from .post_locations import LocationStore, fingerprint
+    inferred_rows = LocationStore(project).latest()
+    below_confidence = 0
     if order not in {"newest", "oldest"}:
         raise ValueError("Choose newest or oldest publication order.")
     def boundary(value: str) -> datetime | None:
@@ -102,6 +115,15 @@ def post_pins(project: Any, items: list[ResearchItem], *, platform: str = "", la
         matched += 1
         undated += int(published is None)
         targets = _targets(item)
+        saved = inferred_rows.get(item.item_id, {})
+        if saved.get("fingerprint") == fingerprint(item) and saved.get("location"):
+            location = saved["location"]
+            if not targets:
+                target = {**location, "city": location.get("city", "")}
+                if target["city"]:
+                    target["city_latitude"], target["city_longitude"] = target["latitude"], target["longitude"]
+                targets.append(target)
+        targets = [t for t in targets if float(t.get("confidence", 0)) >= min_confidence]
         origin: dict[str, Any] | None = None
         pair = _coordinate_pair(item.coordinates.get("lat"), item.coordinates.get("lon")) if item.coordinates else None
         if pair is not None:
@@ -111,15 +133,17 @@ def post_pins(project: Any, items: list[ResearchItem], *, platform: str = "", la
             origin = {"latitude": float(entity["latitude"]), "longitude": float(entity["longitude"]), "kind": "linked institution", "precision": "institution",
                       "label": f"{entity.get('name', '')} ({', '.join(x for x in (entity.get('city', ''), entity.get('country', '')) if x)})"}
         if origin is None and not targets:
+            if _targets(item) or saved.get("location"):
+                below_confidence += 1
             unlocated += 1
             continue
         translation = item.translation if isinstance(item.translation, dict) else {}
         inferred = max(targets, key=lambda t: t["confidence"]) if targets else None
         pins.append({
             "item_id": item.item_id, "run_id": item.run_id, "author": item.author, "published_at": iso_utc(item.published_at), "platform": item.platform, "url": item.url,
-            "language": item.language, "original_text": item.original_text[:1200], "translated_text": translation.get("text", "")[:1200] if translation.get("status") == "done" else "",
+            "language": item.language, "original_text": item.original_text, "translated_text": translation.get("text", "") if translation.get("status") == "done" else "",
             "origin": origin, "targets": targets,
-            "inferred_location": {"name": inferred["name"], "confidence": inferred["confidence"], "method": inferred["method"]} if inferred else None,
+            "inferred_location": {"name": inferred["name"], "confidence": inferred["confidence"], "method": inferred["method"], "reason": inferred.get("reason", ""), "evidence": inferred.get("evidence", ""), "precision": inferred.get("precision", "country")} if inferred else None,
             "placement": "origin" if origin else "mentioned",
             "latitude": origin["latitude"] if origin else (inferred.get("city_latitude", inferred["latitude"]) if inferred else None),
             "longitude": origin["longitude"] if origin else (inferred.get("city_longitude", inferred["longitude"]) if inferred else None),
@@ -142,7 +166,7 @@ def post_pins(project: Any, items: list[ResearchItem], *, platform: str = "", la
     for pin in pins:
         for t in pin["targets"]:
             row = summary.setdefault(t["name"], {"name": t["name"], "posts": 0, "last_24h": 0, "platforms": Counter(), "languages": Counter(), "cities": Counter(), "verified": 0, "item_ids": [],
-                                                 "latitude": (centroid(t["name"]) or (0, 0))[0], "longitude": (centroid(t["name"]) or (0, 0))[1], "last_at": ""})
+                                                 "latitude": (centroid(t["name"]) or (t["latitude"], t["longitude"]))[0], "longitude": (centroid(t["name"]) or (t["latitude"], t["longitude"]))[1], "last_at": ""})
             row["posts"] += 1
             row["verified"] += 1 if pin["verified"] else 0
             published = timestamp(pin["published_at"])
@@ -155,9 +179,10 @@ def post_pins(project: Any, items: list[ResearchItem], *, platform: str = "", la
             row["item_ids"].append(pin["item_id"])
     target_rows = [{**{k: v for k, v in r.items() if k not in {"platforms", "languages", "cities"}}, "platforms": dict(r["platforms"].most_common(4)), "languages": dict(r["languages"].most_common(4)),
                     "cities": dict(r["cities"].most_common(4))} for r in sorted(summary.values(), key=lambda r: (-r["posts"], r["name"]))]
-    flow_rows = [{"from": [lon, lat], "to": [(centroid(n) or (0, 0))[1], (centroid(n) or (0, 0))[0]], "target": n, "posts": c} for (lat, lon, n), c in flows.items()]
+    target_centres = {row["name"]: (row["longitude"], row["latitude"]) for row in target_rows}
+    flow_rows = [{"from": [lon, lat], "to": list(target_centres.get(n, (0, 0))), "target": n, "posts": c} for (lat, lon, n), c in flows.items()]
     return {"pins": pins, "targets": target_rows, "flows": flow_rows,
             "as_of": clock.isoformat().replace("+00:00", "Z"),
-            "coverage": {"unique_posts": matched, "mapped_posts": len(pins), "unlocated_posts": unlocated, "undated_posts": undated},
+            "coverage": {"unique_posts": matched, "mapped_posts": len(pins), "unlocated_posts": unlocated, "undated_posts": undated, **({"below_confidence": below_confidence} if min_confidence > 0 else {})},
             "sentiment_note": NOTE,
-            "note": "Origin is shown only when the platform gave coordinates or the post is linked to a located institution. Countries named in the text are placed at the country's centre and mark what a post is about, not where it came from."}
+            "note": "Origin is shown only when the platform gave coordinates or the post is linked to a located institution. Named or model-inferred places show broad context, not verified posting origin. Model confidence is an estimate, not a calibrated probability; region/country centres are approximate."}

@@ -18,6 +18,9 @@ Type a request the way you would say it — *“Search democracy in the Middle E
 
 - **Interpretation:** an optional LLM provider (OpenAI, OpenAI-compatible, Anthropic, Virginia Tech ARC, or a local endpoint) produces schema-constrained output that is validated and repaired; a deterministic interpreter needs no model and accepts ordinary sentences.
 - **Providers and credentials:** Provider → Credential → Model → Advanced options, with *Test connection*. Keychain integration is removed. Credentials default to session memory, with an owner-only, unencrypted file available only through explicit configuration (or `.env.local` for development) and never in projects, logs, or Git.
+- **Optional setup:** Open **Setup**, above Settings in the sidebar, for all setup questions on one page. It never opens automatically and is not required to collect or review results. Model names retain their entered casing.
+- **Downloads:** Results → **Download** saves a ZIP of the selected run, including its results and provenance.
+- **Post locations:** New runs use the configured AI provider, within the run’s model-call budget, to suggest broad locations for otherwise unmapped posts. On the Map, **Infer post locations** also processes existing results (up to 20 model calls per click). Suggestions retain a supporting quote, rationale, and estimated confidence; the confidence filter also applies to map exports. These are places a post concerns or public-profile context, not verified posting origins, and confidence is not a calibrated probability. Unsupported locations remain unmapped.
 - **Five distinct refresh operations:** Reinterpret request, Rebuild plan, Refresh sources, Reprocess results, Rerun.
 - See [`docs/research-workbench.md`](docs/research-workbench.md). An offline demo with simulated platforms: `python tools/demo_workbench_server.py`.
 

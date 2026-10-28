@@ -464,6 +464,15 @@ def _research_routes(method, rest, query, body, wb, project):
     if rest == "notes" and method == "POST":
         return 200, {"note": project.add_note(str(body.get("text") or ""), author=str(body.get("author") or "analyst"), item_id=str(body.get("item_id") or ""),
                                               run_id=str(body.get("run_id") or ""))}
+    if rest == "map/infer" and method == "POST":
+        from .post_locations import infer_post_locations
+        from .llm_providers import LLMBudget
+        runs = [r["run_id"] for r in wb.list_runs(project)]
+        items = [i for rid in runs for i in wb.items(project, rid)]
+        provider = wb.resolve_provider(project.load_plan(), project=project)
+        result = infer_post_locations(project, items, provider=provider, budget=LLMBudget(20), retry_unknown=True)
+        project.log("post_locations_inferred", result)
+        return 200, result
     if rest == "map/posts" and method == "GET":
         from .post_map import post_pins
         run_id = str(query.get("run_id") or "")
@@ -471,7 +480,7 @@ def _research_routes(method, rest, query, body, wb, project):
         items = [i for rid in runs for i in wb.items(project, rid)]
         try:
             mapped = post_pins(project, items, platform=str(query.get("platform") or ""), language=str(query.get("language") or ""), verdict=str(query.get("verdict") or ""),
-                               days=_int(str(query.get("days") or "0"), 0, 0, 3650), since=str(query.get("since") or ""), until=str(query.get("until") or ""), order=str(query.get("sort") or "newest"))
+                               days=_int(str(query.get("days") or "0"), 0, 0, 3650), since=str(query.get("since") or ""), until=str(query.get("until") or ""), order=str(query.get("sort") or "newest"), min_confidence=float(query.get("min_confidence") or 0))
         except ValueError as exc:
             raise WorkbenchError(str(exc)) from exc
         return 200, {**mapped, "runs_scanned": len(runs)}
@@ -481,6 +490,7 @@ def _research_routes(method, rest, query, body, wb, project):
         filters = {k: str(body.get(k) or "") for k in ("since", "until", "platform", "language", "verdict", "target")}
         filters["days"] = _int(body.get("days"), 0, 0, 3650)
         try:
+            filters["min_confidence"] = float(body.get("min_confidence") or 0)
             return 200, export_map(project, items, filters=filters)
         except ValueError as exc:
             raise WorkbenchError(str(exc)) from exc

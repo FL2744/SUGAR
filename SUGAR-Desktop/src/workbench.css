@@ -515,3 +515,8 @@ kbd { padding: 0 .4rem; border: 1px solid var(--wb-line2); border-radius: .3rem;
 .target-detail .post-list { display: grid; gap: .3rem; max-height: 14rem; overflow: auto; margin: 0; padding: 0; list-style: none; }
 .target-detail .post-list button { width: 100%; text-align: left; }
 .top-targets { display: grid; gap: .15rem; margin: 0; padding: 0; list-style: none; } .top-targets .on { border-color: #4da3ff; }
+
+/* Optional setup is a normal page, never an automatic dialog. */
+.setup-page .form-stack{max-width:68rem}.setup-page .panel{padding:1.2rem}.setup-page .panel h2{margin-top:0}
+/* Give selected-post content 50% more vertical reading space. */
+.post-detail{min-height:36rem;align-content:start}.post-detail .post-text{max-height:13.5rem}

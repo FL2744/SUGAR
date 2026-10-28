@@ -952,6 +952,9 @@ class ResearchPipeline:
                     self.counts["processed"] += 1
         with self.timings.measure("serialization"):
             self.project.save_items(self.run.run_id, list(self.items.values()))
+        from .post_locations import infer_post_locations
+        locations = infer_post_locations(self.project, list(self.items.values()), provider=self.provider, budget=self.budget, checkpoint=self.controller.checkpoint)
+        self.events.emit("location.inference.completed", stage="process", message=f"Suggested broad locations for {locations['proposed']} posts.", **locations)
         from .activity_coding import code_items
         coded = code_items(self.project, list(self.items.values()))
         self.events.emit("coding.completed", stage="process", message=f"Proposed local program and audience codes for {coded['with_codes']} items; no model calls.", **coded)

@@ -59,6 +59,7 @@ async function mockApp(page: Page, options: { saved?: boolean; results?: boolean
     if (path.endsWith("/research/networks")) return reply({ networks: [] });
     if (path.endsWith("/research/map/posts")) return reply(map);
     if (path.endsWith("/research/map/export")) { state.exports.push(body); return reply({ archive: "research/exports/map.zip", directory: "research/exports/map", files: ["analysis.csv", "analysis.jsonl", "timeline.csv", "map.geojson", "data-dictionary.json"] }); }
+    if (path.endsWith("/runs/run_demo/export")) return reply({ archive: "research/exports/results.zip", directory: "research/exports/results", files: ["items.csv", "items.jsonl"] });
     if (path.endsWith("/runs/run_demo")) return reply({ run });
     if (path.endsWith("/runs/run_demo/results")) {
       state.queries.push(url.searchParams);
@@ -237,4 +238,18 @@ test("country snapshots download as standalone HTML and approved AI exports rema
   await desk.getByLabel("Snapshot country").selectOption("");
   await expect(desk.getByRole("button", { name: "Export for approved AI tool", exact: true })).toBeDisabled();
   await expect(desk.getByRole("button", { name: "Download package (.zip)", exact: true })).toHaveCount(0);
+});
+
+
+test("results download saves a run archive and map confidence is included in requests", async ({ page }) => {
+  await mockApp(page, { results: true }); await page.goto("/"); await navigate(page, "Results");
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download", exact: true }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe("run_demo-results.zip");
+  expect(await download.failure()).toBeNull();
+  await navigate(page, "Map");
+  const request = page.waitForRequest((r) => r.url().includes("/map/posts?") && new URL(r.url()).searchParams.get("min_confidence") === "0.8");
+  await page.getByLabel("Minimum post location confidence").selectOption("0.8");
+  await request;
 });

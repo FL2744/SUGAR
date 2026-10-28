@@ -179,7 +179,7 @@ export type PostPin = {
   original_text: string; translated_text: string;
   origin: { latitude: number; longitude: number; kind: string; precision: string; label: string } | null;
   targets: Array<{ name: string; latitude: number; longitude: number; confidence: number; method: string; precision: string; city?: string }>;
-  inferred_location: { name: string; confidence: number; method: string } | null;
+  inferred_location: { name: string; confidence: number; method: string; reason?: string; evidence?: string; precision?: string } | null;
   placement: "origin" | "mentioned"; latitude: number | null; longitude: number | null;
   verified: boolean; verdict: string; verified_by: string; verified_at: string;
 };

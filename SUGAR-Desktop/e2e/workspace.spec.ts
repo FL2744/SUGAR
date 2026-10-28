@@ -464,17 +464,29 @@ test("main browser screens have no automated WCAG 2.2 A/AA violations", async ({
   await expectAccessible(page, "dark research project");
 });
 
-test("first-run setup is offered once, can be skipped, and is remembered", async ({ page }) => {
+test("setup is optional, one page, and opens only from the sidebar", async ({ page }) => {
   await mockApi(page, []);
   await page.goto("/");
-  const setup = page.getByRole("dialog", { name: "Welcome to SUGAR" });
-  await expect(setup).toBeVisible();
-  await expectAccessible(page, "first-run setup");
-  await setup.getByLabel(/What should we call you/).fill("Test Researcher");
-  await setup.getByRole("button", { name: "Skip setup" }).click();
-  await expect(setup).toHaveCount(0);
-  await page.reload();
+  await expect(page.getByRole("heading", { name: "Set up SUGAR", exact: true })).toHaveCount(0);
   await expect(page.getByRole("dialog", { name: "Welcome to SUGAR" })).toHaveCount(0);
+  const setupButton = page.getByRole("button", { name: "Setup", exact: true });
+  await setupButton.click();
+  await expect(page.getByRole("heading", { name: "Set up SUGAR", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your name", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sources", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Try a request", exact: true })).toBeVisible();
+  await page.getByLabel(/What should we call you/).fill("Test Researcher");
+  await page.getByRole("button", { name: "Save name", exact: true }).click();
+  await page.getByRole("radio", { name: /^OpenAI/ }).click();
+  const model = page.getByLabel("Model", { exact: true });
+  await model.fill("myMixedCase-model");
+  await expect(model).toHaveValue("myMixedCase-model");
+  await expect(model).toHaveAttribute("autocapitalize", "none");
+  await expect(model).toHaveAttribute("autocorrect", "off");
+  await expectAccessible(page, "optional setup page");
+  await page.getByRole("button", { name: "Back to research", exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Set up SUGAR", exact: true })).toHaveCount(0);
 });
 
 test("command palette jumps between pages from the keyboard", async ({ page }) => {
@@ -530,6 +542,7 @@ test("posts appear on the map page with a verify action", async ({ page }) => {
   await expect(detail).toContainText("Une conférence à Bruxelles");
   await expect(detail).toContainText("A conference in Brussels");
   await expect(detail).toContainText("Inferred: Belgium");
+  expect((await detail.boundingBox())!.height).toBeGreaterThanOrEqual(576);
   await expect(detail).toContainText("Not verified");
   await detail.getByRole("button", { name: /Mark verified/ }).click();
   await expect(detail).toContainText("Verified by Dana");

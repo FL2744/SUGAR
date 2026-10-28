@@ -146,6 +146,10 @@ export async function downloadWorkspaceFile(reference: string, fileName?: string
     const payload = await result.json().catch(() => ({})) as { error?: string };
     throw new Error(payload.error || `Could not download export (HTTP ${result.status}).`);
   }
+  if (isTauri()) {
+    await invoke<boolean>("save_export", { fileName: fileName || parsed.pathname.split("/").at(-1) || "sugar-export.zip", bytes: Array.from(new Uint8Array(await result.arrayBuffer())) });
+    return;
+  }
   const blobUrl = URL.createObjectURL(await result.blob());
   const link = document.createElement("a");
   link.href = blobUrl;
@@ -153,7 +157,7 @@ export async function downloadWorkspaceFile(reference: string, fileName?: string
   document.body.append(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(blobUrl);
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 }
 
 export async function runBackend(
