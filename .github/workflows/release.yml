@@ -225,6 +225,8 @@ jobs:
           test -n "$bridge"
           "$bridge" diagnostics
           sh tools/smoke_packaged_no_credentials.sh "$bridge"
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
           ditto -c -k --sequesterRsrc --keepParent "$app" SUGAR-macOS.zip
           test -s SUGAR-macOS.zip
       - uses: actions/upload-artifact@v7

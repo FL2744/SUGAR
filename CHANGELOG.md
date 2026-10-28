@@ -2,7 +2,28 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
-## Unreleased
+## 2.0.0 - 2026-10-28
+
+### Desktop workflow and project management
+
+- Setup is now an optional, single-page sidebar destination above Settings. It opens only when selected, and research can start without completing it.
+- Edit the OpenAI model directly in Setup, retain available model choices, and preserve the capitalization typed in model fields.
+- Open Add provider without waiting for slow platform checks.
+- Preserve the selected run, Results, and Activity when returning to the same project.
+- Delete projects with confirmation. Managed project files are retained in `.deleted-projects` for recovery; externally linked folders are only unregistered. Active research runs prevent deletion.
+
+### Results and maps
+
+- Download a copy of results from the Results page.
+- Infer locations discussed in posts using model-assisted analysis, with confidence scores, evidence, and a map confidence filter. Inferred locations describe the post's subject and are not verified posting origins.
+- Reset map pagination when the confidence filter changes.
+- Give the map's post detail panel more room for reading.
+
+### Presentation
+
+- Update the README with the new SUGAR logo and tightly cropped whitespace.
+
+### Research and update infrastructure
 
 - require dated or explicit program context for activity proposals, flag multilingual closure cues, and preserve recent evidence across the new year;
 - normalize imported status punctuation while retaining reported confidence separately, and expand default A–D sector terms across five languages;
