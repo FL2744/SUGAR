@@ -253,3 +253,19 @@ test("results download saves a run archive and map confidence is included in req
   await page.getByLabel("Minimum post location confidence").selectOption("0.8");
   await request;
 });
+
+
+test("reopening the current project retains results and activity run", async ({ page }) => {
+  await mockApp(page, { results: true }); await page.goto("/");
+  await navigate(page, "Results");
+  await page.getByLabel("Group by", { exact: true }).selectOption("none");
+  await expect(page.getByText("We welcome education in Belgium. Synthetic example 0.", { exact: true })).toBeVisible();
+  await navigate(page, "Projects");
+  await page.getByRole("row", { name: /Synthetic research project/ }).click();
+  await navigate(page, "Results");
+  await page.getByLabel("Group by", { exact: true }).selectOption("none");
+  await expect(page.getByText("We welcome education in Belgium. Synthetic example 0.", { exact: true })).toBeVisible();
+  const request = page.waitForRequest((r) => r.url().includes("/runs/run_demo"));
+  await navigate(page, "Activity");
+  await request;
+});

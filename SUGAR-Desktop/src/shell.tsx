@@ -400,9 +400,11 @@ export function App() {
     const reference = isTauri() ? (project.path || "") : project.workspace;
     setWorkspace(reference);
     try { localStorage.setItem("sugar.projectId", project.id); localStorage.setItem("sugar.workspace", reference); } catch { /* storage may be unavailable */ }
-    setRunId("");
-    setOverview(null);
-  }, []);
+    if (project.id !== projectId) {
+      setRunId("");
+      setOverview(null);
+    }
+  }, [projectId]);
 
   const changePage = useCallback((next: Page) => {
     if (page === "settings" && next !== "settings" && settingsDirty.current && !window.confirm("You have unsaved settings. Leave without saving them?")) return;
@@ -414,6 +416,7 @@ export function App() {
 
   const openProject = (project: ApiWorkspace) => {
     activateProject(project);
+    if (project.id === projectId) void refreshOverview(project.id);
     addActivity("Project opened", project.name, "ok");
     setPage("research");
   };
