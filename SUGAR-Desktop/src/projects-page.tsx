@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import type { ApiWorkspace } from "./bridge";
+import { api } from "./bridge";
 import { EmptyState, Spinner, StatusPill, relativeTime } from "./ui";
 
-export function ProjectsPage({ projects, currentId, loading, onOpen, onCreate, onOpenFolder, onRefresh, advanced, createSignal }: {
+export function ProjectsPage({ projects, currentId, loading, onOpen, onCreate, onOpenFolder, onRefresh, onDeleted, advanced, createSignal }: {
   projects: ApiWorkspace[]; currentId: string; loading: boolean; advanced: boolean; createSignal: number;
+  onDeleted: (id: string) => void;
   onOpen: (project: ApiWorkspace) => void; onCreate: (name: string, question: string) => Promise<void>; onOpenFolder: () => void; onRefresh: () => void;
 }) {
+  const [deleting, setDeleting] = useState("");
+  const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [question, setQuestion] = useState("");
@@ -15,6 +19,13 @@ export function ProjectsPage({ projects, currentId, loading, onOpen, onCreate, o
   useEffect(() => { if (createSignal > 0) setCreating(true); }, [createSignal]);
   const shown = useMemo(() => projects.filter((p) => `${p.name} ${p.research_question || ""} ${p.description || ""}`.toLowerCase().includes(filter.toLowerCase())), [projects, filter]);
 
+  const remove = async (project: ApiWorkspace) => {
+    if (!window.confirm(`Delete “${project.name}” from SUGAR? Managed project files are moved to SUGAR's deleted-projects folder; externally opened folders stay on disk.`)) return;
+    setDeleting(project.id); setError("");
+    try { await api(`/api/workspaces/${encodeURIComponent(project.id)}`, { method: "DELETE" }); onDeleted(project.id); onRefresh(); }
+    catch (issue) { setError(issue instanceof Error ? issue.message : String(issue)); }
+    finally { setDeleting(""); }
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!name.trim()) return;
@@ -32,6 +43,7 @@ export function ProjectsPage({ projects, currentId, loading, onOpen, onCreate, o
         </div>
       </div>
 
+      {error && <div role="alert" className="inline-error">{error}</div>}
       {creating && (
         <form className="panel new-project-form" onSubmit={(event) => void submit(event)}>
           <div className="panel-heading"><div><span className="eyebrow">NEW PROJECT</span><h3>Name your project</h3></div></div>
@@ -51,14 +63,14 @@ export function ProjectsPage({ projects, currentId, loading, onOpen, onCreate, o
         <div className="project-table" role="table" aria-label="Projects">
           <div className="project-table-head" role="row"><span role="columnheader">Project</span><span role="columnheader">Research question</span><span role="columnheader">Status</span><span role="columnheader">Last activity</span>{advanced && <span role="columnheader">Runs</span>}<span role="columnheader">Updated</span></div>
           {shown.map((project) => (
-            <button key={project.id} role="row" className={`project-row ${project.id === currentId ? "current" : ""}`} onClick={() => onOpen(project)} aria-current={project.id === currentId}>
-              <span className="project-name" role="cell"><strong>{project.name}</strong>{project.id === currentId && <small>open</small>}</span>
+            <div key={project.id} role="row" className={`project-row ${project.id === currentId ? "current" : ""}`} onClick={() => onOpen(project)} aria-current={project.id === currentId}>
+              <span className="project-name" role="cell"><button className="text-button" onClick={(event) => { event.stopPropagation(); onOpen(project); }}>{project.name}</button>{project.id === currentId && <small>open</small>}</span>
               <span className="project-question" role="cell" title={project.research_question}>{project.research_question || <em className="muted">No research question yet</em>}</span>
               <span role="cell"><StatusPill status={project.status || "draft"} /></span>
               <span role="cell" className="muted">{relativeTime(project.last_activity || "")}</span>
               {advanced && <span role="cell" className="muted">{project.run_count ?? 0}</span>}
-              <span role="cell" className="muted">{project.updated_at ? new Date(project.updated_at).toLocaleDateString() : "—"}</span>
-            </button>))}
+              <span role="cell" className="muted">{project.updated_at ? new Date(project.updated_at).toLocaleDateString() : "—"} <button className="button button-quiet button-small" disabled={Boolean(deleting)} aria-label={`Delete ${project.name}`} onClick={(event) => { event.stopPropagation(); void remove(project); }}>Delete</button></span>
+            </div>))}
         </div>)}
     </section>
   );

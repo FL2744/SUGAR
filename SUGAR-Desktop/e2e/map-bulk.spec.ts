@@ -269,3 +269,15 @@ test("reopening the current project retains results and activity run", async ({ 
   await navigate(page, "Activity");
   await request;
 });
+
+test("project deletion requires confirmation and clears the open project", async ({ page }) => {
+  await mockApp(page, { results: true }); await page.goto("/"); await navigate(page, "Projects");
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.getByRole("button", { name: "Delete Synthetic research project", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Delete Synthetic research project", exact: true })).toBeEnabled();
+  page.once("dialog", (dialog) => dialog.accept());
+  const deleted = page.waitForRequest((r) => r.method() === "DELETE" && r.url().endsWith(`/workspaces/${id}`));
+  await page.getByRole("button", { name: "Delete Synthetic research project", exact: true }).click();
+  await deleted;
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("sugar.projectId"))).toBeNull();
+});

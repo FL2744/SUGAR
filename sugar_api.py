@@ -116,6 +116,23 @@ def resolve_project(raw_identifier: str) -> ResearchProject:
     return ResearchProject(SugarWorkspace.open(root))
 
 
+def delete_project(identifier: str) -> dict[str, Any]:
+    identifier = _workspace_id(identifier)
+    project = resolve_project(identifier)
+    wb = get_workbench()
+    if any((live := wb.pipeline(project, run["run_id"])) is not None and live.active for run in wb.list_runs(project)):
+        raise ApiError(409, "Stop the project's active research runs before deleting it.")
+    index = _linked_index()
+    if identifier in index:
+        del index[identifier]
+        _linked_path().write_text(json.dumps(index, indent=2, sort_keys=True), encoding="utf-8")
+    else:
+        trash = get_workspace_root() / ".deleted-projects"
+        trash.mkdir(exist_ok=True)
+        project.workspace.root.rename(trash / f"{identifier}-{uuid.uuid4().hex}")
+    return {"deleted": identifier}
+
+
 def list_research_projects() -> list[ResearchProject]:
     projects = []
     for candidate in sorted(get_workspace_root().iterdir()):
@@ -604,6 +621,17 @@ class SugarApiHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         if not self._authorized():
+            return
+        project_match = re.fullmatch(r"/api/workspaces/([0-9a-fA-F-]+)", urlsplit(self.path).path)
+        if project_match:
+            try:
+                identifier = _workspace_id(project_match.group(1))
+                if self._require_project(identifier, "owner"):
+                    self._send(200, delete_project(identifier))
+            except ApiError as exc:
+                self._send(exc.status, {"error": str(exc)})
+            except OSError:
+                self._send(500, {"error": "Could not delete the project. Its files may be in use."})
             return
         match = re.fullmatch(r"/api/workspaces/([0-9a-fA-F-]+)/access/(.+)", urlsplit(self.path).path)
         if not match:
