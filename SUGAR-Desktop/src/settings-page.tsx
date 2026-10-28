@@ -167,7 +167,7 @@ export function SettingsPage({ updates, initialSection = "providers", onRunSetup
     <section className="page-content settings-page">
       <div className="page-heading compact-heading"><div><div className="eyebrow">SETTINGS <span className="eyebrow-line" /></div><h1>Settings</h1>
         <p>Changes apply when you press <strong>Save changes</strong>. Nothing is saved automatically.</p></div>
-        <Pill tone={engineState === "ready" ? "ok" : "warn"}>{engineState === "ready" ? "Engine connected" : "Engine not connected"}</Pill></div>
+        <Pill tone={engineState === "ready" ? "ok" : "warn"}>{engineState === "ready" ? "Engine connected" : engineState === "checking" ? "Python engine starting…" : "Engine not connected"}</Pill></div>
 
       <div className="settings-shell">
         <nav className="settings-nav" aria-label="Settings sections">
@@ -179,7 +179,7 @@ export function SettingsPage({ updates, initialSection = "providers", onRunSetup
             <div className="panel settings-panel">
               <div className="section-title"><div className="section-icon amber">⌘</div><div><h3>LLM providers</h3><p>Used to interpret requests, suggest searches, and translate. Each provider has its own credential and model.</p></div></div>
               {!loaded && <div className="loading-block"><Spinner /> Loading…</div>}
-              {loaded && engineState !== "ready" && profiles.length === 0 && <div className="notice notice-warn">The research engine is not connected, so providers cannot be loaded. Check the Connection section.</div>}
+              {loaded && engineState === "unavailable" && profiles.length === 0 && <div className="notice notice-warn">The research engine is not connected, so providers cannot be loaded. Check the Connection section.</div>}
               <div className="provider-layout">
                 <ul className="provider-list" aria-label="Configured providers">
                   {profiles.map((p) => (

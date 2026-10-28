@@ -1148,7 +1148,7 @@ export function App() {
   const author = prefs.name.trim() || "Researcher";
 
   // The project list (project chip, Projects page) and the open project's overview load once the engine is reachable.
-  useEffect(() => { void ensureLocalApi().catch(() => undefined).then(() => loadProjects()); }, [loadProjects, apiUrl]);
+  useEffect(() => { void ensureLocalApi().then(() => loadProjects()).catch(() => undefined); }, [loadProjects, apiUrl]);
   useEffect(() => { void refreshOverview(projectId); }, [projectId, refreshOverview]);
   useEffect(() => { if (activeRunSummary && !runId) setRunId(activeRunSummary.run_id); }, [activeRunSummary, runId]);
   useEffect(() => {
@@ -1199,7 +1199,7 @@ export function App() {
         <button className="side-new-project" onClick={openNewProject} disabled={Boolean(busy)}><span aria-hidden="true">＋</span> New project</button>
         <button className="project-chip" onClick={() => changePage("projects")} title="Switch project"><span className={`project-indicator ${projectId ? "connected" : ""}`} /><span className="project-chip-copy"><strong>{projectId ? projectName : "No project open"}</strong><small>{projectId ? (overview?.summary.status ? titleCase(overview.summary.status) : "Open") : "Create or choose one"}</small></span><span className="chevron" aria-hidden="true">›</span></button>
         <div className="sidebar-spacer" />
-        <div className="engine-card"><div className={`engine-light ${engineState}`} /><div><strong>{engineState === "checking" ? "Connecting to engine" : engineState === "unavailable" ? "Engine unavailable" : engineState === "preview" ? "Browser preview" : isTauri() ? "Local research engine" : "SUGAR API connected"}</strong><small>{engineState === "ready" ? `Python core · ${engineVersion || "connected"}` : engineState === "unavailable" ? "Check the API address and credentials" : engineState === "preview" ? "Connect a research API to work" : "Checking Python core"}</small></div></div>
+        <div className="engine-card"><div className={`engine-light ${engineState}`} /><div><strong>{engineState === "checking" ? "Starting Python engine" : engineState === "unavailable" ? "Engine unavailable" : engineState === "preview" ? "Browser preview" : isTauri() ? "Local research engine" : "SUGAR API connected"}</strong><small>{engineState === "ready" ? `Python core · ${engineVersion || "connected"}` : engineState === "unavailable" ? "Check the API address and credentials" : engineState === "preview" ? "Connect a research API to work" : "Startup can take about a minute"}</small></div></div>
         <button className={`nav-item ${page === "setup" ? "active" : ""}`} onClick={() => changePage("setup")} title="Optional setup"><span className="nav-icon" aria-hidden="true">☷</span><span className="nav-label">Setup</span></button>
         <button className={`nav-item settings-link ${page === "settings" ? "active" : ""}`} onClick={() => changePage("settings")} title="Settings"><span className="nav-icon" aria-hidden="true">⚙</span><span className="nav-label">Settings</span></button>
         <button className={`nav-item about-link ${page === "about" ? "active" : ""}`} onClick={() => changePage("about")} title="About SUGAR"><span className="nav-icon" aria-hidden="true">ⓘ</span><span className="nav-label">About</span></button>
@@ -1213,6 +1213,7 @@ export function App() {
         </header>
 
         <UpdateBanner updates={updates} prefs={prefs} onSavePrefs={savePrefs} onOpenSettings={() => { setSettingsSection("updates"); changePage("settings"); }} />
+        {isTauri() && engineState === "checking" && <div className="notice" role="status"><strong>SUGAR’s Python engine is starting up.</strong><p>This can take about a minute. SUGAR will be ready to use when startup finishes.</p></div>}
         {error && <div className="error-banner" role="alert"><span className="error-symbol">!</span><div><strong>Action needs attention</strong><p>{error}</p></div>{/Could not reach|Failed to fetch/i.test(error) && <button className="button button-secondary button-small" onClick={() => { setError(""); changePage("settings"); }}>Connection settings</button>}<button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
         {busy && <div className="progress-line"><i /></div>}
 

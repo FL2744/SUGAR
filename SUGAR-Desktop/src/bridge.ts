@@ -49,6 +49,7 @@ export function apiPost<T>(path: string, body: unknown = {}): Promise<T> {
 
 /** Open a streaming (Server-Sent Events) response with the same auth and address rules as every other call. */
 export async function openEventStream(path: string, signal: AbortSignal): Promise<Response> {
+  await ensureLocalApi();
   const base = apiBase || defaultApiUrl();
   const response = await fetch(`${base}${path}`, { headers: apiHeaders({ Accept: "text/event-stream" }), signal });
   if (!response.ok || !response.body) {
@@ -77,6 +78,8 @@ export async function openLocalFolder(path: string, create = false, name = ""): 
 }
 
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+  // Queue desktop requests until the sidecar supplies its actual URL and token.
+  await ensureLocalApi();
   const base = apiBase || defaultApiUrl();
   if (!base) throw new Error("Set the SUGAR API address in Settings before connecting.");
   const endpoint = new URL(base, window.location.href);
