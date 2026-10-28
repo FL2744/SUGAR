@@ -80,6 +80,9 @@ def classify_failure(exc: BaseException, source: str) -> dict[str, Any]:
     if status == 402 or "billing" in lowered or "credits" in lowered:
         return {"classification": "source_specific", "kind": "billing", "status": status,
                 "message": f"{name} needs an account with search access or credits: {text[:200]}"}
+    if status is not None and 400 <= status < 500 and status != 408:
+        return {"classification": "source_specific", "kind": "request", "status": status,
+                "message": f"{name} rejected the search request (HTTP {status}). Check the query, date range, and endpoint access; retrying unchanged will not help."}
     if status and status >= 500 or any(k in lowered for k in ("timed out", "timeout", "connection", "temporarily", "unavailable", "reset by peer")):
         code = f" (HTTP {status})" if status else ""
         return {"classification": "retryable", "kind": "transient", "status": status, "retry_after": retry_after,

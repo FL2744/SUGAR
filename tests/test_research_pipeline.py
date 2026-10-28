@@ -568,3 +568,13 @@ def test_budget_zero_means_unlimited_and_default_is_generous(tmp_path):
     assert all(LLMBudget(0).take() for _ in range(1000)) and DEFAULT_LLM_CALLS >= 200
     assert make_plan().limits["llm_calls"] == DEFAULT_LLM_CALLS
     assert make_plan(limits={"llm_calls": 0}).limits["llm_calls"] == 0
+
+
+def test_http_bad_request_is_not_a_network_retry():
+    import requests
+    response = requests.Response()
+    response.status_code = 400
+    result = classify_failure(requests.HTTPError('400 Bad Request', response=response), 'x')
+    assert result['classification'] == 'source_specific'
+    assert result['kind'] == 'request'
+    assert result['status'] == 400

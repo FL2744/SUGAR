@@ -165,3 +165,36 @@ def test_mastodon_reply_preserves_parent_without_inventing_root():
     assert rows[0].parent_record_key == "mastodon:9"
     assert rows[0].thread_root_key == ""
     assert rows[0].conversation_id == ""
+
+
+def test_x_historical_dates_select_archive_and_preserve_pagination():
+    session = FakeSession([FakeResponse({'meta': {'next_token': 'page2'}}), FakeResponse({})])
+    collect_x(bearer_token='t', search_terms=['history'], since='2020-01-01', until='2020-01-31',
+              max_pages_per_query=2, session=session)
+    assert all(url.endswith('/search/all') for url, _ in session.calls)
+    params = session.calls[0][1]['params']
+    assert params['start_time'] == '2020-01-01T00:00:00Z'
+    assert params['end_time'] == '2020-02-01T00:00:00Z'
+    assert session.calls[1][1]['params']['next_token'] == 'page2'
+
+
+def test_x_date_windows():
+    from datetime import datetime, timezone
+    from sugar_core.collectors import _x_search_window
+    now = datetime(2026, 10, 28, 12, tzinfo=timezone.utc)
+    mode, params = _x_search_window('auto', '2026-10-27', '2026-10-28', now=now)
+    assert mode == 'recent'
+    assert params['end_time'] == '2026-10-28T11:59:30Z'
+    assert _x_search_window('auto', None, None, now=now) == ('recent', {})
+    assert _x_search_window('all', '2026-10-27', None, now=now)[0] == 'all'
+    for mode, start, end in [('recent', '2020-01-01', None), ('auto', None, '2020-01-01'),
+                             ('auto', '2026-10-29', None), ('auto', '2020-02-01', '2020-01-01'),
+                             ('auto', 'bad', None)]:
+        with pytest.raises(ValueError):
+            _x_search_window(mode, start, end, now=now)
+
+
+def test_x_archive_denial_is_actionable():
+    with pytest.raises(RuntimeError, match='Full-archive access is required'):
+        collect_x(bearer_token='t', search_terms=['history'], since='2020-01-01',
+                  session=FakeSession([FakeResponse({}, status_code=403)]))

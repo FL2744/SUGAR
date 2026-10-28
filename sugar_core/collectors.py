@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from datetime import datetime, timedelta, timezone
 from typing import Iterable
 from urllib.parse import quote, urlparse
 
@@ -98,12 +99,50 @@ def create_bluesky_access_token(session: requests.Session, identifier: str, app_
     return token
 
 
-def collect_x(*, bearer_token: str, search_terms: Iterable[str], search_mode: str = "recent",
+def _x_search_window(search_mode: str, since: str | None, until: str | None,
+                     *, now: datetime | None = None) -> tuple[str, dict[str, str]]:
+    if search_mode not in {"auto", "recent", "all"}:
+        raise ValueError("X search_mode must be auto, recent or all")
+    now = now or datetime.now(timezone.utc)
+    latest = (now - timedelta(seconds=30)).replace(microsecond=0)
+
+    def parse(value: str, end: bool = False) -> datetime:
+        try:
+            if len(value) == 10:
+                result = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                return result + timedelta(days=1) if end else result
+            result = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if result.tzinfo is None:
+                raise ValueError("timezone required")
+            return result.astimezone(timezone.utc)
+        except ValueError as exc:
+            raise ValueError("X dates must be YYYY-MM-DD or a timestamp with a timezone.") from exc
+
+    start = parse(since) if since else None
+    end = min(parse(until, end=True), latest) if until else latest
+    if start and start >= end:
+        raise ValueError("X start date must be before the end date and before the current searchable time.")
+    oldest_recent = now - timedelta(days=7)
+    historical = (start is not None and start < oldest_recent) or end < oldest_recent
+    if search_mode == "auto":
+        search_mode = "all" if historical else "recent"
+    if search_mode == "recent" and historical:
+        raise ValueError("X recent search only covers the last seven days. Use auto or all for full-archive search.")
+    if historical and start is None:
+        raise ValueError("Add a start date for this historical X search so SUGAR can search the full requested range.")
+    params = {}
+    if start:
+        params["start_time"] = start.isoformat(timespec="seconds").replace("+00:00", "Z")
+    if until:
+        params["end_time"] = end.isoformat(timespec="seconds").replace("+00:00", "Z")
+    return search_mode, params
+
+
+def collect_x(*, bearer_token: str, search_terms: Iterable[str], search_mode: str = "auto",
               since: str | None = None, until: str | None = None, post_languages: list[str] | None = None,
               include_reposts: bool = False, max_posts_per_query: int = 100,
               max_pages_per_query: int = 1, session: requests.Session | None = None) -> list[PostRecord]:
-    if search_mode not in {"recent", "all"}:
-        raise ValueError("X search_mode must be recent or all")
+    search_mode, time_params = _x_search_window(search_mode, since, until)
     if not bearer_token:
         raise ValueError("X bearer token is required.")
     session = session or create_session()
@@ -129,10 +168,7 @@ def collect_x(*, bearer_token: str, search_terms: Iterable[str], search_mode: st
                 "expansions": "author_id",
                 "user.fields": "id,name,username,location",
             }
-            if since:
-                params["start_time"] = since + "T00:00:00Z" if len(since) == 10 else since
-            if until:
-                params["end_time"] = until + "T23:59:59Z" if len(until) == 10 else until
+            params.update(time_params)
             if next_token:
                 params["next_token"] = next_token
             response = session.get(endpoint, params=params, headers={"Authorization": f"Bearer {bearer_token}"}, timeout=60)
@@ -141,7 +177,8 @@ def collect_x(*, bearer_token: str, search_terms: Iterable[str], search_mode: st
             if response.status_code == 402:
                 raise RuntimeError("X API billing/credits are required (402).")
             if response.status_code == 403:
-                raise RuntimeError(f"X denied {search_mode} search for this app (403).")
+                detail = " Full-archive access is required to search beyond seven days; check your X developer account access." if search_mode == "all" else ""
+                raise RuntimeError(f"X denied {search_mode} search for this app (403).{detail}")
             if response.status_code == 429:
                 raise RuntimeError("X rate limit reached (429).")
             response.raise_for_status()

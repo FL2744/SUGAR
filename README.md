@@ -292,3 +292,7 @@ SUGAR was developed in connection with Virginia Tech Diplomacy Lab coursework an
 Apache-2.0 permits use, modification, and redistribution, including by government, academic, nonprofit, and commercial users, subject to the license terms. The license does not grant rights to third-party platform content, collected research data, or third-party trademarks.
 
 As provided by Section 6 of Apache-2.0, the license does not grant trademark rights in the SUGAR name, logo, or other project marks beyond reasonable use needed to describe the origin of the software and reproduce required notices.
+
+### X historical searches
+
+Set a start date and end date in the research plan to search older X posts. SUGAR automatically selects full-archive search for dates beyond the recent seven-day window. This requires full-archive access on your X API account; SUGAR does not silently fall back to recent results if access is denied. Dates use UTC, and a date-only end includes that day up to the currently searchable time. Existing collection limits still apply.

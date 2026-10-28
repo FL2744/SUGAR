@@ -85,6 +85,7 @@ export function PlanEditor({ plan, platforms, providers, advanced, saving, error
             <div className="field-grid">
               <Field label="From"><input type="date" value={timeframe.start} onChange={(event) => patch({ timeframe: { ...timeframe, start: event.target.value, label: "" } })} /></Field>
               <Field label="Until"><input type="date" value={timeframe.end} onChange={(event) => patch({ timeframe: { ...timeframe, end: event.target.value, label: "" } })} /></Field>
+              <p className="muted">X automatically uses full-archive search for start dates older than seven days. Your X API account must have full-archive access. Dates use UTC.</p>
             </div>
             <div className="field-block"><span>Collection depth</span>
               <Segmented label="Depth" value={draft.depth} onChange={setDepth}

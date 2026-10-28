@@ -108,7 +108,7 @@ def _common(request: CollectorRequest) -> dict[str, Any]:
 def _collect_x(request: CollectorRequest) -> list[PostRecord]:
     return collect_x(
         bearer_token=request.secrets.get("x_bearer_token", ""),
-        search_mode=request.config.get("x_search_mode", "recent"),
+        search_mode=request.config.get("x_search_mode", "auto"),
         post_languages=request.config.get("post_languages") or [],
         include_reposts=bool(request.config.get("include_retweets", False)),
         **_common(request),
