@@ -18,7 +18,7 @@ def test_defaults_are_documented_and_applied():
     rows = {r["label"]: r["value"] for r in plan.summary_rows()}
     assert rows["Research topic"] == "democracy"
     assert rows["Region"] == "Middle East"
-    assert rows["Platforms"] == "All enabled platforms"
+    assert "require explicit selection" in rows["Platforms"]
     assert rows["Languages"] == "Automatic"
     assert rows["Date range"] == "No restriction"
     assert rows["Collection depth"] == "Standard"

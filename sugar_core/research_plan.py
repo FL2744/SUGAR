@@ -26,6 +26,8 @@ PLAN_SCHEMA_VERSION = "1.0"
 
 DEPTHS = ("quick", "standard", "deep")
 COLLECTION_MODES = ("discovery", "targeted", "monitoring")
+OPT_IN_PLATFORMS = frozenset({"bilibili", "wikipedia", "gdelt", "weibo"})
+
 SOURCE_SCOPES = ("all_enabled", "selected")
 TRANSLATION_POLICIES = ("auto", "always", "never")
 REFRESH_MODES = ("manual", "scheduled", "watch")
@@ -356,7 +358,7 @@ class ResearchPlanSpec:
         else:
             date_text = "No restriction"
         if self.source_scope == "all_enabled":
-            platform_text = "All enabled platforms"
+            platform_text = "Default platforms (Bilibili, Wikipedia, News/GDELT, and Weibo require explicit selection)"
             if self.exclude_platforms:
                 platform_text += f" except {', '.join(self.exclude_platforms)}"
         else:

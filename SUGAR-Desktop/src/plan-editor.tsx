@@ -69,7 +69,8 @@ export function PlanEditor({ plan, platforms, providers, advanced, saving, error
             <div className="field-block">
               <span>Platforms</span>
               <Segmented label="Platform scope" value={draft.source_scope} onChange={(source_scope) => patch({ source_scope })}
-                options={[{ value: "all_enabled", label: "All enabled platforms", hint: "Every platform that has a search collector and credentials" }, { value: "selected", label: "Only these" }]} />
+                options={[{ value: "all_enabled", label: "Default platforms", hint: "Excludes Bilibili, Wikipedia, News (GDELT), and Weibo" }, { value: "selected", label: "Choose platforms" }]} />
+              <small>Bilibili, Wikipedia, News (GDELT), and Weibo are opt-in. Select Choose platforms to include them.</small>
               {draft.source_scope === "selected" && <div className="check-grid">
                 {platforms.filter((p) => p.keyword_search).map((p) => (
                   <label key={p.id} className="check-row">

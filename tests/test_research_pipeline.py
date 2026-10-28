@@ -578,3 +578,19 @@ def test_http_bad_request_is_not_a_network_retry():
     assert result['classification'] == 'source_specific'
     assert result['kind'] == 'request'
     assert result['status'] == 400
+
+
+def test_opt_in_sources_are_excluded_from_all_but_available_when_selected(tmp_path):
+    from sugar_core.research_plan import OPT_IN_PLATFORMS
+    project = make_project(tmp_path)
+    registry = {name: spec(name, lambda request: []) for name in ["x", "bluesky", *OPT_IN_PLATFORMS]}
+    plan = make_plan()
+    run = project.new_run(kind="run", plan=plan)
+    pipeline = ResearchPipeline(project, run, plan, registry=registry)
+    assert {h.name for h in pipeline._resolve_sources()} == {"x", "bluesky"}
+    plan.source_scope = "selected"
+    plan.platforms = sorted(OPT_IN_PLATFORMS)
+    assert {h.name for h in pipeline._resolve_sources()} == OPT_IN_PLATFORMS
+    plan.exclude_platforms = ["weibo"]
+    assert {h.name for h in pipeline._resolve_sources()} == OPT_IN_PLATFORMS - {"weibo"}
+    pipeline.events.close()

@@ -143,7 +143,7 @@ def test_generated_queries_are_auditable_and_bounded_by_depth():
 
 
 def test_platform_specific_and_exclusion_dispatch():
-    plan = _plan("democracy in the Middle East", source_scope="all_enabled")
+    plan = _plan("democracy in the Middle East", source_scope="selected", platforms=["weibo", "bilibili"])
     zh = [q for q in generate_queries(plan) if q.platform in {"weibo", "bilibili"}]
     assert zh and all(q.language == "zh" for q in zh)
     assert dispatch_text(generate_queries(plan)[0], "x", ["memes", "fan art"]) == 'democracy "Middle East" -memes -"fan art"'

@@ -11,7 +11,7 @@ import re
 from typing import Any
 
 from . import gazetteer as gz
-from .research_plan import QuerySpec, ResearchPlanSpec, asdict_query, PLATFORM_CATEGORIES
+from .research_plan import QuerySpec, ResearchPlanSpec, asdict_query, PLATFORM_CATEGORIES, OPT_IN_PLATFORMS
 from .llm_providers import LLMProvider, ProviderError
 
 QUERY_SCHEMA = {
@@ -133,6 +133,8 @@ def generate_queries(plan: ResearchPlanSpec, *, available_platforms: list[str] |
                     rationale=f"{seed.capitalize()} in {name}, the local language of the region.")
     # platform-specific variants: platforms that mostly operate in one language
     for platform, langs in ({} if not wanted else gz.PLATFORM_LANGUAGE_HINTS).items():
+        if plan.source_scope == "all_enabled" and platform in OPT_IN_PLATFORMS:
+            continue
         if available_platforms is not None and platform not in available_platforms:
             continue
         if plan.source_scope == "selected" and platform not in plan.platforms:

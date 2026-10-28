@@ -30,7 +30,7 @@ from .research_items import (
     DedupIndex, ResearchItem, detect_language, extract_paragraphs, is_language, matches_exclusion, record_to_item,
     start_chain, tag_geography,
 )
-from .research_plan import QuerySpec, ResearchPlanSpec, utc_now
+from .research_plan import OPT_IN_PLATFORMS, QuerySpec, ResearchPlanSpec, utc_now
 from .research_runs import ResearchProject, RunRecord
 from .utils import in_inclusive_date_range
 
@@ -472,7 +472,7 @@ class ResearchPipeline:
         if plan.source_scope == "selected":
             names = list(plan.platforms)
         else:
-            names = sorted(name for name, spec in self.registry.items() if spec.capabilities.keyword_search
+            names = sorted(name for name, spec in self.registry.items() if name not in OPT_IN_PLATFORMS and spec.capabilities.keyword_search
                            and (not spec.enabled_by or self.extra_config.get(spec.enabled_by)))
             if self.enabled_sources:
                 names = [n for n in names if n in self.enabled_sources]
