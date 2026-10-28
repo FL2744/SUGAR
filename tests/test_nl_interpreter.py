@@ -139,7 +139,7 @@ def test_generated_queries_are_auditable_and_bounded_by_depth():
     assert all(q.rationale for q in queries)
     assert len(queries) > len(enabled)                                                 # extras are kept, disabled
     quick = generate_queries(_plan("quick search democracy in the Middle East"))
-    assert sum(q.enabled for q in quick) == 3 and not any(q.language for q in quick if q.enabled)
+    assert sum(q.enabled for q in quick) == 3 and any(q.language for q in quick if q.enabled)
 
 
 def test_platform_specific_and_exclusion_dispatch():

@@ -296,3 +296,9 @@ As provided by Section 6 of Apache-2.0, the license does not grant trademark rig
 ### X historical searches
 
 Set a start date and end date in the research plan to search older X posts. SUGAR automatically selects full-archive search for dates beyond the recent seven-day window. This requires full-archive access on your X API account; SUGAR does not silently fall back to recent results if access is denied. Dates use UTC, and a date-only end includes that day up to the currently searchable time. Existing collection limits still apply.
+
+### Multilingual search queries
+
+In **Edit the plan → Basics → Search query languages**, choose **Automatic multilingual**, **Choose languages**, or **Original terms only**. Automatic uses the geography or post-language filter; without either, it tries Arabic, Spanish, French, and Chinese. The post-language filter remains separate from query generation and result translation.
+
+AI interpretation generates query variants with the configured planning provider. Without one, coverage depends on the built-in glossary. For an existing plan, save the options, then use **Rebuild plan** and review the proposed searches before saving. Enabled queries are balanced across languages within the existing query budget; increase the limit to cover more languages. Multilingual terms improve discovery but do not guarantee equal result counts across languages.

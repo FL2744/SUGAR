@@ -40,7 +40,7 @@ DEPTH_PRESETS: dict[str, dict[str, int]] = {
 
 DEFAULTS_DOC: dict[str, str] = {
     "timeframe": "No date restriction unless the request names one.",
-    "languages": "Automatic: SUGAR detects each item's language and searches in the request language.",
+    "languages": "Automatic: SUGAR detects each item's language; search-query languages are configured separately.",
     "source_scope": "All enabled platforms (those with a keyword-search collector and available credentials).",
     "collection_mode": "Discovery: broad collection to find out what exists, not a fixed list of targets.",
     "depth": "Standard: about six queries, 25 posts per query, one page per query.",
@@ -262,6 +262,8 @@ class ResearchPlanSpec:
             "policy": policy if policy in TRANSLATION_POLICIES else "auto",
             "target_language": _clean(tr.get("target_language")) or "English",
             "translate_queries": bool(tr.get("translate_queries", True)),
+            "query_language_mode": tr.get("query_language_mode") if tr.get("query_language_mode") in {"auto", "selected", "original"} else ("auto" if tr.get("translate_queries", True) else "original"),
+            "query_languages": [code.lower() for code in _clean_list(tr.get("query_languages") or []) if re.fullmatch(r"[a-zA-Z]{2,3}", code)][:8],
             "max_chars_per_item": _bounded_int(tr.get("max_chars_per_item"), 4000, 200, 20000),
             "workers": _bounded_int(tr.get("workers"), 3, 1, 16),
         }

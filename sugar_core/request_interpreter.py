@@ -23,7 +23,7 @@ from typing import Any, Callable
 from . import gazetteer as gz
 from .llm_providers import LLMProvider, ProviderError
 from .nl_interpreter import DeterministicResult, interpret_deterministic
-from .query_planner import apply_generated_queries, generate_queries
+from .query_planner import apply_generated_queries, generate_queries, rebuild_plan_queries
 from .research_plan import (
     DEFAULTS_DOC, PlanIssue, ResearchPlanSpec, build_plan, interpretation_json_schema, utc_now,
 )
@@ -204,6 +204,9 @@ def interpret_request(
                 result.method = "llm"
                 result.plan = _finalize(plan, available_platforms=available_platforms, request=request, method="llm",
                                         assumptions=assumptions, generate=generate_queries_now)
+                if generate_queries_now:
+                    result.plan, query_warnings = rebuild_plan_queries(result.plan, provider=provider, available_platforms=available_platforms)
+                    assumptions.extend(query_warnings)
                 result.assumptions = assumptions
                 result.issues = [i for i in issues]
                 result.clarifications = [str(c) for c in (data.get("clarifications") or []) if str(c).strip()] if not plan.topic else []

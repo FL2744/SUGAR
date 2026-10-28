@@ -79,9 +79,17 @@ export function PlanEditor({ plan, platforms, providers, advanced, saving, error
                   </label>))}
               </div>}
             </div>
-            <ChipInput label="Languages" values={draft.languages.filter((l) => l !== "auto")} suggestions={LANGUAGE_SUGGESTIONS}
+            <ChipInput label="Post language filter" values={draft.languages.filter((l) => l !== "auto")} suggestions={LANGUAGE_SUGGESTIONS}
               onChange={(values) => patch({ languages: values.length ? values : ["auto"] })} placeholder="Automatic — add a language code such as ar or fa"
               hint={draft.languages.includes("auto") && draft.languages.length === 1 ? "Automatic: SUGAR detects each item's language." : draft.languages.map(languageName).join(", ")} />
+            <div className="field-block"><span>Search query languages</span>
+              <Segmented label="Search query languages" value={draft.translation.query_language_mode || "auto"}
+                onChange={(query_language_mode) => patch({ translation: { ...draft.translation, query_language_mode, translate_queries: query_language_mode !== "original" } })}
+                options={[{ value: "auto", label: "Automatic multilingual" }, { value: "selected", label: "Choose languages" }, { value: "original", label: "Original terms only" }]} />
+              {draft.translation.query_language_mode === "selected" && <ChipInput label="Query languages" values={draft.translation.query_languages || []} suggestions={LANGUAGE_SUGGESTIONS}
+                onChange={(query_languages) => patch({ translation: { ...draft.translation, query_languages } })} placeholder="Language codes, such as ar, es, fr, zh" />}
+              <small>Automatic uses languages relevant to the geography or post filter; otherwise Arabic, Spanish, French, and Chinese. This changes search terms, not which post languages are accepted. Save, then Rebuild plan to generate and review queries. A planning provider expands topics beyond the built-in glossary. Query limits still apply.</small>
+            </div>
             <div className="field-grid">
               <Field label="From"><input type="date" value={timeframe.start} onChange={(event) => patch({ timeframe: { ...timeframe, start: event.target.value, label: "" } })} /></Field>
               <Field label="Until"><input type="date" value={timeframe.end} onChange={(event) => patch({ timeframe: { ...timeframe, end: event.target.value, label: "" } })} /></Field>

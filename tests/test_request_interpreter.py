@@ -25,6 +25,8 @@ class ScriptedProvider(LLMProvider):
         self.calls = []
 
     def chat(self, messages, **kwargs):
+        if kwargs.get("purpose") == "query_expansion" and not self.script:
+            return ChatResult(text='{"queries": []}')
         self.calls.append(messages)
         item = self.script.pop(0)
         if isinstance(item, Exception):
@@ -157,3 +159,33 @@ def test_llm_query_expansion_is_added_and_bounded():
 
 def test_parse_json_object_strips_fences():
     assert parse_json_object("```json\n{\"a\": 1}\n```") == {"a": 1}
+
+
+def test_selected_query_languages_are_separate_and_enabled_with_full_budget():
+    plan = interpret_request("democracy in Egypt", today=TODAY).plan
+    plan.translation.update(query_language_mode="selected", query_languages=["es", "fr"])
+    provider = ScriptedProvider([{"queries": [
+        {"text": "democracia Egipto", "language": "es", "rationale": "Spanish query"},
+        {"text": "démocratie Égypte", "language": "fr", "rationale": "French query"},
+    ]}])
+    rebuilt, _ = rebuild_plan_queries(plan, provider=provider)
+    assert rebuilt.languages == ["auto"]
+    assert {"es", "fr"} <= {q["language"] for q in rebuilt.queries if q["enabled"]}
+    assert sum(q["enabled"] for q in rebuilt.queries) <= rebuilt.limits["query_count"]
+    assert rebuilt.to_dict()["translation"]["query_languages"] == ["es", "fr"]
+
+
+def test_original_query_mode_disables_generated_translations():
+    plan = interpret_request("democracy in Egypt", today=TODAY).plan
+    plan.translation.update(query_language_mode="original", translate_queries=False)
+    rebuilt, _ = rebuild_plan_queries(plan)
+    assert all(not q["language"] for q in rebuilt.queries)
+
+
+def test_initial_interpretation_generates_multilingual_queries():
+    provider = ScriptedProvider([GOOD, {"queries": [
+        {"text": "ديمقراطية", "language": "ar", "rationale": "Arabic topic"}
+    ]}])
+    result = run(provider)
+    assert any(q["origin"] == "llm" or q["language"] == "ar" for q in result.plan.queries if q["enabled"])
+    assert len(provider.calls) == 2
