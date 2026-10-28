@@ -613,3 +613,20 @@ test("Add provider does not wait for platform status", async ({ page }) => {
   await expect(page.getByRole("combobox", { name: /^Model/ })).toHaveValue("test-model", { timeout: 1500 });
   release();
 });
+
+test("Setup keeps model choices after changing the OpenAI model", async ({ page }) => {
+  await mockApi(page, []);
+  await page.route(/\/api\/providers\/test$/, (route) => route.fulfill({ headers: corsHeaders, json: { report: { ok: true, total_ms: 10, checks: [], available_models: ["first-model", "MixedCase-model"] } } }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Setup", exact: true }).click();
+  await page.getByRole("radio", { name: /^OpenAI/ }).click();
+  await page.getByLabel("API key", { exact: true }).fill("synthetic-test-key");
+  await page.getByLabel("Model", { exact: true }).fill("first-model");
+  await page.getByRole("button", { name: "Test connection", exact: true }).click();
+  await page.getByRole("combobox", { name: "Available models", exact: true }).selectOption("MixedCase-model");
+  await expect(page.getByLabel("Model", { exact: true })).toHaveValue("MixedCase-model");
+  await expect(page.getByRole("combobox", { name: "Available models", exact: true })).toHaveValue("MixedCase-model");
+  await expect(page.getByRole("button", { name: "Save provider", exact: true })).toBeDisabled();
+  await page.getByLabel("Model", { exact: true }).fill("custom-model");
+  await expect(page.getByRole("option", { name: "MixedCase-model", exact: true }).last()).toHaveCount(1);
+});

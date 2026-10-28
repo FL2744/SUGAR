@@ -26,6 +26,7 @@ export function Onboarding({ prefs, onSavePrefs, onFinish, onOpenSettings, onTry
   const [choice, setChoice] = useState<Choice>("none");
   const [secret, setSecret] = useState("");
   const [model, setModel] = useState("");
+  const [models, setModels] = useState<string[]>([]);
   const [types, setTypes] = useState<ProviderType[]>([]);
   const [report, setReport] = useState<ConnectionReport | null>(null);
   const [busy, setBusy] = useState("");
@@ -44,6 +45,7 @@ export function Onboarding({ prefs, onSavePrefs, onFinish, onOpenSettings, onTry
     try {
       const result = await research.testDraftProvider(profile(), secret.trim());
       setReport(result);
+      setModels(result.available_models || []);
     } catch (issue) { setError(issue instanceof Error ? issue.message : String(issue)); } finally { setBusy(""); }
   };
   const saveProvider = async () => {
@@ -64,7 +66,7 @@ export function Onboarding({ prefs, onSavePrefs, onFinish, onOpenSettings, onTry
 
   const needsKey = choice === "openai" || choice === "arc";
   const canTest = needsKey && secret.trim().length > 7 && !((report?.available_models.length || 0) > 0 && !model.trim());
-  const models = report?.available_models || [];
+
 
   return (
     <section className="page-content setup-page">
@@ -72,9 +74,11 @@ export function Onboarding({ prefs, onSavePrefs, onFinish, onOpenSettings, onTry
       <div className="form-stack">
         <section className="panel settings-panel"><h2>Your name</h2><label className="field-block"><span>What should we call you? <small>Optional; shown on reviews and comments</small></span><input value={name} maxLength={60} onChange={(event) => setName(event.target.value)} placeholder="e.g. Alex Rivera" /></label><button className="button button-secondary" onClick={() => onSavePrefs({ ...prefs, name: name.trim() })}>Save name</button></section>
         <section className="panel settings-panel"><h2>AI model (optional)</h2><p>AI can interpret requests, translate, and suggest broad locations. Without it, you can still collect public sources, organize results, and review evidence.</p>
-          <div className="choice-grid" role="radiogroup" aria-label="AI model provider">{CHOICES.map((c) => <button key={c.id} type="button" role="radio" aria-checked={choice === c.id} className={`choice-card ${choice === c.id ? "on" : ""}`} onClick={() => { setChoice(c.id); setReport(null); setError(""); }}><strong>{c.title}</strong><small>{c.body}</small></button>)}</div>
-          {needsKey && <div className="form-stack"><label className="field-block"><span>{type?.credential_label || "API key"}</span><input type="password" autoComplete="off" spellCheck={false} value={secret} onChange={(event) => { setSecret(event.target.value); setReport(null); }} /></label>
-            <label className="field-block"><span>Model</span><input value={model} autoCapitalize="none" autoCorrect="off" spellCheck={false} list="setup-models" onChange={(event) => { setModel(event.target.value); setReport(null); }} placeholder={type?.default_model || "model name"} /><datalist id="setup-models">{models.map((m) => <option key={m} value={m} />)}</datalist></label>
+          <div className="choice-grid" role="radiogroup" aria-label="AI model provider">{CHOICES.map((c) => <button key={c.id} type="button" role="radio" aria-checked={choice === c.id} className={`choice-card ${choice === c.id ? "on" : ""}`} onClick={() => { setChoice(c.id); setModel(types.find((t) => t.id === c.id)?.default_model || ""); setModels([]); setReport(null); setError(""); }}><strong>{c.title}</strong><small>{c.body}</small></button>)}</div>
+          {needsKey && <div className="form-stack"><label className="field-block"><span>{type?.credential_label || "API key"}</span><input type="password" autoComplete="off" spellCheck={false} value={secret} onChange={(event) => { setSecret(event.target.value); setModels([]); setReport(null); }} /></label>
+            <label className="field-block"><span>Model</span><input type="text" aria-label="Model" value={model} autoCapitalize="none" autoCorrect="off" spellCheck={false} onChange={(event) => { setModel(event.target.value); setReport(null); }} placeholder="Type a model name here" /></label>
+            {models.length > 0 && <label className="field-block"><span>Available models</span><select value={models.includes(model) ? model : ""} onChange={(event) => { setModel(event.target.value); setReport(null); }}><option value="">Choose a model or type its name above</option>{models.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>}
+            <p className="footnote">Type a model name, or test your connection to load available models. After changing the model, test it before saving.</p>
             <div className="preview-actions"><button className="button button-secondary" onClick={() => void test()} disabled={!canTest || Boolean(busy)}>{busy === "test" ? <Spinner /> : "Test connection"}</button><button className="button button-primary" onClick={() => void saveProvider()} disabled={!report?.ok || Boolean(busy)}>{busy === "save" ? <Spinner /> : "Save provider"}</button></div>{report && <ConnectionResult report={report} />}<p className="footnote">Keys stay in session memory by default. Enter them again after restarting.</p></div>}
           {choice === "other" && <button className="button button-secondary" onClick={onOpenSettings}>Configure another provider in Settings</button>}
           {connected && <p className="notice notice-ok" role="status">{connected} is connected and set as your default.</p>}{error && <div className="inline-error" role="alert">{error}</div>}
