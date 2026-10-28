@@ -62,7 +62,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   const posts = useMemo(() => windowPosts(allPosts, since, effectiveUntil, sort), [allPosts, since, effectiveUntil, sort]);
   const rangeError = Boolean(since && effectiveUntil && since > effectiveUntil);
   useEffect(() => { setPlaying(false); setFrame(null); }, [allPosts]);
-  useEffect(() => { setListPage(0); }, [since, effectiveUntil, sort, verdictFilter, days]);
+  useEffect(() => { setListPage(0); }, [projectId, since, effectiveUntil, sort, verdictFilter, days, minConfidence]);
   useEffect(() => {
     if (!playing) return;
     const timer = window.setInterval(() => setFrame((current) => Math.min((current ?? -1) + 1, bins.length - 1)), 1000);
