@@ -4,6 +4,13 @@ Notable SUGAR changes are recorded here. Dates refer to the repository integrati
 
 ## 2.0.0 - 2026-10-28
 
+### Replacement release
+
+- Queue desktop requests while the Python engine starts and show the expected one-minute startup notice.
+- Automatically use X full-archive search for older date ranges; validate dates and stop retrying bad requests.
+- Add default multilingual query generation, selectable query languages, and balanced enabled searches.
+- Make Bilibili, Wikipedia, News (GDELT), and Weibo opt-in through explicit platform selection.
+
 ### Desktop workflow and project management
 
 - Setup is now an optional, single-page sidebar destination above Settings. It opens only when selected, and research can start without completing it.

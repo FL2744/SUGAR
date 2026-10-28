@@ -6,7 +6,7 @@
 
 SUGAR is a cross-platform public-source research system for collecting social-media material, preserving provenance, organizing evidence, conducting spatial and structured analysis, and producing reviewable research products. The public engine is target-neutral; project-specific targets, query plans, and case data belong in non-public project configuration.
 
-Current package version: **1.9.0**.
+Current package version: **2.0.0**.
 
 License: **Apache License 2.0**. Copyright 2026 Alejandro Grenier, William Taggart, and contributors from Diplomacy Lab.
 

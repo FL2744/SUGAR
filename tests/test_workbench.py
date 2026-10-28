@@ -66,7 +66,7 @@ def test_acceptance_flow_from_plain_sentence_to_inspectable_reproducible_results
     out = wb.interpret(sentence, mode="deterministic", project=proj, today=TODAY)
     assert out["method"] == "deterministic" and not out["needs_manual_entry"] and out["clarifications"] == []
     rows = {r["label"]: r["value"] for r in out["summary"]}
-    assert rows == {"Research topic": "democracy", "Region": "Middle East", "Platforms": "All enabled platforms", "Languages": "Automatic",
+    assert rows == {"Research topic": "democracy", "Region": "Middle East", "Platforms": "Default platforms (Bilibili, Wikipedia, News/GDELT, and Weibo require explicit selection)", "Languages": "Automatic",
                     "Date range": "No restriction", "Collection depth": "Standard"}
     assert out["plan"]["queries"]                                               # the plan is auditable before running
     saved = prepare(wb, proj, sentence)
@@ -226,7 +226,7 @@ def test_interactive_retry_inside_an_active_run(tmp_path):
         return []
 
     wb, proj = bench(tmp_path, {"weibo": spec("weibo", flaky), "bluesky": spec("bluesky", hold)}), project(tmp_path)
-    prepare(wb, proj)
+    prepare(wb, proj, source_scope="selected", platforms=["weibo", "bluesky"])
     run_id = wb.start_run(proj)["run"]["run_id"]
     pipeline = wb.pipeline(proj, run_id)
     for _ in range(100):
