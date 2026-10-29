@@ -96,6 +96,30 @@ def _report(project: ResearchProject, run: dict[str, Any], items: list[Any], tra
     return "\n".join(lines)
 
 
+def _activity_snapshot(path: Path) -> tuple[list[dict[str, Any]], list[str]]:
+    """Read one byte snapshot; an append in progress may end mid-JSON or mid-UTF-8."""
+    if not path.is_file():
+        return [], []
+    data = path.read_bytes()
+    lines = data.split(b"\n")
+    events = []
+    warnings = []
+    for index, line in enumerate(lines):
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+            if not isinstance(event, dict):
+                raise ValueError("Expected an activity object")
+        except (ValueError, UnicodeError) as exc:
+            if index == len(lines) - 1 and not data.endswith(b"\n"):
+                warnings.append("The activity log ended with an unfinished entry. This export includes complete entries only; download again after the run finishes for a newer snapshot.")
+                break
+            raise ValueError(f"The saved activity log has an invalid entry on line {index + 1}. The original log has not been changed.") from exc
+        events.append(event)
+    return events, warnings
+
+
 def export_run(project: ResearchProject, run_id: str, *, make_zip: bool = True) -> dict[str, Any]:
     record = project.get_run(run_id)
     if record is None:
@@ -104,7 +128,7 @@ def export_run(project: ResearchProject, run_id: str, *, make_zip: bool = True) 
     items = project.load_items(run_id)
     translations = project.load_translations(run_id)
     events_path = project.events_path(run_id)
-    events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines() if line.strip()] if events_path.is_file() else []
+    events, export_warnings = _activity_snapshot(events_path)
     out_dir = project.root / "exports" / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -132,6 +156,8 @@ def export_run(project: ResearchProject, run_id: str, *, make_zip: bool = True) 
         "activity-log.jsonl": _jsonl(events),
         "report.md": redaction.redact_text(_report(project, run, items, translations)).encode("utf-8"),
     }
+    if export_warnings:
+        files["export-notes.txt"] = ("\n".join(export_warnings) + "\n").encode("utf-8")
     from .analysis_export import analysis_files
     files.update(analysis_files(project, accepted))
     from .evidence_desk import approved_ai_files
@@ -145,6 +171,7 @@ def export_run(project: ResearchProject, run_id: str, *, make_zip: bool = True) 
                                     "created_at", "started_at", "finished_at", "counts", "sources", "errors", "warnings", "completeness", "metrics", "stage_states",
                                     "generated_searches", "software_version")},
         "files": {name: {"sha256": _sha256(data), "bytes": len(data)} for name, data in sorted(files.items())},
+        "export_warnings": export_warnings,
         "notes": "Credentials are never stored in run records or exports. Verify with sugar_core.research_export.verify_export.",
     }
     files["run-manifest.json"] = json.dumps(redaction.redact(manifest), ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
