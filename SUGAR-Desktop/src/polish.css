@@ -134,3 +134,15 @@ select, input, textarea { color-scheme: inherit; }
 
 /* Verification changes button style; keep text and background contrast in the same frame. */
 .post-detail .pill-row .button{transition:transform .15s ease}
+
+/* Keep the group available while reading its selected post. */
+.map-detail.post-browser{height:calc(100dvh - 17rem);min-height:24rem;max-height:none;display:grid;grid-template-rows:minmax(0,1fr);overflow:hidden;gap:0;padding:0}
+.map-detail.post-browser.has-group{grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
+.post-browser-group,.post-browser-detail{position:relative;min-height:0;padding:.9rem;overflow:auto;display:flex;flex-direction:column;gap:.5rem}
+.post-browser-group{border-bottom:1px solid var(--wb-line)}
+.post-browser-group .post-list{flex:1 0 8rem;max-height:none;min-height:0;overflow:auto}
+.post-browser-group .post-list button[aria-pressed="true"]{background:var(--wb-line);outline:2px solid currentColor;outline-offset:-2px}
+.post-browser-detail .post-text{max-height:none;overflow:visible}
+
+.post-browser-group .post-list button{white-space:normal;overflow-wrap:anywhere}
+.post-browser-group details{flex:none}

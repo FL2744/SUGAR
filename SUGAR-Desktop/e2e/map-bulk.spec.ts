@@ -281,3 +281,25 @@ test("project deletion requires confirmation and clears the open project", async
   await deleted;
   await expect.poll(() => page.evaluate(() => localStorage.getItem("sugar.projectId"))).toBeNull();
 });
+
+test("map group list stays above selected post in two scrolling halves", async ({ page }) => {
+  await mockApp(page, { count: 60 });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/"); await navigate(page, "Map");
+  await page.getByRole("group", { name: "Top targets" }).getByRole("button", { name: /Belgium/ }).click();
+  const browser = page.getByRole("complementary", { name: "Map post browser" });
+  const group = browser.getByRole("region", { name: "Selected target" });
+  const details = browser.getByRole("region", { name: "Selected post" });
+  await expect(group.locator(".post-list li")).toHaveCount(60);
+  const firstText = (await group.locator(".post-list button").first().textContent())!.match(/Synthetic example \d+\./)![0];
+  await group.locator(".post-list button").first().click();
+  await expect(details).toContainText(firstText);
+  await expect(group.locator(".post-list button").first()).toHaveAttribute("aria-pressed", "true");
+  const top = (await group.boundingBox())!; const bottom = (await details.boundingBox())!;
+  expect(Math.abs(top.height - bottom.height)).toBeLessThan(3);
+  expect(bottom.y).toBeGreaterThanOrEqual(top.y + top.height - 1);
+  const laterText = (await group.locator(".post-list button").nth(50).textContent())!.match(/Synthetic example \d+\./)![0];
+  await group.locator(".post-list button").nth(50).click();
+  await expect(details).toContainText(laterText);
+  await expect(group.locator(".post-list li")).toHaveCount(60);
+});

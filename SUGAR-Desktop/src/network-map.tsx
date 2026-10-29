@@ -76,9 +76,9 @@ function postColor(style: PostStyle, cluster: boolean): ExpressionSpecification 
 }
 
 /** Posts, institutions and targets on one map. Posts: yellow = posted from here, hollow = a place the text names (approximate). Targets: rings by country. */
-export function NetworkMap({ rows, networks, mode, lines, selectedId, onSelect, basemap, posts, layers, selectedPost, onSelectPost, selectedTarget, onSelectTarget, postStyle = "points", timeDomain }: {
+export function NetworkMap({ rows, networks, mode, lines, selectedId, onSelect, basemap, posts, layers, selectedPost, onSelectPost, selectedTarget, onSelectTarget, onSelectCluster, postStyle = "points", timeDomain }: {
   rows: Institution[]; networks: NetworkRow[]; mode: MapMode; lines: Line[]; selectedId: string; onSelect: (id: string) => void; basemap: Basemap;
-  posts: PostMap | null; layers: PostLayers; selectedPost: string; onSelectPost: (id: string) => void; selectedTarget: string; onSelectTarget: (name: string) => void;
+  posts: PostMap | null; layers: PostLayers; selectedPost: string; onSelectPost: (id: string) => void; selectedTarget: string; onSelectTarget: (name: string) => void; onSelectCluster: (ids: string[]) => void;
   postStyle?: PostStyle; timeDomain?: [number, number];
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -88,6 +88,8 @@ export function NetworkMap({ rows, networks, mode, lines, selectedId, onSelect, 
   const select = useRef(onSelect);
   const selectPost = useRef(onSelectPost);
   const selectTarget = useRef(onSelectTarget);
+  const selectCluster = useRef(onSelectCluster);
+  useEffect(() => { selectCluster.current = onSelectCluster; }, [onSelectCluster]);
   const [ready, setReady] = useState(0);
   const [error, setError] = useState("");
   const initial = useRef(basemap);
@@ -165,6 +167,13 @@ export function NetworkMap({ rows, networks, mode, lines, selectedId, onSelect, 
             const feature = event.features?.[0];
             if (!feature || feature.geometry.type !== "Point") return;
             const center = feature.geometry.coordinates as [number, number];
+            if (source === POSTS) {
+              void (m.getSource(source) as GeoJSONSource).getClusterLeaves(Number(feature.properties?.cluster_id), Number(feature.properties?.point_count), 0)
+                .then((leaves) => selectCluster.current(leaves.map((leaf) => String(leaf.properties?.id || "")).filter(Boolean)))
+                .catch(() => setError("Could not load this cluster. Try selecting it again."));
+              return;
+            }
+
             void (m.getSource(source) as GeoJSONSource).getClusterExpansionZoom(Number(feature.properties?.cluster_id)).then((zoom) => m.easeTo({ center, zoom })).catch(() => undefined);
           });
         }

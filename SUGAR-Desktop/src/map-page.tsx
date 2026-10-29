@@ -37,6 +37,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   const [allPosts, setPosts] = useState<PostMap | null>(null);
   const [basemap, setBasemap] = useState<Basemap>(dark ? "dark" : "streets");
   const [layers, setLayers] = useState<PostLayers>({ posts: true, targets: true, flows: false, institutions: true });
+  const [clusterPosts, setClusterPosts] = useState<string[]>([]);
   const [selectedPost, setSelectedPost] = useState("");
   const [verdictFilter, setVerdictFilter] = useState("");
   const [days, setDays] = useState("");
@@ -101,7 +102,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
     });
   }, [showLines, overlap, byId, nearKm, hidden]);
 
-  const pickedTarget = posts?.targets.find((t) => t.name === selectedTarget);
+  const pickedTarget = clusterPosts.length ? { name: "this cluster", posts: (posts?.pins || []).filter((p) => clusterPosts.includes(p.item_id)).length, item_ids: clusterPosts, last_24h: 0, verified: (posts?.pins || []).filter((p) => clusterPosts.includes(p.item_id) && p.verified).length, platforms: {} as Record<string, number>, languages: {} as Record<string, number>, cities: {} as Record<string, number> } : posts?.targets.find((t) => t.name === selectedTarget);
   const targetPosts = useMemo(() => { const ids = new Set(pickedTarget?.item_ids || []); return (posts?.pins || []).filter((p) => ids.has(p.item_id)); }, [pickedTarget, posts]);
   const exportMapped = async (target = "") => {
     setExporting(true); setError("");
@@ -198,16 +199,17 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
           </Collapsible>
           {sentiment && <div className="map-axis-summary" role="status">{(["valence", "intensity", "direction"] as const).map((axis) => { const score = axisSummary(posts?.pins || [], axis); return <span key={axis}>{titleCase(axis)}: <strong>{score.mean === null ? "Unscored" : score.mean.toFixed(2)}</strong> <small>(n={score.n.toLocaleString()})</small></span>; })}<small>{allPosts?.sentiment_note || "Exploratory English lexical indicators, including English translations. Unsupported language is unscored."}</small></div>}
           {(posts?.targets.length ?? 0) > 0 && <div className="top-strip" role="group" aria-label="Top targets"><span className="muted">Where posts are about:</span>
-            {posts!.targets.slice(0, 8).map((t) => <button key={t.name} className={`chip-toggle ${selectedTarget === t.name ? "on" : ""}`} aria-pressed={selectedTarget === t.name} onClick={() => { setSelected(""); setSelectedPost(""); setSelectedTarget(t.name); }}>{t.name} <strong>{t.posts}</strong>{t.last_24h > 0 && <small> · {t.last_24h} today</small>}</button>)}</div>}
+            {posts!.targets.slice(0, 8).map((t) => <button key={t.name} className={`chip-toggle ${selectedTarget === t.name ? "on" : ""}`} aria-pressed={selectedTarget === t.name} onClick={() => { setSelected(""); setSelectedPost(""); setClusterPosts([]); setSelectedTarget(t.name); }}>{t.name} <strong>{t.posts}</strong>{t.last_24h > 0 && <small> · {t.last_24h} today</small>}</button>)}</div>}
 
           <div className="map-stats" role="status">
             {loading && <Spinner />}<strong>{visible.filter((r) => r.placed).length}</strong> institutions placed · <strong>{data?.unplaced ?? 0}</strong> not placed · <strong>{(posts?.pins.length ?? 0).toLocaleString()}</strong> of {(allPosts?.pins.length ?? 0).toLocaleString()} located posts
             {allPosts?.coverage && <> · {allPosts.coverage.unlocated_posts.toLocaleString()} posts without a mapped location</>}
             {overlap && <> · <strong>{near}</strong> subject institutions have a reference institution within {nearKm} km</>}
           </div>
-          {view === "map" ? <NetworkMap key={projectId} rows={visible} networks={networks} mode={mode} lines={lines} selectedId={selected} onSelect={(id) => { setSelectedPost(""); setSelectedTarget(""); setSelected(id); }} basemap={basemap} postStyle={postStyle} timeDomain={timeDomain}
-            posts={posts} layers={layers} selectedPost={selectedPost} onSelectPost={(id) => { setSelected(""); setSelectedTarget(""); setSelectedPost(id); }}
-            selectedTarget={selectedTarget} onSelectTarget={(name) => { setSelected(""); setSelectedPost(""); setSelectedTarget(name); }} />
+          {view === "map" ? <NetworkMap key={projectId} rows={visible} networks={networks} mode={mode} lines={lines} selectedId={selected} onSelect={(id) => { setSelectedPost(""); setClusterPosts([]); setSelectedTarget(""); setSelected(id); }} basemap={basemap} postStyle={postStyle} timeDomain={timeDomain}
+            posts={posts} layers={layers} selectedPost={selectedPost} onSelectPost={(id) => { setSelected(""); setClusterPosts([]); setSelectedTarget(""); setSelectedPost(id); }}
+            onSelectCluster={(ids) => { setSelected(""); setSelectedTarget(""); setSelectedPost(""); setClusterPosts(ids); }}
+            selectedTarget={selectedTarget} onSelectTarget={(name) => { setSelected(""); setSelectedPost(""); setClusterPosts([]); setSelectedTarget(name); }} />
             : <div className="project-table" role="table" aria-label="Institutions on the map">
                 <div className="project-table-head" role="row"><span role="columnheader">Institution</span><span role="columnheader">Status</span><span role="columnheader">Where</span><span role="columnheader">Support</span></div>
                 {layers.posts && (posts?.pins || []).slice(listPage * 100, (listPage + 1) * 100).map((p) => <button key={p.item_id} className="project-row" role="row" onClick={() => { setSelected(""); setSelectedPost(p.item_id); }}><span role="cell"><strong dir="auto">{p.author || "Unknown author"}</strong> <small className="muted">{p.platform} · {p.published_at ? p.published_at.slice(0, 10) : "date unknown"}</small></span>
@@ -222,19 +224,20 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             <p className="footnote">{overlap.method}</p></details>}
         </div>
 
-        {pickedTarget && !pickedPost && (
-          <aside className="map-detail target-detail" aria-label="Selected target">
-            <button className="inspector-close" onClick={() => setSelectedTarget("")} aria-label="Close">×</button>
+        {(pickedTarget || pickedPost) && <aside className={`map-detail post-browser ${pickedTarget ? "has-group" : ""}`} aria-label="Map post browser">
+        {pickedTarget && (
+          <section className="target-detail post-browser-group" aria-label="Selected target">
+            <button className="inspector-close" onClick={() => { setClusterPosts([]); setSelectedTarget(""); setSelectedPost(""); }} aria-label="Close">×</button>
             <h3>Posts about {pickedTarget.name}</h3>
             <div className="pill-row"><Pill tone="info">{pickedTarget.posts} post{pickedTarget.posts === 1 ? "" : "s"}</Pill>{pickedTarget.last_24h > 0 && <Pill tone="warn">{pickedTarget.last_24h} in the last 24 hours</Pill>}<Pill tone={pickedTarget.verified ? "ok" : "neutral"}>{pickedTarget.verified} verified</Pill></div>
-            <p className="muted">Places posts concern, from named places or evidence-backed model suggestions. Locations are approximate; regions stay regional.</p>
-            <p><strong>Platforms</strong> {Object.entries(pickedTarget.platforms).map(([k, v]) => `${k} ${v}`).join(" · ")}<br /><strong>Languages</strong> {Object.entries(pickedTarget.languages).map(([k, v]) => `${k} ${v}`).join(" · ")}
-              {Object.keys(pickedTarget.cities).length > 0 && <><br /><strong>Cities named</strong> {Object.entries(pickedTarget.cities).map(([k, v]) => `${k} ${v}`).join(" · ")}</>}</p>
-            <ul className="post-list">{targetPosts.slice(0, 40).map((p) => <li key={p.item_id}><button className="button button-quiet button-small" onClick={() => { setSelectedTarget(""); setSelectedPost(p.item_id); }}><strong dir="auto">{p.author || "Unknown"}</strong> · <span dir="auto">{p.original_text.slice(0, 70)}</span></button></li>)}</ul>
-            <button className="button button-secondary button-small" disabled={exporting || rangeError} onClick={() => void exportMapped(pickedTarget.name)}>Export these posts for analysis</button>
-          </aside>)}
+            {!clusterPosts.length && <details><summary>About this group</summary><p className="muted">Places posts concern, from named places or evidence-backed model suggestions. Locations are approximate; regions stay regional.</p></details>}
+            {!clusterPosts.length && <details><summary>Platforms and languages</summary><p><strong>Platforms</strong> {Object.entries(pickedTarget.platforms).map(([k, v]) => `${k} ${v}`).join(" · ")}<br /><strong>Languages</strong> {Object.entries(pickedTarget.languages).map(([k, v]) => `${k} ${v}`).join(" · ")}
+              {Object.keys(pickedTarget.cities).length > 0 && <><br /><strong>Cities named</strong> {Object.entries(pickedTarget.cities).map(([k, v]) => `${k} ${v}`).join(" · ")}</>}</p></details>}
+            <ul className="post-list">{targetPosts.map((p) => <li key={p.item_id}><button className="button button-quiet button-small" onClick={() => setSelectedPost(p.item_id)} aria-pressed={selectedPost === p.item_id}><strong dir="auto">{p.author || "Unknown"}</strong> · <span dir="auto">{p.original_text.slice(0, 70)}</span></button></li>)}</ul>
+            {!clusterPosts.length && <button className="button button-secondary button-small" disabled={exporting || rangeError} onClick={() => void exportMapped(pickedTarget.name)}>Export these posts for analysis</button>}
+          </section>)}
         {pickedPost && (
-          <aside className="map-detail post-detail" aria-label="Selected post">
+          <section className="post-browser-detail" aria-label="Selected post">
             <button className="inspector-close" onClick={() => setSelectedPost("")} aria-label="Close">×</button>
             <h3 dir="auto">{pickedPost.author || "Unknown author"}</h3>
             <p className="muted">{pickedPost.platform} · {pickedPost.published_at ? formatTime(pickedPost.published_at) : "date unknown"}</p>
@@ -247,7 +250,9 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             {pickedPost.targets.length > 0 && <p><strong>About</strong> {pickedPost.targets.map((t) => t.city ? `${t.city}, ${t.name}` : t.name).join(", ")} <small className="muted">named or inferred; approximate location</small></p>}
             <div className="pill-row"><button className={`button ${pickedPost.verified ? "button-secondary" : "button-primary"} button-small`} onClick={() => void setVerified(pickedPost.item_id, !pickedPost.verified)}>{pickedPost.verified ? "✓ Verified. Undo" : "✓ Mark verified"}</button>
               {pickedPost.url && <a className="button button-quiet button-small" href={pickedPost.url} target="_blank" rel="noreferrer noopener">Open post</a>}</div>
-          </aside>)}
+          </section>)}
+        {pickedTarget && !pickedPost && <section className="post-browser-detail" aria-label="Selected post"><p className="muted">Select a post above to read its details.</p></section>}
+        </aside>}
         {picked && !pickedPost && !pickedTarget && (
           <aside className="map-detail" aria-label="Selected institution">
             <button className="inspector-close" onClick={() => setSelected("")} aria-label="Close">×</button>
