@@ -146,3 +146,5 @@ select, input, textarea { color-scheme: inherit; }
 
 .post-browser-group .post-list button{white-space:normal;overflow-wrap:anywhere}
 .post-browser-group details{flex:none}
+
+.post-browser-detail .pill-row .button{transition:transform .15s ease}
