@@ -118,6 +118,7 @@ export type Institution = {
   activity_assessment?: ActivityAssessment;
   program_assessment?: { codes: Array<{ field: string; label: string; quote: string; rule?: string }>; review_state: string; basis: string };
   entity_id: string; name: string; network: string; entity_type: string; status: string; status_date: string; country: string; region: string; city: string;
+  source_status_claim?: string; status_basis?: string;
   latitude: number | null; longitude: number | null; placed: boolean; location_precision: string; aliases: string[]; programs: string[]; audiences: string[];
   delivery_modes: string[]; hosts: string[]; source_count: number; confidence: Confidence; conflicts: string[]; last_verified: string; last_evidence: string;
   activity: { items: number; recent_items: number }; updated_at: string;
@@ -134,6 +135,47 @@ export type InstitutionCandidate = {
 };
 
 export type NetworkRow = { name: string; role: "subject" | "reference"; label: string; color: string; institutions: number; placed: number };
+export type NetworkCatalogDataset = { id: string; network: string; label: string; role: "subject" | "reference"; color: string; records: number; placed: number; status_counts: Record<"active" | "closed" | "unknown", number>; source: string; summary: string; default_selected: boolean };
+export type PublicationAuditCandidate = {
+  title: string; url: string; match: string; publication_date: string; date_basis: string;
+  page_date_candidate: string; search_age_label: string; source_scope: string;
+};
+export type PublicationSearchRow = {
+  entity_id: string; name: string; country: string; city: string; network: string; network_label: string;
+  checked_on: string; result: string; query: string; fallback_query: string;
+  exact_publication_date: string; date_shown_in_result: string; search_age_label: string; date_basis: string;
+  evidence_scope: string; match_strength: string; evidence_title: string; evidence_url: string;
+  candidates: PublicationAuditCandidate[];
+};
+export type PublicationAudit = {
+  checked_on: string; rows_searched: number; matched_page: number; exact_publication_date_candidate: number;
+  relative_search_age_label: number; date_shown_in_result: number; any_date_or_age_signal: number;
+  no_relevant_result: number; source_scope_counts: Record<string, number>; result_counts: Record<string, number>;
+  by_network: Record<string, { rows: number; matched_page: number; exact_date: number; relative_label: number; page_date_candidate: number; no_date_or_page: number }>;
+  method: string; caveat: string; records: PublicationSearchRow[];
+};
+export type NetworkCatalog = {
+  catalog_id: string; label: string; as_of: string; use_note: string; networks: NetworkCatalogDataset[];
+  source_inventory: Array<{ file: string; sheet: string; rows: number; notes: string }>;
+  data_quality_notes: string[];
+  activity_audit: {
+    core_records: number; supplementary_records: number; core_records_with_last_post_date: number; supplementary_records_with_last_post_date: number;
+    named_site_checks: number; named_site_checks_with_dated_signals: number; source_status_claim_counts: Record<string, Record<string, number>>; interpretation: string;
+  };
+  publication_audit: PublicationAudit;
+  workbook_status_assumptions: { by_network: Record<string, Record<"active" | "closed" | "unknown", number>>; basis: string };
+  activity_pulse: Array<{ network: string; checked_on: string; scope: string; status: string; source_url: string; signal: string }>;
+  site_activity_spot_checks: Array<{
+    network: string; entity_id: string; entity_name: string; country: string; checked_on: string; assessment: string;
+    signals: Array<{ date: string; kind: string; title: string; note: string; source_url: string; source_title: string; source_quality: string; related_sources?: Array<{ title: string; url: string }> }>;
+  }>;
+  overlap_claim_counts: Record<string, number>;
+  program_overlap_interpretations: Array<{
+    program_type: string; niche_term_ids: string; american_spaces_counterpart: string; overlap_assessment: string;
+    team_judgment: string; strongest_regions: string; source_origin: { file?: string; sheet?: string; row?: number };
+  }>;
+  curated_search_suggestions: Array<{ id: string; label: string; query: string; rationale: string }>;
+};
 export type NetworkPreview = { file_id: string; filename: string; suggested_mapping: Record<string, string>; columns?: string[]; row_count: number; valid_rows: number; error_count: number; errors: string[]; sample: Array<Record<string, unknown>> };
 export type SeedRow = { seed_source: string; seed_id: string; name: string; description: string; aliases: string[]; country: string; city?: string; latitude: number | null; longitude: number | null; opened_date: string; closed_date: string; status: string; website: string; source_url: string };
 export type OverlapRow = {

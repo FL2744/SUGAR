@@ -57,7 +57,14 @@ def test_digest_baselines_then_reports_institution_changes(tmp_path):
     assert third["summary"] == "Nothing changed since the last check." and [d["id"] for d in mon.list_digests(proj)] == [third["id"], second["id"], first["id"]]
 
 
-def test_scheduler_runs_due_monitors_defers_conflicts_and_digests_finished_passes(tmp_path):
+def test_scheduler_runs_due_monitors_defers_conflicts_and_digests_finished_passes(tmp_path, monkeypatch):
+    # A separate pipeline test may leave a simulated provider cooldown on the
+    # process-wide pacer while using a no-op sleeper. This test needs its own
+    # pacing state so it exercises scheduler behavior, not cross-test residue.
+    from sugar_core.provider_pacing import SharedRequestPacer
+    import sugar_core.research_pipeline as pipeline_module
+
+    monkeypatch.setattr(pipeline_module, "SHARED_REQUEST_PACER", SharedRequestPacer())
     wb, proj = bench(tmp_path), make_project(tmp_path)
     prepare(wb, proj)
     saved = mon.save_monitor(proj, name="Daily", cadence_hours=24)
@@ -72,6 +79,11 @@ def test_scheduler_runs_due_monitors_defers_conflicts_and_digests_finished_passe
         if row and row.status in mon.TERMINAL:
             break
         time.sleep(0.1)
+    assert row and row.status in mon.TERMINAL, (
+        "scheduled research pass did not finish within 20 seconds: "
+        f"status={row.status}, stage={row.stage}, stage_states={row.stage_states}, "
+        f"sources={row.sources}"
+    )
     clock["now"] += timedelta(hours=1)
     second = scheduler.tick()
     assert second == {"started": 0, "digests": 1}              # finished pass becomes a digest; the monitor is not due again yet

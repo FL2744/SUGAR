@@ -2,6 +2,15 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
+## Unreleased
+
+### Team 4 network catalog and overlap maps
+
+- Bundle the supplied Confucius Institute, Luban Workshop, and American Spaces datasets, plus supplementary lists, provenance, overlap leads, and the row-level public publication search audit.
+- Use source-workbook status labels as explicit map assumptions, preserve human-verified registry overrides, and show status counts and distinct markers across two- and three-network map layers.
+- Add interactive HTML network-map export and six focused, manually selected search suggestions.
+- Document the catalog, source caveats, geolocation coverage, overlap interpretation, and publication-search limitations in the README and `docs/team4-network-catalog.md`.
+
 ## 2.0.0 - 2026-10-28
 
 ### Replacement release

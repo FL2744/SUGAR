@@ -206,6 +206,12 @@ Heat layers represent mapped-record density, **not influence**. Geographic proxi
 
 See [`docs/research-map.md`](docs/research-map.md) and [`docs/spatial-overlap.md`](docs/spatial-overlap.md).
 
+### Built-in Team 4 network catalog
+
+The browser app includes a project-importable catalog compiled from supplied Team 4 workbooks: 586 Confucius Institute rows, 38 detailed Luban Workshop rows, and 559 American Spaces rows, plus separately selectable supplemental lists and overlap leads. The map offers Confucius Institutes + American Spaces, Luban Workshops + American Spaces, and all-three comparison layers, with an interactive standalone HTML export and six manually selectable, focused search suggestions.
+
+Map status follows each source workbook label as a working assumption; human-verified registry status takes precedence. Of the 1,183 core rows, 755 have coordinates and 428 CI rows remain unplaced in the institution list. Workbook labels, team-reported overlaps, and search-result publication dates are leads for review, not independent proof of current operation, partnership, or a location's latest post. The built-in catalog includes a searchable row-level public publication search audit with CSV export. See [`docs/team4-network-catalog.md`](docs/team4-network-catalog.md) for the source inventory, status rules, map behavior, audit method, and limitations.
+
 ## AI use
 
 LLM enrichment and triage are optional. Source text is treated as untrusted data and separated from model instructions. SUGAR does not infer a country from language alone and does not infer private/street-level locations.

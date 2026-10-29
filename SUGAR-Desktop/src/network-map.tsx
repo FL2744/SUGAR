@@ -27,13 +27,15 @@ const TERRAIN: StyleSpecification = {
 const styleFor = (basemap: Basemap): string | StyleSpecification => basemap === "terrain" ? TERRAIN : basemap === "dark" ? "https://tiles.openfreemap.org/styles/dark" : "https://tiles.openfreemap.org/styles/liberty";
 
 const roleOf = (networks: NetworkRow[], name: string) => networks.find((n) => n.name === name)?.role ?? "subject";
+const colorOf = (networks: NetworkRow[], name: string) => networks.find((n) => n.name === name)?.color || (roleOf(networks, name) === "reference" ? "#1f8f6a" : "#d2691e");
 
 function pointCollection(rows: Institution[], networks: NetworkRow[]) {
   return {
     type: "FeatureCollection" as const,
     features: rows.filter((r) => r.placed && r.latitude !== null && r.longitude !== null).map((r) => ({
       type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [r.longitude as number, r.latitude as number] },
-      properties: { id: r.entity_id, name: r.name, status: r.status, role: roleOf(networks, r.network), confidence: r.confidence.level, weight: 1 + r.activity.recent_items * 2 + r.programs.length },
+      properties: { id: r.entity_id, name: r.name, status: r.status, sourceStatusClaim: r.source_status_claim || "", statusBasis: r.status_basis || "",
+        role: roleOf(networks, r.network), color: colorOf(networks, r.network), confidence: r.confidence.level, weight: 1 + r.activity.recent_items * 2 + r.programs.length },
     })),
   };
 }
@@ -130,9 +132,12 @@ export function NetworkMap({ rows, networks, mode, lines, selectedId, onSelect, 
         m.addLayer({ id: "clusters", type: "circle", source: POINTS, filter: ["has", "point_count"], paint: { "circle-color": "#52667f", "circle-radius": ["step", ["get", "point_count"], 16, 15, 21, 50, 27], "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
         m.addLayer({ id: "cluster-count", type: "symbol", source: POINTS, filter: ["has", "point_count"], layout: { "text-field": "{point_count_abbreviated}", "text-size": 12, "text-font": ["Noto Sans Bold"] }, paint: { "text-color": "#fff" } });
         m.addLayer({ id: "points", type: "circle", source: POINTS, filter: ["!", ["has", "point_count"]], paint: {
-          "circle-color": ["case", ["in", ["get", "status"], ["literal", ["closed"]]], "#98a2b0", ["==", ["get", "role"], "reference"], "#1f8f6a", "#d2691e"],
+          "circle-color": ["match", ["get", "status"], "closed", "#98a2b0", "renamed", "#e3c46b", "relocated", "#b7a4d5", "unknown", "#d5dbe3", ["get", "color"]],
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 5, 9, 9], "circle-stroke-width": ["case", ["==", ["get", "confidence"], "low"], 2.2, 1.5],
-          "circle-stroke-color": ["case", ["==", ["get", "confidence"], "low"], "#e0a800", "#ffffff"] } });
+          "circle-stroke-color": ["case", ["==", ["get", "confidence"], "low"], "#e0a800", ["in", ["get", "status"], ["literal", ["closed", "renamed", "relocated", "unknown"]]], "#64748b", "#ffffff"] } });
+        m.addLayer({ id: "status-symbols", type: "symbol", source: POINTS, filter: ["in", ["get", "status"], ["literal", ["closed", "renamed", "relocated", "unknown"]]],
+          layout: { "text-field": ["match", ["get", "status"], "closed", "×", "renamed", "↻", "relocated", "↗", "unknown", "?", ""], "text-size": 10, "text-font": ["Noto Sans Bold"], "text-allow-overlap": true },
+          paint: { "text-color": "#1f2937", "text-halo-color": "#ffffff", "text-halo-width": 1 } });
         m.addLayer({ id: "selected", type: "circle", source: POINTS, filter: ["==", ["get", "id"], ""], paint: { "circle-radius": 13, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#2f6bcb", "circle-stroke-width": 3 } });
         m.addLayer({ id: "labels", type: "symbol", source: POINTS, minzoom: 6, filter: ["!", ["has", "point_count"]], layout: { "text-field": ["get", "name"], "text-size": 11, "text-offset": [0, 1.3], "text-anchor": "top", "text-font": ["Noto Sans Regular"], "text-max-width": 14 },
           paint: { "text-color": ink, "text-halo-color": halo, "text-halo-width": 1.3 } });
@@ -232,7 +237,7 @@ export function NetworkMap({ rows, networks, mode, lines, selectedId, onSelect, 
     const vis = (on: boolean) => (on ? "visible" : "none");
     const heat = mode === "heat";
     m.setLayoutProperty("heat", "visibility", vis(layers.institutions && heat));
-    for (const layer of ["clusters", "cluster-count", "points", "labels", "overlap-lines"]) m.setLayoutProperty(layer, "visibility", vis(layers.institutions));
+        for (const layer of ["clusters", "cluster-count", "points", "status-symbols", "labels", "overlap-lines"]) m.setLayoutProperty(layer, "visibility", vis(layers.institutions));
     for (const layer of ["post-glow", "post-pins", "post-clusters", "post-cluster-count", "post-selected"]) m.setLayoutProperty(layer, "visibility", vis(layers.posts));
     m.setLayoutProperty("post-density", "visibility", vis(layers.posts && postStyle === "density"));
     m.setLayoutProperty("post-glow", "visibility", vis(layers.posts && postStyle === "points"));
@@ -296,7 +301,7 @@ export function NetworkMap({ rows, networks, mode, lines, selectedId, onSelect, 
     <div ref={frame} tabIndex={-1} role={expanded ? "dialog" : undefined} aria-modal={expanded || undefined} aria-label={expanded ? "Expanded research map" : undefined} className={`map-frame network-map ${basemap === "dark" ? "dark" : ""} ${expanded ? "is-expanded" : ""}`}>
       <div className="map-canvas-actions"><button className="button button-secondary button-small" onClick={fitData} disabled={!ready}>Fit visible data</button><button className="button button-secondary button-small" onClick={() => setExpanded(!expanded)} aria-pressed={expanded}>{expanded ? "Return to layout" : "Expand map"}</button></div>
       <div className="map-legend-lite" aria-hidden="true">
-        <span><i className="lg lg-origin" /> Posted from</span><span><i className="lg lg-mention" /> Place named</span><span><i className="lg lg-target" /> Target</span><span><i className="lg lg-inst" /> Institution</span>
+        <span><i className="lg lg-origin" /> Posted from</span><span><i className="lg lg-mention" /> Place named</span><span><i className="lg lg-target" /> Target</span><span><i className="lg lg-inst" /> Institution · network color if active, × closed, ↻ renamed, ↗ relocated, ? unknown</span>
       </div>
       {postStyle !== "points" && <div className={`map-color-legend ${postStyle}`} aria-label="Post color legend"><strong>{postStyle === "density" ? "Origin density" : postStyle === "recency" ? "Publication time" : postStyle === "valence" ? "Negative → positive language" : postStyle === "intensity" ? "Lower → higher intensity" : "Inward → outward language"}</strong><i />
         <small>{postStyle === "density" ? "Recorded origins only · relative density at this zoom" : postStyle === "recency" ? "Older → newer · clusters use latest date" : "Clusters average scored items · gray = unscored"}</small></div>}

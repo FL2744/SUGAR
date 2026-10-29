@@ -22,6 +22,22 @@ PUBLIC_BASELINE_FILES = {
     "sugar_core/workspace_hub.py", "tests/test_official_baselines.py",
 }
 PUBLIC_PROGRAM_FILES = {"sugar_core/mission_rubric.py", "tests/test_activity_edge_cases.py"}
+PUBLIC_TEAM_CATALOG_FILES = {
+    "docs/team4-network-catalog.md",
+    "sugar_core/team_catalog.py",
+    "sugar_core/data/team4_network_catalog.json",
+}
+PUBLIC_TEAM_NAME_FILES = {
+    "README.md",
+    "CHANGELOG.md",
+    "docs/public-repository-boundaries.md",
+    "tests/test_team_catalog.py",
+}
+PUBLIC_TEAM_NAMES = {
+    "Con" + "fucius",
+    "Lu" + "ban",
+    "鲁" + "班工坊",
+}
 
 
 def _patterns_for(relative: str) -> list[re.Pattern]:
@@ -30,6 +46,8 @@ def _patterns_for(relative: str) -> list[re.Pattern]:
         for term in _blocked_terms()
         if not (term == "Con" + "fucius" and relative in PUBLIC_BASELINE_FILES)
         and not (term in {"Lu" + "ban", "鲁" + "班工坊"} and relative in PUBLIC_PROGRAM_FILES)
+        and not (term in PUBLIC_TEAM_NAMES and relative in PUBLIC_TEAM_NAME_FILES)
+        and relative not in PUBLIC_TEAM_CATALOG_FILES
     ]
 
 
@@ -87,3 +105,14 @@ def test_public_baseline_exception_is_limited_to_its_name_and_files():
     assert not any(pattern.search(public_name) for pattern in _patterns_for("sugar_core/official_baselines.py"))
     assert any(pattern.search(mission_marker) for pattern in _patterns_for("sugar_core/official_baselines.py"))
     assert any(pattern.search(public_name) for pattern in _patterns_for("project/watchlist.json"))
+
+
+def test_public_team_catalog_name_exception_does_not_allow_other_mission_markers():
+    public_name = "Con" + "fucius"
+    workshop_name = "Lu" + "ban"
+    mission_marker = "Bei" + "jing"
+    for relative in PUBLIC_TEAM_NAME_FILES:
+        patterns = _patterns_for(relative)
+        assert not any(pattern.search(public_name) for pattern in patterns)
+        assert not any(pattern.search(workshop_name) for pattern in patterns)
+        assert any(pattern.search(mission_marker) for pattern in patterns)

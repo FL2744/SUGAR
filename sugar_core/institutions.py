@@ -167,6 +167,8 @@ def _row(entity: dict[str, Any], links: list[dict[str, Any]], *, window_start: d
     return {
         "entity_id": entity["entity_id"], "name": entity.get("name", ""), "network": entity.get("network", ""), "entity_type": entity.get("entity_type", ""),
         "status": entity.get("status", "unknown"), "status_date": entity.get("status_date", ""), "country": entity.get("country", ""),
+        "source_status_claim": next((str(ref.get("reported_status") or "") for ref in refs if ref.get("reported_status")), ""),
+        "status_basis": next((str(ref.get("status_basis") or "") for ref in refs if ref.get("status_basis")), ""),
         "reported_status_confidence": entity.get("reported_status_confidence", ""),
         "region": entity.get("region", ""), "city": entity.get("city", ""), "latitude": lat if lat not in ("", None) else None,
         "longitude": lon if lon not in ("", None) else None, "placed": lat not in ("", None) and lon not in ("", None),
@@ -181,8 +183,12 @@ def _row(entity: dict[str, Any], links: list[dict[str, Any]], *, window_start: d
 
 
 def list_institutions(project: Any, *, network: str = "", status: str = "", country: str = "", query: str = "", since: str = "",
-                      confidence_level: str = "", placed: str = "", program: str = "", audience: str = "") -> dict[str, Any]:
-    entities = list_entities(project.workspace, filters={"network": network, "status": status, "country": country, "query": query})
+                      confidence_level: str = "", placed: str = "", program: str = "", audience: str = "",
+                      assume_source_status: bool = False) -> dict[str, Any]:
+    entities = list_entities(project.workspace, filters={
+        "network": network, "status": "" if assume_source_status else status,
+        "country": country, "query": query,
+    })
     links = LinkStore(project).active()
     by_entity: dict[str, list[dict[str, Any]]] = {}
     for link in links:
@@ -198,6 +204,16 @@ def list_institutions(project: Any, *, network: str = "", status: str = "", coun
         row["activity_assessment"] = assess(entity, [*by_entity.get(entity["entity_id"], []), *candidate_links(entity, items, index)], items,
                                             archives=histories.get(entity["entity_id"], {}).get("pages", []))
         row["program_assessment"] = entity_programs(entity, rubric)
+    if assume_source_status:
+        from .team_catalog import map_status_for_entity, workbook_status_assumptions
+        assumptions = workbook_status_assumptions()
+        for row, entity in zip(rows, entities):
+            map_status = map_status_for_entity(entity, assumptions)
+            if map_status["status_basis"] == "registry":
+                continue
+            row.update(map_status)
+        if status:
+            rows = [row for row in rows if row["status"] == status]
     if confidence_level:
         rows = [r for r in rows if r["confidence"]["level"] == confidence_level]
     if placed in {"yes", "no"}:

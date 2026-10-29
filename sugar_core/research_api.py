@@ -183,7 +183,8 @@ def _institution_routes(method, rest, query, body, wb, project):
         if rest == "institutions" and method == "GET":
             return 200, inst.list_institutions(project, network=query.get("network", ""), status=query.get("status", ""), country=query.get("country", ""),
                                                query=query.get("q", ""), since=query.get("since", ""), confidence_level=query.get("confidence", ""),
-                                               placed=query.get("placed", ""), program=query.get("program", ""), audience=query.get("audience", ""))
+                                               placed=query.get("placed", ""), program=query.get("program", ""), audience=query.get("audience", ""),
+                                               assume_source_status=str(query.get("assume_source_status", "")).casefold() in {"1", "true", "yes"})
         if rest == "institutions" and method == "POST":
             evidence, urls = [], []
             cache: dict[str, dict[str, object]] = {}
@@ -235,6 +236,12 @@ def _network_routes(method, rest, query, body, wb, project):
     from . import seed_sources as seeds
     actor = str(body.get("_author") or "Researcher")
     try:
+        if rest == "networks/catalog" and method == "GET":
+            from . import team_catalog
+            return 200, team_catalog.catalog_summary()
+        if rest == "networks/catalog/import" and method == "POST":
+            from . import team_catalog
+            return 200, team_catalog.import_catalog(project, list(body.get("datasets") or []), actor=actor)
         if rest == "networks" and method == "GET":
             return 200, {"networks": nets.list_networks(project)}
         if rest == "networks" and method == "POST":
@@ -494,6 +501,14 @@ def _research_routes(method, rest, query, body, wb, project):
             return 200, export_map(project, items, filters=filters)
         except ValueError as exc:
             raise WorkbenchError(str(exc)) from exc
+    if rest == "map/institutions/export" and method == "POST":
+        from .team_catalog import export_network_map
+        raw_networks = body.get("networks") or []
+        networks = raw_networks if isinstance(raw_networks, list) else [item.strip() for item in str(raw_networks).split(",") if item.strip()]
+        try:
+            return 200, export_network_map(project, networks, near_km=float(body.get("near_km") or 25), country=str(body.get("country") or ""))
+        except (ValueError, TypeError) as exc:
+            raise WorkbenchError(str(exc) or "Map export parameters are invalid.") from exc
     if rest == "review" and method == "GET":
         item_id = str(query.get("item_id") or "")
         return 200, ({"item_id": item_id, "review": project.review.state(item_id)} if item_id else {"summary": project.review.summary()})

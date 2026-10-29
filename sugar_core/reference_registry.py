@@ -63,6 +63,7 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "longitude": ("longitude", "lon", "lng", "long", "x", "decimal_longitude"),
     "location_precision": ("location_precision", "geo_precision", "precision"),
     "status": ("status", "current_status", "institution_status", "operational_status"),
+    "reported_status": ("reported_status", "source_status_claim", "status_claim"),
     "reported_status_confidence": ("reported_status_confidence", "status_confidence"),
     "affiliation_type": ("affiliation_type", "affiliation_category", "affiliation_scale", "affiliation"),
     "status_date": ("status_date", "closed_date", "closure_date", "effective_date"),
@@ -895,8 +896,12 @@ def import_reference_dataset(
         evidence = {
             "source_name": base["name"], "source_file": source_relative, "source_sha256": digest,
             "source_row": row_number, "source_url": _clean(_mapped_value(row, mapping, "source_url")),
+            "source_origin": _mapped_value(row, mapping, "source_origin"),
+            "location_source": _mapped_value(row, mapping, "location_source"),
+            "status_basis": _mapped_value(row, mapping, "status_basis"),
+            "last_publication_search": _mapped_value(row, mapping, "last_publication_search"),
             "license_notes": base["license_notes"], "imported_at": base["imported_at"],
-            "reported_status": _clean(_mapped_value(row, mapping, "status")),
+            "reported_status": _clean(_mapped_value(row, mapping, "reported_status") or _mapped_value(row, mapping, "status")),
             "reported_status_confidence": import_status_confidence(_mapped_value(row, mapping, "status")),
             "status_mapping_note": "Imported wording is unverified. Suspended/merged map to unknown pending the final study scale.",
         }

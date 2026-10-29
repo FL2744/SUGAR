@@ -8,6 +8,14 @@ const DEPTH_PRESETS = {
   deep: { query_count: 12, max_posts_per_query: 50, max_pages_per_query: 3 },
 } as const;
 const LANGUAGE_SUGGESTIONS = ["en", "ar", "fa", "tr", "he", "fr", "es", "pt", "ru", "zh", "ur", "hi"];
+const TEAM_SEARCH_SUGGESTIONS = [
+  { id: "teda-suez", label: "TEDA Suez / Suez Canal CI", query: "\"TEDA Suez\" AND (\"Confucius\" OR \"Suez Canal University\")", why: "Named zone and host from a CI profile." },
+  { id: "great-wall", label: "Great Wall language competition", query: "\"Great Wall Language Competition\" OR (\"Great Wall\" AND \"TAG-Confucius\")", why: "Specific competition and institute pairing." },
+  { id: "china-africa", label: "China–Africa people-to-people exchanges", query: "\"China–Africa Forum\" AND \"People-to-People and Cultural Exchanges\"", why: "Named forum track from the team search list." },
+  { id: "abu-dhabi", label: "Abu Dhabi ports / investment links", query: "\"Confucius\" AND (\"Abu Dhabi Ports\" OR \"Khalifa Port\" OR \"Abu Dhabi Investment Authority\")", why: "Named UAE entities paired with a CI term." },
+  { id: "inphb-luban", label: "INP-HB Luban Workshop", query: "(\"Luban Workshop\" OR \"鲁班工坊\") AND (\"INP-HB\" OR \"Tianjin University of Technology\")", why: "Named host/partner in a team-reported overlap lead." },
+  { id: "antananarivo-luban", label: "Antananarivo Luban Workshop", query: "(\"Luban Workshop\" OR \"鲁班工坊\") AND (\"University of Antananarivo\" OR \"École Supérieure Polytechnique\")", why: "Named host/partner in a team-reported overlap lead." },
+];
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return <label className="field-block"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>;
@@ -39,6 +47,14 @@ export function PlanEditor({ plan, platforms, providers, advanced, saving, error
   const updateQuery = (id: string, changes: Partial<QuerySpec>) =>
     patch({ queries: draft.queries.map((q) => (q.id === id ? { ...q, ...changes, origin: changes.enabled !== undefined && Object.keys(changes).length === 1 ? q.origin : "analyst" } : q)) });
   const addQuery = () => patch({ queries: [...draft.queries, { id: `new_${Date.now()}`, text: "", platform: "", language: "", geography: "", origin: "analyst", enabled: true, rationale: "Added by the researcher." }] });
+  const addTeamQuery = (suggestion: typeof TEAM_SEARCH_SUGGESTIONS[number]) => {
+    const currentEnabled = draft.queries.filter((item) => item.enabled).length;
+    if (draft.queries.some((query) => query.text.trim() === suggestion.query) || currentEnabled >= 60) return;
+    const query: QuerySpec = { id: "team4_" + suggestion.id, text: suggestion.query, platform: "", language: "", geography: "", origin: "analyst", enabled: true,
+      rationale: "Focused team search suggestion. " + suggestion.why + " Treat results as leads, not findings." };
+    const enabledQueries = currentEnabled + 1;
+    patch({ queries: [...draft.queries, query], limits: { ...draft.limits, query_count: Math.max(draft.limits.query_count, enabledQueries) } });
+  };
   const togglePlatform = (id: string) => patch({ platforms: draft.platforms.includes(id) ? draft.platforms.filter((p) => p !== id) : [...draft.platforms, id] });
   const enabledCount = draft.queries.filter((q) => q.enabled).length;
   const timeframe = draft.timeframe;
@@ -125,6 +141,16 @@ export function PlanEditor({ plan, platforms, providers, advanced, saving, error
                   </div>))}
                 <button type="button" className="button button-secondary button-small" onClick={addQuery}>＋ Add query</button>
               </div>
+              <Collapsible title="Focused team search suggestions" badge={<span className="muted">6</span>} hint="Add one precise query at a time; none are enabled automatically.">
+                <div className="chip-group" role="group" aria-label="Focused team search suggestions">
+                  {TEAM_SEARCH_SUGGESTIONS.map((suggestion) => {
+                    const added = draft.queries.some((query) => query.text.trim() === suggestion.query);
+                    return <button type="button" key={suggestion.id} className="chip-toggle" aria-pressed={added} disabled={added || enabledCount >= 60} title={enabledCount >= 60 ? "Plan limit: 60 enabled queries" : suggestion.why}
+                      onClick={() => addTeamQuery(suggestion)}>＋ {suggestion.label}</button>;
+                  })}
+                </div>
+                <small className="muted">Overlap-based suggestions come from team-reported leads and should be verified independently.</small>
+              </Collapsible>
             </Collapsible>
             <Collapsible title="Sources" hint="Which platforms and how much to take from each">
               <div className="check-grid">

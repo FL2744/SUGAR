@@ -2,7 +2,7 @@ import { api, apiPost, openEventStream } from "./bridge";
 import type { OfficeExport, OfficeOverview } from "./research-types";
 import type {
   ActivityEvent, ConnectionReport, Interpretation, PlanSpec, PlatformRow, ProjectOverview, ProviderProfileRow, ProviderType,
-  AccuracyReport, BriefResult, CodeRow, CodingSummary, ThemeRow, Digest, Monitor, InstitutionCandidate, InstitutionDetail, InstitutionList, PostMap, NetworkPreview, NetworkRow, OverlapResult, SeedRow, ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
+  AccuracyReport, BriefResult, CodeRow, CodingSummary, ThemeRow, Digest, Monitor, InstitutionCandidate, InstitutionDetail, InstitutionList, PostMap, NetworkCatalog, NetworkPreview, NetworkRow, OverlapResult, SeedRow, ResultItem, ResultsPayload, ReviewState, ReviewSummary, RunSummary, TimelineEvent,
 } from "./research-types";
 
 const ws = (id: string) => `/api/workspaces/${encodeURIComponent(id)}`;
@@ -60,6 +60,7 @@ export const research = {
   inferPostLocations: (id: string) => apiPost<{ scanned: number; proposed: number; remaining: number; warnings: string[] }>(`${ws(id)}/research/map/infer`),
   postMap: (id: string, params: Record<string, string | number | boolean | undefined> = {}) => api<PostMap>(`${ws(id)}/research/map/posts${query(params)}`),
   exportMap: (id: string, filters: Record<string, string | number>) => apiPost<{ archive: string; directory: string; files: string[] }>(`${ws(id)}/research/map/export`, filters),
+  exportNetworkMap: (id: string, networks: string[], nearKm: number, country = "") => apiPost<{ file: string; filename: string; networks: string[]; counts: Record<string, { mapped: number; within_distance: number; status_counts: Record<string, number> }>; computed_nearby_subject_records: number; distance_km: number; country: string; note: string }>(`${ws(id)}/research/map/institutions/export`, { networks, near_km: nearKm, country }),
   institutions: (id: string, params: Record<string, string | number | boolean | undefined> = {}) => api<InstitutionList>(`${ws(id)}/research/institutions${query(params)}`),
   institution: (id: string, entityId: string) => api<{ institution: InstitutionDetail }>(`${ws(id)}/research/institutions/${encodeURIComponent(entityId)}`).then((r) => r.institution),
   recordInstitution: (id: string, body: { values: Record<string, unknown>; evidence: Array<Record<string, unknown>>; entity_id?: string; author?: string }) =>
@@ -72,6 +73,8 @@ export const research = {
     apiPost<{ candidates: InstitutionCandidate[]; warnings: string[]; scanned: number; model_used: boolean }>(`${ws(id)}/research/institutions/candidates`, { run_id: runId, mode }),
   institutionHistory: (id: string, entityId: string) => apiPost<{ pages: Array<{ url: string; signals: string[]; total: number; first_seen: string; last_ok: string; snapshots: Array<{ captured_at: string; status: string; archive_url: string }> }>; errors: Array<{ url: string; reason: string }>; note: string }>(`${ws(id)}/research/institutions/${encodeURIComponent(entityId)}/history`, {}),
   networks: (id: string) => api<{ networks: NetworkRow[] }>(`${ws(id)}/research/networks`).then((r) => r.networks),
+  teamCatalog: (id: string) => api<NetworkCatalog>(`${ws(id)}/research/networks/catalog`),
+  importTeamCatalog: (id: string, datasets: string[]) => apiPost<{ selected_datasets: string[]; selected_records: number; added: number; updated: number; skipped_existing: number; catalog_file: string; network_names: string[]; note: string }>(`${ws(id)}/research/networks/catalog/import`, { datasets }),
   setNetwork: (id: string, name: string, role: "subject" | "reference", label = "") => apiPost<{ networks: NetworkRow[] }>(`${ws(id)}/research/networks`, { name, role, label }).then((r) => r.networks),
   previewNetworkFile: (id: string, filename: string, contentBase64: string) => apiPost<NetworkPreview>(`${ws(id)}/research/networks/preview`, { filename, content_base64: contentBase64 }),
   importNetworkFile: (id: string, body: Record<string, unknown>) => apiPost<Record<string, unknown>>(`${ws(id)}/research/networks/import`, body),

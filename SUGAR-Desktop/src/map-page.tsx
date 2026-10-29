@@ -10,6 +10,14 @@ import { CountrySnapshotButton } from "./office-desk";
 import { Collapsible, EmptyState, Pill, Spinner, formatTime, relativeTime, titleCase } from "./ui";
 
 const WINDOWS: Array<[string, string]> = [["", "All time"], ["2024-01-01", "Since 2024"], ["12m", "Last 12 months"], ["6m", "Last 6 months"]];
+const TEAM_NETWORKS = { ci: "team4_confucius_institutes", luban: "team4_luban_workshops", american: "team4_american_spaces" } as const;
+const COMPARISON_PRESETS = {
+  custom: [],
+  ci_american: [TEAM_NETWORKS.ci, TEAM_NETWORKS.american],
+  luban_american: [TEAM_NETWORKS.luban, TEAM_NETWORKS.american],
+  all_three: [TEAM_NETWORKS.ci, TEAM_NETWORKS.luban, TEAM_NETWORKS.american],
+} as const;
+type ComparisonPreset = keyof typeof COMPARISON_PRESETS;
 const sinceDate = (value: string): string => {
   if (!value || /^\d{4}-/.test(value)) return value;
   const months = Number(value.replace("m", ""));
@@ -22,6 +30,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   const [data, setData] = useState<InstitutionList | null>(null);
   const [networks, setNetworks] = useState<NetworkRow[]>([]);
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
+  const [comparisonPreset, setComparisonPreset] = useState<ComparisonPreset>("custom");
   const [status, setStatus] = useState("");
   const [level, setLevel] = useState("");
   const [country, setCountry] = useState("");
@@ -56,6 +65,12 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   const [frame, setFrame] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
   const [listPage, setListPage] = useState(0);
+  const applyComparisonPreset = (preset: ComparisonPreset) => {
+    setComparisonPreset(preset);
+    if (preset === "custom") return;
+    const selected = new Set<string>(COMPARISON_PRESETS[preset]);
+    setHidden((current) => ({ ...current, ...Object.fromEntries(networks.map((network) => [network.name, !selected.has(network.name)])) }));
+  };
   const requestSeq = useRef(0);
   const bins = useMemo(() => timelineBins(allPosts?.pins || []), [allPosts]);
   const timeDomain = useMemo<[number, number] | undefined>(() => bins.length ? [Date.parse(`${bins[0].start}T00:00:00Z`), Date.parse(`${bins[bins.length - 1].end}T23:59:59Z`)] : undefined, [bins]);
@@ -77,21 +92,25 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
     const seq = ++requestSeq.current;
     setLoading(true); setError("");
     try {
-      const [list, nets, pm] = await Promise.all([research.institutions(projectId, { status, confidence: level, country, program, audience, since: sinceDate(windowKey) }), research.networks(projectId),
+      const [list, nets, pm] = await Promise.all([research.institutions(projectId, { status, confidence: level, country, program, audience, since: sinceDate(windowKey), assume_source_status: true }), research.networks(projectId),
         research.postMap(projectId, { verdict: verdictFilter, days, min_confidence: minConfidence }).catch((e) => { if (seq === requestSeq.current) setError(`Posts could not be loaded: ${e instanceof Error ? e.message : String(e)}`); return null; })]);
       if (seq === requestSeq.current) { setData(list); setNetworks(nets); setPosts(pm); }
     } catch (e) { if (seq === requestSeq.current) setError(e instanceof Error ? e.message : String(e)); } finally { if (seq === requestSeq.current) setLoading(false); }
   }, [projectId, status, level, country, program, audience, windowKey, verdictFilter, days, minConfidence]);
   useEffect(() => { void load(); }, [load]);
 
-  const subjects = useMemo(() => networks.filter((n) => n.role === "subject").map((n) => n.name), [networks]);
-  const references = useMemo(() => networks.filter((n) => n.role === "reference").map((n) => n.name), [networks]);
+  const activeNetworks = useMemo(() => networks.filter((n) => !hidden[n.name]), [networks, hidden]);
+  const subjects = useMemo(() => activeNetworks.filter((n) => n.role === "subject").map((n) => n.name), [activeNetworks]);
+  const references = useMemo(() => activeNetworks.filter((n) => n.role === "reference").map((n) => n.name), [activeNetworks]);
   useEffect(() => {
     if (!projectId || !subjects.length || !references.length) { setOverlap(null); return; }
     void research.overlap(projectId, { subject: subjects.join(","), reference: references.join(","), bands: `5,${nearKm},100,250`, country }).then(setOverlap).catch(() => setOverlap(null));
   }, [projectId, subjects, references, nearKm, country, data]);
 
   const visible = useMemo(() => (data?.institutions || []).filter((r) => !hidden[r.network || ""]), [data, hidden]);
+  const selectedCoreNetworks = useMemo(() => activeNetworks.filter((n) => Object.values(TEAM_NETWORKS).includes(n.name as typeof TEAM_NETWORKS[keyof typeof TEAM_NETWORKS])).map((n) => n.name), [activeNetworks]);
+  const canExportNetworkMap = selectedCoreNetworks.length === 3 || (selectedCoreNetworks.length === 2 && selectedCoreNetworks.includes(TEAM_NETWORKS.american) &&
+    (selectedCoreNetworks.includes(TEAM_NETWORKS.ci) || selectedCoreNetworks.includes(TEAM_NETWORKS.luban)));
   const byId = useMemo(() => Object.fromEntries((data?.institutions || []).map((r) => [r.entity_id, r])), [data]);
   const lines: Line[] = useMemo(() => {
     if (!showLines || !overlap) return [];
@@ -119,6 +138,13 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
       await load();
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setInferring(false); }
   };
+  const exportNetworkMap = async () => {
+    setExporting(true); setError("");
+    try {
+      const result = await research.exportNetworkMap(projectId, selectedCoreNetworks, nearKm, country);
+      await downloadWorkspaceFile(`sugar-file://${projectId}/${result.file}`, result.filename);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setExporting(false); }
+  };
   const pickedPost = posts?.pins.find((p) => p.item_id === selectedPost);
   const setVerified = async (itemId: string, verified: boolean) => {
     try {
@@ -131,6 +157,10 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
   const picked: Institution | undefined = byId[selected];
   const pickedOverlap = overlap?.rows.find((r) => r.entity_id === selected);
   const near = overlap ? overlap.by_country.reduce((n, c) => n + c.subjects_near_reference, 0) : 0;
+  const mapStatusCounts = useMemo(() => visible.reduce((counts, row) => {
+    const key = row.status in counts ? row.status as keyof typeof counts : "unknown";
+    counts[key] += 1; return counts;
+  }, { active: 0, closed: 0, renamed: 0, relocated: 0, unknown: 0 }), [visible]);
 
   return (
     <section className="page-content map-page">
@@ -143,6 +173,9 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
           <button className="button button-secondary" disabled={inferring} onClick={() => void inferLocations()} title="Use your configured AI provider to suggest broad locations for existing unmapped posts">{inferring ? <Spinner /> : "Infer post locations"}</button>
           <CountrySnapshotButton projectId={projectId} country={country} onError={setError} />
           <button className="button button-secondary" onClick={() => void exportMapped()} disabled={exporting || rangeError || !posts?.pins.length}>{exporting ? <Spinner /> : "Export mapped posts"}</button>
+          <button className="button button-secondary" onClick={() => void exportNetworkMap()} disabled={exporting || !canExportNetworkMap} title="Export a Confucius Institute or Luban Workshop comparison with American Spaces as an interactive HTML map">
+            {exporting ? <Spinner /> : "Export network map (HTML)"}
+          </button>
         </div>
       </div>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
@@ -157,11 +190,23 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
               <button className="chip-toggle" aria-pressed={layers.targets} onClick={() => setLayers({ ...layers, targets: !layers.targets })}><span className="swatch target" aria-hidden="true" /> Targets <small>{posts?.targets.length ?? 0}</small></button>
               <button className="chip-toggle" aria-pressed={layers.flows} onClick={() => setLayers({ ...layers, flows: !layers.flows })}>Origin → target</button>
               <button className="chip-toggle" aria-pressed={layers.institutions} onClick={() => setLayers({ ...layers, institutions: !layers.institutions })}>Institutions</button>
-              {networks.map((n) => <button key={n.name || "none"} className="chip-toggle chip-sub" aria-pressed={!hidden[n.name]} title={`Show or hide ${n.label}`} onClick={() => setHidden({ ...hidden, [n.name]: !hidden[n.name] })}><span className={`swatch ${n.role}`} aria-hidden="true" /> {n.label} <small>{n.institutions}</small></button>)}
+              {networks.map((n) => <button key={n.name || "none"} className="chip-toggle chip-sub" aria-pressed={!hidden[n.name]} title={`Show or hide ${n.label}`} onClick={() => { setComparisonPreset("custom"); setHidden((current) => ({ ...current, [n.name]: !current[n.name] })); }}><span className={`swatch ${n.role}`} style={{ backgroundColor: n.color || (n.role === "reference" ? "#1f8f6a" : "#d2691e") }} aria-hidden="true" /> {n.label} <small>{n.institutions}</small></button>)}
             </div>
             <div className="map-toolbar-end">
+              <label className="map-compare-control">Compare networks <select aria-label="Network comparison layers" value={comparisonPreset} onChange={(e) => applyComparisonPreset(e.target.value as ComparisonPreset)}>
+                <option value="custom">Custom layers</option><option value="ci_american">Confucius Institutes + American Spaces</option><option value="luban_american">Luban Workshops + American Spaces</option><option value="all_three">All three layers</option>
+              </select></label>
               <div className="segmented" role="radiogroup" aria-label="Basemap">{(["dark", "streets", "terrain"] as const).map((v) => <button key={v} role="radio" aria-checked={basemap === v} className={basemap === v ? "on" : ""} onClick={() => setBasemap(v)}>{titleCase(v)}</button>)}</div>
             </div>
+          </div>
+          <div className="map-status-legend" role="note" aria-label="Map status legend">
+            <strong>Team 4 status follows workbook labels as an assumption; verified registry statuses take precedence.</strong>
+            <span><i className="map-status-symbol active">●</i> Active · layer color</span>
+            <span><i className="map-status-symbol closed">×</i> Closed, including temporarily closed</span>
+            <span><i className="map-status-symbol renamed">↻</i> Renamed</span>
+            <span><i className="map-status-symbol relocated">↗</i> Relocated</span>
+            <span><i className="map-status-symbol unknown">?</i> Unknown or no status label</span>
+            <span className="muted">{mapStatusCounts.active.toLocaleString()} active · {mapStatusCounts.closed.toLocaleString()} closed · {mapStatusCounts.renamed.toLocaleString()} renamed · {mapStatusCounts.relocated.toLocaleString()} relocated · {mapStatusCounts.unknown.toLocaleString()} unknown in visible layers</span>
           </div>
           <Collapsible title="Filters and options" hint="Time, verification, status, place, program, audience, style"
             badge={[days, verdictFilter, windowKey, status, level, country, program, audience].filter(Boolean).length ? <Pill tone="info">{[days, verdictFilter, windowKey, status, level, country, program, audience].filter(Boolean).length} on</Pill> : undefined}>
@@ -170,7 +215,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
               <label className="field-block"><span>Posted in</span><select value={days} onChange={(e) => setDays(e.target.value)}><option value="">Any time</option><option value="1">Last 24 hours</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
               <label className="check-row"><input type="checkbox" checked={sentiment} onChange={(e) => { setSentiment(e.target.checked); if (!e.target.checked && ["valence", "intensity", "direction"].includes(postStyle)) setPostStyle("points"); }} /><span>Enable exploratory language axes</span></label>
               <label className="field-block"><span>Institution evidence from</span><select value={windowKey} onChange={(e) => setWindowKey(e.target.value)}>{WINDOWS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
-              <label className="field-block"><span>Status</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Any</option>{["active", "closed", "renamed", "relocated", "unknown"].map((x) => <option key={x} value={x}>{titleCase(x)}</option>)}</select></label>
+              <label className="field-block"><span>Status (Team 4 workbook assumption)</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Any status</option>{["active", "closed", "renamed", "relocated", "unknown"].map((x) => <option key={x} value={x}>{titleCase(x)}</option>)}</select></label>
               <label className="field-block"><span>Confidence</span><select value={level} onChange={(e) => setLevel(e.target.value)}><option value="">Any</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
               <label className="field-block"><span>Country</span><select value={country} onChange={(e) => setCountry(e.target.value)}><option value="">All</option>{data?.facets.countries.map((f) => <option key={f.key} value={f.key === "unknown" ? "" : f.key}>{f.key} ({f.count})</option>)}</select></label>
               <label className="field-block"><span>Program</span><select value={program} onChange={(e) => setProgram(e.target.value)}><option value="">Any</option>{data?.facets.programs.map((f) => <option key={f.key} value={f.key}>{titleCase(f.key)} ({f.count})</option>)}</select></label>
@@ -215,7 +260,7 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
                 {layers.posts && (posts?.pins || []).slice(listPage * 100, (listPage + 1) * 100).map((p) => <button key={p.item_id} className="project-row" role="row" onClick={() => { setSelected(""); setSelectedPost(p.item_id); }}><span role="cell"><strong dir="auto">{p.author || "Unknown author"}</strong> <small className="muted">{p.platform} · {p.published_at ? p.published_at.slice(0, 10) : "date unknown"}</small></span>
                   <span role="cell">{p.verified ? "Verified" : "Not verified"}</span><span role="cell">{p.origin ? p.origin.label : p.inferred_location ? `About ${p.inferred_location.name}` : "—"}</span><span role="cell"><small dir="auto">{p.original_text.slice(0, 80)}</small></span></button>)}
                 {visible.map((r) => <button key={r.entity_id} className="project-row" role="row" onClick={() => setSelected(r.entity_id)}><span role="cell"><strong dir="auto">{r.name}</strong> <small className="muted">{r.network}</small></span>
-                  <span role="cell">{titleCase(r.status)}</span><span role="cell">{[r.city, r.country].filter(Boolean).join(", ") || "—"}{r.placed ? "" : " · not placed"}</span><span role="cell"><ConfidencePill confidence={r.confidence} /></span></button>)}
+                  <span role="cell">{titleCase(r.status)}{r.source_status_claim && <small className="muted">Workbook: {r.source_status_claim}</small>}</span><span role="cell">{[r.city, r.country].filter(Boolean).join(", ") || "—"}{r.placed ? "" : " · not placed"}</span><span role="cell"><ConfidencePill confidence={r.confidence} /></span></button>)}
               </div>}
           {view === "list" && layers.posts && (posts?.pins.length || 0) > 100 && <nav className="results-pagination" aria-label="Map post list pages"><button className="button button-secondary button-small" disabled={!listPage} onClick={() => setListPage(listPage - 1)}>Previous posts</button><span>{listPage * 100 + 1}–{Math.min((listPage + 1) * 100, posts!.pins.length)} of {posts!.pins.length.toLocaleString()}</span><button className="button button-secondary button-small" disabled={(listPage + 1) * 100 >= posts!.pins.length} onClick={() => setListPage(listPage + 1)}>Next posts</button></nav>}
           {overlap && overlap.by_country.length > 0 && <details className="overlap-table"><summary>Overlap by country ({overlap.by_country.length})</summary>
@@ -258,8 +303,9 @@ export function MapPage({ projectId, dark, onOpenRecord, onOpenInstitutions }: {
             <button className="inspector-close" onClick={() => setSelected("")} aria-label="Close">×</button>
             <h3 dir="auto">{picked.name}</h3>
             <p className="muted">{[picked.city, picked.country].filter(Boolean).join(", ")}{picked.network ? ` · ${picked.network}` : ""}</p>
-            <div className="pill-row"><Pill tone={picked.status === "active" ? "ok" : "neutral"}>{titleCase(picked.status)}</Pill><ConfidencePill confidence={picked.confidence} />
+            <div className="pill-row"><Pill tone={picked.status === "active" ? "ok" : picked.status === "closed" ? "warn" : "neutral"}>{titleCase(picked.status)}{picked.status_basis === "source_workbook_assumption" ? " · assumed" : ""}</Pill><ConfidencePill confidence={picked.confidence} />
               {picked.last_verified ? <Pill tone="ok">Verified {relativeTime(picked.last_verified)}</Pill> : <Pill tone="warn">Not verified</Pill>}</div>
+            {picked.source_status_claim && <p className="footnote">Map status follows the original workbook label “{picked.source_status_claim}”{picked.status_basis === "human_verified_registry" ? "; a human-verified registry status takes precedence." : "; this is an assumption, not independent confirmation of current operation."}</p>}
             {picked.programs.length > 0 && <p><strong>Programs</strong> {picked.programs.map(titleCase).join(", ")}</p>}
             {picked.audiences.length > 0 && <p><strong>Audiences</strong> {picked.audiences.map(titleCase).join(", ")}</p>}
             <p><strong>Support</strong> {picked.source_count} source{picked.source_count === 1 ? "" : "s"} · {picked.activity.items} linked item{picked.activity.items === 1 ? "" : "s"}{picked.activity.recent_items ? ` (${picked.activity.recent_items} in the chosen window)` : ""}</p>

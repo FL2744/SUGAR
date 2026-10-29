@@ -13,6 +13,8 @@ import pandas as pd
 
 OBSERVATION_COLORS = {
     "institution": "#2563eb",
+    "language_institute": "#d97721",
+    "vocational_training": "#7562b0",
     "program": "#16a34a",
     "event": "#ea580c",
     "digital_post": "#7c3aed",
@@ -40,6 +42,7 @@ class MapOptions:
     show_minimap: bool = True
     show_measure_control: bool = True
     show_mouse_position: bool = True
+    show_computed_proximity: bool = False
     as_of_date: str = ""
 
 
@@ -882,14 +885,15 @@ def create_map(
     m = folium.Map(
         location=center,
         zoom_start=2,
-        # MarkerCluster requires a finite map maxZoom even when the active base
-        # layer is the provider-independent canvas rather than a tile layer.
         max_zoom=19,
         tiles=None,
         control_scale=True,
         prefer_canvas=True,
         world_copy_jump=True,
     )
+    # Folium applies max_zoom to a tile layer, but this map starts with tiles=None.
+    # MarkerCluster reads the Leaflet map's own maxZoom option at runtime.
+    m.options["maxZoom"] = 19
     # Local HTML exports must remain usable even when a remote tile service rejects
     # file:// referrers or changes its terms. Start on a provider-independent canvas;
     # analysts can enable OSM explicitly when they have network access.
@@ -993,7 +997,7 @@ def create_map(
         proximity_group = folium.FeatureGroup(
             name=f"Computed proximity — nearest reference ({len(proximity_rows):,})",
             overlay=True,
-            show=False,
+            show=options.show_computed_proximity,
         ).add_to(m)
         for _, row in proximity_rows.iterrows():
             endpoint = _nearest_spatial_endpoint(row)
