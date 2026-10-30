@@ -47,6 +47,9 @@ def _patterns_for(relative: str) -> list[re.Pattern]:
         if not (term == "Con" + "fucius" and relative in PUBLIC_BASELINE_FILES)
         and not (term in {"Lu" + "ban", "鲁" + "班工坊"} and relative in PUBLIC_PROGRAM_FILES)
         and not (term in PUBLIC_TEAM_NAMES and relative in PUBLIC_TEAM_NAME_FILES)
+        # Public world-map labels are geography, not mission targeting.
+        and not (relative == "sugar_core/data/natural-earth-country-labels.json"
+                 and term in {"Chi" + "na", "Kyrgyz" + "stan"})
         and relative not in PUBLIC_TEAM_CATALOG_FILES
     ]
 
@@ -116,3 +119,11 @@ def test_public_team_catalog_name_exception_does_not_allow_other_mission_markers
         assert not any(pattern.search(public_name) for pattern in patterns)
         assert not any(pattern.search(workshop_name) for pattern in patterns)
         assert any(pattern.search(mission_marker) for pattern in patterns)
+
+
+def test_world_map_label_exception_is_limited_to_country_names():
+    path = "sugar_core/data/natural-earth-country-labels.json"
+    for country in ("Chi" + "na", "Kyrgyz" + "stan"):
+        assert not any(pattern.search(country) for pattern in _patterns_for(path))
+        assert any(pattern.search(country) for pattern in _patterns_for("project/watchlist.json"))
+    assert any(pattern.search("Bei" + "jing") for pattern in _patterns_for(path))
