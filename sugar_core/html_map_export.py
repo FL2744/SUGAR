@@ -14,6 +14,8 @@ def make_html_export_offline(path: str | Path) -> None:
     assets = json.loads((data / "html-map-assets.json").read_text(encoding="utf-8"))
     land = (data / "natural-earth-land.json").read_text(encoding="utf-8")
 
+    countries = (data / "natural-earth-countries.json").read_text(encoding="utf-8")
+
     def script(match: re.Match) -> str:
         return '<script>' + assets[match.group(1)].replace('</script', '<\\/script') + '</script>'
 
@@ -32,15 +34,19 @@ def make_html_export_offline(path: str | Path) -> None:
     setup = '''<script>
     L.Map.addInitHook(function () {
         this.attributionControl && this.attributionControl.setPrefix(false);
-        this.attributionControl && this.attributionControl.addAttribution('Land: Natural Earth (public domain)');
+        this.attributionControl && this.attributionControl.addAttribution('Land and boundaries: Natural Earth (public domain; de facto)');
         this.getContainer().style.background = '#dceaf2';
         L.geoJSON(LAND_DATA, {
             pane: 'tilePane', interactive: false,
             style: {color: '#94a3b8', weight: 0.7, fillColor: '#e2e8d5', fillOpacity: 1}
         }).addTo(this);
+        L.geoJSON(COUNTRY_DATA, {
+            pane: 'tilePane', interactive: false,
+            style: {color: '#64748b', weight: 0.8, fill: false, opacity: 0.85}
+        }).addTo(this);
         this.setMaxBounds([[-85, -180], [85, 180]]);
     });
-    </script>'''.replace('LAND_DATA', land)
+    </script>'''.replace('LAND_DATA', land).replace('COUNTRY_DATA', countries)
     page = re.sub(r'<script\s+src="(https[^"]+)"[^>]*>\s*</script>', script, page)
     page = re.sub(r'<link\s+rel="stylesheet"\s+href="(https[^"]+)"[^>]*>', style, page)
     licenses = json.dumps((data / 'html-map-licenses.md').read_text(encoding='utf-8')).replace('<', '\\u003c')
