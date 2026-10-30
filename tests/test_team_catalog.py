@@ -105,8 +105,12 @@ def test_import_and_three_layered_html_map_exports(tmp_path):
         html = output.read_text(encoding="utf-8")
         assert output.is_file()
         assert "Network location comparison" in html
-        assert "OpenStreetMap (online)" in html
-        assert "Offline analytic canvas" in html
+        assert "OpenStreetMap (online)" not in html
+        assert "Natural Earth (public domain)" in html
+        assert "connect-src 'none'" in html
+        assert not re.search(r'<(?:script|link)[^>]+(?:src|href)="https?://', html)
+        assert "L.tileLayer(" not in html
+        assert "setPrefix(false)" in html
         assert "L.control.layers" in html
         assert re.search(r'"maxZoom"\s*:\s*19', html)
         assert "nearest reference" in html

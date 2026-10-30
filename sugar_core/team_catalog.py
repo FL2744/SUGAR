@@ -506,6 +506,8 @@ def export_network_map(workspace_project: Any, network_names: list[str], *, near
         reference_layers=[ReferenceLayer(name=reference_label, frame=reference_frame,
                                          color=datasets[reference_name]["color"], show=True)],
     )
+    from .html_map_export import make_html_export_offline
+    make_html_export_offline(output)
     relative = Path(output).resolve().relative_to(workspace_project.workspace.root).as_posix()
     workspace_project.workspace.register_artifact(
         "network_map_html", output, label="Team 4 network overlap map",
