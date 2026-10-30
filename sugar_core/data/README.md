@@ -22,3 +22,7 @@ this is a generalized overview, not a statement of sovereignty. Public domain.
 
 Source: https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_110m_admin_0_countries.geojson
 Source SHA-256: `6866c877d39cba9c357620878839b336d569f8c662d3cfab4cb1dbe2d39c977f`
+
+`natural-earth-country-labels.json` retains English country names, label coordinates,
+label rank, and minimum label zoom from the same Natural Earth v5.1.2 source.
+Labels are embedded only in HTML exports and decluttered as the user zooms.

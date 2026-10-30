@@ -16,6 +16,8 @@ def make_html_export_offline(path: str | Path) -> None:
 
     countries = (data / "natural-earth-countries.json").read_text(encoding="utf-8")
 
+    labels = (data / "natural-earth-country-labels.json").read_text(encoding="utf-8")
+
     def script(match: re.Match) -> str:
         return '<script>' + assets[match.group(1)].replace('</script', '<\\/script') + '</script>'
 
@@ -44,9 +46,41 @@ def make_html_export_offline(path: str | Path) -> None:
             pane: 'tilePane', interactive: false,
             style: {color: '#64748b', weight: 0.8, fill: false, opacity: 0.85}
         }).addTo(this);
+        // Country names belong to the downloaded map only. Declutter at each
+        // zoom level so small countries become readable as the user zooms in.
+        const map = this;
+        const pane = map.createPane('countryLabels');
+        pane.style.zIndex = 350;
+        pane.style.pointerEvents = 'none';
+        const names = L.layerGroup().addTo(map);
+        const measure = document.createElement('canvas').getContext('2d');
+        measure.font = '11px Arial';
+        function labelCountries() {
+            names.clearLayers();
+            const occupied = [], size = map.getSize(), zoom = map.getZoom();
+            COUNTRY_LABELS.forEach(function (country) {
+                if (zoom < country.zoom) return;
+                const point = map.latLngToContainerPoint([country.lat, country.lon]);
+                const width = measure.measureText(country.name).width + 8;
+                const box = [point.x-width/2, point.y-9, point.x+width/2, point.y+9];
+                if (box[0]<0 || box[1]<0 || box[2]>size.x || box[3]>size.y) return;
+                if (occupied.some(b => box[0]<b[2] && box[2]>b[0] && box[1]<b[3] && box[3]>b[1])) return;
+                occupied.push(box);
+                const text = document.createElement('span');
+                text.textContent = country.name;
+                text.style.cssText = 'font:11px Arial;color:#334155;white-space:nowrap;text-shadow:0 0 3px white,0 0 3px white;';
+                L.marker([country.lat,country.lon], {
+                    pane:'countryLabels', interactive:false, keyboard:false,
+                    icon:L.divIcon({className:'sugar-country-label', html:text,
+                        iconSize:[width,18], iconAnchor:[width/2,9]})
+                }).addTo(names);
+            });
+        }
+        map.on('zoomend moveend resize', labelCountries);
+        map.whenReady(labelCountries);
         this.setMaxBounds([[-85, -180], [85, 180]]);
     });
-    </script>'''.replace('LAND_DATA', land).replace('COUNTRY_DATA', countries)
+    </script>'''.replace('LAND_DATA', land).replace('COUNTRY_DATA', countries).replace('COUNTRY_LABELS', labels)
     page = re.sub(r'<script\s+src="(https[^"]+)"[^>]*>\s*</script>', script, page)
     page = re.sub(r'<link\s+rel="stylesheet"\s+href="(https[^"]+)"[^>]*>', style, page)
     licenses = json.dumps((data / 'html-map-licenses.md').read_text(encoding='utf-8')).replace('<', '\\u003c')
