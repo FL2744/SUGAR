@@ -2,7 +2,7 @@
 
 Notable SUGAR changes are recorded here. Dates refer to the repository integration date, not necessarily the first experimental commit.
 
-## Unreleased
+## 2.1.0 - 2026-11-05
 
 ### Team 4 network catalog and overlap maps
 
